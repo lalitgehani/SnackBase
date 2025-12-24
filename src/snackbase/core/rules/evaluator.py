@@ -36,31 +36,45 @@ class Evaluator:
         value = self.context
         
         for part in parts:
+            if value is None:
+                return None
+
+            # 1. Try dictionary access
             if isinstance(value, dict):
-                # Allow for list/dict access if needed, but for now strict dict access
                 if part in value:
                     value = value[part]
-                else:
-                    # Variable not found, treat as None (or raise error based on strictness)
-                    # For rules, treating missing as None is often safer/easier
-                    return None
-            else:
-                # Trying to access property of non-dict
-                return None
+                    continue
+            
+            # 2. Try object attribute access
+            if hasattr(value, part):
+                value = getattr(value, part)
+                continue
+            
+            # 3. Not found
+            return None
                 
         return value
 
     def _evaluate_binary(self, node: BinaryOp) -> Any: # noqa: C901
         """Evaluate binary operations."""
+        # Short-circuit logic for AND/OR
+        if node.operator == "and":
+            left = self.evaluate(node.left)
+            if not bool(left):
+                return False
+            return bool(self.evaluate(node.right))
+            
+        if node.operator == "or":
+            left = self.evaluate(node.left)
+            if bool(left):
+                return True
+            return bool(self.evaluate(node.right))
+            
+        # Standard evaluation for others
         left = self.evaluate(node.left)
         right = self.evaluate(node.right)
         op = node.operator
 
-        if op == "and":
-            return bool(left) and bool(right)
-        if op == "or":
-            return bool(left) or bool(right)
-        
         if op == "==":
             return left == right
         if op == "!=":
@@ -84,9 +98,9 @@ class Evaluator:
 
     def _evaluate_unary(self, node: UnaryOp) -> Any:
         """Evaluate unary operations."""
-        operand = self.evaluate(node.operand)
-        
         if node.operator == "not":
+            # For NOT, we need to evaluate the operand first
+            operand = self.evaluate(node.operand)
             return not bool(operand)
             
         raise RuleEvaluationError(f"Unknown unary operator: {node.operator}")

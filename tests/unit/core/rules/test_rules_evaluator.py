@@ -1,9 +1,22 @@
 """Unit tests for Rule Evaluator."""
 
 import pytest
+from dataclasses import dataclass
+from typing import Optional, List
 from snackbase.core.rules import evaluate_rule, parse_rule
 from snackbase.core.rules.exceptions import RuleEvaluationError
 
+@dataclass
+class UserContext:
+    id: int
+    role: str
+    groups: List[str]
+    settings: Optional[dict] = None
+
+@dataclass
+class RecordContext:
+    owner_id: int
+    status: str
 
 def test_evaluator_literals():
     """Test evaluating constant literals."""
@@ -13,8 +26,8 @@ def test_evaluator_literals():
     assert evaluate_rule(parse_rule("'hello'"), {}) == "hello"
     assert evaluate_rule(parse_rule("null"), {}) is None
 
-def test_evaluator_variables():
-    """Test variable resolution."""
+def test_evaluator_variables_dict():
+    """Test variable resolution with dictionary context."""
     context = {"user": {"id": 1, "role": "admin"}}
     
     assert evaluate_rule(parse_rule("user.id"), context) == 1
@@ -22,6 +35,17 @@ def test_evaluator_variables():
     assert evaluate_rule(parse_rule("user.missing"), context) is None
     assert evaluate_rule(parse_rule("missing.variable"), context) is None
 
+def test_evaluator_variables_objects():
+    """Test variable resolution with object context."""
+    user = UserContext(id=1, role="admin", groups=["dev", "ops"], settings={"theme": "dark"})
+    context = {"user": user}
+    
+    assert evaluate_rule(parse_rule("user.id"), context) == 1
+    assert evaluate_rule(parse_rule("user.role"), context) == "admin"
+    assert evaluate_rule(parse_rule("user.settings.theme"), context) == "dark"
+    # Accessing missing attribute should return None safely
+    assert evaluate_rule(parse_rule("user.missing_attr"), context) is None
+    
 def test_evaluator_comparisons():
     """Test comparison operators."""
     context = {"age": 25, "role": "user"}
@@ -36,13 +60,29 @@ def test_evaluator_comparisons():
     # String comparison
     assert evaluate_rule(parse_rule("role == 'user'"), context) is True
 
-def test_evaluator_logic():
-    """Test logical operators."""
+def test_evaluator_logic_short_circuit():
+    """Test logical operators with short-circuiting."""
     context = {"a": True, "b": False}
     
+    # Simple logic
     assert evaluate_rule(parse_rule("a and not b"), context) is True
     assert evaluate_rule(parse_rule("b or a"), context) is True
-    assert evaluate_rule(parse_rule("not a"), context) is False
+    
+    # Short-circuiting:
+    # 'a' is True, so 'a or <error>' should be True without evaluating <error>
+    # creating a mock object that raises error on access to simulate dangerous op
+    class Dangerous:
+        @property
+        def boom(self):
+            raise RuntimeError("Should not be called")
+            
+    context_danger = {"a": True, "d": Dangerous()}
+    # If short-circuit works, d.boom is never accessed
+    assert evaluate_rule(parse_rule("a or d.boom"), context_danger) is True
+    
+    context_danger_false = {"b": False, "d": Dangerous()}
+    # If short-circuit works, d.boom is never accessed for AND if first is False
+    assert evaluate_rule(parse_rule("b and d.boom"), context_danger_false) is False
 
 def test_evaluator_functions():
     """Test built-in functions."""
@@ -89,10 +129,6 @@ def test_evaluator_complex_expression():
 def test_evaluator_errors():
     """Test error handling during evaluation."""
     # Type error safety (comparison of incompatible types)
-    # Should evaluate to False rather than crash for None types in comparators often
-    # But for strict mismatch like int < str it might raise specific py error or handle gracefully
-    # Our implementation catches TypeError and returns False
-    
     assert evaluate_rule(parse_rule("1 < 'a'"), {}) is False
     
     # Missing function
