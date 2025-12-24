@@ -97,13 +97,19 @@ class AccountIdGenerator:
     def _find_highest_id(cls, existing_ids: set[str]) -> str:
         """Find the highest ID in the existing set.
 
+        Ignores IDs starting with 'SY' as they are reserved for system accounts.
+
         Args:
             existing_ids: Set of existing account IDs.
 
         Returns:
-            The highest ID based on lexicographic ordering.
+            The highest ID based on lexicographic ordering (excluding SY).
         """
-        valid_ids = [id_ for id_ in existing_ids if cls.validate(id_)]
+        valid_ids = [
+            id_
+            for id_ in existing_ids
+            if cls.validate(id_) and not id_.startswith("SY")
+        ]
         if not valid_ids:
             return "AA0000"
         return max(valid_ids, key=cls._id_sort_key)
@@ -126,6 +132,8 @@ class AccountIdGenerator:
     @classmethod
     def _increment_id(cls, account_id: str) -> str:
         """Increment an account ID to the next value.
+
+        Skips the 'SY' prefix range as it is reserved.
 
         Args:
             account_id: Valid account ID in XX#### format.
@@ -154,5 +162,24 @@ class AccountIdGenerator:
 
         if first_idx > 25:
             raise AccountIdExhaustedError()
+
+        # Check for reserved prefix SY
+        # S=18, Y=24
+        s_idx = cls.LETTERS.index("S")
+        y_idx = cls.LETTERS.index("Y")
+
+        if first_idx == s_idx and second_idx == y_idx:
+            # Skip entire SY range -> jump to SZ
+            # Actually, next after SY9999 is SZ0000
+            # But if we land anywhere in SY range (e.g. SY0000), skip to SZ0000
+            # Since we only increment by 1 or carry over, we will hit SY0000 first
+            # (coming from SX9999 -> SY0000).
+            # So just force it to next block if we are in SY.
+            # But wait, we might just want to skip SY completely.
+            # If we are at SYxxxx, move to SZ0000?
+            # Yes, simpler validation.
+            second_idx += 1
+            number = 0
+            # Should be safe since Y < Z (24 < 25), so second_idx becomes 25 (Z).
 
         return f"{cls.LETTERS[first_idx]}{cls.LETTERS[second_idx]}{number:04d}"
