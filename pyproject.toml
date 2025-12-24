@@ -17,6 +17,9 @@ dependencies = [
     "structlog>=24.4.0",
     "python-multipart>=0.0.12",
     "click>=8.1.0",
+    "argon2-cffi>=23.1.0",
+    "pyjwt>=2.8.0",
+    "email-validator>=2.1.0",
 ]
 
 [project.scripts]
