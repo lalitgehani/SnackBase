@@ -17,7 +17,7 @@ async def seed_roles(db_session):
     await db_session.commit()
 
 @pytest.mark.asyncio
-async def test_register_integration_success(db_session, seed_roles):
+async def test_register_integration_success(db_session):
     """Test full registration flow with in-memory database."""
     
     # We need to use the app with the database session overridden or 
@@ -70,7 +70,7 @@ async def test_register_integration_success(db_session, seed_roles):
 
 
 @pytest.mark.asyncio
-async def test_register_integration_duplicate_slug(db_session, seed_roles):
+async def test_register_integration_duplicate_slug(db_session):
     """Test registration with existing slug."""
     
     async def override_get_db_session():

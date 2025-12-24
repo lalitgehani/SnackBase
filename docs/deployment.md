@@ -417,14 +417,29 @@ sudo certbot --nginx -d api.yourdomain.com
 sudo certbot renew --dry-run
 ```
 
-### Option 3: Docker Deployment (Coming Soon)
+### Option 3: Docker Deployment
 
-Docker support will be added in a future update. The deployment will include:
+You can deploy SnackBase using the included `Dockerfile` and `docker-compose.yml` (optional).
 
-- Multi-stage Dockerfile for optimized images
-- docker-compose.yml for local development
-- Production-ready container configuration
-- Health checks and restart policies
+#### 1. Build the Image
+
+```bash
+docker build -t snackbase .
+```
+
+#### 2. Run the Container
+
+```bash
+docker run -d \
+  -p 8000:8000 \
+  -v $(pwd)/sb_data:/app/sb_data \
+  --name snackbase \
+  snackbase
+```
+
+#### 3. Access Application
+
+The application will be available at http://localhost:8000.
 
 ---
 
