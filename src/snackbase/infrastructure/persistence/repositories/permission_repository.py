@@ -123,3 +123,38 @@ class PermissionRepository:
             )
         )
         return result.scalar_one_or_none() is not None
+
+    async def find_permissions_using_macro(self, macro_name: str) -> list[PermissionModel]:
+        """Find all permissions that use a specific macro.
+
+        Args:
+            macro_name: The macro name (with or without @ prefix).
+
+        Returns:
+            List of permissions that reference the macro in their rules.
+        """
+        import json
+
+        # Normalize macro name (ensure it has @ prefix for search)
+        search_name = macro_name if macro_name.startswith("@") else f"@{macro_name}"
+
+        # Get all permissions
+        all_permissions = await self.list_all()
+
+        # Filter permissions that use the macro
+        using_macro = []
+        for permission in all_permissions:
+            try:
+                rules = json.loads(permission.rules)
+                # Check each operation's rule expression
+                for operation in ["create", "read", "update", "delete"]:
+                    if operation in rules and isinstance(rules[operation], dict):
+                        rule_expr = rules[operation].get("rule", "")
+                        if search_name in rule_expr:
+                            using_macro.append(permission)
+                            break  # Found usage, no need to check other operations
+            except (json.JSONDecodeError, TypeError):
+                # Skip invalid rules
+                continue
+
+        return using_macro

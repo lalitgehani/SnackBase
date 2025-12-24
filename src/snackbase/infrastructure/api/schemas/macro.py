@@ -104,3 +104,20 @@ class MacroResponse(MacroBase):
             except json.JSONDecodeError:
                 return []
         return v
+
+
+class MacroTestRequest(BaseModel):
+    """Schema for testing a macro."""
+
+    parameters: List[str] = Field(
+        default_factory=list,
+        description="Array of test values to pass to the macro"
+    )
+
+
+class MacroTestResponse(BaseModel):
+    """Schema for macro test response."""
+
+    result: Optional[str] = Field(None, description="The result of the macro execution")
+    execution_time: float = Field(..., description="Execution time in milliseconds")
+    rows_affected: int = Field(0, description="Number of rows affected (always 0 for SELECT)")

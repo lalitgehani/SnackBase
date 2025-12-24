@@ -1,5 +1,6 @@
 """API router for managing SQL macros."""
 
+import time
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -16,11 +17,16 @@ from snackbase.infrastructure.api.dependencies import (
 from snackbase.infrastructure.api.schemas.macro import (
     MacroCreate,
     MacroResponse,
+    MacroTestRequest,
+    MacroTestResponse,
     MacroUpdate,
 )
 from snackbase.infrastructure.persistence.database import get_db_session
 from snackbase.infrastructure.persistence.repositories.macro_repository import (
     MacroRepository,
+)
+from snackbase.infrastructure.persistence.repositories.permission_repository import (
+    PermissionRepository,
 )
 
 router = APIRouter()
@@ -158,6 +164,104 @@ async def update_macro(
         )
 
 
+@router.post(
+    "/{macro_id}/test",
+    response_model=MacroTestResponse,
+    dependencies=[Depends(require_superadmin)],
+)
+async def test_macro(
+    macro_id: int,
+    test_request: MacroTestRequest,
+    current_user: SuperadminUser,
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Test a SQL macro execution.
+
+    Executes the macro in a transaction that is rolled back after execution.
+    Requires superadmin privileges.
+    """
+    from sqlalchemy import text
+    import json
+
+    repository = MacroRepository(db)
+    macro = await repository.get_by_id(macro_id)
+    
+    if not macro:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Macro not found",
+        )
+    
+    # Parse macro parameters
+    try:
+        param_names = json.loads(macro.parameters) if macro.parameters else []
+    except json.JSONDecodeError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Invalid macro parameters definition",
+        )
+    
+    # Validate parameter count
+    if len(test_request.parameters) != len(param_names):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Expected {len(param_names)} parameters, got {len(test_request.parameters)}",
+        )
+    
+    # Build bind parameters
+    bind_params = {}
+    for i, param_name in enumerate(param_names):
+        bind_params[param_name] = test_request.parameters[i]
+    
+    # Execute in transaction with rollback
+    try:
+        # Start a savepoint for rollback
+        async with db.begin_nested():
+            start_time = time.time()
+            
+            stmt = text(macro.sql_query)
+            stmt = stmt.bindparams(**bind_params)
+            
+            # Execute with timeout
+            stmt = stmt.execution_options(timeout=5)
+            result = await db.execute(stmt)
+            
+            # Get result
+            result_value = result.scalar()
+            
+            # Calculate execution time in milliseconds
+            execution_time = (time.time() - start_time) * 1000
+            
+            # Rollback the nested transaction
+            raise Exception("Rollback test transaction")
+            
+    except Exception as e:
+        # Expected rollback or actual error
+        if "Rollback test transaction" not in str(e):
+            logger.error(
+                "Macro test execution failed",
+                macro_id=macro_id,
+                error=str(e),
+            )
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"Macro execution failed: {str(e)}",
+            )
+    
+    logger.info(
+        "Macro tested",
+        macro_id=macro_id,
+        execution_time=execution_time,
+        user_id=current_user.user_id,
+    )
+    
+    return MacroTestResponse(
+        result=str(result_value) if result_value is not None else None,
+        execution_time=execution_time,
+        rows_affected=0,  # SELECT queries don't affect rows
+    )
+
+
 @router.delete(
     "/{macro_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -171,9 +275,35 @@ async def delete_macro(
     """Delete a SQL macro.
 
     Requires superadmin privileges.
+    Fails if macro is used in any active permission rules.
     """
-    repository = MacroRepository(db)
-    deleted = await repository.delete(macro_id)
+    macro_repo = MacroRepository(db)
+    permission_repo = PermissionRepository(db)
+    
+    # Check if macro exists
+    macro = await macro_repo.get_by_id(macro_id)
+    if not macro:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Macro not found",
+        )
+    
+    # Check if macro is used in any permissions
+    permissions_using_macro = await permission_repo.find_permissions_using_macro(macro.name)
+    if permissions_using_macro:
+        logger.warning(
+            "Cannot delete macro: in use by permissions",
+            macro_id=macro_id,
+            macro_name=macro.name,
+            permission_count=len(permissions_using_macro),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot delete macro '{macro.name}': it is used in {len(permissions_using_macro)} permission rule(s)",
+        )
+    
+    # Delete the macro
+    deleted = await macro_repo.delete(macro_id)
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
