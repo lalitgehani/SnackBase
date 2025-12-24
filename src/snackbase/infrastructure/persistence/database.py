@@ -204,6 +204,18 @@ async def init_database() -> None:
     It creates tables if they don't exist (development mode).
     In production, migrations should be used instead.
     """
+    # Import all models to ensure they are registered with Base.metadata
+    # This import must happen before create_tables() is called
+    from snackbase.infrastructure.persistence.models import (  # noqa: F401
+        AccountModel,
+        CollectionModel,
+        GroupModel,
+        InvitationModel,
+        RoleModel,
+        UserModel,
+        UsersGroupsModel,
+    )
+
     db = get_db_manager()
     settings = get_settings()
 
@@ -225,8 +237,40 @@ async def init_database() -> None:
     if settings.is_development:
         logger.info("Development mode: Creating database tables")
         await db.create_tables()
+        # Seed default roles
+        await _seed_default_roles(db, RoleModel)
     else:
         logger.info("Production mode: Skipping auto-create, use migrations")
+
+
+async def _seed_default_roles(db: DatabaseManager, RoleModel: type) -> None:
+    """Seed default roles if they don't exist.
+
+    Args:
+        db: Database manager instance.
+        RoleModel: The RoleModel class to use for creating roles.
+    """
+    from sqlalchemy import select
+
+    default_roles = [
+        {"id": 1, "name": "admin", "description": "Administrator with full access"},
+        {"id": 2, "name": "user", "description": "Regular user with limited access"},
+    ]
+
+    async with db.session() as session:
+        for role_data in default_roles:
+            # Check if role already exists
+            result = await session.execute(
+                select(RoleModel).where(RoleModel.name == role_data["name"])
+            )
+            existing = result.scalar_one_or_none()
+
+            if existing is None:
+                role = RoleModel(**role_data)
+                session.add(role)
+                logger.info("Seeded default role", role_name=role_data["name"])
+
+        await session.commit()
 
 
 async def close_database() -> None:
