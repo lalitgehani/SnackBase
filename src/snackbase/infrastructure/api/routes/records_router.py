@@ -553,3 +553,93 @@ async def _update_record(
     )
 
     return RecordResponse.from_record(updated_record)
+
+
+@router.delete(
+    "/{collection}/{record_id}",
+    responses={
+        204: {"description": "Record deleted successfully"},
+        401: {"description": "Authentication required"},
+        403: {"description": "Permission denied"},
+        404: {"description": "Record or collection not found"},
+        409: {"description": "Conflict (Foreign Key Restriction)"},
+    },
+)
+async def delete_record(
+    collection: str,
+    record_id: str,
+    current_user: AuthenticatedUser,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Delete a record by ID."""
+    from fastapi import Response
+    
+    # 1. Look up collection
+    collection_repo = CollectionRepository(session)
+    collection_model = await collection_repo.get_by_name(collection)
+
+    if collection_model is None:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={
+                "error": "Not found",
+                "message": f"Collection '{collection}' not found",
+            },
+        )
+
+    # 2. Delete record
+    record_repo = RecordRepository(session)
+    try:
+        deleted = await record_repo.delete_record(
+            collection_name=collection,
+            record_id=record_id,
+            account_id=current_user.account_id,
+        )
+
+        if not deleted:
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={
+                    "error": "Not found",
+                    "message": "Record not found",
+                },
+            )
+
+        await session.commit()
+        
+        logger.info(
+            "Record deleted successfully",
+            collection=collection,
+            record_id=record_id,
+            account_id=current_user.account_id,
+            deleted_by=current_user.user_id,
+        )
+        
+        # Return 204 No Content
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+        
+    except Exception as e:
+        logger.error(
+            "Record deletion failed",
+            collection=collection,
+            record_id=record_id,
+            error=str(e),
+        )
+        # Check for constraint errors
+        error_msg = str(e).lower()
+        if "foreign key" in error_msg or "constraint" in error_msg:
+            return JSONResponse(
+                status_code=status.HTTP_409_CONFLICT,
+                content={
+                    "error": "Conflict",
+                    "message": "Cannot delete record: it is referenced by other records",
+                },
+            )
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "error": "Internal error",
+                "message": "Failed to delete record",
+            },
+        )
+

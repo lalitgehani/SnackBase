@@ -410,3 +410,33 @@ class RecordRepository:
             records.append(record)
 
         return records, total_count
+
+    async def delete_record(
+        self,
+        collection_name: str,
+        record_id: str,
+        account_id: str,
+    ) -> bool:
+        """Delete a record by ID, scoped to account.
+
+        Args:
+            collection_name: The collection name.
+            record_id: The record ID.
+            account_id: The account ID for scoping.
+
+        Returns:
+            True if record was deleted, False if not found.
+        """
+        table_name = TableBuilder.generate_table_name(collection_name)
+
+        delete_sql = f'''
+            DELETE FROM "{table_name}"
+            WHERE "id" = :record_id AND "account_id" = :account_id
+        '''
+
+        result = await self.session.execute(
+            text(delete_sql),
+            {"record_id": record_id, "account_id": account_id},
+        )
+
+        return result.rowcount > 0
