@@ -107,5 +107,5 @@ def test_parser_syntax_error():
 def test_parser_invalid_token():
     """Test invalid token error."""
     with pytest.raises(RuleSyntaxError):
-        lexer = Lexer("user.id @ 1") # @ is invalid
+        lexer = Lexer("user.id # 1") # # is invalid
         list(lexer.tokenize())
