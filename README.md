@@ -6,18 +6,24 @@ SnackBase is a Python/FastAPI-based BaaS providing auto-generated REST APIs, mul
 
 ## Status
 
-**Phase 1: Foundation & MVP** (In Progress - 4/13 features complete)
+**Phase 1: Foundation & MVP** (Nearing Completion - 11/13 features complete)
 
 - [x] F1.1: Project Scaffolding & Architecture Setup
 - [x] F1.2: Database Schema & Core System Tables
 - [x] F1.3: Account Registration
 - [x] F1.4: Account Login
 - [x] F1.5: JWT Token Management
-- [ ] F1.6: Dynamic Collection Creation
-- [ ] F1.7-F1.10: Dynamic Record CRUD
-- [ ] F1.11: User Invitation System
-- [ ] F1.12: Hook System Infrastructure
+- [x] F1.6: Dynamic Collection Creation
+- [x] F1.7-F1.10: Dynamic Record CRUD
+- [x] F1.11: User Invitation System
+- [x] F1.12: Hook System Infrastructure
 - [x] F1.13: Account ID Generator
+
+**Documentation Status**: ✅ Complete
+
+- [Deployment Guide](docs/deployment.md) - Development and production deployment
+- [Hook System](docs/hooks.md) - Extensibility framework and stable API
+- [API Examples](docs/api-examples.md) - Practical usage examples
 
 ## Features
 
@@ -31,6 +37,7 @@ SnackBase is a Python/FastAPI-based BaaS providing auto-generated REST APIs, mul
 - **CLI** - Server management and utility commands
 
 #### Authentication System
+
 - **Account Registration** - Multi-tenant account creation with unique `XX####` ID format
 - **User Registration** - Per-account user registration with email/password
 - **Login** - Timing-safe password verification with account resolution
@@ -39,10 +46,12 @@ SnackBase is a Python/FastAPI-based BaaS providing auto-generated REST APIs, mul
 - **Protected Endpoints** - JWT-based authentication with `Authorization: Bearer` header
 
 #### Domain Layer
+
 - **Entities** - Account, User, Role, Group, Collection, Invitation
 - **Services** - AccountIdGenerator, PasswordValidator, SlugGenerator
 
 #### Persistence Layer
+
 - **ORM Models** - Account, User, Role, Group, Collection, Invitation, RefreshToken, UsersGroups
 - **Repositories** - AccountRepository, UserRepository, RoleRepository, RefreshTokenRepository
 
@@ -77,6 +86,37 @@ uv sync
 # Or install with pip
 pip install -e .
 ```
+
+## Documentation
+
+Comprehensive documentation is available in the [`docs/`](docs/) directory:
+
+- **[Deployment Guide](docs/deployment.md)** - Complete guide for development and production deployment
+
+  - Development setup with SQLite
+  - Production deployment with PostgreSQL and systemd
+  - Nginx reverse proxy configuration
+  - Environment variables reference
+  - Health checks and monitoring
+  - Troubleshooting guide
+
+- **[Hook System](docs/hooks.md)** - Extensibility framework documentation
+
+  - Stable API contract (v1.0)
+  - Hook categories and events
+  - Built-in hooks (timestamp, account_isolation, created_by)
+  - Creating custom hooks
+  - Advanced features and best practices
+
+- **[API Examples](docs/api-examples.md)** - Practical API usage examples
+
+  - Authentication flows
+  - Collection creation
+  - CRUD operations
+  - Error handling
+  - Best practices
+
+- **[API Reference (Swagger)](http://localhost:8000/docs)** - Interactive API documentation
 
 ## Usage
 
@@ -154,6 +194,7 @@ SNACKBASE_LOG_FORMAT=json
 ### Authentication
 
 - `POST /api/v1/auth/register` - Create a new account with admin user
+
   ```bash
   curl -X POST http://localhost:8000/api/v1/auth/register \
     -H "Content-Type: application/json" \
@@ -165,6 +206,7 @@ SNACKBASE_LOG_FORMAT=json
   ```
 
 - `POST /api/v1/auth/login` - Login with email, password, and account identifier
+
   ```bash
   curl -X POST http://localhost:8000/api/v1/auth/login \
     -H "Content-Type: application/json" \
@@ -176,6 +218,7 @@ SNACKBASE_LOG_FORMAT=json
   ```
 
 - `POST /api/v1/auth/refresh` - Refresh access token using refresh token
+
   ```bash
   curl -X POST http://localhost:8000/api/v1/auth/refresh \
     -H "Content-Type: application/json" \
@@ -244,6 +287,7 @@ Accounts represent isolated tenants within a single database. Data segregation u
 ### Account ID Format
 
 Accounts use auto-generated IDs in format `XX####` (2 letters + 4 digits, e.g., `AB1234`):
+
 - `id`: XX#### format (primary key, immutable)
 - `slug`: URL-friendly identifier for login (globally unique)
 - `name`: Display name (not unique)
@@ -287,15 +331,15 @@ uv run pytest --cov=snackbase
 
 ## Configuration Reference
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `SNACKBASE_DATABASE_URL` | `sqlite+aiosqlite:///./sb_data/snackbase.db` | Database connection URL |
-| `SNACKBASE_SECRET_KEY` | `change-me-in-production...` | JWT signing key |
-| `SNACKBASE_ACCESS_TOKEN_EXPIRE_MINUTES` | `60` | Access token expiration (minutes) |
-| `SNACKBASE_REFRESH_TOKEN_EXPIRE_DAYS` | `7` | Refresh token expiration (days) |
-| `SNACKBASE_PORT` | `8000` | Server port |
-| `SNACKBASE_LOG_LEVEL` | `INFO` | Logging level |
-| `SNACKBASE_LOG_FORMAT` | `json` | Log format (json/console) |
+| Setting                                 | Default                                      | Description                       |
+| --------------------------------------- | -------------------------------------------- | --------------------------------- |
+| `SNACKBASE_DATABASE_URL`                | `sqlite+aiosqlite:///./sb_data/snackbase.db` | Database connection URL           |
+| `SNACKBASE_SECRET_KEY`                  | `change-me-in-production...`                 | JWT signing key                   |
+| `SNACKBASE_ACCESS_TOKEN_EXPIRE_MINUTES` | `60`                                         | Access token expiration (minutes) |
+| `SNACKBASE_REFRESH_TOKEN_EXPIRE_DAYS`   | `7`                                          | Refresh token expiration (days)   |
+| `SNACKBASE_PORT`                        | `8000`                                       | Server port                       |
+| `SNACKBASE_LOG_LEVEL`                   | `INFO`                                       | Logging level                     |
+| `SNACKBASE_LOG_FORMAT`                  | `json`                                       | Log format (json/console)         |
 
 ## Roadmap
 
