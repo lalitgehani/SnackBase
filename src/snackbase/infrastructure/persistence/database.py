@@ -239,6 +239,8 @@ async def init_database() -> None:
         await db.create_tables()
         # Seed default roles
         await _seed_default_roles(db, RoleModel)
+        # Seed default permissions (after roles are created)
+        await _seed_default_permissions(db)
     else:
         logger.info("Production mode: Skipping auto-create, use migrations")
 
@@ -269,6 +271,61 @@ async def _seed_default_roles(db: DatabaseManager, RoleModel: type) -> None:
                 role = RoleModel(**role_data)
                 session.add(role)
                 logger.info("Seeded default role", role_name=role_data["name"])
+
+        await session.commit()
+
+
+async def _seed_default_permissions(db: DatabaseManager) -> None:
+    """Seed default permissions if they don't exist.
+
+    Creates default admin permissions with full access to all collections.
+
+    Args:
+        db: Database manager instance.
+    """
+    import json
+
+    from sqlalchemy import select
+
+    from snackbase.infrastructure.persistence.models import PermissionModel, RoleModel
+
+    # Admin role gets full access to all collections (*)
+    admin_permission_rules = {
+        "create": {"rule": "true", "fields": "*"},
+        "read": {"rule": "true", "fields": "*"},
+        "update": {"rule": "true", "fields": "*"},
+        "delete": {"rule": "true", "fields": "*"},
+    }
+
+    async with db.session() as session:
+        # Get admin role
+        result = await session.execute(
+            select(RoleModel).where(RoleModel.name == "admin")
+        )
+        admin_role = result.scalar_one_or_none()
+
+        if admin_role:
+            # Check if permission already exists
+            result = await session.execute(
+                select(PermissionModel).where(
+                    PermissionModel.role_id == admin_role.id,
+                    PermissionModel.collection == "*",
+                )
+            )
+            existing = result.scalar_one_or_none()
+
+            if existing is None:
+                permission = PermissionModel(
+                    role_id=admin_role.id,
+                    collection="*",
+                    rules=json.dumps(admin_permission_rules),
+                )
+                session.add(permission)
+                logger.info(
+                    "Seeded default admin permission",
+                    role_id=admin_role.id,
+                    collection="*",
+                )
 
         await session.commit()
 

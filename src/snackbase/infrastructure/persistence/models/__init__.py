@@ -8,6 +8,7 @@ from snackbase.infrastructure.persistence.models.account import AccountModel
 from snackbase.infrastructure.persistence.models.collection import CollectionModel
 from snackbase.infrastructure.persistence.models.group import GroupModel
 from snackbase.infrastructure.persistence.models.invitation import InvitationModel
+from snackbase.infrastructure.persistence.models.permission import PermissionModel
 from snackbase.infrastructure.persistence.models.refresh_token import RefreshTokenModel
 from snackbase.infrastructure.persistence.models.role import RoleModel
 from snackbase.infrastructure.persistence.models.user import UserModel
@@ -18,6 +19,7 @@ __all__ = [
     "CollectionModel",
     "GroupModel",
     "InvitationModel",
+    "PermissionModel",
     "RefreshTokenModel",
     "RoleModel",
     "UserModel",

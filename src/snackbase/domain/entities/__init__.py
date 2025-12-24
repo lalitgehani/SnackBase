@@ -13,6 +13,11 @@ from snackbase.domain.entities.hook_context import (
     HookResult,
 )
 from snackbase.domain.entities.invitation import Invitation
+from snackbase.domain.entities.permission import (
+    OperationRule,
+    Permission,
+    PermissionRules,
+)
 from snackbase.domain.entities.role import Role
 from snackbase.domain.entities.user import User
 
@@ -24,6 +29,10 @@ __all__ = [
     "HookContext",
     "HookResult",
     "Invitation",
+    "OperationRule",
+    "Permission",
+    "PermissionRules",
     "Role",
     "User",
 ]
+

@@ -9,6 +9,9 @@ from snackbase.infrastructure.persistence.repositories.collection_repository imp
 from snackbase.infrastructure.persistence.repositories.invitation_repository import (
     InvitationRepository,
 )
+from snackbase.infrastructure.persistence.repositories.permission_repository import (
+    PermissionRepository,
+)
 from snackbase.infrastructure.persistence.repositories.record_repository import (
     RecordRepository,
 )
@@ -26,10 +29,9 @@ __all__ = [
     "AccountRepository",
     "CollectionRepository",
     "InvitationRepository",
+    "PermissionRepository",
     "RecordRepository",
     "RefreshTokenRepository",
     "RoleRepository",
     "UserRepository",
 ]
-
-

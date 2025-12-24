@@ -45,6 +45,11 @@ class RoleModel(Base):
         "UserModel",
         back_populates="role",
     )
+    permissions: Mapped[list["PermissionModel"]] = relationship(  # noqa: F821
+        "PermissionModel",
+        back_populates="role",
+        cascade="all, delete-orphan",
+    )
 
     def __repr__(self) -> str:
         return f"<Role(id={self.id}, name={self.name})>"
