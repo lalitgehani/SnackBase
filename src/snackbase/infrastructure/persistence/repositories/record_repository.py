@@ -6,7 +6,7 @@ since tables are created dynamically and not mapped to ORM models.
 
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import text
@@ -56,7 +56,7 @@ class RecordRepository:
             The complete record dict including system fields.
         """
         table_name = TableBuilder.generate_table_name(collection_name)
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # Build system fields
         system_fields = {
@@ -145,7 +145,7 @@ class RecordRepository:
             The updated record dict, or None if not found/access denied.
         """
         table_name = TableBuilder.generate_table_name(collection_name)
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         
         # 1. Prepare update values
         schema_lookup = {f["name"]: f for f in schema}

@@ -100,7 +100,7 @@ async def test_create_macro_invalid_query(async_client):
         headers={"Authorization": "Bearer dummy"},
     )
 
-    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
 @pytest.mark.asyncio

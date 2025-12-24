@@ -3,7 +3,7 @@
 from datetime import datetime
 from enum import Enum
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class InvitationStatus(str, Enum):
@@ -41,8 +41,7 @@ class InvitationResponse(BaseModel):
     created_at: datetime = Field(..., description="Creation timestamp")
     status: InvitationStatus = Field(..., description="Current invitation status")
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class InvitationAcceptRequest(BaseModel):
