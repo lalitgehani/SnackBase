@@ -214,17 +214,18 @@ class RecordValidator:
 
     @classmethod
     def validate_and_apply_defaults(
-        cls, data: dict[str, Any], schema: list[dict[str, Any]]
+        cls, data: dict[str, Any], schema: list[dict[str, Any]], partial: bool = False
     ) -> tuple[dict[str, Any], list[RecordValidationError]]:
         """Validate record data against schema and apply default values.
 
         Args:
             data: The record data to validate.
             schema: The collection schema (list of field definitions).
+            partial: If True, only validate fields present in data (for PATCH).
 
         Returns:
             Tuple of (processed_data, errors).
-            processed_data has defaults applied for missing optional fields.
+            processed_data has defaults applied for missing optional fields (unless partial=True).
             errors is empty list if validation passed.
         """
         errors: list[RecordValidationError] = []
@@ -273,18 +274,20 @@ class RecordValidator:
                         errors.append(error)
                     else:
                         processed_data[field_name] = value
-            elif is_required:
-                # Required field missing
-                errors.append(
-                    RecordValidationError(
-                        field=field_name,
-                        message=f"Required field '{field_name}' is missing",
-                        code="required_missing",
+            elif not partial:
+                # Field missing - apply defaults or check required ONLY if not partial update
+                if is_required:
+                    # Required field missing
+                    errors.append(
+                        RecordValidationError(
+                            field=field_name,
+                            message=f"Required field '{field_name}' is missing",
+                            code="required_missing",
+                        )
                     )
-                )
-            elif default_value is not None:
-                # Optional field with default - apply default
-                processed_data[field_name] = default_value
-            # else: optional field without default - don't include in processed_data
+                elif default_value is not None:
+                    # Optional field with default - apply default
+                    processed_data[field_name] = default_value
+                # else: optional field without default - don't include in processed_data
 
         return processed_data, errors

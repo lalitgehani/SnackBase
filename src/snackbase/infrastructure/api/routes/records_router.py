@@ -361,3 +361,195 @@ async def get_record(
         )
 
     return RecordResponse.from_record(record)
+
+
+@router.put(
+    "/{collection}/{record_id}",
+    response_model=RecordResponse,
+    responses={
+        400: {"model": RecordValidationErrorResponse, "description": "Validation error"},
+        401: {"description": "Authentication required"},
+        403: {"description": "Permission denied"},
+        404: {"description": "Record or collection not found"},
+    },
+)
+async def update_record_full(
+    collection: str,
+    record_id: str,
+    data: dict[str, Any],
+    current_user: AuthenticatedUser,
+    session: AsyncSession = Depends(get_db_session),
+) -> RecordResponse | JSONResponse:
+    """Update a record (full replacement).
+    
+    Replaces the entire record with the provided data (except system fields).
+    """
+    return await _update_record(collection, record_id, data, current_user, session, partial=False)
+
+
+@router.patch(
+    "/{collection}/{record_id}",
+    response_model=RecordResponse,
+    responses={
+        400: {"model": RecordValidationErrorResponse, "description": "Validation error"},
+        401: {"description": "Authentication required"},
+        403: {"description": "Permission denied"},
+        404: {"description": "Record or collection not found"},
+    },
+)
+async def update_record_partial(
+    collection: str,
+    record_id: str,
+    data: dict[str, Any],
+    current_user: AuthenticatedUser,
+    session: AsyncSession = Depends(get_db_session),
+) -> RecordResponse | JSONResponse:
+    """Update a record (partial update).
+    
+    Updates only the provided fields.
+    """
+    return await _update_record(collection, record_id, data, current_user, session, partial=True)
+
+
+async def _update_record(
+    collection: str,
+    record_id: str,
+    data: dict[str, Any],
+    current_user: AuthenticatedUser,
+    session: AsyncSession,
+    partial: bool,
+) -> RecordResponse | JSONResponse:
+    """Internal helper for record updates."""
+    # 1. Look up collection
+    collection_repo = CollectionRepository(session)
+    collection_model = await collection_repo.get_by_name(collection)
+
+    if collection_model is None:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={
+                "error": "Not found",
+                "message": f"Collection '{collection}' not found",
+            },
+        )
+
+    # 2. Parse collection schema
+    try:
+        schema = json.loads(collection_model.schema)
+    except json.JSONDecodeError:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "error": "Internal error",
+                "message": "Failed to parse collection schema",
+            },
+        )
+
+    # 3. Validate reference fields
+    record_repo = RecordRepository(session)
+    reference_errors = []
+    
+    # Check references only for fields present in data
+    # (if full update, this covers all refs; if partial, only updated refs)
+    for field in schema:
+        field_name = field["name"]
+        field_type = field.get("type", "text").lower()
+
+        if field_type == FieldType.REFERENCE.value and field_name in data:
+            ref_value = data[field_name]
+            if ref_value is not None:
+                target_collection = field.get("collection", "")
+                exists = await record_repo.check_reference_exists(
+                    target_collection,
+                    ref_value,
+                    current_user.account_id,
+                )
+                if not exists:
+                    reference_errors.append({
+                        "field": field_name,
+                        "message": f"Referenced record '{ref_value}' not found in collection '{target_collection}'",
+                        "code": "invalid_reference",
+                    })
+
+    # 4. Validate record data
+    processed_data, validation_errors = RecordValidator.validate_and_apply_defaults(
+        data, schema, partial=partial
+    )
+
+    # Combine errors
+    all_errors = [
+        RecordValidationErrorDetail(
+            field=e.field,
+            message=e.message,
+            code=e.code,
+        )
+        for e in validation_errors
+    ] + [
+        RecordValidationErrorDetail(**e) for e in reference_errors
+    ]
+
+    if all_errors:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content=RecordValidationErrorResponse(
+                error="Validation error",
+                details=all_errors,
+            ).model_dump(),
+        )
+
+    # 5. Update record
+    try:
+        updated_record = await record_repo.update_record(
+            collection_name=collection,
+            record_id=record_id,
+            account_id=current_user.account_id,
+            updated_by=current_user.user_id,
+            data=processed_data,
+            schema=schema,
+        )
+        
+        if updated_record is None:
+            # Either record doesn't exist or doesn't belong to account
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={
+                    "error": "Not found",
+                    "message": "Record not found",
+                },
+            )
+            
+        await session.commit()
+    except Exception as e:
+        logger.error(
+            "Record update failed: database error",
+            collection=collection,
+            record_id=record_id,
+            error=str(e),
+        )
+        # Check for constraint errors
+        error_msg = str(e).lower()
+        if "foreign key" in error_msg or "constraint" in error_msg:
+             return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={
+                    "error": "Validation error",
+                    "message": "Foreign key constraint violation",
+                },
+            )
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "error": "Internal error",
+                "message": "Failed to update record",
+            },
+        )
+
+    logger.info(
+        "Record updated successfully",
+        collection=collection,
+        record_id=record_id,
+        account_id=current_user.account_id,
+        updated_by=current_user.user_id,
+    )
+
+    return RecordResponse.from_record(updated_record)
