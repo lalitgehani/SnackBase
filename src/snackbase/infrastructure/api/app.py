@@ -14,7 +14,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from snackbase.core.config import get_settings
+from snackbase.core.hooks import HookDecorator, HookEvent, HookRegistry
 from snackbase.core.logging import configure_logging, get_logger
+from snackbase.domain.entities.hook_context import HookContext
+from snackbase.infrastructure.hooks import register_builtin_hooks
 from snackbase.infrastructure.persistence.database import (
     close_database,
     init_database,
@@ -62,10 +65,40 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.error("Failed to initialize database", error=str(e))
         raise
 
+    # Register built-in hooks
+    if hasattr(app.state, "hook_registry"):
+        register_builtin_hooks(app.state.hook_registry)
+        logger.info("Built-in hooks registered")
+
+        # Trigger ON_BOOTSTRAP hook
+        bootstrap_context = HookContext(app=app)
+        await app.state.hook_registry.trigger(
+            event=HookEvent.ON_BOOTSTRAP,
+            context=bootstrap_context,
+        )
+        logger.info("ON_BOOTSTRAP hooks triggered")
+
+        # Trigger ON_SERVE hook (app is ready to serve)
+        await app.state.hook_registry.trigger(
+            event=HookEvent.ON_SERVE,
+            context=bootstrap_context,
+        )
+        logger.info("ON_SERVE hooks triggered")
+
     yield
 
     # Shutdown
     logger.info("Shutting down SnackBase")
+
+    # Trigger ON_TERMINATE hook
+    if hasattr(app.state, "hook_registry"):
+        terminate_context = HookContext(app=app)
+        await app.state.hook_registry.trigger(
+            event=HookEvent.ON_TERMINATE,
+            context=terminate_context,
+        )
+        logger.info("ON_TERMINATE hooks triggered")
+
     await close_database()
     logger.info("Database connection closed")
 
@@ -90,6 +123,17 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json" if settings.is_development else None,
         lifespan=lifespan,
     )
+
+    # Initialize hook system
+    # The hook registry is the core of the extensibility system
+    hook_registry = HookRegistry()
+    hook_decorator = HookDecorator(hook_registry)
+
+    # Store on app state for access throughout the application
+    app.state.hook_registry = hook_registry
+    app.state.hook = hook_decorator
+
+    logger.info("Hook system initialized")
 
     # Configure CORS
     app.add_middleware(
