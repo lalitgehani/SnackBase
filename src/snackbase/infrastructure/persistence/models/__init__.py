@@ -13,6 +13,7 @@ from snackbase.infrastructure.persistence.models.refresh_token import RefreshTok
 from snackbase.infrastructure.persistence.models.role import RoleModel
 from snackbase.infrastructure.persistence.models.user import UserModel
 from snackbase.infrastructure.persistence.models.users_groups import UsersGroupsModel
+from snackbase.infrastructure.persistence.models.macro import MacroModel
 
 __all__ = [
     "AccountModel",
@@ -24,5 +25,6 @@ __all__ = [
     "RoleModel",
     "UserModel",
     "UsersGroupsModel",
+    "MacroModel",
 ]
 
