@@ -29,7 +29,7 @@ router = APIRouter()
 
 
 @router.post(
-    "/",
+    "",
     status_code=status.HTTP_201_CREATED,
     response_model=CollectionResponse,
     responses={

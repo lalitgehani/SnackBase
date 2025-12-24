@@ -22,6 +22,7 @@ from snackbase.infrastructure.api.schemas.record_schemas import (
     RecordResponse,
     RecordValidationErrorDetail,
     RecordValidationErrorResponse,
+    RecordListResponse,
 )
 
 __all__ = [
@@ -34,7 +35,9 @@ __all__ = [
     "LoginRequest",
     "RecordResponse",
     "RecordValidationErrorDetail",
+    "RecordValidationErrorDetail",
     "RecordValidationErrorResponse",
+    "RecordListResponse",
     "RefreshRequest",
     "RegisterRequest",
     "SchemaFieldResponse",

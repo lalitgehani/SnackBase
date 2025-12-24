@@ -215,3 +215,112 @@ class RecordRepository:
         )
 
         return result.scalar_one_or_none() is not None
+
+    async def find_all(
+        self,
+        collection_name: str,
+        account_id: str,
+        schema: list[dict[str, Any]],
+        skip: int = 0,
+        limit: int = 30,
+        sort_by: str = "created_at",
+        descending: bool = True,
+        filters: dict[str, Any] | None = None,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Find records in a collection with pagination, sorting, and filtering.
+
+        Args:
+            collection_name: The collection name.
+            account_id: The account ID for scoping.
+            schema: The collection schema for type conversion.
+            skip: Number of records to skip.
+            limit: Maximum number of records to return.
+            sort_by: Field to sort by.
+            descending: Whether to sort in descending order.
+            filters: Optional dictionary of filter conditions (field=value).
+
+        Returns:
+            A tuple containing (list of records, total count).
+        """
+        table_name = TableBuilder.generate_table_name(collection_name)
+        filters = filters or {}
+
+        # 1. Build base query components
+        where_clauses = ['"account_id" = :account_id']
+        params = {"account_id": account_id}
+
+        # Validate sort field to prevent SQL injection
+        # Allow system fields and schema fields
+        schema_field_names = {f["name"] for f in schema}
+        system_fields = {"id", "created_at", "created_by", "updated_at", "updated_by"}
+        
+        if sort_by not in schema_field_names and sort_by not in system_fields:
+            # Fallback to default if invalid sort field
+            sort_by = "created_at"
+
+        # Apply filters
+        for field, value in filters.items():
+            if field in schema_field_names or field in system_fields:
+                param_name = f"filter_{field}"
+                where_clauses.append(f'"{field}" = :{param_name}')
+                
+                # specific handling for boolean or json
+                 # Check schema type if it's a schema field
+                schema_field = next((f for f in schema if f["name"] == field), None)
+                if schema_field:
+                    field_type = schema_field.get("type", "text").lower()
+                    if field_type == "boolean":
+                        if isinstance(value, str):
+                            params[param_name] = 1 if value.lower() == "true" else 0
+                        else:
+                             params[param_name] = 1 if value else 0
+                    else:
+                        params[param_name] = value
+                else:
+                    params[param_name] = value
+
+        where_clause = " AND ".join(where_clauses)
+
+        # 2. Get total count
+        count_sql = f'SELECT COUNT(*) FROM "{table_name}" WHERE {where_clause}'
+        count_result = await self.session.execute(text(count_sql), params)
+        total_count = count_result.scalar_one()
+
+        # 3. Get paginated records
+        sort_order = "DESC" if descending else "ASC"
+        
+        select_sql = f'''
+            SELECT * FROM "{table_name}"
+            WHERE {where_clause}
+            ORDER BY "{sort_by}" {sort_order}
+            LIMIT :limit OFFSET :skip
+        '''
+        
+        params["limit"] = limit
+        params["skip"] = skip
+
+        result = await self.session.execute(text(select_sql), params)
+        rows = result.fetchall()
+
+        # 4. Convert rows to dicts and fix types
+        records = []
+        schema_lookup = {f["name"]: f for f in schema}
+
+        for row in rows:
+            record = dict(row._mapping)
+            
+            # Type conversion (same as get_by_id)
+            for key, value in list(record.items()):
+                if key in schema_lookup:
+                    field_type = schema_lookup[key].get("type", "text").lower()
+                    if field_type == "json" and value is not None:
+                        try:
+                            record[key] = json.loads(value)
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+                    elif field_type == "boolean":
+                        record[key] = bool(value)
+            
+            records.append(record)
+
+        return records, total_count

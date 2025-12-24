@@ -51,3 +51,12 @@ class RecordValidationErrorResponse(BaseModel):
     details: list[RecordValidationErrorDetail] = Field(
         ..., description="List of validation errors"
     )
+
+
+class RecordListResponse(BaseModel):
+    """Response for listing records."""
+
+    items: list[RecordResponse] = Field(..., description="List of records")
+    total: int = Field(..., description="Total number of records matching filter")
+    skip: int = Field(..., description="Number of records skipped")
+    limit: int = Field(..., description="Number of records returned")

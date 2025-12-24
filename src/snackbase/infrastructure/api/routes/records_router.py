@@ -7,7 +7,7 @@ import json
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, Request, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,6 +18,7 @@ from snackbase.infrastructure.api.schemas import (
     RecordResponse,
     RecordValidationErrorDetail,
     RecordValidationErrorResponse,
+    RecordListResponse,
 )
 from snackbase.infrastructure.persistence.database import get_db_session
 from snackbase.infrastructure.persistence.repositories import (
@@ -200,3 +201,163 @@ async def create_record(
 
     # 7. Return created record
     return RecordResponse.from_record(created_record)
+
+
+@router.get(
+    "/{collection}",
+    response_model=RecordListResponse,
+    responses={
+        401: {"description": "Authentication required"},
+        403: {"description": "Permission denied"},
+        404: {"description": "Collection not found"},
+    },
+)
+async def list_records(
+    collection: str,
+    request: Request,
+    current_user: AuthenticatedUser,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(30, ge=1, le=100),
+    sort: str = Query("-created_at"),
+    fields: str | None = Query(None),
+    session: AsyncSession = Depends(get_db_session),
+) -> RecordListResponse | JSONResponse:
+    """List records in a collection.
+
+    Supports pagination, sorting, and filtering.
+    """
+    # 1. Look up collection
+    collection_repo = CollectionRepository(session)
+    collection_model = await collection_repo.get_by_name(collection)
+
+    if collection_model is None:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={
+                "error": "Not found",
+                "message": f"Collection '{collection}' not found",
+            },
+        )
+
+    # 2. Parse schema
+    try:
+        schema = json.loads(collection_model.schema)
+    except json.JSONDecodeError:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"error": "Internal error", "message": "Invalid collection schema"},
+        )
+
+    # 3. Parse sort parameter
+    descending = True
+    sort_by = "created_at"
+    
+    if sort.startswith("-"):
+        descending = True
+        sort_by = sort[1:]
+    elif sort.startswith("+"):
+        descending = False
+        sort_by = sort[1:]
+    else:
+        # Default behavior or handle bare field name
+        sort_by = sort
+
+    # 4. Extract filters from query params
+    # Exclude reserved params
+    reserved_params = {"skip", "limit", "sort", "fields"}
+    filters = {
+        k: v for k, v in request.query_params.items() 
+        if k not in reserved_params
+    }
+
+    # 5. Query records
+    record_repo = RecordRepository(session)
+    records, total = await record_repo.find_all(
+        collection_name=collection,
+        account_id=current_user.account_id,
+        schema=schema,
+        skip=skip,
+        limit=limit,
+        sort_by=sort_by,
+        descending=descending,
+        filters=filters,
+    )
+
+    # 6. Apply field limiting if requested
+    if fields:
+        field_list = [f.strip() for f in fields.split(",")]
+        # Always include ID
+        if "id" not in field_list:
+            field_list.append("id")
+            
+        filtered_records = []
+        for record in records:
+            filtered_record = {k: v for k, v in record.items() if k in field_list}
+            filtered_records.append(filtered_record)
+        records = filtered_records
+
+    # 7. Return response
+    return RecordListResponse(
+        items=[RecordResponse.from_record(r) for r in records],
+        total=total,
+        skip=skip,
+        limit=limit,
+    )
+
+
+@router.get(
+    "/{collection}/{record_id}",
+    response_model=RecordResponse,
+    responses={
+        401: {"description": "Authentication required"},
+        403: {"description": "Permission denied"},
+        404: {"description": "Record not found"},
+    },
+)
+async def get_record(
+    collection: str,
+    record_id: str,
+    current_user: AuthenticatedUser,
+    session: AsyncSession = Depends(get_db_session),
+) -> RecordResponse | JSONResponse:
+    """Get a single record by ID."""
+    # 1. Look up collection (to get schema for type conversion)
+    collection_repo = CollectionRepository(session)
+    collection_model = await collection_repo.get_by_name(collection)
+
+    if collection_model is None:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={
+                "error": "Not found",
+                "message": f"Collection '{collection}' not found",
+            },
+        )
+
+    try:
+        schema = json.loads(collection_model.schema)
+    except json.JSONDecodeError:
+         return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"error": "Internal error", "message": "Invalid collection schema"},
+        )
+
+    # 2. Get record
+    record_repo = RecordRepository(session)
+    record = await record_repo.get_by_id(
+        collection_name=collection,
+        record_id=record_id,
+        account_id=current_user.account_id,
+        schema=schema,
+    )
+
+    if record is None:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={
+                "error": "Not found",
+                "message": "Record not found",
+            },
+        )
+
+    return RecordResponse.from_record(record)
