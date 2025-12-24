@@ -14,10 +14,10 @@ def parse_rule(expression: str) -> Node:
     parser = Parser(lexer)
     return parser.parse()
 
-def evaluate_rule(node: Node, context: dict[str, Any]) -> Any:
+async def evaluate_rule(node: Node, context: dict[str, Any], macro_engine: Any | None = None) -> Any:
     """Evaluate a parsed rule AST against a context."""
-    evaluator = Evaluator(context)
-    return evaluator.evaluate(node)
+    evaluator = Evaluator(context, macro_engine)
+    return await evaluator.evaluate(node)
 
 __all__ = [
     "parse_rule",

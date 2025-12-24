@@ -18,55 +18,60 @@ class RecordContext:
     owner_id: int
     status: str
 
-def test_evaluator_literals():
+@pytest.mark.asyncio
+async def test_evaluator_literals():
     """Test evaluating constant literals."""
-    assert evaluate_rule(parse_rule("true"), {}) is True
-    assert evaluate_rule(parse_rule("false"), {}) is False
-    assert evaluate_rule(parse_rule("123"), {}) == 123
-    assert evaluate_rule(parse_rule("'hello'"), {}) == "hello"
-    assert evaluate_rule(parse_rule("null"), {}) is None
+    assert await evaluate_rule(parse_rule("true"), {}) is True
+    assert await evaluate_rule(parse_rule("false"), {}) is False
+    assert await evaluate_rule(parse_rule("123"), {}) == 123
+    assert await evaluate_rule(parse_rule("'hello'"), {}) == "hello"
+    assert await evaluate_rule(parse_rule("null"), {}) is None
 
-def test_evaluator_variables_dict():
+@pytest.mark.asyncio
+async def test_evaluator_variables_dict():
     """Test variable resolution with dictionary context."""
     context = {"user": {"id": 1, "role": "admin"}}
     
-    assert evaluate_rule(parse_rule("user.id"), context) == 1
-    assert evaluate_rule(parse_rule("user.role"), context) == "admin"
-    assert evaluate_rule(parse_rule("user.missing"), context) is None
-    assert evaluate_rule(parse_rule("missing.variable"), context) is None
+    assert await evaluate_rule(parse_rule("user.id"), context) == 1
+    assert await evaluate_rule(parse_rule("user.role"), context) == "admin"
+    assert await evaluate_rule(parse_rule("user.missing"), context) is None
+    assert await evaluate_rule(parse_rule("missing.variable"), context) is None
 
-def test_evaluator_variables_objects():
+@pytest.mark.asyncio
+async def test_evaluator_variables_objects():
     """Test variable resolution with object context."""
     user = UserContext(id=1, role="admin", groups=["dev", "ops"], settings={"theme": "dark"})
     context = {"user": user}
     
-    assert evaluate_rule(parse_rule("user.id"), context) == 1
-    assert evaluate_rule(parse_rule("user.role"), context) == "admin"
-    assert evaluate_rule(parse_rule("user.settings.theme"), context) == "dark"
+    assert await evaluate_rule(parse_rule("user.id"), context) == 1
+    assert await evaluate_rule(parse_rule("user.role"), context) == "admin"
+    assert await evaluate_rule(parse_rule("user.settings.theme"), context) == "dark"
     # Accessing missing attribute should return None safely
-    assert evaluate_rule(parse_rule("user.missing_attr"), context) is None
+    assert await evaluate_rule(parse_rule("user.missing_attr"), context) is None
     
-def test_evaluator_comparisons():
+@pytest.mark.asyncio
+async def test_evaluator_comparisons():
     """Test comparison operators."""
     context = {"age": 25, "role": "user"}
     
-    assert evaluate_rule(parse_rule("age == 25"), context) is True
-    assert evaluate_rule(parse_rule("age != 18"), context) is True
-    assert evaluate_rule(parse_rule("age > 20"), context) is True
-    assert evaluate_rule(parse_rule("age < 30"), context) is True
-    assert evaluate_rule(parse_rule("age >= 25"), context) is True
-    assert evaluate_rule(parse_rule("age <= 25"), context) is True
+    assert await evaluate_rule(parse_rule("age == 25"), context) is True
+    assert await evaluate_rule(parse_rule("age != 18"), context) is True
+    assert await evaluate_rule(parse_rule("age > 20"), context) is True
+    assert await evaluate_rule(parse_rule("age < 30"), context) is True
+    assert await evaluate_rule(parse_rule("age >= 25"), context) is True
+    assert await evaluate_rule(parse_rule("age <= 25"), context) is True
     
     # String comparison
-    assert evaluate_rule(parse_rule("role == 'user'"), context) is True
+    assert await evaluate_rule(parse_rule("role == 'user'"), context) is True
 
-def test_evaluator_logic_short_circuit():
+@pytest.mark.asyncio
+async def test_evaluator_logic_short_circuit():
     """Test logical operators with short-circuiting."""
     context = {"a": True, "b": False}
     
     # Simple logic
-    assert evaluate_rule(parse_rule("a and not b"), context) is True
-    assert evaluate_rule(parse_rule("b or a"), context) is True
+    assert await evaluate_rule(parse_rule("a and not b"), context) is True
+    assert await evaluate_rule(parse_rule("b or a"), context) is True
     
     # Short-circuiting:
     # 'a' is True, so 'a or <error>' should be True without evaluating <error>
@@ -78,13 +83,14 @@ def test_evaluator_logic_short_circuit():
             
     context_danger = {"a": True, "d": Dangerous()}
     # If short-circuit works, d.boom is never accessed
-    assert evaluate_rule(parse_rule("a or d.boom"), context_danger) is True
+    assert await evaluate_rule(parse_rule("a or d.boom"), context_danger) is True
     
     context_danger_false = {"b": False, "d": Dangerous()}
     # If short-circuit works, d.boom is never accessed for AND if first is False
-    assert evaluate_rule(parse_rule("b and d.boom"), context_danger_false) is False
+    assert await evaluate_rule(parse_rule("b and d.boom"), context_danger_false) is False
 
-def test_evaluator_functions():
+@pytest.mark.asyncio
+async def test_evaluator_functions():
     """Test built-in functions."""
     context = {
         "roles": ["admin", "editor"],
@@ -92,17 +98,18 @@ def test_evaluator_functions():
     }
     
     # contains
-    assert evaluate_rule(parse_rule("contains(roles, 'admin')"), context) is True
-    assert evaluate_rule(parse_rule("contains(roles, 'guest')"), context) is False
+    assert await evaluate_rule(parse_rule("contains(roles, 'admin')"), context) is True
+    assert await evaluate_rule(parse_rule("contains(roles, 'guest')"), context) is False
     
     # starts_with
-    assert evaluate_rule(parse_rule("starts_with(email, 'user')"), context) is True
-    assert evaluate_rule(parse_rule("starts_with(email, 'admin')"), context) is False
+    assert await evaluate_rule(parse_rule("starts_with(email, 'user')"), context) is True
+    assert await evaluate_rule(parse_rule("starts_with(email, 'admin')"), context) is False
     
     # ends_with
-    assert evaluate_rule(parse_rule("ends_with(email, '@example.com')"), context) is True
+    assert await evaluate_rule(parse_rule("ends_with(email, '@example.com')"), context) is True
     
-def test_evaluator_complex_expression():
+@pytest.mark.asyncio
+async def test_evaluator_complex_expression():
     """Test a complex real-world rule."""
     expression = """
         (user.role == 'admin') or 
@@ -112,25 +119,26 @@ def test_evaluator_complex_expression():
     
     # Scenario 1: Admin
     ctx1 = {"user": {"role": "admin", "id": 1}, "record": {"status": "published", "owner_id": 2}}
-    assert evaluate_rule(parse_rule(expression), ctx1) is True
+    assert await evaluate_rule(parse_rule(expression), ctx1) is True
     
     # Scenario 2: Editor accessing draft
     ctx2 = {"user": {"role": "editor", "id": 2}, "record": {"status": "draft", "owner_id": 3}}
-    assert evaluate_rule(parse_rule(expression), ctx2) is True
+    assert await evaluate_rule(parse_rule(expression), ctx2) is True
     
     # Scenario 3: Editor accessing published (fail)
     ctx3 = {"user": {"role": "editor", "id": 2}, "record": {"status": "published", "owner_id": 3}}
-    assert evaluate_rule(parse_rule(expression), ctx3) is False
+    assert await evaluate_rule(parse_rule(expression), ctx3) is False
     
     # Scenario 4: User accessing own record
     ctx4 = {"user": {"role": "user", "id": 3}, "record": {"status": "published", "owner_id": 3}}
-    assert evaluate_rule(parse_rule(expression), ctx4) is True
+    assert await evaluate_rule(parse_rule(expression), ctx4) is True
 
-def test_evaluator_errors():
+@pytest.mark.asyncio
+async def test_evaluator_errors():
     """Test error handling during evaluation."""
     # Type error safety (comparison of incompatible types)
-    assert evaluate_rule(parse_rule("1 < 'a'"), {}) is False
+    assert await evaluate_rule(parse_rule("1 < 'a'"), {}) is False
     
     # Missing function
     with pytest.raises(RuleEvaluationError, match="Unknown function"):
-        evaluate_rule(parse_rule("unknown_func()"), {})
+        await evaluate_rule(parse_rule("unknown_func()"), {})
