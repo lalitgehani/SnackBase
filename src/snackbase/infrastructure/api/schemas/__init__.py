@@ -18,6 +18,13 @@ from snackbase.infrastructure.api.schemas.collection_schemas import (
     FieldDefinition,
     SchemaFieldResponse,
 )
+from snackbase.infrastructure.api.schemas.invitation_schemas import (
+    InvitationAcceptRequest,
+    InvitationCreateRequest,
+    InvitationListResponse,
+    InvitationResponse,
+    InvitationStatus,
+)
 from snackbase.infrastructure.api.schemas.record_schemas import (
     RecordResponse,
     RecordValidationErrorDetail,
@@ -32,6 +39,11 @@ __all__ = [
     "ConflictErrorResponse",
     "CreateCollectionRequest",
     "FieldDefinition",
+    "InvitationAcceptRequest",
+    "InvitationCreateRequest",
+    "InvitationListResponse",
+    "InvitationResponse",
+    "InvitationStatus",
     "LoginRequest",
     "RecordResponse",
     "RecordValidationErrorDetail",
