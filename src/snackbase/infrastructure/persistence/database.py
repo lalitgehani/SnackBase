@@ -1,0 +1,238 @@
+"""Database abstraction layer using SQLAlchemy 2.0 async.
+
+This module provides the database session management and engine configuration
+for SQLAlchemy with async support. It supports both SQLite (aiosqlite) and
+PostgreSQL (asyncpg) drivers.
+"""
+
+from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import AsyncGenerator
+
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
+from sqlalchemy.orm import DeclarativeBase
+
+from snackbase.core.config import get_settings
+from snackbase.core.logging import get_logger
+
+logger = get_logger(__name__)
+
+
+class Base(DeclarativeBase):
+    """Base class for all SQLAlchemy models.
+
+    All models should inherit from this class to get proper ORM mapping
+    and metadata management.
+    """
+
+    pass
+
+
+class DatabaseManager:
+    """Database connection and session manager.
+
+    This class manages the async database engine and session factory.
+    It provides context managers for database sessions and handles
+    connection pooling.
+    """
+
+    def __init__(self) -> None:
+        """Initialize the database manager."""
+        self.settings = get_settings()
+        self._engine = None
+        self._session_factory = None
+
+    @property
+    def engine(self):
+        """Get or create the database engine.
+
+        Returns:
+            AsyncEngine: SQLAlchemy async engine instance.
+        """
+        if self._engine is None:
+            self._engine = create_async_engine(
+                self.settings.database_url,
+                echo=self.settings.db_echo,
+                pool_size=self.settings.db_pool_size,
+                max_overflow=self.settings.db_max_overflow,
+                pool_timeout=self.settings.db_pool_timeout,
+                pool_recycle=self.settings.db_pool_recycle,
+                # SQLite-specific settings
+                connect_args={
+                    "check_same_thread": False,
+                }
+                if self.settings.database_url.startswith("sqlite")
+                else {},
+            )
+            logger.info(
+                "Database engine created",
+                database_url=self._engine.url.render_as_string(hide_password=True),
+                pool_size=self.settings.db_pool_size,
+            )
+        return self._engine
+
+    @property
+    def session_factory(self):
+        """Get or create the session factory.
+
+        Returns:
+            async_sessionmaker: SQLAlchemy async session factory.
+        """
+        if self._session_factory is None:
+            self._session_factory = async_sessionmaker(
+                bind=self.engine,
+                class_=AsyncSession,
+                expire_on_commit=False,
+                autoflush=False,
+            )
+            logger.debug("Database session factory created")
+        return self._session_factory
+
+    async def create_tables(self) -> None:
+        """Create all database tables.
+
+        This method creates all tables defined in models that inherit
+        from Base. Should be called on application startup for development.
+        In production, use migrations instead.
+        """
+        async with self.engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+            logger.info("Database tables created")
+
+    async def drop_tables(self) -> None:
+        """Drop all database tables.
+
+        WARNING: This will delete all data. Only use in testing!
+        """
+        async with self.engine.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
+            logger.warning("Database tables dropped")
+
+    async def disconnect(self) -> None:
+        """Close the database engine and all connections.
+
+        Should be called on application shutdown.
+        """
+        if self._engine is not None:
+            await self._engine.dispose()
+            logger.info("Database engine disposed")
+
+    @asynccontextmanager
+    async def session(self) -> AsyncGenerator[AsyncSession, None]:
+        """Provide a transactional scope for database operations.
+
+        This context manager creates a new session and ensures it's
+        properly closed after use.
+
+        Yields:
+            AsyncSession: SQLAlchemy async session.
+
+        Example:
+            async with db.session() as session:
+                result = await session.execute(select(User))
+                users = result.scalars().all()
+        """
+        async with self.session_factory() as session:
+            try:
+                yield session
+            except Exception:
+                await session.rollback()
+                raise
+            finally:
+                await session.close()
+
+    async def check_connection(self) -> bool:
+        """Check if database connection is working.
+
+        Returns:
+            bool: True if connection is successful, False otherwise.
+        """
+        try:
+            async with self.engine.connect() as conn:
+                await conn.execute(text("SELECT 1"))
+                logger.debug("Database connection check successful")
+                return True
+        except Exception as e:
+            logger.error("Database connection check failed", error=str(e))
+            return False
+
+
+# Global database manager instance
+_db_manager: DatabaseManager | None = None
+
+
+def get_db_manager() -> DatabaseManager:
+    """Get the global database manager instance.
+
+    Returns:
+        DatabaseManager: Global database manager instance.
+    """
+    global _db_manager
+    if _db_manager is None:
+        _db_manager = DatabaseManager()
+    return _db_manager
+
+
+async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
+    """Dependency for FastAPI to get database session.
+
+    This function is designed to be used as a FastAPI dependency.
+
+    Yields:
+        AsyncSession: SQLAlchemy async session.
+
+    Example:
+        @app.get("/users")
+        async def list_users(session: AsyncSession = Depends(get_db_session)):
+            result = await session.execute(select(User))
+            return result.scalars().all()
+    """
+    db = get_db_manager()
+    async with db.session() as session:
+        yield session
+
+
+async def init_database() -> None:
+    """Initialize the database.
+
+    This function should be called on application startup.
+    It creates tables if they don't exist (development mode).
+    In production, migrations should be used instead.
+    """
+    db = get_db_manager()
+    settings = get_settings()
+
+    # Create database directory if using SQLite
+    if settings.database_url.startswith("sqlite"):
+        # Extract path from sqlite+aiosqlite:///path/to/file.db
+        db_path = settings.database_url.split(":///")[-1]
+        db_file = Path(db_path)
+        db_dir = db_file.parent
+        db_dir.mkdir(parents=True, exist_ok=True)
+        logger.info("Database directory created", path=str(db_dir))
+
+    # Check connection
+    if not await db.check_connection():
+        logger.error("Database connection failed")
+        raise RuntimeError("Failed to connect to database")
+
+    # Create tables in development (use migrations in production)
+    if settings.is_development:
+        logger.info("Development mode: Creating database tables")
+        await db.create_tables()
+    else:
+        logger.info("Production mode: Skipping auto-create, use migrations")
+
+
+async def close_database() -> None:
+    """Close the database connection.
+
+    This function should be called on application shutdown.
+    """
+    db = get_db_manager()
+    await db.disconnect()
