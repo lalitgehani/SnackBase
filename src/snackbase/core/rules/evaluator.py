@@ -2,6 +2,8 @@
 
 from typing import Any
 
+from datetime import datetime
+
 from .ast import BinaryOp, FunctionCall, Literal, Node, UnaryOp, Variable
 from .exceptions import RuleEvaluationError
 
@@ -135,5 +137,91 @@ class Evaluator:
             if not isinstance(s, str) or not isinstance(suffix, str):
                 return False
             return s.endswith(suffix)
+            
+        # --- Built-in Macros ---
+        
+        if node.name == "@has_group":
+            if len(args) != 1:
+                raise RuleEvaluationError("@has_group() expects 1 argument")
+            group_name = args[0]
+            user = self.context.get("user")
+            if not user or not hasattr(user, "groups") and not isinstance(user, dict):
+                 return False
+            
+            groups = user.get("groups") if isinstance(user, dict) else getattr(user, "groups", [])
+            if not groups:
+                return False
+                
+            return group_name in groups
+
+        if node.name == "@has_role":
+            if len(args) != 1:
+                raise RuleEvaluationError("@has_role() expects 1 argument")
+            role_name = args[0]
+            user = self.context.get("user")
+            if not user:
+                return False
+                
+            role = user.get("role") if isinstance(user, dict) else getattr(user, "role", None)
+            return role == role_name
+
+        if node.name in ("@owns_record", "@is_creator"):
+            if len(args) != 0:
+                raise RuleEvaluationError(f"{node.name}() expects 0 arguments")
+            
+            user = self.context.get("user")
+            record = self.context.get("record")
+            
+            if not user or not record:
+                return False
+                
+            user_id = user.get("id") if isinstance(user, dict) else getattr(user, "id", None)
+            
+            # Record owner_id could be direct attribute or dict key
+            owner_id = None
+            if isinstance(record, dict):
+                owner_id = record.get("owner_id")
+            else:
+                owner_id = getattr(record, "owner_id", None)
+                
+            if user_id is None or owner_id is None:
+                return False
+                
+            return user_id == owner_id
+
+        if node.name == "@in_time_range":
+            if len(args) != 2:
+                raise RuleEvaluationError("@in_time_range() expects 2 arguments (start_hour, end_hour)")
+            
+            start_hour = args[0]
+            end_hour = args[1]
+            
+            if not isinstance(start_hour, (int, float)) or not isinstance(end_hour, (int, float)):
+                 raise RuleEvaluationError("Time range arguments must be numbers (0-23)")
+
+            current_hour = datetime.now().hour
+            return start_hour <= current_hour < end_hour
+
+        if node.name == "@has_permission":
+            # This is a bit recursive/meta: checking if user has a permission
+            # Usually implies checking role permissions or direct assignments
+            # For now, we can check basic role permissions map if present in context
+            if len(args) != 2:
+                 raise RuleEvaluationError("@has_permission() expects 2 arguments (action, collection)")
+                 
+            action = args[0]
+            collection = args[1]
+            
+            # Simple implementation: check if "permissions" dict exists in context
+            # and follows structure permissions[collection][action]
+            permissions = self.context.get("permissions")
+            if not permissions or not isinstance(permissions, dict):
+                return False
+                
+            collection_perms = permissions.get(collection)
+            if not collection_perms or not isinstance(collection_perms, list):
+                return False
+                
+            return action in collection_perms
 
         raise RuleEvaluationError(f"Unknown function: {node.name}")

@@ -111,9 +111,9 @@ class Lexer:
         """Parse identifier or keyword."""
         start_pos = self.pos
         result = ""
-        # Identifiers can invoke letters, numbers, underscores, and dots (for variable access)
+        # Identifiers can invoke letters, numbers, underscores, dots (for variable access), and @ (for macros)
         while self.current_char is not None and (
-            self.current_char.isalnum() or self.current_char in "_."
+            self.current_char.isalnum() or self.current_char in "_.@"
         ):
             result += self.current_char
             self.advance()
@@ -148,7 +148,7 @@ class Lexer:
             if self.current_char in ("'", '"'):
                 return self._string()
 
-            if self.current_char.isalpha() or self.current_char == "_":
+            if self.current_char.isalpha() or self.current_char in ("_", "@"):
                 return self._identifier()
 
             start_pos = self.pos
