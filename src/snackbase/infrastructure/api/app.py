@@ -184,13 +184,18 @@ def register_routes(app: FastAPI) -> None:
     Args:
         app: FastAPI application instance.
     """
-    from snackbase.infrastructure.api.routes import auth_router
+    from snackbase.infrastructure.api.routes import auth_router, collections_router
 
     settings = get_settings()
 
     # API v1 routes
     # Register auth routes
     app.include_router(auth_router, prefix=f"{settings.api_prefix}/auth", tags=["auth"])
+
+    # Register collections routes
+    app.include_router(
+        collections_router, prefix=f"{settings.api_prefix}/collections", tags=["collections"]
+    )
 
     # These will be registered as we implement features
     # For now, just add a placeholder

@@ -3,6 +3,9 @@
 from snackbase.infrastructure.persistence.repositories.account_repository import (
     AccountRepository,
 )
+from snackbase.infrastructure.persistence.repositories.collection_repository import (
+    CollectionRepository,
+)
 from snackbase.infrastructure.persistence.repositories.refresh_token_repository import (
     RefreshTokenRepository,
 )
@@ -15,7 +18,9 @@ from snackbase.infrastructure.persistence.repositories.user_repository import (
 
 __all__ = [
     "AccountRepository",
+    "CollectionRepository",
     "RefreshTokenRepository",
     "RoleRepository",
     "UserRepository",
 ]
+
