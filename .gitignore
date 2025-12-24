@@ -89,3 +89,6 @@ logs/
 
 PRD_PHASES.md
 REQUIREMENTS.md
+
+# Agent workspace rules (do not ignore)
+!.agent/
