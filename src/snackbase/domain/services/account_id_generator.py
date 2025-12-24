@@ -56,20 +56,82 @@ class AccountIdGenerator:
         return bool(cls.PATTERN.match(account_id))
 
     @classmethod
+    def validate_with_error(cls, account_id: str) -> tuple[bool, str | None]:
+        """Validate an account ID and return a descriptive error message if invalid.
+
+        Args:
+            account_id: The account ID to validate.
+
+        Returns:
+            A tuple of (is_valid, error_message). If valid, error_message is None.
+            If invalid, error_message describes the validation failure.
+
+        Examples:
+            >>> AccountIdGenerator.validate_with_error("AB1234")
+            (True, None)
+            >>> AccountIdGenerator.validate_with_error("ab1234")
+            (False, "Account ID must contain uppercase letters only")
+            >>> AccountIdGenerator.validate_with_error("A1234")
+            (False, "Account ID must be exactly 6 characters (2 letters + 4 digits)")
+        """
+        if not isinstance(account_id, str):
+            return False, "Account ID must be a string"
+
+        if not account_id:
+            return False, "Account ID cannot be empty"
+
+        if len(account_id) != 6:
+            return (
+                False,
+                f"Account ID must be exactly 6 characters (2 letters + 4 digits), got {len(account_id)}",
+            )
+
+        # Check letter portion
+        letter_portion = account_id[:2]
+        if not letter_portion.isalpha():
+            return False, "First 2 characters must be letters"
+
+        if not letter_portion.isupper():
+            return False, "Account ID must contain uppercase letters only"
+
+        # Check number portion
+        number_portion = account_id[2:]
+        if not number_portion.isdigit():
+            return False, "Last 4 characters must be digits"
+
+        return True, None
+
+    @classmethod
     def generate(cls, existing_ids: Iterable[str] | None = None) -> str:
         """Generate a new unique account ID.
 
         Generates the next available ID by finding the highest existing ID
         and incrementing. If no existing IDs, starts from AA0001.
 
+        Thread-Safety:
+            This method is a pure function and is inherently thread-safe.
+            However, the caller MUST ensure that existing_ids is fetched
+            within a database transaction with appropriate isolation level
+            (e.g., SERIALIZABLE or REPEATABLE READ) to prevent race conditions
+            during concurrent account creation.
+
         Args:
             existing_ids: Iterable of existing account IDs to avoid collisions.
+                Should be fetched from the database within a transaction.
 
         Returns:
             A new unique account ID in XX#### format.
 
         Raises:
             AccountIdExhaustedError: If all 6,760,000 IDs are exhausted.
+
+        Examples:
+            >>> AccountIdGenerator.generate([])
+            'AA0001'
+            >>> AccountIdGenerator.generate(['AA0001'])
+            'AA0002'
+            >>> AccountIdGenerator.generate(['AA9999'])
+            'AB0000'
         """
         existing_set = set(existing_ids) if existing_ids else set()
 
