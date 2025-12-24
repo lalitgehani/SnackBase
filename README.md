@@ -6,18 +6,18 @@ SnackBase is a Python/FastAPI-based BaaS providing auto-generated REST APIs, mul
 
 ## Status
 
-**Phase 1: Foundation & MVP** (In Progress - 1/13 features complete)
+**Phase 1: Foundation & MVP** (In Progress - 4/13 features complete)
 
 - [x] F1.1: Project Scaffolding & Architecture Setup
-- [ ] F1.2: Database Schema & Core System Tables
-- [ ] F1.3: Account Registration
-- [ ] F1.4: Account Login
-- [ ] F1.5: JWT Token Management
+- [x] F1.2: Database Schema & Core System Tables
+- [x] F1.3: Account Registration
+- [x] F1.4: Account Login
+- [x] F1.5: JWT Token Management
 - [ ] F1.6: Dynamic Collection Creation
 - [ ] F1.7-F1.10: Dynamic Record CRUD
 - [ ] F1.11: User Invitation System
 - [ ] F1.12: Hook System Infrastructure
-- [ ] F1.13: Account ID Generator
+- [x] F1.13: Account ID Generator
 
 ## Features
 
@@ -30,9 +30,24 @@ SnackBase is a Python/FastAPI-based BaaS providing auto-generated REST APIs, mul
 - **Health Check Endpoints** - `/health`, `/ready`, `/live`
 - **CLI** - Server management and utility commands
 
+#### Authentication System
+- **Account Registration** - Multi-tenant account creation with unique `XX####` ID format
+- **User Registration** - Per-account user registration with email/password
+- **Login** - Timing-safe password verification with account resolution
+- **JWT Token Management** - Access tokens (1 hour) and refresh tokens (7 days) with rotation
+- **Password Hashing** - Argon2id (OWASP recommended)
+- **Protected Endpoints** - JWT-based authentication with `Authorization: Bearer` header
+
+#### Domain Layer
+- **Entities** - Account, User, Role, Group, Collection, Invitation
+- **Services** - AccountIdGenerator, PasswordValidator, SlugGenerator
+
+#### Persistence Layer
+- **ORM Models** - Account, User, Role, Group, Collection, Invitation, RefreshToken, UsersGroups
+- **Repositories** - AccountRepository, UserRepository, RoleRepository, RefreshTokenRepository
+
 ### Planned Features
 
-- Multi-tenant data isolation
 - Auto-generated CRUD APIs for dynamic collections
 - Row-level security engine with SQL macros
 - User-specific and role-based permissions
@@ -136,6 +151,39 @@ SNACKBASE_LOG_FORMAT=json
 
 - `GET /api/v1` - API information
 
+### Authentication
+
+- `POST /api/v1/auth/register` - Create a new account with admin user
+  ```bash
+  curl -X POST http://localhost:8000/api/v1/auth/register \
+    -H "Content-Type: application/json" \
+    -d '{
+      "account_name": "My Company",
+      "email": "admin@example.com",
+      "password": "SecurePass123!"
+    }'
+  ```
+
+- `POST /api/v1/auth/login` - Login with email, password, and account identifier
+  ```bash
+  curl -X POST http://localhost:8000/api/v1/auth/login \
+    -H "Content-Type: application/json" \
+    -d '{
+      "email": "admin@example.com",
+      "password": "SecurePass123!",
+      "account_identifier": "my-company"
+    }'
+  ```
+
+- `POST /api/v1/auth/refresh` - Refresh access token using refresh token
+  ```bash
+  curl -X POST http://localhost:8000/api/v1/auth/refresh \
+    -H "Content-Type: application/json" \
+    -d '{"refresh_token": "..."}'
+  ```
+
+- `GET /api/v1/auth/me` - Get current authenticated user info (requires JWT)
+
 ## Project Structure
 
 ```
@@ -149,19 +197,28 @@ SnackBase/
 │       │   ├── config.py        # Configuration management
 │       │   └── logging.py       # Structured logging
 │       ├── domain/              # Business entities (no external deps)
-│       │   ├── entities/
-│       │   └── services/
+│       │   ├── entities/        # Account, User, Role, Group, Collection, Invitation
+│       │   └── services/        # AccountIdGenerator, PasswordValidator, SlugGenerator
 │       ├── application/         # Use cases and orchestration
-│       │   ├── commands/
-│       │   └── queries/
+│       │   ├── commands/        # Write operations (TODO)
+│       │   └── queries/         # Read operations (TODO)
 │       └── infrastructure/      # External dependencies
 │           ├── api/
-│           │   └── app.py       # FastAPI application
+│           │   ├── app.py       # FastAPI application factory
+│           │   ├── dependencies.py # Auth dependencies
+│           │   ├── routes/
+│           │   │   └── auth_router.py # Auth endpoints
+│           │   └── schemas/
+│           │       └── auth_schemas.py # Pydantic models
 │           ├── auth/
+│           │   ├── jwt_service.py    # JWT token management
+│           │   └── password_hasher.py # Argon2 password hashing
 │           ├── persistence/
-│           │   └── database.py  # SQLAlchemy database layer
-│           ├── realtime/
-│           └── storage/
+│           │   ├── database.py  # SQLAlchemy async engine
+│           │   ├── models/      # ORM models
+│           │   └── repositories/ # Data access layer
+│           ├── realtime/        # WebSocket/SSE (TODO)
+│           └── storage/         # File storage (TODO)
 ├── sb_data/                     # Data directory (gitignored)
 │   ├── snackbase.db            # SQLite database
 │   └── files/                   # File uploads
@@ -182,7 +239,21 @@ SnackBase follows **Clean Architecture** principles with three layers:
 
 ### Multi-Tenancy Model
 
-Accounts represent isolated tenants within a single database. Data segregation uses row-level isolation via `account_id` column.
+Accounts represent isolated tenants within a single database. Data segregation uses row-level isolation via `account_id` column. Users can belong to multiple accounts with the same email address, using a `(email, account_id)` identity tuple.
+
+### Account ID Format
+
+Accounts use auto-generated IDs in format `XX####` (2 letters + 4 digits, e.g., `AB1234`):
+- `id`: XX#### format (primary key, immutable)
+- `slug`: URL-friendly identifier for login (globally unique)
+- `name`: Display name (not unique)
+
+### Authentication System
+
+- **Password Hashing**: Argon2id algorithm (OWASP recommended)
+- **JWT Tokens**: Access tokens (1 hour) + refresh tokens (7 days) with rotation
+- **Timing-Safe Comparison**: Prevents user enumeration attacks
+- **Token Storage**: Refresh tokens stored in database with SHA-256 hashing and revocation tracking
 
 ### Two-Tier Table Architecture
 
@@ -220,6 +291,8 @@ uv run pytest --cov=snackbase
 |---------|---------|-------------|
 | `SNACKBASE_DATABASE_URL` | `sqlite+aiosqlite:///./sb_data/snackbase.db` | Database connection URL |
 | `SNACKBASE_SECRET_KEY` | `change-me-in-production...` | JWT signing key |
+| `SNACKBASE_ACCESS_TOKEN_EXPIRE_MINUTES` | `60` | Access token expiration (minutes) |
+| `SNACKBASE_REFRESH_TOKEN_EXPIRE_DAYS` | `7` | Refresh token expiration (days) |
 | `SNACKBASE_PORT` | `8000` | Server port |
 | `SNACKBASE_LOG_LEVEL` | `INFO` | Logging level |
 | `SNACKBASE_LOG_FORMAT` | `json` | Log format (json/console) |
