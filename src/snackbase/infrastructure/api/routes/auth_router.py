@@ -18,10 +18,16 @@ from snackbase.domain.services import (
 from snackbase.infrastructure.api.schemas import (
     AccountResponse,
     AuthResponse,
+    LoginRequest,
     RegisterRequest,
     UserResponse,
 )
-from snackbase.infrastructure.auth import hash_password, jwt_service
+from snackbase.infrastructure.auth import (
+    DUMMY_PASSWORD_HASH,
+    hash_password,
+    jwt_service,
+    verify_password,
+)
 from snackbase.infrastructure.persistence.database import get_db_session
 from snackbase.infrastructure.persistence.models import AccountModel, UserModel
 from snackbase.infrastructure.persistence.repositories import (
@@ -207,3 +213,154 @@ async def register(
             created_at=user.created_at,
         ),
     )
+
+
+@router.post(
+    "/login",
+    status_code=status.HTTP_200_OK,
+    response_model=AuthResponse,
+    responses={
+        401: {"description": "Invalid credentials"},
+    },
+)
+async def login(
+    request: LoginRequest,
+    session: AsyncSession = Depends(get_db_session),
+) -> AuthResponse | JSONResponse:
+    """Authenticate a user and return JWT tokens.
+
+    Validates the user's credentials against the specified account and returns
+    JWT tokens for authenticated access.
+
+    Flow:
+    1. Resolve account by slug or ID
+    2. Look up user by email in account
+    3. Verify password using timing-safe comparison
+    4. Check if user is active
+    5. Update last_login timestamp
+    6. Generate JWT tokens
+    7. Return response
+
+    Security:
+    - All authentication failures return the same generic 401 message
+    - Password verification is always performed (even with dummy hash) to prevent timing attacks
+    """
+    # Generic error response for all auth failures (prevents user enumeration)
+    auth_error = JSONResponse(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        content={
+            "error": "Authentication failed",
+            "message": "Invalid credentials",
+        },
+    )
+
+    # Initialize repositories
+    account_repo = AccountRepository(session)
+    user_repo = UserRepository(session)
+    role_repo = RoleRepository(session)
+
+    # 1. Resolve account by slug or ID
+    account = await account_repo.get_by_slug_or_id(request.account)
+
+    if account is None:
+        # Account not found - still verify password to prevent timing attacks
+        logger.info(
+            "Login failed: account not found",
+            account_identifier=request.account,
+            email=request.email,
+        )
+        verify_password(request.password, DUMMY_PASSWORD_HASH)
+        return auth_error
+
+    # 2. Look up user by email in account
+    user = await user_repo.get_by_email_and_account(request.email, account.id)
+
+    if user is None:
+        # User not found - still verify password to prevent timing attacks
+        logger.info(
+            "Login failed: user not found in account",
+            account_id=account.id,
+            email=request.email,
+        )
+        verify_password(request.password, DUMMY_PASSWORD_HASH)
+        return auth_error
+
+    # 3. Verify password using timing-safe comparison
+    if not verify_password(request.password, user.password_hash):
+        logger.info(
+            "Login failed: invalid password",
+            account_id=account.id,
+            user_id=user.id,
+        )
+        return auth_error
+
+    # 4. Check if user is active
+    if not user.is_active:
+        logger.info(
+            "Login failed: user inactive",
+            account_id=account.id,
+            user_id=user.id,
+        )
+        return auth_error
+
+    # Get user's role
+    role = await role_repo.get_by_id(user.role_id)
+    if role is None:
+        logger.error(
+            "Login failed: role not found",
+            account_id=account.id,
+            user_id=user.id,
+            role_id=user.role_id,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"error": "Internal error", "message": "Role configuration error"},
+        )
+
+    # 5. Update last_login timestamp
+    await user_repo.update_last_login(user.id)
+    await session.commit()
+
+    # Refresh to get updated timestamps
+    await session.refresh(user)
+
+    logger.info(
+        "User logged in successfully",
+        account_id=account.id,
+        user_id=user.id,
+        email=user.email,
+    )
+
+    # 6. Generate JWT tokens
+    access_token = jwt_service.create_access_token(
+        user_id=user.id,
+        account_id=account.id,
+        email=user.email,
+        role=role.name,
+    )
+    refresh_token = jwt_service.create_refresh_token(
+        user_id=user.id,
+        account_id=account.id,
+    )
+    expires_in = jwt_service.get_expires_in()
+
+    # 7. Return response
+    return AuthResponse(
+        token=access_token,
+        refresh_token=refresh_token,
+        expires_in=expires_in,
+        account=AccountResponse(
+            id=account.id,
+            slug=account.slug,
+            name=account.name,
+            created_at=account.created_at,
+        ),
+        user=UserResponse(
+            id=user.id,
+            email=user.email,
+            role=role.name,
+            is_active=user.is_active,
+            created_at=user.created_at,
+        ),
+    )
+

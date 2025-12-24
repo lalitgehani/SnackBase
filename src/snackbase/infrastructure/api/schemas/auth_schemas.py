@@ -21,6 +21,18 @@ class RegisterRequest(BaseModel):
     )
 
 
+class LoginRequest(BaseModel):
+    """Request body for user login."""
+
+    account: str = Field(
+        ...,
+        min_length=1,
+        description="Account identifier (slug or ID in XX#### format)",
+    )
+    email: EmailStr = Field(..., description="User's email address")
+    password: str = Field(..., min_length=1, description="User's password")
+
+
 class AccountResponse(BaseModel):
     """Account information in auth responses."""
 

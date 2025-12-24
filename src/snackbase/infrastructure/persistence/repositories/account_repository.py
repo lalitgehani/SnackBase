@@ -82,3 +82,29 @@ class AccountRepository:
         """
         result = await self.session.execute(select(AccountModel.id))
         return list(result.scalars().all())
+
+    async def get_by_slug_or_id(self, identifier: str) -> AccountModel | None:
+        """Get an account by slug or ID (XX#### format).
+
+        Attempts to find by ID first (if format matches XX####), then by slug.
+
+        Args:
+            identifier: Account slug or ID.
+
+        Returns:
+            Account model if found, None otherwise.
+        """
+        import re
+
+        # Check if identifier matches account ID format (2 letters + 4 digits)
+        if re.match(r"^[A-Z]{2}\d{4}$", identifier.upper()):
+            account = await self.get_by_id(identifier.upper())
+            if account:
+                return account
+
+        # Fall back to slug lookup (case-insensitive)
+        result = await self.session.execute(
+            select(AccountModel).where(AccountModel.slug == identifier.lower())
+        )
+        return result.scalar_one_or_none()
+

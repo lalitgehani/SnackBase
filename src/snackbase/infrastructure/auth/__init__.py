@@ -12,12 +12,14 @@ from snackbase.infrastructure.auth.jwt_service import (
     jwt_service,
 )
 from snackbase.infrastructure.auth.password_hasher import (
+    DUMMY_PASSWORD_HASH,
     hash_password,
     needs_rehash,
     verify_password,
 )
 
 __all__ = [
+    "DUMMY_PASSWORD_HASH",
     "InvalidTokenError",
     "JWTError",
     "JWTService",
@@ -27,3 +29,4 @@ __all__ = [
     "needs_rehash",
     "verify_password",
 ]
+

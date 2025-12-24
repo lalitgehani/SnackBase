@@ -11,6 +11,11 @@ from argon2.exceptions import VerifyMismatchError
 # Argon2id is recommended for password hashing
 _hasher = PasswordHasher()
 
+# Dummy hash for timing-safe comparison when user doesn't exist.
+# This is a valid Argon2id hash that will never match any password,
+# ensuring consistent response times to prevent user enumeration.
+DUMMY_PASSWORD_HASH = _hasher.hash("dummy_password_for_timing_safety")
+
 
 def hash_password(password: str) -> str:
     """Hash a password using Argon2id.
