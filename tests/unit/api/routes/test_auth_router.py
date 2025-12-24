@@ -220,3 +220,207 @@ def test_register_slug_conflict(mock_account_repo, mock_validator, client):
     # Cleanup
     app.dependency_overrides = {}
 
+
+from datetime import datetime
+
+@patch("snackbase.infrastructure.api.routes.auth_router.verify_password")
+@patch("snackbase.infrastructure.api.routes.auth_router.jwt_service")
+@patch("snackbase.infrastructure.api.routes.auth_router.RefreshTokenRepository")
+@patch("snackbase.infrastructure.api.routes.auth_router.RoleRepository")
+@patch("snackbase.infrastructure.api.routes.auth_router.UserRepository")
+@patch("snackbase.infrastructure.api.routes.auth_router.AccountRepository")
+def test_login_success(
+    mock_account_repo,
+    mock_user_repo,
+    mock_role_repo,
+    mock_refresh_repo,
+    mock_jwt,
+    mock_verify,
+    client
+):
+    """Test successful login returns tokens and user data."""
+    
+    # Configure Mocks
+    account_repo = mock_account_repo.return_value
+    account_mock = MagicMock()
+    account_mock.id = "XY1234"
+    account_mock.slug = "test-account"
+    account_mock.name = "Test Account"
+    account_mock.created_at = datetime.now()
+    account_repo.get_by_slug_or_id = AsyncMock(return_value=account_mock)
+    
+    user_repo = mock_user_repo.return_value
+    user_mock = MagicMock()
+    user_mock.id = "user-id"
+    user_mock.email = "test@example.com"
+    user_mock.password_hash = "hashed_password"
+    user_mock.is_active = True
+    user_mock.role_id = "role-id"
+    user_mock.created_at = datetime.now()
+    user_repo.get_by_email_and_account = AsyncMock(return_value=user_mock)
+    user_repo.update_last_login = AsyncMock()
+    
+    role_repo = mock_role_repo.return_value
+    role_mock = MagicMock()
+    role_mock.id = "role-id"
+    role_mock.name = "admin"
+    role_repo.get_by_id = AsyncMock(return_value=role_mock)
+    
+    mock_verify.return_value = True
+    
+    mock_jwt.create_access_token.return_value = "access_token"
+    mock_jwt.create_refresh_token.return_value = ("refresh_token", "token_id")
+    mock_jwt.get_expires_in.return_value = 3600
+    
+    mock_refresh_repo.return_value.create = AsyncMock()
+    
+    # Override DB session
+    from snackbase.infrastructure.persistence.database import get_db_session
+    session_mock = AsyncMock()
+    session_mock.refresh = AsyncMock()
+    app.dependency_overrides[get_db_session] = lambda: session_mock
+
+    payload = {
+        "email": "test@example.com",
+        "password": "Password123!",
+        "account": "test-account"
+    }
+    
+    response = client.post("/api/v1/auth/login", json=payload)
+    
+    assert response.status_code == 200
+    data = response.json()
+    assert data["token"] == "access_token"
+    assert data["account"]["slug"] == "test-account"
+    assert data["user"]["email"] == "test@example.com"
+    
+    # Verify last_login updated
+    user_repo.update_last_login.assert_called_with("user-id")
+    
+    # Cleanup
+    app.dependency_overrides = {}
+
+
+@patch("snackbase.infrastructure.api.routes.auth_router.AccountRepository")
+def test_login_account_not_found(mock_account_repo, client):
+    """Test login fails when account not found."""
+    
+    mock_account_repo.return_value.get_by_slug_or_id = AsyncMock(return_value=None)
+    
+    # Override DB session
+    from snackbase.infrastructure.persistence.database import get_db_session
+    app.dependency_overrides[get_db_session] = lambda: AsyncMock()
+
+    payload = {
+        "email": "test@example.com",
+        "password": "Password123!",
+        "account": "non-existent"
+    }
+    
+    response = client.post("/api/v1/auth/login", json=payload)
+    
+    assert response.status_code == 401
+    assert response.json()["message"] == "Invalid credentials"
+    
+    # Cleanup
+    app.dependency_overrides = {}
+
+
+@patch("snackbase.infrastructure.api.routes.auth_router.UserRepository")
+@patch("snackbase.infrastructure.api.routes.auth_router.AccountRepository")
+def test_login_user_not_found(mock_account_repo, mock_user_repo, client):
+    """Test login fails when user not found in account."""
+    
+    account_mock = MagicMock()
+    account_mock.id = "XY1234"
+    mock_account_repo.return_value.get_by_slug_or_id = AsyncMock(return_value=account_mock)
+    
+    mock_user_repo.return_value.get_by_email_and_account = AsyncMock(return_value=None)
+    
+    # Override DB session
+    from snackbase.infrastructure.persistence.database import get_db_session
+    app.dependency_overrides[get_db_session] = lambda: AsyncMock()
+
+    payload = {
+        "email": "unknown@example.com",
+        "password": "Password123!",
+        "account": "test-account"
+    }
+    
+    response = client.post("/api/v1/auth/login", json=payload)
+    
+    assert response.status_code == 401
+    assert response.json()["message"] == "Invalid credentials"
+    
+    # Cleanup
+    app.dependency_overrides = {}
+
+
+@patch("snackbase.infrastructure.api.routes.auth_router.verify_password")
+@patch("snackbase.infrastructure.api.routes.auth_router.UserRepository")
+@patch("snackbase.infrastructure.api.routes.auth_router.AccountRepository")
+def test_login_invalid_password(mock_account_repo, mock_user_repo, mock_verify, client):
+    """Test login fails with invalid password."""
+    
+    account_mock = MagicMock()
+    account_mock.id = "XY1234"
+    mock_account_repo.return_value.get_by_slug_or_id = AsyncMock(return_value=account_mock)
+    
+    user_mock = MagicMock()
+    user_mock.password_hash = "hashed_password"
+    mock_user_repo.return_value.get_by_email_and_account = AsyncMock(return_value=user_mock)
+    
+    mock_verify.return_value = False
+    
+    # Override DB session
+    from snackbase.infrastructure.persistence.database import get_db_session
+    app.dependency_overrides[get_db_session] = lambda: AsyncMock()
+
+    payload = {
+        "email": "test@example.com",
+        "password": "WrongPassword",
+        "account": "test-account"
+    }
+    
+    response = client.post("/api/v1/auth/login", json=payload)
+    
+    assert response.status_code == 401
+    assert response.json()["message"] == "Invalid credentials"
+    
+    # Cleanup
+    app.dependency_overrides = {}
+
+
+@patch("snackbase.infrastructure.api.routes.auth_router.verify_password")
+@patch("snackbase.infrastructure.api.routes.auth_router.UserRepository")
+@patch("snackbase.infrastructure.api.routes.auth_router.AccountRepository")
+def test_login_inactive_user(mock_account_repo, mock_user_repo, mock_verify, client):
+    """Test login fails if user is inactive."""
+    
+    account_mock = MagicMock()
+    account_mock.id = "XY1234"
+    mock_account_repo.return_value.get_by_slug_or_id = AsyncMock(return_value=account_mock)
+    
+    user_mock = MagicMock()
+    user_mock.is_active = False
+    user_mock.password_hash = "hashed_password"
+    mock_user_repo.return_value.get_by_email_and_account = AsyncMock(return_value=user_mock)
+    
+    mock_verify.return_value = True
+    
+    # Override DB session
+    from snackbase.infrastructure.persistence.database import get_db_session
+    app.dependency_overrides[get_db_session] = lambda: AsyncMock()
+
+    payload = {
+        "email": "test@example.com",
+        "password": "Password123!",
+        "account": "test-account"
+    }
+    
+    response = client.post("/api/v1/auth/login", json=payload)
+    
+    assert response.status_code == 401
+    
+    # Cleanup
+    app.dependency_overrides = {}

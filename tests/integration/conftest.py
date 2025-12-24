@@ -10,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from snackbase.infrastructure.persistence.database import Base
+from httpx import AsyncClient, ASGITransport
 
 
 @pytest.fixture(scope="session")
@@ -45,6 +46,14 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
         expire_on_commit=False,
     )
 
+    # Seed default roles
+    from snackbase.infrastructure.persistence.models.role import RoleModel
+    async with async_session_maker() as session:
+        admin_role = RoleModel(name="admin", description="Administrator")
+        user_role = RoleModel(name="user", description="Standard User")
+        session.add_all([admin_role, user_role])
+        await session.commit()
+
     async with async_session_maker() as session:
         yield session
         await session.rollback()
@@ -53,4 +62,23 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
 
+
     await engine.dispose()
+
+
+@pytest_asyncio.fixture
+async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
+    """Create a test client with overridden database dependency."""
+    from httpx import AsyncClient, ASGITransport
+    from snackbase.infrastructure.api.app import app
+    from snackbase.infrastructure.persistence.database import get_db_session
+
+    app.dependency_overrides[get_db_session] = lambda: db_session
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test"
+    ) as ac:
+        yield ac
+
+    app.dependency_overrides = {}
