@@ -18,6 +18,11 @@ from snackbase.infrastructure.api.schemas.collection_schemas import (
     FieldDefinition,
     SchemaFieldResponse,
 )
+from snackbase.infrastructure.api.schemas.record_schemas import (
+    RecordResponse,
+    RecordValidationErrorDetail,
+    RecordValidationErrorResponse,
+)
 
 __all__ = [
     "AccountResponse",
@@ -27,6 +32,9 @@ __all__ = [
     "CreateCollectionRequest",
     "FieldDefinition",
     "LoginRequest",
+    "RecordResponse",
+    "RecordValidationErrorDetail",
+    "RecordValidationErrorResponse",
     "RefreshRequest",
     "RegisterRequest",
     "SchemaFieldResponse",
@@ -35,3 +43,4 @@ __all__ = [
     "ValidationErrorDetail",
     "ValidationErrorResponse",
 ]
+

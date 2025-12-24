@@ -20,6 +20,10 @@ from snackbase.domain.services.password_validator import (
     PasswordValidator,
     default_password_validator,
 )
+from snackbase.domain.services.record_validator import (
+    RecordValidationError,
+    RecordValidator,
+)
 from snackbase.domain.services.slug_generator import (
     SlugGenerator,
     SlugValidationError,
@@ -34,6 +38,8 @@ __all__ = [
     "OnDeleteAction",
     "PasswordValidationError",
     "PasswordValidator",
+    "RecordValidationError",
+    "RecordValidator",
     "RESERVED_FIELD_NAMES",
     "SlugGenerator",
     "SlugValidationError",
