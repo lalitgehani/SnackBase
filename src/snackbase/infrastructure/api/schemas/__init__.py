@@ -5,7 +5,9 @@ from snackbase.infrastructure.api.schemas.auth_schemas import (
     AuthResponse,
     ConflictErrorResponse,
     LoginRequest,
+    RefreshRequest,
     RegisterRequest,
+    TokenRefreshResponse,
     UserResponse,
     ValidationErrorDetail,
     ValidationErrorResponse,
@@ -16,8 +18,11 @@ __all__ = [
     "AuthResponse",
     "ConflictErrorResponse",
     "LoginRequest",
+    "RefreshRequest",
     "RegisterRequest",
+    "TokenRefreshResponse",
     "UserResponse",
     "ValidationErrorDetail",
     "ValidationErrorResponse",
 ]
+

@@ -4,34 +4,46 @@ Provides endpoints for user registration, login, and token management.
 """
 
 import uuid
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from snackbase.core.config import get_settings
 from snackbase.core.logging import get_logger
 from snackbase.domain.services import (
     AccountIdGenerator,
     SlugGenerator,
     default_password_validator,
 )
+from snackbase.infrastructure.api.dependencies import AuthenticatedUser, CurrentUser
 from snackbase.infrastructure.api.schemas import (
     AccountResponse,
     AuthResponse,
     LoginRequest,
+    RefreshRequest,
     RegisterRequest,
+    TokenRefreshResponse,
     UserResponse,
 )
 from snackbase.infrastructure.auth import (
     DUMMY_PASSWORD_HASH,
+    InvalidTokenError,
+    TokenExpiredError,
     hash_password,
     jwt_service,
     verify_password,
 )
 from snackbase.infrastructure.persistence.database import get_db_session
-from snackbase.infrastructure.persistence.models import AccountModel, UserModel
+from snackbase.infrastructure.persistence.models import (
+    AccountModel,
+    RefreshTokenModel,
+    UserModel,
+)
 from snackbase.infrastructure.persistence.repositories import (
     AccountRepository,
+    RefreshTokenRepository,
     RoleRepository,
     UserRepository,
 )
@@ -188,11 +200,24 @@ async def register(
         email=user.email,
         role=admin_role.name,
     )
-    refresh_token = jwt_service.create_refresh_token(
+    refresh_token, token_id = jwt_service.create_refresh_token(
         user_id=user.id,
         account_id=account_id,
     )
     expires_in = jwt_service.get_expires_in()
+
+    # Store refresh token in database for revocation tracking
+    settings = get_settings()
+    refresh_token_repo = RefreshTokenRepository(session)
+    refresh_token_model = RefreshTokenModel(
+        id=token_id,
+        token_hash=refresh_token_repo.hash_token(refresh_token),
+        user_id=user.id,
+        account_id=account_id,
+        expires_at=datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_expire_days),
+    )
+    await refresh_token_repo.create(refresh_token_model)
+    await session.commit()
 
     # 9. Return response
     return AuthResponse(
@@ -338,11 +363,24 @@ async def login(
         email=user.email,
         role=role.name,
     )
-    refresh_token = jwt_service.create_refresh_token(
+    refresh_token, token_id = jwt_service.create_refresh_token(
         user_id=user.id,
         account_id=account.id,
     )
     expires_in = jwt_service.get_expires_in()
+
+    # Store refresh token in database for revocation tracking
+    settings = get_settings()
+    refresh_token_repo = RefreshTokenRepository(session)
+    refresh_token_model = RefreshTokenModel(
+        id=token_id,
+        token_hash=refresh_token_repo.hash_token(refresh_token),
+        user_id=user.id,
+        account_id=account.id,
+        expires_at=datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_expire_days),
+    )
+    await refresh_token_repo.create(refresh_token_model)
+    await session.commit()
 
     # 7. Return response
     return AuthResponse(
@@ -364,3 +402,152 @@ async def login(
         ),
     )
 
+
+@router.post(
+    "/refresh",
+    status_code=status.HTTP_200_OK,
+    response_model=TokenRefreshResponse,
+    responses={
+        401: {"description": "Invalid or expired refresh token"},
+    },
+)
+async def refresh_tokens(
+    request: RefreshRequest,
+    session: AsyncSession = Depends(get_db_session),
+) -> TokenRefreshResponse | JSONResponse:
+    """Refresh access and refresh tokens.
+
+    Validates the provided refresh token, issues new tokens, and invalidates
+    the old refresh token (token rotation).
+
+    Flow:
+    1. Validate refresh token (signature, expiration, type)
+    2. Check if token is revoked in database
+    3. Get user information from token claims
+    4. Revoke old refresh token
+    5. Generate new access token and refresh token
+    6. Store new refresh token
+    7. Return new tokens
+    """
+    auth_error = JSONResponse(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        content={
+            "error": "Authentication failed",
+            "message": "Invalid or expired refresh token",
+        },
+    )
+
+    # 1. Validate refresh token
+    try:
+        payload = jwt_service.validate_refresh_token(request.refresh_token)
+    except TokenExpiredError:
+        logger.info("Token refresh failed: token expired")
+        return auth_error
+    except InvalidTokenError as e:
+        logger.info("Token refresh failed: invalid token", error=str(e))
+        return auth_error
+
+    # 2. Check if token is revoked in database
+    refresh_token_repo = RefreshTokenRepository(session)
+    token_model = await refresh_token_repo.get_by_hash(request.refresh_token)
+
+    if token_model is None:
+        logger.info("Token refresh failed: token not found in database")
+        return auth_error
+
+    if token_model.is_revoked:
+        logger.warning(
+            "Token refresh failed: token already revoked",
+            token_id=token_model.id,
+            user_id=token_model.user_id,
+        )
+        return auth_error
+
+    # 3. Get user information to generate new tokens
+    user_id = payload["user_id"]
+    account_id = payload["account_id"]
+
+    # Get user's role for new access token
+    user_repo = UserRepository(session)
+    role_repo = RoleRepository(session)
+
+    user = await user_repo.get_by_id(user_id)
+    if user is None or not user.is_active:
+        logger.info(
+            "Token refresh failed: user not found or inactive",
+            user_id=user_id,
+        )
+        return auth_error
+
+    role = await role_repo.get_by_id(user.role_id)
+    if role is None:
+        logger.error(
+            "Token refresh failed: role not found",
+            user_id=user_id,
+            role_id=user.role_id,
+        )
+        return auth_error
+
+    # 4. Revoke old refresh token
+    await refresh_token_repo.revoke(token_model.id)
+
+    # 5. Generate new tokens
+    access_token = jwt_service.create_access_token(
+        user_id=user_id,
+        account_id=account_id,
+        email=user.email,
+        role=role.name,
+    )
+    new_refresh_token, new_token_id = jwt_service.create_refresh_token(
+        user_id=user_id,
+        account_id=account_id,
+    )
+    expires_in = jwt_service.get_expires_in()
+
+    # 6. Store new refresh token
+    settings = get_settings()
+    new_token_model = RefreshTokenModel(
+        id=new_token_id,
+        token_hash=refresh_token_repo.hash_token(new_refresh_token),
+        user_id=user_id,
+        account_id=account_id,
+        expires_at=datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_expire_days),
+    )
+    await refresh_token_repo.create(new_token_model)
+    await session.commit()
+
+    logger.info(
+        "Tokens refreshed successfully",
+        user_id=user_id,
+        account_id=account_id,
+    )
+
+    # 7. Return new tokens
+    return TokenRefreshResponse(
+        token=access_token,
+        refresh_token=new_refresh_token,
+        expires_in=expires_in,
+    )
+
+
+@router.get(
+    "/me",
+    status_code=status.HTTP_200_OK,
+    responses={
+        401: {"description": "Not authenticated"},
+    },
+)
+async def get_current_user_info(
+    current_user: AuthenticatedUser,
+) -> dict:
+    """Get the current authenticated user's information.
+
+    This is a protected endpoint that requires a valid access token.
+    Returns the user information extracted from the JWT token claims.
+    """
+    return {
+        "user_id": current_user.user_id,
+        "account_id": current_user.account_id,
+        "email": current_user.email,
+        "role": current_user.role,
+    }

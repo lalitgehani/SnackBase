@@ -87,3 +87,18 @@ class ConflictErrorResponse(BaseModel):
     error: str = Field(..., description="Error type")
     message: str = Field(..., description="Human-readable error message")
     field: str = Field(..., description="Field that caused the conflict")
+
+
+class RefreshRequest(BaseModel):
+    """Request body for token refresh."""
+
+    refresh_token: str = Field(..., min_length=1, description="JWT refresh token")
+
+
+class TokenRefreshResponse(BaseModel):
+    """Response for successful token refresh."""
+
+    token: str = Field(..., description="New JWT access token")
+    refresh_token: str = Field(..., description="New JWT refresh token")
+    expires_in: int = Field(..., description="Access token expiration time in seconds")
+

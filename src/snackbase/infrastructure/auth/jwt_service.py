@@ -4,6 +4,7 @@ Provides JWT token creation and validation for authentication.
 Supports access tokens and refresh tokens with configurable expiration.
 """
 
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -101,7 +102,7 @@ class JWTService:
         user_id: str,
         account_id: str,
         expires_delta: timedelta | None = None,
-    ) -> str:
+    ) -> tuple[str, str]:
         """Create a refresh token.
 
         Args:
@@ -110,7 +111,7 @@ class JWTService:
             expires_delta: Custom expiration time. Defaults to config value.
 
         Returns:
-            Encoded JWT refresh token.
+            Tuple of (encoded JWT refresh token, token ID for storage).
         """
         settings = get_settings()
         if expires_delta is None:
@@ -118,18 +119,20 @@ class JWTService:
 
         now = datetime.now(timezone.utc)
         expire = now + expires_delta
+        token_id = str(uuid.uuid4())
 
         payload = {
             "iss": self.ISSUER,
             "sub": user_id,
             "iat": now,
             "exp": expire,
+            "jti": token_id,
             "user_id": user_id,
             "account_id": account_id,
             "type": "refresh",
         }
 
-        return jwt.encode(payload, self.secret_key, algorithm=self.ALGORITHM)
+        return jwt.encode(payload, self.secret_key, algorithm=self.ALGORITHM), token_id
 
     def decode_token(self, token: str) -> dict[str, Any]:
         """Decode and validate a JWT token.
@@ -156,6 +159,42 @@ class JWTService:
             raise TokenExpiredError("Token has expired") from e
         except jwt.InvalidTokenError as e:
             raise InvalidTokenError("Invalid token") from e
+
+    def validate_refresh_token(self, token: str) -> dict[str, Any]:
+        """Validate that a token is a refresh token and decode it.
+
+        Args:
+            token: The encoded JWT token.
+
+        Returns:
+            Decoded token payload.
+
+        Raises:
+            TokenExpiredError: If the token has expired.
+            InvalidTokenError: If the token is invalid or not a refresh token.
+        """
+        payload = self.decode_token(token)
+        if payload.get("type") != "refresh":
+            raise InvalidTokenError("Not a refresh token")
+        return payload
+
+    def validate_access_token(self, token: str) -> dict[str, Any]:
+        """Validate that a token is an access token and decode it.
+
+        Args:
+            token: The encoded JWT token.
+
+        Returns:
+            Decoded token payload.
+
+        Raises:
+            TokenExpiredError: If the token has expired.
+            InvalidTokenError: If the token is invalid or not an access token.
+        """
+        payload = self.decode_token(token)
+        if payload.get("type") != "access":
+            raise InvalidTokenError("Not an access token")
+        return payload
 
     def get_expires_in(self, expires_delta: timedelta | None = None) -> int:
         """Get the expiration time in seconds.

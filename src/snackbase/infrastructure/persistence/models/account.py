@@ -69,6 +69,11 @@ class AccountModel(Base):
         back_populates="account",
         cascade="all, delete-orphan",
     )
+    refresh_tokens: Mapped[list["RefreshTokenModel"]] = relationship(  # noqa: F821
+        "RefreshTokenModel",
+        back_populates="account",
+        cascade="all, delete-orphan",
+    )
 
     __table_args__ = (
         # Validate account ID format: 2 uppercase letters + 4 digits

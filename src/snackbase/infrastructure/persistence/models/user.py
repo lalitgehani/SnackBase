@@ -101,6 +101,11 @@ class UserModel(Base):
         "InvitationModel",
         back_populates="inviter",
     )
+    refresh_tokens: Mapped[list["RefreshTokenModel"]] = relationship(  # noqa: F821
+        "RefreshTokenModel",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
 
     __table_args__ = (
         # Unique constraint on (account_id, email)
