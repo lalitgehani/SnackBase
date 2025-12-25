@@ -27,10 +27,13 @@ class TokenType(Enum):
     AND = auto()
     OR = auto()
     NOT = auto()
+    IN = auto()  # in (membership operator)
     
     # Punctuation
     LPAREN = auto()
     RPAREN = auto()
+    LBRACKET = auto()  # [
+    RBRACKET = auto()  # ]
     COMMA = auto()
     
     EOF = auto()
@@ -131,6 +134,8 @@ class Lexer:
             return Token(TokenType.OR, "or", start_pos)
         if result == "not":
             return Token(TokenType.NOT, "not", start_pos)
+        if result == "in":
+            return Token(TokenType.IN, "in", start_pos)
 
         return Token(TokenType.IDENTIFIER, result, start_pos)
 
@@ -194,6 +199,14 @@ class Lexer:
             if self.current_char == ",":
                 self.advance()
                 return Token(TokenType.COMMA, ",", start_pos)
+
+            if self.current_char == "[":
+                self.advance()
+                return Token(TokenType.LBRACKET, "[", start_pos)
+
+            if self.current_char == "]":
+                self.advance()
+                return Token(TokenType.RBRACKET, "]", start_pos)
 
             self.error(f"Invalid character '{self.current_char}'")
 

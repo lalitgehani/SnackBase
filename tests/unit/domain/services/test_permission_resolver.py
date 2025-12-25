@@ -309,3 +309,98 @@ class TestPermissionResolver:
                 context={"user": {"id": "user456"}, "record": {}}
             )
             assert result.allowed is False
+
+    @pytest.mark.asyncio
+    async def test_resolve_permission_user_in_array(self, permission_resolver):
+        """Test resolving permission with user.id in [...] rule."""
+        mock_permission = PermissionModel(
+            id=1,
+            role_id=2,
+            collection="customers",
+            rules=json.dumps({
+                "read": {"rule": "user.id in ['user123', 'user456']", "fields": "*"}
+            })
+        )
+        
+        with patch.object(
+            permission_resolver.permission_repo,
+            "get_by_role_id",
+            return_value=[mock_permission]
+        ):
+            # Should allow for user123 (in array)
+            result = await permission_resolver.resolve_permission(
+                user_id="user123",
+                role_id=2,
+                collection="customers",
+                operation="read",
+                context={"user": {"id": "user123"}, "record": {}}
+            )
+            assert result.allowed is True
+            
+            # Should allow for user456 (in array)
+            result = await permission_resolver.resolve_permission(
+                user_id="user456",
+                role_id=2,
+                collection="customers",
+                operation="read",
+                context={"user": {"id": "user456"}, "record": {}}
+            )
+            assert result.allowed is True
+            
+            # Should deny for user789 (not in array)
+            result = await permission_resolver.resolve_permission(
+                user_id="user789",
+                role_id=2,
+                collection="customers",
+                operation="read",
+                context={"user": {"id": "user789"}, "record": {}}
+            )
+            assert result.allowed is False
+
+    @pytest.mark.asyncio
+    async def test_resolve_permission_user_specific_with_role_or(self, permission_resolver):
+        """Test user-specific rule combined with role rule using OR logic."""
+        # Permission for specific user OR admin role
+        mock_permission = PermissionModel(
+            id=1,
+            role_id=2,
+            collection="customers",
+            rules=json.dumps({
+                "read": {"rule": "user.id == 'special_user' or user.role == 'admin'", "fields": "*"}
+            })
+        )
+        
+        with patch.object(
+            permission_resolver.permission_repo,
+            "get_by_role_id",
+            return_value=[mock_permission]
+        ):
+            # Special user with non-admin role should be allowed
+            result = await permission_resolver.resolve_permission(
+                user_id="special_user",
+                role_id=2,
+                collection="customers",
+                operation="read",
+                context={"user": {"id": "special_user", "role": "viewer"}, "record": {}}
+            )
+            assert result.allowed is True
+            
+            # Regular user with admin role should be allowed
+            result = await permission_resolver.resolve_permission(
+                user_id="regular_user",
+                role_id=2,
+                collection="customers",
+                operation="read",
+                context={"user": {"id": "regular_user", "role": "admin"}, "record": {}}
+            )
+            assert result.allowed is True
+            
+            # Regular user with non-admin role should be denied
+            result = await permission_resolver.resolve_permission(
+                user_id="regular_user",
+                role_id=2,
+                collection="customers",
+                operation="read",
+                context={"user": {"id": "regular_user", "role": "viewer"}, "record": {}}
+            )
+            assert result.allowed is False

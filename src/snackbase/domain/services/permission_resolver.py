@@ -190,12 +190,16 @@ class PermissionResolver:
         Returns:
             True if rule evaluates to true, False otherwise.
         """
-        # Check for user-specific rules (contains user.id == "specific_id")
+        # Check for user-specific rules (contains user.id == "specific_id" or user.id in [...])
         # This is a simple heuristic - the actual evaluation will determine the result
-        is_user_specific = f'user.id == "{user_id}"' in rule_expr or f"user.id == '{user_id}'" in rule_expr
+        is_user_specific = (
+            f'user.id == "{user_id}"' in rule_expr or 
+            f"user.id == '{user_id}'" in rule_expr or
+            "user.id in [" in rule_expr
+        )
         
         if is_user_specific:
-            logger.debug(f"Detected user-specific rule: {rule_expr}")
+            logger.debug(f"Detected user-specific rule for user_id={user_id}: {rule_expr}")
         
         try:
             # Create lexer and parser for this rule

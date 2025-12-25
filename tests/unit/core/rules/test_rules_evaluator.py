@@ -142,3 +142,95 @@ async def test_evaluator_errors():
     # Missing function
     with pytest.raises(RuleEvaluationError, match="Unknown function"):
         await evaluate_rule(parse_rule("unknown_func()"), {})
+
+
+@pytest.mark.asyncio
+async def test_evaluator_in_operator_with_list_literal():
+    """Test 'in' operator with inline list literals."""
+    # Simple string in list
+    assert await evaluate_rule(parse_rule("'admin' in ['admin', 'user']"), {}) is True
+    assert await evaluate_rule(parse_rule("'guest' in ['admin', 'user']"), {}) is False
+    
+    # Integer in list
+    assert await evaluate_rule(parse_rule("1 in [1, 2, 3]"), {}) is True
+    assert await evaluate_rule(parse_rule("5 in [1, 2, 3]"), {}) is False
+
+
+@pytest.mark.asyncio
+async def test_evaluator_in_operator_with_variable():
+    """Test 'in' operator with variable on left side."""
+    context = {"user": {"id": "user123", "role": "admin"}}
+    
+    # Variable in list
+    assert await evaluate_rule(parse_rule("user.id in ['user123', 'user456']"), context) is True
+    assert await evaluate_rule(parse_rule("user.id in ['user456', 'user789']"), context) is False
+    
+    # Role check
+    assert await evaluate_rule(parse_rule("user.role in ['admin', 'superadmin']"), context) is True
+    assert await evaluate_rule(parse_rule("user.role in ['editor', 'viewer']"), context) is False
+
+
+@pytest.mark.asyncio
+async def test_evaluator_in_operator_with_array_variable():
+    """Test 'in' operator with array variable on right side."""
+    context = {"allowed_users": ["user1", "user2", "user3"], "current_user": "user2"}
+    
+    assert await evaluate_rule(parse_rule("current_user in allowed_users"), context) is True
+    
+    context["current_user"] = "user5"
+    assert await evaluate_rule(parse_rule("current_user in allowed_users"), context) is False
+
+
+@pytest.mark.asyncio
+async def test_evaluator_in_operator_null_handling():
+    """Test 'in' operator with null values."""
+    context = {"user": {"id": None}, "items": None}
+    
+    # Null in list should work
+    assert await evaluate_rule(parse_rule("user.id in [null, 'a']"), context) is True
+    
+    # Value in null collection should return False
+    assert await evaluate_rule(parse_rule("'a' in items"), context) is False
+
+
+@pytest.mark.asyncio
+async def test_evaluator_user_specific_rule():
+    """Test user-specific permission rule: user.id == 'specific_user'."""
+    # User-specific rule with exact match
+    rule = "user.id == 'user_abc123'"
+    
+    ctx_match = {"user": {"id": "user_abc123"}}
+    ctx_no_match = {"user": {"id": "user_xyz789"}}
+    
+    assert await evaluate_rule(parse_rule(rule), ctx_match) is True
+    assert await evaluate_rule(parse_rule(rule), ctx_no_match) is False
+
+
+@pytest.mark.asyncio
+async def test_evaluator_user_specific_rule_combined_with_role():
+    """Test user-specific rule combined with role rule using OR."""
+    # User-specific or role-based access
+    rule = "user.id == 'special_user' or user.role == 'admin'"
+    
+    # Special user (any role)
+    ctx1 = {"user": {"id": "special_user", "role": "viewer"}}
+    assert await evaluate_rule(parse_rule(rule), ctx1) is True
+    
+    # Admin (any user)
+    ctx2 = {"user": {"id": "regular_user", "role": "admin"}}
+    assert await evaluate_rule(parse_rule(rule), ctx2) is True
+    
+    # Neither special user nor admin
+    ctx3 = {"user": {"id": "regular_user", "role": "viewer"}}
+    assert await evaluate_rule(parse_rule(rule), ctx3) is False
+
+
+@pytest.mark.asyncio
+async def test_evaluator_multiple_users_in_array():
+    """Test granting access to multiple specific users: user.id in ['user1', 'user2']."""
+    rule = "user.id in ['user1', 'user2', 'user3']"
+    
+    assert await evaluate_rule(parse_rule(rule), {"user": {"id": "user1"}}) is True
+    assert await evaluate_rule(parse_rule(rule), {"user": {"id": "user2"}}) is True
+    assert await evaluate_rule(parse_rule(rule), {"user": {"id": "user3"}}) is True
+    assert await evaluate_rule(parse_rule(rule), {"user": {"id": "user4"}}) is False

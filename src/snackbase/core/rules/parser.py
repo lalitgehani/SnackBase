@@ -1,6 +1,6 @@
 """Parser for rule expressions."""
 
-from .ast import BinaryOp, FunctionCall, Literal, Node, UnaryOp, Variable
+from .ast import BinaryOp, FunctionCall, ListLiteral, Literal, Node, UnaryOp, Variable
 from .exceptions import RuleSyntaxError
 from .lexer import Lexer, Token, TokenType
 
@@ -62,13 +62,14 @@ class Parser:
         return self.comparison()
 
     def comparison(self) -> Node:
-        """Parse comparison expressions."""
+        """Parse comparison expressions including 'in' operator."""
         node = self.atom()
 
         if self.current_token.type in (
             TokenType.EQ, TokenType.NEQ, 
             TokenType.LT, TokenType.GT, 
-            TokenType.LTE, TokenType.GTE
+            TokenType.LTE, TokenType.GTE,
+            TokenType.IN
         ):
             token = self.current_token
             # Map token type to string operator
@@ -78,7 +79,8 @@ class Parser:
                 TokenType.LT: "<",
                 TokenType.GT: ">",
                 TokenType.LTE: "<=",
-                TokenType.GTE: ">="
+                TokenType.GTE: ">=",
+                TokenType.IN: "in"
             }
             self.consume(token.type)
             right = self.atom()
@@ -116,6 +118,9 @@ class Parser:
             self.consume(TokenType.RPAREN)
             return node
 
+        if token.type == TokenType.LBRACKET:
+            return self._list_literal()
+
         if token.type == TokenType.IDENTIFIER:
             # Check for function call
             # We need to peek to resolve ambiguity between variable and function call
@@ -148,3 +153,17 @@ class Parser:
                 
         self.consume(TokenType.RPAREN)
         return FunctionCall(name, arguments)
+
+    def _list_literal(self) -> Node:
+        """Parse list literal (e.g., ['a', 'b', 'c'])."""
+        self.consume(TokenType.LBRACKET)
+        items: list[Node] = []
+        
+        if self.current_token.type != TokenType.RBRACKET:
+            items.append(self.expression())
+            while self.current_token.type == TokenType.COMMA:
+                self.consume(TokenType.COMMA)
+                items.append(self.expression())
+                
+        self.consume(TokenType.RBRACKET)
+        return ListLiteral(items)

@@ -36,3 +36,8 @@ class FunctionCall(Node):
     """Represents a function call (e.g., contains(a, b))."""
     name: str
     arguments: list[Node]
+
+@dataclass
+class ListLiteral(Node):
+    """Represents a list literal (e.g., ['a', 'b', 'c'])."""
+    items: list[Node]

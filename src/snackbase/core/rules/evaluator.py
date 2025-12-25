@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from .ast import BinaryOp, FunctionCall, Literal, Node, UnaryOp, Variable
+from .ast import BinaryOp, FunctionCall, ListLiteral, Literal, Node, UnaryOp, Variable
 from .exceptions import RuleEvaluationError
 from ..macros.engine import MacroExecutionEngine
 
@@ -36,6 +36,9 @@ class Evaluator:
         
         if isinstance(node, FunctionCall):
             return await self._evaluate_function(node)
+        
+        if isinstance(node, ListLiteral):
+            return await self._evaluate_list(node)
         
         raise RuleEvaluationError(f"Unknown node type: {type(node).__name__}")
 
@@ -102,6 +105,16 @@ class Evaluator:
         except TypeError:
             # If types are incompatible (e.g. None < 5), return False
             return False
+        
+        # 'in' operator for membership testing
+        if op == "in":
+            if right is None:
+                return False
+            try:
+                return left in right
+            except TypeError:
+                # If right is not iterable, return False
+                return False
             
         raise RuleEvaluationError(f"Unknown binary operator: {op}")
 
@@ -158,3 +171,10 @@ class Evaluator:
             return s.endswith(suffix)
             
         raise RuleEvaluationError(f"Unknown function: {node.name}")
+
+    async def _evaluate_list(self, node: ListLiteral) -> Any:
+        """Evaluate a list literal to a Python list."""
+        result = []
+        for item in node.items:
+            result.append(await self.evaluate(item))
+        return result
