@@ -32,15 +32,18 @@ class CurrentUser:
     account_id: str
     email: str
     role: str
+    groups: list[str]  # List of group names the user belongs to
 
 
 async def get_current_user(
     authorization: Annotated[str | None, Header()] = None,
+    session: Annotated[AsyncSession, Depends(get_db_session)] = None,
 ) -> CurrentUser:
     """Extract and validate the current user from the Authorization header.
 
     Args:
         authorization: The Authorization header value (e.g., "Bearer <token>").
+        session: Database session for loading user groups.
 
     Returns:
         CurrentUser: The authenticated user's context.
@@ -70,11 +73,25 @@ async def get_current_user(
         # Validate access token (not refresh token)
         payload = jwt_service.validate_access_token(token)
 
+        user_id = payload["user_id"]
+        
+        # Load user groups from database
+        groups: list[str] = []
+        if session is not None:
+            from snackbase.infrastructure.persistence.repositories import UserRepository
+            
+            user_repo = UserRepository(session)
+            user = await user_repo.get_by_id_with_groups(user_id)
+            
+            if user and user.groups:
+                groups = [group.name for group in user.groups]
+
         return CurrentUser(
-            user_id=payload["user_id"],
+            user_id=user_id,
             account_id=payload["account_id"],
             email=payload["email"],
             role=payload["role"],
+            groups=groups,
         )
     except TokenExpiredError:
         logger.info("Authentication failed: token expired")

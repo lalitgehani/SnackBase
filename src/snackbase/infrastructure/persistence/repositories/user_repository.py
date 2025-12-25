@@ -46,6 +46,24 @@ class UserRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_by_id_with_groups(self, user_id: str) -> UserModel | None:
+        """Get a user by ID with groups eagerly loaded.
+
+        Args:
+            user_id: User ID (UUID string).
+
+        Returns:
+            User model with groups if found, None otherwise.
+        """
+        from sqlalchemy.orm import selectinload
+
+        result = await self.session.execute(
+            select(UserModel)
+            .where(UserModel.id == user_id)
+            .options(selectinload(UserModel.groups))
+        )
+        return result.scalar_one_or_none()
+
     async def get_by_email_and_account(
         self, email: str, account_id: str
     ) -> UserModel | None:

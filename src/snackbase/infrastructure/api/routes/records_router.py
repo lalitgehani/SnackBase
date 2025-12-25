@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.core.logging import get_logger
-from snackbase.domain.services import FieldType, RecordValidator
+from snackbase.domain.services import FieldType, RecordValidator, PIIMaskingService
 from snackbase.infrastructure.api.dependencies import AuthenticatedUser, AuthContext
 from snackbase.infrastructure.api.middleware import (
     check_collection_permission,
@@ -33,6 +33,49 @@ from snackbase.infrastructure.persistence.repositories import (
 logger = get_logger(__name__)
 
 router = APIRouter()
+
+
+def _mask_record_pii(
+    record: dict[str, Any],
+    schema: list[dict],
+    user_groups: list[str],
+) -> dict[str, Any]:
+    """Mask PII fields in a record based on user groups.
+    
+    Args:
+        record: The record data to mask.
+        schema: The collection schema with PII field definitions.
+        user_groups: List of group names the user belongs to.
+        
+    Returns:
+        Record with PII fields masked if user doesn't have pii_access group.
+    """
+    # Check if user has pii_access group
+    if not PIIMaskingService.should_mask_for_user(user_groups):
+        # User has pii_access, return unmasked data
+        return record
+    
+    # User doesn't have pii_access, mask PII fields
+    masked_record = record.copy()
+    
+    for field in schema:
+        field_name = field.get("name")
+        is_pii = field.get("pii", False)
+        mask_type = field.get("mask_type")
+        
+        if is_pii and field_name in masked_record and masked_record[field_name] is not None:
+            # Determine mask type (use default if not specified)
+            if not mask_type:
+                # Default to 'full' masking if no mask_type specified
+                mask_type = "full"
+            
+            # Apply masking
+            masked_record[field_name] = PIIMaskingService.mask_value(
+                masked_record[field_name],
+                mask_type,
+            )
+    
+    return masked_record
 
 
 @router.post(
@@ -221,6 +264,9 @@ async def create_record(
     if allowed_fields != "*":
         created_record = apply_field_filter(created_record, allowed_fields)
     
+    # 8. Apply PII masking to response
+    created_record = _mask_record_pii(created_record, schema, current_user.groups)
+    
     return RecordResponse.from_record(created_record)
 
 
@@ -321,7 +367,14 @@ async def list_records(
             filtered_records.append(filtered_record)
         records = filtered_records
     
-    # 7. Apply additional field limiting if requested via query param
+    # 7. Apply PII masking to all records
+    masked_records = []
+    for record in records:
+        masked_record = _mask_record_pii(record, schema, current_user.groups)
+        masked_records.append(masked_record)
+    records = masked_records
+    
+    # 8. Apply additional field limiting if requested via query param
     if fields:
         field_list = [f.strip() for f in fields.split(",")]
         # Always include ID
@@ -334,7 +387,7 @@ async def list_records(
             filtered_records.append(filtered_record)
         records = filtered_records
 
-    # 8. Return response
+    # 9. Return response
     return RecordListResponse(
         items=[RecordResponse.from_record(r) for r in records],
         total=total,
@@ -411,6 +464,9 @@ async def get_record(
     # 4. Apply field filter to response
     if allowed_fields != "*":
         record = apply_field_filter(record, allowed_fields)
+    
+    # 5. Apply PII masking to response
+    record = _mask_record_pii(record, schema, current_user.groups)
 
     return RecordResponse.from_record(record)
 
@@ -640,6 +696,9 @@ async def _update_record(
     # 8. Apply field filter to response
     if allowed_fields != "*":
         updated_record = apply_field_filter(updated_record, allowed_fields)
+    
+    # 9. Apply PII masking to response
+    updated_record = _mask_record_pii(updated_record, schema, current_user.groups)
 
     return RecordResponse.from_record(updated_record)
 

@@ -25,6 +25,7 @@ from snackbase.domain.services.permission_resolver import (
     PermissionResolver,
     PermissionResult,
 )
+from snackbase.domain.services.pii_masking_service import PIIMaskingService
 from snackbase.domain.services.record_validator import (
     RecordValidationError,
     RecordValidator,
@@ -46,6 +47,7 @@ __all__ = [
     "PermissionCache",
     "PermissionResolver",
     "PermissionResult",
+    "PIIMaskingService",
     "RecordValidationError",
     "RecordValidator",
     "RESERVED_FIELD_NAMES",
