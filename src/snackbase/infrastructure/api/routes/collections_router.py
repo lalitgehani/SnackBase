@@ -107,9 +107,12 @@ async def create_collection(
     table_name = TableBuilder.generate_table_name(request.name)
 
     # 5. Create physical table
-    db_manager = get_db_manager()
     try:
-        await TableBuilder.create_table(db_manager.engine, request.name, schema_dicts)
+        # Use session's engine to ensure we're using the correct database (especially for tests)
+        from sqlalchemy.ext.asyncio import AsyncEngine
+        from typing import cast
+        engine = cast(AsyncEngine, session.bind)
+        await TableBuilder.create_table(engine, request.name, schema_dicts)
     except Exception as e:
         logger.error(
             "Collection creation failed: table creation error",

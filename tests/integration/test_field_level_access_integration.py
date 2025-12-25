@@ -62,12 +62,24 @@ async def test_account_and_users(db_session: AsyncSession):
     )
     await user_repo.create(limited_user)
     
+    # Create account admin (in test account)
+    account_admin = UserModel(
+        id="account-admin-id",
+        account_id=account.id,
+        email="accadmin@example.com",
+        password_hash="hashed",
+        role_id=admin_role.id,
+        is_active=True,
+    )
+    await user_repo.create(account_admin)
+    
     await db_session.commit()
     
     return {
         "account": account,
         "superadmin": superadmin,
         "limited_user": limited_user,
+        "account_admin": account_admin,
         "admin_role": admin_role,
         "user_role": user_role,
     }
@@ -92,6 +104,18 @@ def limited_user_headers():
         account_id="TE1234",  # Match the account created in fixture
         email="limited@example.com",
         role="user",
+    )
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def account_admin_headers():
+    """Create headers for an admin user in the test account."""
+    token = jwt_service.create_access_token(
+        user_id="account-admin-id",
+        account_id="TE1234",
+        email="accadmin@example.com",
+        role="admin",
     )
     return {"Authorization": f"Bearer {token}"}
 
@@ -159,7 +183,28 @@ async def limited_permission(
     assert response.status_code == 201
     return response.json()
 
+    return response.json()
 
+
+@pytest_asyncio.fixture
+async def admin_full_access(client: AsyncClient, superadmin_headers, test_collection):
+    """Grant full access to admin role for test collection."""
+    permission_data = {
+        "role_id": 1,  # admin role
+        "collection": test_collection["name"],
+        "rules": {
+            "create": {"rule": "true", "fields": "*"},
+            "read": {"rule": "true", "fields": "*"},
+            "update": {"rule": "true", "fields": "*"},
+            "delete": {"rule": "true", "fields": "*"},
+        },
+    }
+    await client.post(
+        "/api/v1/permissions",
+        json=permission_data,
+        headers=superadmin_headers,
+    )
+    return permission_data
 @pytest.mark.asyncio
 async def test_create_with_allowed_fields(
     client: AsyncClient,
@@ -202,7 +247,7 @@ async def test_create_with_unauthorized_field(
     }
     
     response = await client.post(
-        "/api/v1/employees",
+        f"/api/v1/{test_collection['name']}",
         json=record_data,
         headers=limited_user_headers,
     )
@@ -228,7 +273,7 @@ async def test_create_with_system_field(
     }
     
     response = await client.post(
-        "/api/v1/employees",
+        f"/api/v1/{test_collection['name']}",
         json=record_data,
         headers=limited_user_headers,
     )
@@ -242,13 +287,14 @@ async def test_create_with_system_field(
 @pytest.mark.asyncio
 async def test_read_filters_response_fields(
     client: AsyncClient,
-    superadmin_headers,
+    account_admin_headers,
     limited_user_headers,
     test_collection,
     limited_permission,
+    admin_full_access,
 ):
-    """Test that read response only includes allowed fields + system fields."""
-    # Create record as superadmin with all fields
+    """Test that restricted fields are filtered from response."""
+    # Create record as account admin
     record_data = {
         "name": "Jane Smith",
         "email": "jane@example.com",
@@ -257,16 +303,16 @@ async def test_read_filters_response_fields(
     }
     
     create_response = await client.post(
-        "/api/v1/employees",
+        f"/api/v1/{test_collection['name']}",
         json=record_data,
-        headers=superadmin_headers,
+        headers=account_admin_headers,
     )
     assert create_response.status_code == 201
     record_id = create_response.json()["id"]
     
     # Read as limited user
     response = await client.get(
-        f"/api/v1/employees/{record_id}",
+        f"/api/v1/{test_collection['name']}/{record_id}",
         headers=limited_user_headers,
     )
     
@@ -289,15 +335,17 @@ async def test_read_filters_response_fields(
 @pytest.mark.asyncio
 async def test_read_wildcard_returns_all_fields(
     client: AsyncClient,
+    account_admin_headers,
     superadmin_headers,
     test_collection,
 ):
-    """Test that wildcard permission returns all fields."""
+    """Test that explicit wildcard returns all fields."""
     # Create permission with wildcard
     permission_data = {
         "role_id": 1,  # admin role
-        "collection": "employees",
+        "collection": test_collection["name"],
         "rules": {
+            "create": {"rule": "true", "fields": "*"},
             "read": {"rule": "true", "fields": "*"},
         },
     }
@@ -308,7 +356,7 @@ async def test_read_wildcard_returns_all_fields(
         headers=superadmin_headers,
     )
     
-    # Create record
+    # Create record as account admin
     record_data = {
         "name": "Admin User",
         "email": "admin@example.com",
@@ -317,16 +365,16 @@ async def test_read_wildcard_returns_all_fields(
     }
     
     create_response = await client.post(
-        "/api/v1/employees",
+        f"/api/v1/{test_collection['name']}",
         json=record_data,
-        headers=superadmin_headers,
+        headers=account_admin_headers,
     )
     record_id = create_response.json()["id"]
     
     # Read record
     response = await client.get(
-        f"/api/v1/employees/{record_id}",
-        headers=superadmin_headers,
+        f"/api/v1/{test_collection['name']}/{record_id}",
+        headers=account_admin_headers,
     )
     
     assert response.status_code == 200
@@ -342,23 +390,24 @@ async def test_read_wildcard_returns_all_fields(
 @pytest.mark.asyncio
 async def test_update_with_allowed_fields(
     client: AsyncClient,
-    superadmin_headers,
+    account_admin_headers,
     limited_user_headers,
     test_collection,
     limited_permission,
+    admin_full_access,
 ):
     """Test that update succeeds with allowed fields."""
-    # Create record as superadmin
+    # Create record as account admin
     record_data = {
         "name": "Original Name",
-        "email": "original@example.com",
+        "email": "test@example.com",
         "department": "Sales",
     }
     
     create_response = await client.post(
-        "/api/v1/employees",
+        f"/api/v1/{test_collection['name']}",
         json=record_data,
-        headers=superadmin_headers,
+        headers=account_admin_headers,
     )
     record_id = create_response.json()["id"]
     
@@ -369,7 +418,7 @@ async def test_update_with_allowed_fields(
     }
     
     response = await client.patch(
-        f"/api/v1/employees/{record_id}",
+        f"/api/v1/{test_collection['name']}/{record_id}",
         json=update_data,
         headers=limited_user_headers,
     )
@@ -383,13 +432,14 @@ async def test_update_with_allowed_fields(
 @pytest.mark.asyncio
 async def test_update_with_unauthorized_field(
     client: AsyncClient,
-    superadmin_headers,
+    account_admin_headers,
     limited_user_headers,
     test_collection,
     limited_permission,
+    admin_full_access,
 ):
     """Test that update fails with 422 for unauthorized field."""
-    # Create record as superadmin
+    # Create record as account admin
     record_data = {
         "name": "Test User",
         "email": "test@example.com",
@@ -397,9 +447,9 @@ async def test_update_with_unauthorized_field(
     }
     
     create_response = await client.post(
-        "/api/v1/employees",
+        f"/api/v1/{test_collection['name']}",
         json=record_data,
-        headers=superadmin_headers,
+        headers=account_admin_headers,
     )
     record_id = create_response.json()["id"]
     
@@ -409,7 +459,7 @@ async def test_update_with_unauthorized_field(
     }
     
     response = await client.patch(
-        f"/api/v1/employees/{record_id}",
+        f"/api/v1/{test_collection['name']}/{record_id}",
         json=update_data,
         headers=limited_user_headers,
     )
@@ -422,10 +472,11 @@ async def test_update_with_unauthorized_field(
 @pytest.mark.asyncio
 async def test_update_with_system_field(
     client: AsyncClient,
-    superadmin_headers,
+    account_admin_headers,
     limited_user_headers,
     test_collection,
     limited_permission,
+    admin_full_access,
 ):
     """Test that update fails with 422 when trying to update system field."""
     # Create record
@@ -435,9 +486,9 @@ async def test_update_with_system_field(
     }
     
     create_response = await client.post(
-        "/api/v1/employees",
+        f"/api/v1/{test_collection['name']}",
         json=record_data,
-        headers=superadmin_headers,
+        headers=account_admin_headers,
     )
     record_id = create_response.json()["id"]
     
@@ -448,7 +499,7 @@ async def test_update_with_system_field(
     }
     
     response = await client.patch(
-        f"/api/v1/employees/{record_id}",
+        f"/api/v1/{test_collection['name']}/{record_id}",
         json=update_data,
         headers=limited_user_headers,
     )
@@ -462,13 +513,14 @@ async def test_update_with_system_field(
 @pytest.mark.asyncio
 async def test_list_filters_response_fields(
     client: AsyncClient,
-    superadmin_headers,
+    account_admin_headers,
     limited_user_headers,
     test_collection,
     limited_permission,
+    admin_full_access,
 ):
-    """Test that list response filters fields for each record."""
-    # Create multiple records as superadmin
+    """Test that list endpoint filters restricted fields."""
+    # Create multiple records as account admin
     records_data = [
         {"name": "User 1", "email": "user1@example.com", "salary": 50000, "department": "IT"},
         {"name": "User 2", "email": "user2@example.com", "salary": 60000, "department": "HR"},
@@ -476,15 +528,15 @@ async def test_list_filters_response_fields(
     
     for record_data in records_data:
         response = await client.post(
-            "/api/v1/employees",
+        f"/api/v1/{test_collection['name']}",
             json=record_data,
-            headers=superadmin_headers,
+            headers=account_admin_headers,
         )
         assert response.status_code == 201
     
     # List as limited user
     response = await client.get(
-        "/api/v1/employees",
+        f"/api/v1/{test_collection['name']}",
         headers=limited_user_headers,
     )
     
@@ -509,9 +561,12 @@ async def test_list_filters_response_fields(
 @pytest.mark.asyncio
 async def test_pii_masking_after_field_filtering(
     client: AsyncClient,
-    superadmin_headers,
+    account_admin_headers,
     limited_user_headers,
-    db_session: AsyncSession,
+    test_collection,
+    limited_permission,
+    admin_full_access,
+    superadmin_headers,
 ):
     """Test that PII masking is applied after field filtering."""
     # Create collection with PII field
@@ -549,7 +604,21 @@ async def test_pii_masking_after_field_filtering(
         json=permission_data,
         headers=superadmin_headers,
     )
-    
+
+    # Grant admin access to users collection
+    admin_permission = {
+        "role_id": 1,  # admin role
+        "collection": "users",
+        "rules": {
+            "create": {"rule": "true", "fields": "*"},
+            "read": {"rule": "true", "fields": "*"},
+        },
+    }
+    await client.post(
+        "/api/v1/permissions",
+        json=admin_permission,
+        headers=superadmin_headers,
+    )  
     # Create record with PII data
     record_data = {
         "name": "John Doe",
@@ -561,7 +630,7 @@ async def test_pii_masking_after_field_filtering(
     create_response = await client.post(
         "/api/v1/users",
         json=record_data,
-        headers=superadmin_headers,
+        headers=account_admin_headers,
     )
     record_id = create_response.json()["id"]
     

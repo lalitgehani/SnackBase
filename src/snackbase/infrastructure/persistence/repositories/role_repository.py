@@ -44,3 +44,36 @@ class RoleRepository:
             select(RoleModel).where(RoleModel.name == name)
         )
         return result.scalar_one_or_none()
+
+    async def create(self, role: RoleModel) -> RoleModel:
+        """Create a new role.
+
+        Args:
+            role: Role model to create.
+
+        Returns:
+            Created role model.
+        """
+        self.session.add(role)
+        await self.session.flush()
+        return role
+
+    async def delete(self, role_id: int) -> bool:
+        """Delete a role by ID.
+
+        Args:
+            role_id: Role ID.
+
+        Returns:
+            True if deleted, False if not found.
+        """
+        result = await self.session.execute(
+            select(RoleModel).where(RoleModel.id == role_id)
+        )
+        role = result.scalar_one_or_none()
+        if not role:
+            return False
+        
+        await self.session.delete(role)
+        await self.session.flush()
+        return True
