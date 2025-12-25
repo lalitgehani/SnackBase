@@ -148,6 +148,41 @@ class PermissionCache:
             
             return len(keys_to_delete)
     
+    
+    def get_user_groups(self, user_id: str) -> list[str] | None:
+        """Get cached groups for a user.
+        
+        Args:
+            user_id: User ID.
+            
+        Returns:
+            List of group names if found and not expired, None otherwise.
+        """
+        key = f"{user_id}:__groups__"
+        with self._lock:
+            entry = self._cache.get(key)
+            if entry is None:
+                return None
+            
+            if time.time() > entry.expires_at:
+                del self._cache[key]
+                return None
+            
+            return entry.value
+
+    def set_user_groups(self, user_id: str, groups: list[str]) -> None:
+        """Cache groups for a user.
+        
+        Args:
+            user_id: User ID.
+            groups: List of group names.
+        """
+        key = f"{user_id}:__groups__"
+        expires_at = time.time() + self.ttl_seconds
+        
+        with self._lock:
+            self._cache[key] = CacheEntry(value=groups, expires_at=expires_at)
+
     def size(self) -> int:
         """Get current cache size.
         

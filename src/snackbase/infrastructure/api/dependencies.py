@@ -36,6 +36,7 @@ class CurrentUser:
 
 
 async def get_current_user(
+    request: Request,
     authorization: Annotated[str | None, Header()] = None,
     session: Annotated[AsyncSession, Depends(get_db_session)] = None,
 ) -> CurrentUser:
@@ -76,15 +77,24 @@ async def get_current_user(
         user_id = payload["user_id"]
         
         # Load user groups from database
-        groups: list[str] = []
-        if session is not None:
-            from snackbase.infrastructure.persistence.repositories import UserRepository
+        # 1. Try to load from PermissionCache
+        permission_cache = get_permission_cache(request)
+        groups = permission_cache.get_user_groups(user_id)
+
+        # 2. If miss, load from DB
+        if groups is None:
+            groups = []
+            if session is not None:
+                from snackbase.infrastructure.persistence.repositories import UserRepository
+                
+                user_repo = UserRepository(session)
+                user = await user_repo.get_by_id_with_groups(user_id)
+                
+                if user and user.groups:
+                    groups = [group.name for group in user.groups]
             
-            user_repo = UserRepository(session)
-            user = await user_repo.get_by_id_with_groups(user_id)
-            
-            if user and user.groups:
-                groups = [group.name for group in user.groups]
+            # 3. Cache the result
+            permission_cache.set_user_groups(user_id, groups)
 
         return CurrentUser(
             user_id=user_id,
