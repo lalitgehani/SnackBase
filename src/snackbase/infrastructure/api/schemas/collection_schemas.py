@@ -44,12 +44,45 @@ class FieldDefinition(BaseModel):
         default=None,
         description="On delete action: cascade, set_null, restrict (required for reference type)",
     )
+    # PII (Personally Identifiable Information) fields
+    pii: bool = Field(
+        default=False,
+        description="Whether this field contains PII data",
+    )
+    mask_type: str | None = Field(
+        default=None,
+        description="Mask type for PII fields: email, ssn, phone, name, full, custom",
+    )
 
     @field_validator("type")
     @classmethod
     def normalize_type(cls, v: str) -> str:
         """Normalize field type to lowercase."""
         return v.lower()
+
+    @field_validator("mask_type")
+    @classmethod
+    def validate_mask_type(cls, v: str | None, info) -> str | None:
+        """Validate mask_type is only set when pii=True and has valid value."""
+        if v is None:
+            return v
+
+        # Normalize to lowercase
+        v = v.lower()
+
+        # Check if pii is True
+        pii = info.data.get("pii", False)
+        if not pii:
+            raise ValueError("mask_type can only be set when pii=True")
+
+        # Validate mask_type value
+        valid_mask_types = {"email", "ssn", "phone", "name", "full", "custom"}
+        if v not in valid_mask_types:
+            raise ValueError(
+                f"Invalid mask_type '{v}'. Valid types: {', '.join(sorted(valid_mask_types))}"
+            )
+
+        return v
 
 
 class CreateCollectionRequest(BaseModel):
@@ -82,6 +115,8 @@ class SchemaFieldResponse(BaseModel):
     options: dict | None = None
     collection: str | None = None
     on_delete: str | None = None
+    pii: bool = False
+    mask_type: str | None = None
 
 
 class CollectionResponse(BaseModel):

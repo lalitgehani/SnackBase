@@ -30,6 +30,17 @@ class OnDeleteAction(str, Enum):
     RESTRICT = "restrict"
 
 
+class MaskType(str, Enum):
+    """Valid mask types for PII fields."""
+
+    EMAIL = "email"
+    SSN = "ssn"
+    PHONE = "phone"
+    NAME = "name"
+    FULL = "full"
+    CUSTOM = "custom"
+
+
 # Reserved field names that are auto-added by the system
 RESERVED_FIELD_NAMES = frozenset({
     "id",
@@ -257,6 +268,75 @@ class CollectionValidator:
         return errors
 
     @classmethod
+    def get_default_mask_type(cls, field_name: str) -> str | None:
+        """Infer default mask type from field name.
+
+        Args:
+            field_name: The field name to analyze.
+
+        Returns:
+            Suggested mask type or None if no match.
+        """
+        field_lower = field_name.lower()
+
+        # Email patterns
+        if "email" in field_lower or field_lower in {"e_mail", "mail"}:
+            return MaskType.EMAIL.value
+
+        # SSN patterns
+        if "ssn" in field_lower or "social_security" in field_lower:
+            return MaskType.SSN.value
+
+        # Phone patterns
+        if "phone" in field_lower or "mobile" in field_lower or "tel" in field_lower:
+            return MaskType.PHONE.value
+
+        # Name patterns
+        if field_lower in {"name", "first_name", "last_name", "full_name", "firstname", "lastname"}:
+            return MaskType.NAME.value
+
+        return None
+
+    @classmethod
+    def validate_pii_field(cls, field: dict, field_index: int) -> list[CollectionValidationError]:
+        """Validate PII field configuration.
+
+        Args:
+            field: The field definition dict.
+            field_index: Index of the field in the schema (for error messages).
+
+        Returns:
+            List of validation errors (empty if valid).
+        """
+        errors = []
+        pii = field.get("pii", False)
+        mask_type = field.get("mask_type")
+
+        # If pii is False, mask_type should not be set
+        if not pii and mask_type is not None:
+            errors.append(
+                CollectionValidationError(
+                    field=f"schema[{field_index}].mask_type",
+                    message="mask_type can only be set when pii=True",
+                    code="mask_type_requires_pii",
+                )
+            )
+
+        # If pii is True and mask_type is provided, validate it
+        if pii and mask_type is not None:
+            valid_mask_types = [t.value for t in MaskType]
+            if mask_type.lower() not in valid_mask_types:
+                errors.append(
+                    CollectionValidationError(
+                        field=f"schema[{field_index}].mask_type",
+                        message=f"Invalid mask_type '{mask_type}'. Valid types: {', '.join(valid_mask_types)}",
+                        code="mask_type_invalid",
+                    )
+                )
+
+        return errors
+
+    @classmethod
     def validate_field(cls, field: dict, field_index: int) -> list[CollectionValidationError]:
         """Validate a single field definition.
 
@@ -280,6 +360,9 @@ class CollectionValidator:
         # If this is a reference field, validate reference-specific config
         if field_type.lower() == FieldType.REFERENCE.value:
             errors.extend(cls.validate_reference_field(field, field_index))
+
+        # Validate PII configuration
+        errors.extend(cls.validate_pii_field(field, field_index))
 
         return errors
 

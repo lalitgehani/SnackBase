@@ -159,6 +159,8 @@ async def create_collection(
                 options=f.get("options"),
                 collection=f.get("collection"),
                 on_delete=f.get("on_delete"),
+                pii=f.get("pii", False),
+                mask_type=f.get("mask_type"),
             )
             for f in schema_dicts
         ],
