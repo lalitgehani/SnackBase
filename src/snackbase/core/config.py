@@ -66,6 +66,9 @@ class Settings(BaseSettings):
     log_format: Literal["json", "console"] = "json"
     log_file: str | None = None
 
+    # Permission Cache Settings
+    permission_cache_ttl_seconds: int = 300  # 5 minutes
+
     # File Storage Settings
     storage_path: str = "./sb_data/files"
     max_file_size: int = 10 * 1024 * 1024  # 10MB in bytes

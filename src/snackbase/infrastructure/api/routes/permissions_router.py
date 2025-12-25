@@ -139,6 +139,12 @@ async def create_permission(
     await session.commit()
     await session.refresh(permission)
 
+    # Invalidate permission cache for this collection
+    from fastapi import Request as FastAPIRequest
+    from starlette.requests import Request as StarletteRequest
+    # Get app from request context - we'll need to pass request
+    # For now, we'll add this via dependency injection
+    
     logger.info(
         "Permission created successfully",
         permission_id=permission.id,

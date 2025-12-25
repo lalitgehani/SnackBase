@@ -6,9 +6,10 @@ Provides dependencies for extracting and validating JWT tokens from requests.
 from dataclasses import dataclass
 from typing import Annotated
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Request, status
 
 from snackbase.core.logging import get_logger
+from snackbase.domain.services import PermissionCache
 from snackbase.infrastructure.auth import (
     InvalidTokenError,
     TokenExpiredError,
@@ -119,6 +120,18 @@ async def require_superadmin(
             detail="Superadmin access required",
         )
     return current_user
+
+
+def get_permission_cache(request: Request) -> PermissionCache:
+    """Get the permission cache from app state.
+    
+    Args:
+        request: FastAPI request object.
+        
+    Returns:
+        PermissionCache instance.
+    """
+    return request.app.state.permission_cache
 
 
 # Type alias for superadmin dependency injection

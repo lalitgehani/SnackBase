@@ -20,6 +20,11 @@ from snackbase.domain.services.password_validator import (
     PasswordValidator,
     default_password_validator,
 )
+from snackbase.domain.services.permission_cache import PermissionCache
+from snackbase.domain.services.permission_resolver import (
+    PermissionResolver,
+    PermissionResult,
+)
 from snackbase.domain.services.record_validator import (
     RecordValidationError,
     RecordValidator,
@@ -38,6 +43,9 @@ __all__ = [
     "OnDeleteAction",
     "PasswordValidationError",
     "PasswordValidator",
+    "PermissionCache",
+    "PermissionResolver",
+    "PermissionResult",
     "RecordValidationError",
     "RecordValidator",
     "RESERVED_FIELD_NAMES",
