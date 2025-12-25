@@ -13,7 +13,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.core.logging import get_logger
 from snackbase.domain.services import FieldType, RecordValidator
-from snackbase.infrastructure.api.dependencies import AuthenticatedUser
+from snackbase.infrastructure.api.dependencies import AuthenticatedUser, AuthContext
+from snackbase.infrastructure.api.middleware import (
+    check_collection_permission,
+    apply_field_filter,
+)
 from snackbase.infrastructure.api.schemas import (
     RecordResponse,
     RecordValidationErrorDetail,
@@ -46,6 +50,7 @@ async def create_record(
     collection: str,
     data: dict[str, Any],
     current_user: AuthenticatedUser,
+    auth_context: AuthContext,
     session: AsyncSession = Depends(get_db_session),
 ) -> RecordResponse | JSONResponse:
     """Create a new record in a collection.
@@ -57,11 +62,24 @@ async def create_record(
         collection: The collection name (from URL path).
         data: The record data (request body).
         current_user: The authenticated user.
+        auth_context: Authorization context for permission checking.
         session: Database session.
 
     Returns:
         The created record with all fields including system fields.
     """
+    # 0. Check create permission
+    allowed, allowed_fields = await check_collection_permission(
+        auth_context=auth_context,
+        collection=collection,
+        operation="create",
+        session=session,
+    )
+    
+    # Filter request body to allowed fields only
+    if allowed_fields != "*":
+        data = apply_field_filter(data, allowed_fields)
+    
     # 1. Look up collection by name
     collection_repo = CollectionRepository(session)
     collection_model = await collection_repo.get_by_name(collection)
@@ -199,7 +217,10 @@ async def create_record(
         created_by=current_user.user_id,
     )
 
-    # 7. Return created record
+    # 7. Apply field filter to response
+    if allowed_fields != "*":
+        created_record = apply_field_filter(created_record, allowed_fields)
+    
     return RecordResponse.from_record(created_record)
 
 
@@ -216,6 +237,7 @@ async def list_records(
     collection: str,
     request: Request,
     current_user: AuthenticatedUser,
+    auth_context: AuthContext,
     skip: int = Query(0, ge=0),
     limit: int = Query(30, ge=1, le=100),
     sort: str = Query("-created_at"),
@@ -226,6 +248,14 @@ async def list_records(
 
     Supports pagination, sorting, and filtering.
     """
+    # 0. Check read permission
+    allowed, allowed_fields = await check_collection_permission(
+        auth_context=auth_context,
+        collection=collection,
+        operation="read",
+        session=session,
+    )
+    
     # 1. Look up collection
     collection_repo = CollectionRepository(session)
     collection_model = await collection_repo.get_by_name(collection)
@@ -283,7 +313,15 @@ async def list_records(
         filters=filters,
     )
 
-    # 6. Apply field limiting if requested
+    # 6. Apply field filtering based on permissions
+    if allowed_fields != "*":
+        filtered_records = []
+        for record in records:
+            filtered_record = apply_field_filter(record, allowed_fields)
+            filtered_records.append(filtered_record)
+        records = filtered_records
+    
+    # 7. Apply additional field limiting if requested via query param
     if fields:
         field_list = [f.strip() for f in fields.split(",")]
         # Always include ID
@@ -296,7 +334,7 @@ async def list_records(
             filtered_records.append(filtered_record)
         records = filtered_records
 
-    # 7. Return response
+    # 8. Return response
     return RecordListResponse(
         items=[RecordResponse.from_record(r) for r in records],
         total=total,
@@ -318,6 +356,7 @@ async def get_record(
     collection: str,
     record_id: str,
     current_user: AuthenticatedUser,
+    auth_context: AuthContext,
     session: AsyncSession = Depends(get_db_session),
 ) -> RecordResponse | JSONResponse:
     """Get a single record by ID."""
@@ -359,6 +398,19 @@ async def get_record(
                 "message": "Record not found",
             },
         )
+    
+    # 3. Check read permission with record context
+    allowed, allowed_fields = await check_collection_permission(
+        auth_context=auth_context,
+        collection=collection,
+        operation="read",
+        session=session,
+        record=record,
+    )
+    
+    # 4. Apply field filter to response
+    if allowed_fields != "*":
+        record = apply_field_filter(record, allowed_fields)
 
     return RecordResponse.from_record(record)
 
@@ -378,13 +430,14 @@ async def update_record_full(
     record_id: str,
     data: dict[str, Any],
     current_user: AuthenticatedUser,
+    auth_context: AuthContext,
     session: AsyncSession = Depends(get_db_session),
 ) -> RecordResponse | JSONResponse:
     """Update a record (full replacement).
     
     Replaces the entire record with the provided data (except system fields).
     """
-    return await _update_record(collection, record_id, data, current_user, session, partial=False)
+    return await _update_record(collection, record_id, data, current_user, auth_context, session, partial=False)
 
 
 @router.patch(
@@ -402,13 +455,14 @@ async def update_record_partial(
     record_id: str,
     data: dict[str, Any],
     current_user: AuthenticatedUser,
+    auth_context: AuthContext,
     session: AsyncSession = Depends(get_db_session),
 ) -> RecordResponse | JSONResponse:
     """Update a record (partial update).
     
     Updates only the provided fields.
     """
-    return await _update_record(collection, record_id, data, current_user, session, partial=True)
+    return await _update_record(collection, record_id, data, current_user, auth_context, session, partial=True)
 
 
 async def _update_record(
@@ -416,6 +470,7 @@ async def _update_record(
     record_id: str,
     data: dict[str, Any],
     current_user: AuthenticatedUser,
+    auth_context: AuthContext,
     session: AsyncSession,
     partial: bool,
 ) -> RecordResponse | JSONResponse:
@@ -444,9 +499,39 @@ async def _update_record(
                 "message": "Failed to parse collection schema",
             },
         )
-
-    # 3. Validate reference fields
+    
+    # 3. Fetch existing record for permission check context
     record_repo = RecordRepository(session)
+    existing_record = await record_repo.get_by_id(
+        collection_name=collection,
+        record_id=record_id,
+        account_id=current_user.account_id,
+        schema=schema,
+    )
+    
+    if existing_record is None:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={
+                "error": "Not found",
+                "message": "Record not found",
+            },
+        )
+    
+    # 4. Check update permission with record context
+    allowed, allowed_fields = await check_collection_permission(
+        auth_context=auth_context,
+        collection=collection,
+        operation="update",
+        session=session,
+        record=existing_record,
+    )
+    
+    # Filter request body to allowed fields only
+    if allowed_fields != "*":
+        data = apply_field_filter(data, allowed_fields)
+
+    # 5. Validate reference fields
     reference_errors = []
     
     # Check references only for fields present in data
@@ -471,7 +556,7 @@ async def _update_record(
                         "code": "invalid_reference",
                     })
 
-    # 4. Validate record data
+    # 6. Validate record data
     processed_data, validation_errors = RecordValidator.validate_and_apply_defaults(
         data, schema, partial=partial
     )
@@ -497,7 +582,7 @@ async def _update_record(
             ).model_dump(),
         )
 
-    # 5. Update record
+    # 7. Update record
     try:
         updated_record = await record_repo.update_record(
             collection_name=collection,
@@ -551,6 +636,10 @@ async def _update_record(
         account_id=current_user.account_id,
         updated_by=current_user.user_id,
     )
+    
+    # 8. Apply field filter to response
+    if allowed_fields != "*":
+        updated_record = apply_field_filter(updated_record, allowed_fields)
 
     return RecordResponse.from_record(updated_record)
 
@@ -569,6 +658,7 @@ async def delete_record(
     collection: str,
     record_id: str,
     current_user: AuthenticatedUser,
+    auth_context: AuthContext,
     session: AsyncSession = Depends(get_db_session),
 ):
     """Delete a record by ID."""
@@ -586,9 +676,44 @@ async def delete_record(
                 "message": f"Collection '{collection}' not found",
             },
         )
-
-    # 2. Delete record
+    
+    # 2. Parse schema
+    try:
+        schema = json.loads(collection_model.schema)
+    except json.JSONDecodeError:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"error": "Internal error", "message": "Invalid collection schema"},
+        )
+    
+    # 3. Fetch record for permission check context
     record_repo = RecordRepository(session)
+    record = await record_repo.get_by_id(
+        collection_name=collection,
+        record_id=record_id,
+        account_id=current_user.account_id,
+        schema=schema,
+    )
+    
+    if record is None:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={
+                "error": "Not found",
+                "message": "Record not found",
+            },
+        )
+    
+    # 4. Check delete permission with record context
+    await check_collection_permission(
+        auth_context=auth_context,
+        collection=collection,
+        operation="delete",
+        session=session,
+        record=record,
+    )
+
+    # 5. Delete record
     try:
         deleted = await record_repo.delete_record(
             collection_name=collection,

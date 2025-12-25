@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException, Request, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.core.logging import get_logger
 from snackbase.domain.services import PermissionCache
@@ -15,6 +16,7 @@ from snackbase.infrastructure.auth import (
     TokenExpiredError,
     jwt_service,
 )
+from snackbase.infrastructure.persistence.database import get_db_session
 
 logger = get_logger(__name__)
 
@@ -131,9 +133,88 @@ def get_permission_cache(request: Request) -> PermissionCache:
     Returns:
         PermissionCache instance.
     """
+    # Check if permission_cache exists, create if not (for test compatibility)
+    if not hasattr(request.app.state, "permission_cache"):
+        from snackbase.core.config import get_settings
+        settings = get_settings()
+        request.app.state.permission_cache = PermissionCache(
+            ttl_seconds=settings.permission_cache_ttl_seconds
+        )
+    
     return request.app.state.permission_cache
+
+
+async def get_user_role_id(
+    current_user: AuthenticatedUser,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> int:
+    """Get the role_id for the current user.
+    
+    Args:
+        current_user: The authenticated user.
+        session: Database session.
+        
+    Returns:
+        User's role_id.
+        
+    Raises:
+        HTTPException: 404 if user not found.
+    """
+    from snackbase.infrastructure.persistence.repositories import UserRepository
+    
+    user_repo = UserRepository(session)
+    user = await user_repo.get_by_id(current_user.user_id)
+    
+    if user is None:
+        logger.warning(
+            "User not found in database",
+            user_id=current_user.user_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+    
+    return user.role_id
+
+
+@dataclass
+class AuthorizationContext:
+    """Context for authorization checks.
+    
+    Contains user information, role, and permission cache for
+    performing authorization checks.
+    """
+    
+    user: CurrentUser
+    role_id: int
+    permission_cache: PermissionCache
+
+
+async def get_authorization_context(
+    current_user: AuthenticatedUser,
+    role_id: Annotated[int, Depends(get_user_role_id)],
+    request: Request,
+) -> AuthorizationContext:
+    """Get authorization context for the current request.
+    
+    Args:
+        current_user: The authenticated user.
+        role_id: User's role_id from database.
+        request: FastAPI request object.
+        
+    Returns:
+        AuthorizationContext with user, role_id, and permission cache.
+    """
+    return AuthorizationContext(
+        user=current_user,
+        role_id=role_id,
+        permission_cache=get_permission_cache(request),
+    )
 
 
 # Type alias for superadmin dependency injection
 SuperadminUser = Annotated[CurrentUser, Depends(require_superadmin)]
 
+# Type alias for authorization context dependency injection
+AuthContext = Annotated[AuthorizationContext, Depends(get_authorization_context)]

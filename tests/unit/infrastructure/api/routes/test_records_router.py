@@ -31,6 +31,18 @@ def mock_user():
 
 
 @pytest.fixture
+def mock_auth_context():
+    """Mock authorization context that allows all operations."""
+    auth_ctx = MagicMock()
+    auth_ctx.user = MagicMock()
+    auth_ctx.user.user_id = "user-123"
+    auth_ctx.user.account_id = "acc-123"
+    auth_ctx.role_id = 1
+    auth_ctx.permission_cache = MagicMock()
+    return auth_ctx
+
+
+@pytest.fixture
 def mock_request():
     request = MagicMock(spec=Request)
     request.query_params = {}
@@ -55,6 +67,7 @@ def sample_collection(sample_schema):
     return col
 
 
+@patch("snackbase.infrastructure.api.routes.records_router.check_collection_permission")
 @patch("snackbase.infrastructure.api.routes.records_router.RecordRepository")
 @patch("snackbase.infrastructure.api.routes.records_router.CollectionRepository")
 @patch("snackbase.infrastructure.api.routes.records_router.RecordValidator")
@@ -63,8 +76,10 @@ async def test_create_record_success(
     mock_validator,
     mock_col_repo_cls,
     mock_rec_repo_cls,
+    mock_check_permission,
     mock_session,
     mock_user,
+    mock_auth_context,
     sample_collection,
 ):
     # Setup
@@ -89,9 +104,12 @@ async def test_create_record_success(
 
     # Mock validator
     mock_validator.validate_and_apply_defaults.return_value = (data, [])
+    
+    # Mock permission check - allow all fields
+    mock_check_permission.return_value = (True, "*")
 
     # Act
-    response = await create_record("posts", data, mock_user, mock_session)
+    response = await create_record("posts", data, mock_user, mock_auth_context, mock_session)
 
     # Assert
     assert response.id == "rec-new"
@@ -100,24 +118,32 @@ async def test_create_record_success(
     mock_col_repo.get_by_name.assert_called_once_with("posts")
     mock_rec_repo.insert_record.assert_called_once()
     mock_session.commit.assert_called_once()
+    mock_check_permission.assert_called_once()
 
 
+@patch("snackbase.infrastructure.api.routes.records_router.check_collection_permission")
 @patch("snackbase.infrastructure.api.routes.records_router.CollectionRepository")
 @pytest.mark.asyncio
 async def test_create_record_collection_not_found(
     mock_col_repo_cls,
+    mock_check_permission,
     mock_session,
     mock_user,
+    mock_auth_context,
 ):
     mock_col_repo = mock_col_repo_cls.return_value
     mock_col_repo.get_by_name = AsyncMock(return_value=None)
+    
+    # Mock permission check
+    mock_check_permission.return_value = (True, "*")
 
-    response = await create_record("unknown", {}, mock_user, mock_session)
+    response = await create_record("unknown", {}, mock_user, mock_auth_context, mock_session)
 
     assert isinstance(response, JSONResponse)
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
+@patch("snackbase.infrastructure.api.routes.records_router.check_collection_permission")
 @patch("snackbase.infrastructure.api.routes.records_router.RecordRepository")
 @patch("snackbase.infrastructure.api.routes.records_router.CollectionRepository")
 @patch("snackbase.infrastructure.api.routes.records_router.RecordValidator")
@@ -126,8 +152,10 @@ async def test_create_record_validation_error(
     mock_validator,
     mock_col_repo_cls,
     mock_rec_repo_cls,
+    mock_check_permission,
     mock_session,
     mock_user,
+    mock_auth_context,
     sample_collection,
 ):
     mock_col_repo = mock_col_repo_cls.return_value
@@ -137,8 +165,11 @@ async def test_create_record_validation_error(
     error = RecordValidationErrorDetail(field="title", message="Required", code="missing")
     # Return tuple (processed_data, errors)
     mock_validator.validate_and_apply_defaults.return_value = ({}, [error])
+    
+    # Mock permission check
+    mock_check_permission.return_value = (True, "*")
 
-    response = await create_record("posts", {}, mock_user, mock_session)
+    response = await create_record("posts", {}, mock_user, mock_auth_context, mock_session)
 
     assert isinstance(response, JSONResponse)
     assert response.status_code == status.HTTP_400_BAD_REQUEST
@@ -147,14 +178,17 @@ async def test_create_record_validation_error(
     assert body["details"][0]["field"] == "title"
 
 
+@patch("snackbase.infrastructure.api.routes.records_router.check_collection_permission")
 @patch("snackbase.infrastructure.api.routes.records_router.RecordRepository")
 @patch("snackbase.infrastructure.api.routes.records_router.CollectionRepository")
 @pytest.mark.asyncio
 async def test_list_records_success(
     mock_col_repo_cls,
     mock_rec_repo_cls,
+    mock_check_permission,
     mock_session,
     mock_user,
+    mock_auth_context,
     mock_request,
     sample_collection,
 ):
@@ -183,9 +217,12 @@ async def test_list_records_success(
         },
     ]
     mock_rec_repo.find_all = AsyncMock(return_value=(records, 2))
+    
+    # Mock permission check
+    mock_check_permission.return_value = (True, "*")
 
     response = await list_records(
-        "posts", mock_request, mock_user, skip=0, limit=10, sort="-created_at", fields=None, session=mock_session
+        "posts", mock_request, mock_user, mock_auth_context, skip=0, limit=10, sort="-created_at", fields=None, session=mock_session
     )
 
     assert response.total == 2
@@ -193,31 +230,40 @@ async def test_list_records_success(
     assert response.items[0].title == "A"
 
 
+@patch("snackbase.infrastructure.api.routes.records_router.check_collection_permission")
 @patch("snackbase.infrastructure.api.routes.records_router.CollectionRepository")
 @pytest.mark.asyncio
 async def test_list_records_collection_not_found(
     mock_col_repo_cls,
+    mock_check_permission,
     mock_session,
     mock_user,
+    mock_auth_context,
     mock_request,
 ):
     mock_col_repo = mock_col_repo_cls.return_value
     mock_col_repo.get_by_name = AsyncMock(return_value=None)
+    
+    # Mock permission check
+    mock_check_permission.return_value = (True, "*")
 
-    response = await list_records("unknown", mock_request, mock_user, session=mock_session)
+    response = await list_records("unknown", mock_request, mock_user, mock_auth_context, session=mock_session)
 
     assert isinstance(response, JSONResponse)
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
+@patch("snackbase.infrastructure.api.routes.records_router.check_collection_permission")
 @patch("snackbase.infrastructure.api.routes.records_router.RecordRepository")
 @patch("snackbase.infrastructure.api.routes.records_router.CollectionRepository")
 @pytest.mark.asyncio
 async def test_get_record_success(
     mock_col_repo_cls,
     mock_rec_repo_cls,
+    mock_check_permission,
     mock_session,
     mock_user,
+    mock_auth_context,
     sample_collection,
 ):
     mock_col_repo = mock_col_repo_cls.return_value
@@ -234,8 +280,11 @@ async def test_get_record_success(
         "updated_by": "user-1"
     }
     mock_rec_repo.get_by_id = AsyncMock(return_value=record)
+    
+    # Mock permission check
+    mock_check_permission.return_value = (True, "*")
 
-    response = await get_record("posts", "rec-1", mock_user, mock_session)
+    response = await get_record("posts", "rec-1", mock_user, mock_auth_context, mock_session)
 
     assert response.id == "rec-1"
     assert response.title == "My Post"
@@ -249,6 +298,7 @@ async def test_get_record_not_found(
     mock_rec_repo_cls,
     mock_session,
     mock_user,
+    mock_auth_context,
     sample_collection,
 ):
     mock_col_repo = mock_col_repo_cls.return_value
@@ -257,12 +307,13 @@ async def test_get_record_not_found(
     mock_rec_repo = mock_rec_repo_cls.return_value
     mock_rec_repo.get_by_id = AsyncMock(return_value=None)
 
-    response = await get_record("posts", "rec-missing", mock_user, mock_session)
+    response = await get_record("posts", "rec-missing", mock_user, mock_auth_context, mock_session)
 
     assert isinstance(response, JSONResponse)
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
+@patch("snackbase.infrastructure.api.routes.records_router.check_collection_permission")
 @patch("snackbase.infrastructure.api.routes.records_router.RecordRepository")
 @patch("snackbase.infrastructure.api.routes.records_router.CollectionRepository")
 @patch("snackbase.infrastructure.api.routes.records_router.RecordValidator")
@@ -271,14 +322,28 @@ async def test_update_record_success(
     mock_validator,
     mock_col_repo_cls,
     mock_rec_repo_cls,
+    mock_check_permission,
     mock_session,
     mock_user,
+    mock_auth_context,
     sample_collection,
 ):
     mock_col_repo = mock_col_repo_cls.return_value
     mock_col_repo.get_by_name = AsyncMock(return_value=sample_collection)
 
     mock_rec_repo = mock_rec_repo_cls.return_value
+    
+    # Mock existing record for permission check
+    existing_record = {
+        "id": "rec-1",
+        "title": "Old",
+        "created_at": "2023",
+        "updated_at": "2023",
+        "account_id": "acc-1",
+        "created_by": "user-1",
+        "updated_by": "user-1"
+    }
+    
     updated_record = {
         "id": "rec-1",
         "title": "Updated",
@@ -288,35 +353,58 @@ async def test_update_record_success(
         "created_by": "user-1",
         "updated_by": "user-1"
     }
+    mock_rec_repo.get_by_id = AsyncMock(return_value=existing_record)
     mock_rec_repo.update_record = AsyncMock(return_value=updated_record)
 
     mock_validator.validate_and_apply_defaults.return_value = ({"title": "Updated"}, [])
+    
+    # Mock permission check
+    mock_check_permission.return_value = (True, "*")
 
-    response = await update_record_partial("posts", "rec-1", {"title": "Updated"}, mock_user, mock_session)
+    response = await update_record_partial("posts", "rec-1", {"title": "Updated"}, mock_user, mock_auth_context, mock_session)
 
     assert response.title == "Updated"
     mock_rec_repo.update_record.assert_called_once()
     mock_session.commit.assert_called_once()
 
 
+@patch("snackbase.infrastructure.api.routes.records_router.check_collection_permission")
 @patch("snackbase.infrastructure.api.routes.records_router.RecordRepository")
 @patch("snackbase.infrastructure.api.routes.records_router.CollectionRepository")
 @pytest.mark.asyncio
 async def test_delete_record_success(
     mock_col_repo_cls,
     mock_rec_repo_cls,
+    mock_check_permission,
     mock_session,
     mock_user,
+    mock_auth_context,
     sample_collection,
 ):
     mock_col_repo = mock_col_repo_cls.return_value
     mock_col_repo.get_by_name = AsyncMock(return_value=sample_collection)
 
     mock_rec_repo = mock_rec_repo_cls.return_value
+    
+    # Mock existing record for permission check
+    existing_record = {
+        "id": "rec-1",
+        "title": "To Delete",
+        "created_at": "2023",
+        "updated_at": "2023",
+        "account_id": "acc-1",
+        "created_by": "user-1",
+        "updated_by": "user-1"
+    }
+    mock_rec_repo.get_by_id = AsyncMock(return_value=existing_record)
     mock_rec_repo.delete_record = AsyncMock(return_value=True)
+    
+    # Mock permission check
+    mock_check_permission.return_value = (True, "*")
 
-    response = await delete_record("posts", "rec-1", mock_user, mock_session)
+    response = await delete_record("posts", "rec-1", mock_user, mock_auth_context, mock_session)
 
     assert response.status_code == status.HTTP_204_NO_CONTENT
     mock_rec_repo.delete_record.assert_called_once()
     mock_session.commit.assert_called_once()
+

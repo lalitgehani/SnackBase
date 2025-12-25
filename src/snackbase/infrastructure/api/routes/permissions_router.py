@@ -5,12 +5,12 @@ Provides endpoints for managing role-based permissions.
 
 import json
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.core.logging import get_logger
-from snackbase.infrastructure.api.dependencies import SuperadminUser
+from snackbase.infrastructure.api.dependencies import SuperadminUser, get_permission_cache
 from snackbase.infrastructure.api.schemas import (
     CreatePermissionRequest,
     OperationRuleSchema,
@@ -72,8 +72,9 @@ def _permission_to_response(permission: PermissionModel) -> PermissionResponse:
     },
 )
 async def create_permission(
-    request: CreatePermissionRequest,
+    permission_request: CreatePermissionRequest,
     current_user: SuperadminUser,
+    request: Request,
     session: AsyncSession = Depends(get_db_session),
 ) -> PermissionResponse | JSONResponse:
     """Create a new permission.
@@ -91,48 +92,48 @@ async def create_permission(
     """
     # Verify role exists
     role_repo = RoleRepository(session)
-    role = await role_repo.get_by_id(request.role_id)
+    role = await role_repo.get_by_id(permission_request.role_id)
     if role is None:
         logger.info(
             "Permission creation failed: role not found",
-            role_id=request.role_id,
+            role_id=permission_request.role_id,
         )
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
             content={
                 "error": "Not found",
-                "message": f"Role with ID {request.role_id} not found",
+                "message": f"Role with ID {permission_request.role_id} not found",
             },
         )
 
     # Convert rules to JSON
     rules_dict = {}
-    if request.rules.create:
+    if permission_request.rules.create:
         rules_dict["create"] = {
-            "rule": request.rules.create.rule,
-            "fields": request.rules.create.fields,
+            "rule": permission_request.rules.create.rule,
+            "fields": permission_request.rules.create.fields,
         }
-    if request.rules.read:
+    if permission_request.rules.read:
         rules_dict["read"] = {
-            "rule": request.rules.read.rule,
-            "fields": request.rules.read.fields,
+            "rule": permission_request.rules.read.rule,
+            "fields": permission_request.rules.read.fields,
         }
-    if request.rules.update:
+    if permission_request.rules.update:
         rules_dict["update"] = {
-            "rule": request.rules.update.rule,
-            "fields": request.rules.update.fields,
+            "rule": permission_request.rules.update.rule,
+            "fields": permission_request.rules.update.fields,
         }
-    if request.rules.delete:
+    if permission_request.rules.delete:
         rules_dict["delete"] = {
-            "rule": request.rules.delete.rule,
-            "fields": request.rules.delete.fields,
+            "rule": permission_request.rules.delete.rule,
+            "fields": permission_request.rules.delete.fields,
         }
 
     # Create permission
     permission_repo = PermissionRepository(session)
     permission = PermissionModel(
-        role_id=request.role_id,
-        collection=request.collection,
+        role_id=permission_request.role_id,
+        collection=permission_request.collection,
         rules=json.dumps(rules_dict),
     )
     await permission_repo.create(permission)
@@ -140,10 +141,8 @@ async def create_permission(
     await session.refresh(permission)
 
     # Invalidate permission cache for this collection
-    from fastapi import Request as FastAPIRequest
-    from starlette.requests import Request as StarletteRequest
-    # Get app from request context - we'll need to pass request
-    # For now, we'll add this via dependency injection
+    permission_cache = get_permission_cache(request)
+    permission_cache.invalidate_collection(permission.collection)
     
     logger.info(
         "Permission created successfully",
@@ -247,6 +246,7 @@ async def get_permission(
 async def delete_permission(
     permission_id: int,
     current_user: SuperadminUser,
+    request: Request,
     session: AsyncSession = Depends(get_db_session),
 ) -> None:
     """Delete a permission.
@@ -256,11 +256,16 @@ async def delete_permission(
     Args:
         permission_id: Permission ID.
         current_user: Authenticated superadmin user.
+        request: FastAPI request object.
         session: Database session.
     """
     from fastapi import HTTPException
 
     permission_repo = PermissionRepository(session)
+    
+    # Get permission before deleting to invalidate cache
+    permission = await permission_repo.get_by_id(permission_id)
+    
     deleted = await permission_repo.delete(permission_id)
 
     if not deleted:
@@ -274,6 +279,11 @@ async def delete_permission(
         )
 
     await session.commit()
+    
+    # Invalidate permission cache for this collection
+    if permission:
+        permission_cache = get_permission_cache(request)
+        permission_cache.invalidate_collection(permission.collection)
 
     logger.info(
         "Permission deleted",
