@@ -17,6 +17,7 @@ from snackbase.infrastructure.api.dependencies import AuthenticatedUser, AuthCon
 from snackbase.infrastructure.api.middleware import (
     check_collection_permission,
     apply_field_filter,
+    validate_request_fields,
 )
 from snackbase.infrastructure.api.schemas import (
     RecordResponse,
@@ -119,9 +120,13 @@ async def create_record(
         session=session,
     )
     
+    # Validate request fields (reject if contains unauthorized fields)
+    if allowed_fields != "*":
+        validate_request_fields(data, allowed_fields, "create")
+    
     # Filter request body to allowed fields only
     if allowed_fields != "*":
-        data = apply_field_filter(data, allowed_fields)
+        data = apply_field_filter(data, allowed_fields, is_request=True)
     
     # 1. Look up collection by name
     collection_repo = CollectionRepository(session)
@@ -583,9 +588,13 @@ async def _update_record(
         record=existing_record,
     )
     
+    # Validate request fields (reject if contains unauthorized fields)
+    if allowed_fields != "*":
+        validate_request_fields(data, allowed_fields, "update")
+    
     # Filter request body to allowed fields only
     if allowed_fields != "*":
-        data = apply_field_filter(data, allowed_fields)
+        data = apply_field_filter(data, allowed_fields, is_request=True)
 
     # 5. Validate reference fields
     reference_errors = []

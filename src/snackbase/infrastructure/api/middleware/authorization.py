@@ -20,6 +20,9 @@ from snackbase.infrastructure.api.dependencies import (
 
 logger = get_logger(__name__)
 
+# System fields that are always readable but never writable via API
+SYSTEM_FIELDS = {"id", "account_id", "created_at", "updated_at", "created_by", "updated_by"}
+
 
 def extract_operation_from_method(method: str) -> str:
     """Extract CRUD operation from HTTP method.
@@ -81,15 +84,96 @@ def extract_collection_from_path(path: str) -> str | None:
     return None
 
 
+def validate_request_fields(
+    data: dict[str, Any],
+    allowed_fields: list[str] | str,
+    operation: str,
+) -> None:
+    """Validate that request body only contains allowed fields.
+    
+    Checks that:
+    1. All fields in the request are in the allowed fields list
+    2. No system fields are present in the request (they cannot be written)
+    
+    Args:
+        data: Request data dictionary.
+        allowed_fields: List of allowed field names or "*" for all fields.
+        operation: Operation type (create, update) for error messages.
+        
+    Raises:
+        HTTPException: 422 if validation fails with details about unauthorized fields.
+    """
+    if allowed_fields == "*":
+        # Wildcard allows all fields except system fields
+        unauthorized_fields = set(data.keys()) & SYSTEM_FIELDS
+        if unauthorized_fields:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail={
+                    "error": "Field access denied",
+                    "message": (
+                        f"Cannot {operation} system fields via API: "
+                        f"{', '.join(sorted(unauthorized_fields))}"
+                    ),
+                    "unauthorized_fields": sorted(unauthorized_fields),
+                    "field_type": "system",
+                },
+            )
+        return
+    
+    if isinstance(allowed_fields, str):
+        # Should not happen, but handle gracefully
+        return
+    
+    # Check for system fields in request
+    system_fields_in_request = set(data.keys()) & SYSTEM_FIELDS
+    if system_fields_in_request:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={
+                "error": "Field access denied",
+                "message": (
+                    f"Cannot {operation} system fields via API: "
+                    f"{', '.join(sorted(system_fields_in_request))}"
+                ),
+                "unauthorized_fields": sorted(system_fields_in_request),
+                "field_type": "system",
+            },
+        )
+    
+    # Check for fields not in allowed list
+    request_fields = set(data.keys())
+    allowed_set = set(allowed_fields)
+    unauthorized_fields = request_fields - allowed_set
+    
+    if unauthorized_fields:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={
+                "error": "Field access denied",
+                "message": (
+                    f"Permission denied to {operation} fields: "
+                    f"{', '.join(sorted(unauthorized_fields))}"
+                ),
+                "unauthorized_fields": sorted(unauthorized_fields),
+                "allowed_fields": sorted(allowed_fields),
+                "field_type": "restricted",
+            },
+        )
+
+
 def apply_field_filter(
     data: dict[str, Any],
     allowed_fields: list[str] | str,
+    is_request: bool = False,
 ) -> dict[str, Any]:
     """Apply field-level filtering to data.
     
     Args:
         data: Data dictionary to filter.
         allowed_fields: List of allowed field names or "*" for all fields.
+        is_request: If True, filtering for request body (excludes system fields).
+                   If False, filtering for response (includes system fields).
         
     Returns:
         Filtered data dictionary.
@@ -102,9 +186,12 @@ def apply_field_filter(
         return data
     
     # Filter to only allowed fields
-    # Always include system fields for responses
-    system_fields = {"id", "account_id", "created_at", "updated_at", "created_by", "updated_by"}
-    all_allowed = set(allowed_fields) | system_fields
+    if is_request:
+        # For requests: only allow the specified fields (no system fields)
+        all_allowed = set(allowed_fields)
+    else:
+        # For responses: always include system fields
+        all_allowed = set(allowed_fields) | SYSTEM_FIELDS
     
     return {k: v for k, v in data.items() if k in all_allowed}
 

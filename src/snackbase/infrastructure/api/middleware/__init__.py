@@ -1,15 +1,17 @@
 """Authorization middleware package."""
 
 from snackbase.infrastructure.api.middleware.authorization import (
-    check_collection_permission,
     apply_field_filter,
-    extract_operation_from_method,
+    check_collection_permission,
     extract_collection_from_path,
+    extract_operation_from_method,
+    validate_request_fields,
 )
 
 __all__ = [
-    "check_collection_permission",
     "apply_field_filter",
-    "extract_operation_from_method",
+    "check_collection_permission",
     "extract_collection_from_path",
+    "extract_operation_from_method",
+    "validate_request_fields",
 ]
