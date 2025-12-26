@@ -1,3 +1,5 @@
+<img width="2816" height="1536" alt="Gemini_Generated_Image_2g6dru2g6dru2g6d" src="https://github.com/user-attachments/assets/71d1b9b7-1b31-44c7-8520-eb748f788190" />
+
 # SnackBase
 
 > Open-source Backend-as-a-Service (BaaS) - A self-hosted alternative to PocketBase
