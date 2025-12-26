@@ -6,7 +6,7 @@ SnackBase is a Python/FastAPI-based BaaS providing auto-generated REST APIs, mul
 
 ## Status
 
-**Phase 1: Foundation & MVP** (Nearing Completion - 11/13 features complete)
+**Phase 1: Foundation & MVP** (11/13 features complete)
 
 - [x] F1.1: Project Scaffolding & Architecture Setup
 - [x] F1.2: Database Schema & Core System Tables
@@ -18,53 +18,93 @@ SnackBase is a Python/FastAPI-based BaaS providing auto-generated REST APIs, mul
 - [x] F1.11: User Invitation System
 - [x] F1.12: Hook System Infrastructure
 - [x] F1.13: Account ID Generator
+- [x] Additional: Full React Admin UI
+- [x] Additional: Rule Engine & Permission System
+- [ ] GxP-compliant audit logging
+- [ ] Real-time subscriptions (WebSocket/SSE)
 
-**Documentation Status**: ✅ Complete
+## Quick Start
 
-- [Deployment Guide](docs/deployment.md) - Development and production deployment
-- [Hook System](docs/hooks.md) - Extensibility framework and stable API
-- [API Examples](docs/api-examples.md) - Practical usage examples
+```bash
+# Clone and install
+git clone https://github.com/yourusername/snackbase.git
+cd SnackBase
+uv sync
+
+# Initialize database and create superadmin
+uv run python -m snackbase init-db
+uv run python -m snackbase create-superadmin
+
+# Start server
+uv run python -m snackbase serve
+
+# Access the UI
+open http://localhost:8000
+```
 
 ## Features
 
-### Currently Implemented
+### Core Platform
 
 - **Clean Architecture** - Domain, application, and infrastructure layer separation
+- **Multi-Tenancy** - Row-level isolation with account-scoped data
 - **Configuration Management** - Environment variables and `.env` file support
 - **Structured JSON Logging** - Correlation ID tracking for request tracing
-- **Database Abstraction** - SQLAlchemy 2.0 async with SQLite and PostgreSQL support
-- **Health Check Endpoints** - `/health`, `/ready`, `/live`
-- **CLI** - Server management and utility commands
+- **Health Checks** - `/health`, `/ready`, `/live` endpoints
 
-#### Authentication System
+### Authentication System
 
 - **Account Registration** - Multi-tenant account creation with unique `XX####` ID format
 - **User Registration** - Per-account user registration with email/password
 - **Login** - Timing-safe password verification with account resolution
 - **JWT Token Management** - Access tokens (1 hour) and refresh tokens (7 days) with rotation
 - **Password Hashing** - Argon2id (OWASP recommended)
-- **Protected Endpoints** - JWT-based authentication with `Authorization: Bearer` header
+- **Multi-Account Support** - Users can belong to multiple accounts
 
-#### Domain Layer
+### Dynamic Collections & Records
 
-- **Entities** - Account, User, Role, Group, Collection, Invitation
-- **Services** - AccountIdGenerator, PasswordValidator, SlugGenerator
+- **Collection Management** - Create, read, update, delete collections with custom schemas
+- **Auto-Generated CRUD APIs** - RESTful endpoints for any collection
+- **Field Types** - Text, number, email, boolean, date, JSON, select, relation
+- **Schema Builder UI** - Visual interface for designing collection schemas
+- **Bulk Operations** - Bulk create, update, delete with filtering
 
-#### Persistence Layer
+### Authorization & Security
 
-- **ORM Models** - Account, User, Role, Group, Collection, Invitation, RefreshToken, UsersGroups
-- **Repositories** - AccountRepository, UserRepository, RoleRepository, RefreshTokenRepository
+- **Role-Based Access Control (RBAC)** - Flexible roles and permissions system
+- **Permission System** - Granular CRUD permissions per collection
+- **Rule Engine** - Custom DSL for permission expressions (`@has_role()`, `@owns_record()`)
+- **Wildcard Collection Support** - `*` for all collections
+- **Field-Level Access Control** - Show/hide specific fields
+- **Permission Caching** - 5-minute TTL with invalidation
 
-### Planned Features
+### Extensibility
 
-- Auto-generated CRUD APIs for dynamic collections
-- Row-level security engine with SQL macros
-- User-specific and role-based permissions
-- PII masking with field-level access control
-- GxP-compliant audit logging
-- Real-time subscriptions (WebSocket/SSE)
-- OAuth/SAML authentication
-- Admin UI for platform management
+- **Hook System (Stable API v1.0)** - Event-driven extensibility
+  - App Lifecycle, Model Operations, Record Operations, Collection Operations
+  - Built-in hooks: timestamp, account_isolation, created_by
+  - Custom hooks with priority-based execution
+- **SQL Macros** - Reusable SQL snippets shared across accounts
+- **Group Management** - User groups for easier permission assignment
+
+### Admin UI
+
+- **React + TypeScript** - Modern admin interface
+- **Dashboard** - Platform statistics and metrics
+- **Account Management** - Create and manage accounts (superadmin)
+- **User Management** - Full CRUD for users
+- **Role Management** - Create roles and assign permissions
+- **Permission Management** - Matrix view and bulk operations
+- **Collection Builder** - Visual schema designer
+- **Records Browser** - Data grid with filtering and editing
+- **Group Management** - Organize users into groups
+
+### API & Testing
+
+- **11 API Routers** - Comprehensive REST API coverage
+- **Interactive Docs** - Swagger/OpenAPI at `/docs`
+- **Comprehensive Tests** - Unit and integration tests with pytest
+- **Test Coverage** - High coverage across core functionality
 
 ## Installation
 
@@ -77,79 +117,43 @@ SnackBase is a Python/FastAPI-based BaaS providing auto-generated REST APIs, mul
 
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/yourusername/snackbase.git
 cd SnackBase
 
 # Install dependencies
 uv sync
 
-# Or install with pip
-pip install -e .
+# Create environment file
+cp .env.example .env
+# Edit .env with your configuration
 ```
 
 ## Documentation
 
 Comprehensive documentation is available in the [`docs/`](docs/) directory:
 
-- **[Deployment Guide](docs/deployment.md)** - Complete guide for development and production deployment
-
-  - Development setup with SQLite
-  - Production deployment with PostgreSQL and systemd
-  - Nginx reverse proxy configuration
-  - Environment variables reference
-  - Health checks and monitoring
-  - Troubleshooting guide
-
-- **[Hook System](docs/hooks.md)** - Extensibility framework documentation
-
-  - Stable API contract (v1.0)
-  - Hook categories and events
-  - Built-in hooks (timestamp, account_isolation, created_by)
-  - Creating custom hooks
-  - Advanced features and best practices
-
-- **[API Examples](docs/api-examples.md)** - Practical API usage examples
-
-  - Authentication flows
-  - Collection creation
-  - CRUD operations
-  - Error handling
-  - Best practices
-
+- **[Deployment Guide](docs/deployment.md)** - Development and production deployment
+- **[Hook System](docs/hooks.md)** - Extensibility framework and stable API
+- **[API Examples](docs/api-examples.md)** - Practical usage examples
 - **[API Reference (Swagger)](http://localhost:8000/docs)** - Interactive API documentation
 
-## Usage
-
-### CLI Commands
+## CLI Commands
 
 ```bash
-# Start the development server
-uv run python -m snackbase serve
+# Server management
+uv run python -m snackbase serve          # Start server (0.0.0.0:8000)
+uv run python -m snackbase serve --reload # Dev mode with auto-reload
+uv run python -m snackbase info           # Show configuration
 
-# Show configuration information
-uv run python -m snackbase info
+# Database
+uv run python -m snackbase init-db        # Initialize database (dev only)
+uv run python -m snackbase create-superadmin  # Create superadmin user
 
-# Initialize the database (development only)
-uv run python -m snackbase init-db
-
-# Interactive Python shell with SnackBase context
-uv run python -m snackbase shell
+# Interactive shell
+uv run python -m snackbase shell          # IPython REPL with pre-loaded context
 ```
 
-### Server Options
-
-```bash
-# Custom host and port
-uv run python -m snackbase serve --host 127.0.0.1 --port 3000
-
-# Enable auto-reload for development
-uv run python -m snackbase serve --reload
-
-# Multiple workers
-uv run python -m snackbase serve --workers 4
-```
-
-### Environment Variables
+## Environment Variables
 
 Create a `.env` file in the project root:
 
@@ -163,7 +167,7 @@ SNACKBASE_API_PREFIX=/api/v1
 SNACKBASE_HOST=0.0.0.0
 SNACKBASE_PORT=8000
 
-# Database
+# Database (default: SQLite)
 SNACKBASE_DATABASE_URL=sqlite+aiosqlite:///./sb_data/snackbase.db
 # For PostgreSQL:
 # SNACKBASE_DATABASE_URL=postgresql+asyncpg://user:pass@localhost/dbname
@@ -179,185 +183,169 @@ SNACKBASE_LOG_LEVEL=INFO
 SNACKBASE_LOG_FORMAT=json
 ```
 
-## API Endpoints
+## API Structure
 
-### Health Checks
-
-- `GET /health` - Basic health check
-- `GET /ready` - Readiness check (includes database connectivity)
-- `GET /live` - Liveness check
-
-### API Root
-
-- `GET /api/v1` - API information
-
-### Authentication
-
-- `POST /api/v1/auth/register` - Create a new account with admin user
-
-  ```bash
-  curl -X POST http://localhost:8000/api/v1/auth/register \
-    -H "Content-Type: application/json" \
-    -d '{
-      "account_name": "My Company",
-      "email": "admin@example.com",
-      "password": "SecurePass123!"
-    }'
-  ```
-
-- `POST /api/v1/auth/login` - Login with email, password, and account identifier
-
-  ```bash
-  curl -X POST http://localhost:8000/api/v1/auth/login \
-    -H "Content-Type: application/json" \
-    -d '{
-      "email": "admin@example.com",
-      "password": "SecurePass123!",
-      "account_identifier": "my-company"
-    }'
-  ```
-
-- `POST /api/v1/auth/refresh` - Refresh access token using refresh token
-
-  ```bash
-  curl -X POST http://localhost:8000/api/v1/auth/refresh \
-    -H "Content-Type: application/json" \
-    -d '{"refresh_token": "..."}'
-  ```
-
-- `GET /api/v1/auth/me` - Get current authenticated user info (requires JWT)
+```
+/health, /ready, /live          # Health checks (no prefix)
+/api/v1/
+├── /auth/                      # Register, login, refresh, me
+├── /collections/               # Collection CRUD (superadmin)
+├── /accounts/                  # Account management (superadmin)
+├── /roles/                     # Role management
+├── /permissions/               # Permission management
+├── /macros/                    # SQL macro management
+├── /groups/                    # Group management
+├── /invitations/               # User invitations
+├── /dashboard/                 # Dashboard statistics
+└── /{collection}/              # Dynamic collection CRUD
+```
 
 ## Project Structure
 
 ```
 SnackBase/
-├── src/
-│   └── snackbase/
-│       ├── __init__.py
-│       ├── __main__.py          # Entry point for `python -m snackbase`
-│       ├── cli.py               # CLI commands
-│       ├── core/
-│       │   ├── config.py        # Configuration management
-│       │   └── logging.py       # Structured logging
-│       ├── domain/              # Business entities (no external deps)
-│       │   ├── entities/        # Account, User, Role, Group, Collection, Invitation
-│       │   └── services/        # AccountIdGenerator, PasswordValidator, SlugGenerator
-│       ├── application/         # Use cases and orchestration
-│       │   ├── commands/        # Write operations (TODO)
-│       │   └── queries/         # Read operations (TODO)
-│       └── infrastructure/      # External dependencies
-│           ├── api/
-│           │   ├── app.py       # FastAPI application factory
-│           │   ├── dependencies.py # Auth dependencies
-│           │   ├── routes/
-│           │   │   └── auth_router.py # Auth endpoints
-│           │   └── schemas/
-│           │       └── auth_schemas.py # Pydantic models
-│           ├── auth/
-│           │   ├── jwt_service.py    # JWT token management
-│           │   └── password_hasher.py # Argon2 password hashing
-│           ├── persistence/
-│           │   ├── database.py  # SQLAlchemy async engine
-│           │   ├── models/      # ORM models
-│           │   └── repositories/ # Data access layer
-│           ├── realtime/        # WebSocket/SSE (TODO)
-│           └── storage/         # File storage (TODO)
-├── sb_data/                     # Data directory (gitignored)
-│   ├── snackbase.db            # SQLite database
-│   └── files/                   # File uploads
-├── CLAUDE.md                    # Project instructions for AI
-├── REQUIREMENTS.md              # Detailed requirements
-├── PRD_PHASES.md                # Phase-by-phase development plan
-├── pyproject.toml               # Project configuration
-└── README.md                    # This file
+├── src/snackbase/
+│   ├── core/                         # Cross-cutting concerns
+│   │   ├── config.py                 # Pydantic Settings
+│   │   ├── logging.py                # Structured logging
+│   │   ├── hooks/                    # Hook registry (STABLE API)
+│   │   ├── macros/                   # SQL macro engine
+│   │   └── rules/                    # Rule engine (lexer, parser, AST)
+│   ├── domain/                       # Core business logic
+│   │   ├── entities/                 # Business entities
+│   │   └── services/                 # Business logic interfaces
+│   ├── application/                  # Use cases
+│   │   ├── commands/                 # Write operations
+│   │   └── queries/                  # Read operations
+│   └── infrastructure/               # External dependencies
+│       ├── api/
+│       │   ├── app.py                # FastAPI app factory
+│       │   ├── dependencies.py       # FastAPI dependencies
+│       │   ├── routes/               # 11 API routers
+│       │   ├── schemas/              # Pydantic models
+│       │   └── middleware/           # Authorization middleware
+│       ├── persistence/
+│       │   ├── database.py           # SQLAlchemy 2.0 async
+│       │   ├── models/               # ORM models
+│       │   ├── repositories/         # Repository pattern
+│       │   └── table_builder.py      # Dynamic table creation
+│       ├── auth/                     # JWT, password hasher
+│       ├── hooks/                    # Built-in hooks
+│       ├── services/                 # Token, email services
+│       ├── realtime/                 # WebSocket/SSE (TODO)
+│       └── storage/                  # File storage (TODO)
+├── ui/                               # React Admin UI
+│   ├── src/
+│   │   ├── pages/                    # Dashboard, Accounts, Collections, etc.
+│   │   ├── components/               # React components (Radix + Tailwind)
+│   │   ├── services/                 # API clients
+│   │   ├── stores/                   # Zustand state
+│   │   └── lib/                      # Utilities
+├── tests/                            # Unit and integration tests
+│   ├── unit/
+│   ├── integration/
+│   └── conftest.py                   # Pytest fixtures
+├── sb_data/                          # Data directory (gitignored)
+├── CLAUDE.md                         # AI assistant instructions
+├── pyproject.toml                    # Project configuration
+└── README.md                         # This file
+```
+
+## Development
+
+### Backend
+
+```bash
+# Code quality
+uv run ruff check .                        # Lint
+uv run ruff format .                       # Format
+uv run mypy src/                           # Type check
+
+# Testing
+uv run pytest                              # Run all tests
+uv run pytest tests/unit/                  # Unit tests only
+uv run pytest tests/integration/           # Integration tests only
+uv run pytest --cov=snackbase              # With coverage
+uv run pytest -k "test_name"               # Run specific test
+```
+
+### Frontend
+
+```bash
+cd ui
+npm run dev        # Start dev server (Vite)
+npm run build      # Production build
+npm run lint       # ESLint
+npm run preview    # Preview production build
 ```
 
 ## Architecture
 
-SnackBase follows **Clean Architecture** principles with three layers:
+### Clean Architecture
 
-1. **Domain Layer** - Core business logic with zero dependencies on external frameworks
-2. **Application Layer** - Use cases and orchestration of domain logic
-3. **Infrastructure Layer** - All external dependencies (FastAPI, SQLAlchemy, etc.)
+SnackBase follows **Clean Architecture** with three layers:
+
+1. **Domain Layer** - Core business logic with zero external dependencies
+2. **Application Layer** - Use cases and orchestration
+3. **Infrastructure Layer** - All external dependencies (FastAPI, SQLAlchemy)
 
 ### Multi-Tenancy Model
 
-Accounts represent isolated tenants within a single database. Data segregation uses row-level isolation via `account_id` column. Users can belong to multiple accounts with the same email address, using a `(email, account_id)` identity tuple.
+Accounts represent isolated tenants using row-level isolation via `account_id`:
 
-### Account ID Format
-
-Accounts use auto-generated IDs in format `XX####` (2 letters + 4 digits, e.g., `AB1234`):
-
-- `id`: XX#### format (primary key, immutable)
-- `slug`: URL-friendly identifier for login (globally unique)
-- `name`: Display name (not unique)
-
-### Authentication System
-
-- **Password Hashing**: Argon2id algorithm (OWASP recommended)
-- **JWT Tokens**: Access tokens (1 hour) + refresh tokens (7 days) with rotation
-- **Timing-Safe Comparison**: Prevents user enumeration attacks
-- **Token Storage**: Refresh tokens stored in database with SHA-256 hashing and revocation tracking
+- **Account ID Format**: `XX####` (2 letters + 4 digits, e.g., `AB1234`)
+- **User Identity**: `(email, account_id)` tuple
+- **Password Scope**: Per-account (same email = different passwords per account)
 
 ### Two-Tier Table Architecture
 
-1. **Core System Tables** - Schema changes via releases (accounts, users, roles, permissions, collections)
-2. **User-Created Collections** - Global tables shared by ALL accounts (e.g., `posts`, `products`)
+1. **Core System Tables** - Schema changes via releases (accounts, users, roles, permissions, collections, macros, migrations)
+2. **User-Created Collections** - Single global tables shared by ALL accounts
 
-## Development
+**Critical**: User collections are ONE physical table where all accounts store data together, isolated by `account_id`. The `collections` table stores schema definitions only.
 
-### Code Quality
+### Hook System (Stable API v1.0)
 
-```bash
-# Run linting
-uv run ruff check .
+The hook registry is a **STABLE API contract**:
 
-# Format code
-uv run ruff format .
-
-# Type checking
-uv run mypy src/
+```python
+@app.hook.on_record_after_create("posts", priority=10)
+async def send_post_notification(record, context):
+    await notification_service.send(record.created_by, "Post created!")
 ```
 
-### Testing (Coming Soon)
+Built-in hooks (cannot be unregistered):
+- `timestamp_hook` - Auto-sets created_at/updated_at
+- `account_isolation_hook` - Enforces account_id filtering
+- `created_by_hook` - Sets created_by user
 
-```bash
-# Run tests
-uv run pytest
+### Rule Engine
 
-# With coverage
-uv run pytest --cov=snackbase
+Custom DSL for permission expressions:
+
+```python
+user.id == "user_abc123"
+@has_role("admin") and @owns_record()
+status in ["draft", "published"]
 ```
-
-## Configuration Reference
-
-| Setting                                 | Default                                      | Description                       |
-| --------------------------------------- | -------------------------------------------- | --------------------------------- |
-| `SNACKBASE_DATABASE_URL`                | `sqlite+aiosqlite:///./sb_data/snackbase.db` | Database connection URL           |
-| `SNACKBASE_SECRET_KEY`                  | `change-me-in-production...`                 | JWT signing key                   |
-| `SNACKBASE_ACCESS_TOKEN_EXPIRE_MINUTES` | `60`                                         | Access token expiration (minutes) |
-| `SNACKBASE_REFRESH_TOKEN_EXPIRE_DAYS`   | `7`                                          | Refresh token expiration (days)   |
-| `SNACKBASE_PORT`                        | `8000`                                       | Server port                       |
-| `SNACKBASE_LOG_LEVEL`                   | `INFO`                                       | Logging level                     |
-| `SNACKBASE_LOG_FORMAT`                  | `json`                                       | Log format (json/console)         |
 
 ## Roadmap
 
-See [PRD_PHASES.md](PRD_PHASES.md) for detailed phase-by-phase specifications.
+See [PRD_PHASES.md](PRD_PHASES.md) for detailed specifications.
 
-- **Phase 1**: Foundation & MVP - Multi-tenancy, auth, dynamic collections
-- **Phase 2**: Security & Authorization - RLS, PII masking, SQL macros
-- **Phase 3**: Admin UI & Operations - Dashboard, migrations, audit logging
-- **Phase 4**: Advanced Features - Real-time, PostgreSQL, hooks
-- **Phase 5**: Enterprise - OAuth/SAML, rate limiting, monitoring
+- [x] **Phase 1**: Foundation & MVP - Multi-tenancy, auth, dynamic collections, UI
+- [x] **Phase 2**: Security & Authorization - RLS, permissions, rule engine
+- [ ] **Phase 3**: Operations - Audit logging, migrations
+- [ ] **Phase 4**: Advanced Features - Real-time, file storage
+- [ ] **Phase 5**: Enterprise - OAuth/SAML, rate limiting, monitoring
 
 ## Contributing
 
-Contributions are welcome! Please read the requirements documentation before starting work.
+Contributions are welcome! Please read [CLAUDE.md](CLAUDE.md) for development guidelines.
 
 ## License
 
-[Your License Here]
+MIT License - See LICENSE file for details
 
 ## Acknowledgments
 
