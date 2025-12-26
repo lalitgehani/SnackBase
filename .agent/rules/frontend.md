@@ -36,6 +36,8 @@ description: Use this rule when working on admin ui for the frontend development
 ### UI & Styling
 
 - **ShadCN**: Use existing components in `ui/src/components/ui/`.
+- Intall new ShadCN components using npx shadcn@latest add {component name}
+- Never create ShadCN component file. Always install using CLI.
 - **Tailwind**: Use utility classes.
 - **Class Merging**: Always use `cn()` when accepting `className` props.
   ```tsx
