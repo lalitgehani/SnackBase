@@ -112,12 +112,12 @@ class TestPIIMasking:
             "age": 30,
         }
         
-        create_response = await client.post("/api/v1/customers", json=record_data, headers=user_headers)
+        create_response = await client.post("/api/v1/records/customers", json=record_data, headers=user_headers)
         assert create_response.status_code == 201
         record_id = create_response.json()["id"]
 
         # 5. Get record
-        response = await client.get(f"/api/v1/customers/{record_id}", headers=user_headers)
+        response = await client.get(f"/api/v1/records/customers/{record_id}", headers=user_headers)
         assert response.status_code == 200
         data = response.json()
 
@@ -195,12 +195,12 @@ class TestPIIMasking:
         user_headers = {"Authorization": f"Bearer {token}"}
 
         record_data = {"email": "john.doe@example.com"}
-        create_res = await client.post("/api/v1/customers2", json=record_data, headers=user_headers)
+        create_res = await client.post("/api/v1/records/customers2", json=record_data, headers=user_headers)
         assert create_res.status_code == 201
         record_id = create_res.json()["id"]
 
         # 5. Get record
-        response = await client.get(f"/api/v1/customers2/{record_id}", headers=user_headers)
+        response = await client.get(f"/api/v1/records/customers2/{record_id}", headers=user_headers)
         assert response.status_code == 200
         data = response.json()
 
@@ -255,10 +255,10 @@ class TestPIIMasking:
          headers = {"Authorization": f"Bearer {token}"}
 
          for i in range(3):
-             await client.post("/api/v1/employees_list", json={"email": f"emp{i}@example.com"}, headers=headers)
+             await client.post("/api/v1/records/employees_list", json={"email": f"emp{i}@example.com"}, headers=headers)
 
          # 5. List
-         response = await client.get("/api/v1/employees_list", headers=headers)
+         response = await client.get("/api/v1/records/employees_list", headers=headers)
          assert response.status_code == 200
          data = response.json()
          
@@ -303,7 +303,7 @@ class TestPIIMasking:
          token = jwt_service.create_access_token(user_id=user.id, account_id=account.id, email=user.email, role="user")
          headers = {"Authorization": f"Bearer {token}"}
          
-         res = await client.post("/api/v1/contacts_db", json={"email": "raw@example.com"}, headers=headers)
+         res = await client.post("/api/v1/records/contacts_db", json={"email": "raw@example.com"}, headers=headers)
          assert res.status_code == 201
          rec_id = res.json()["id"]
 

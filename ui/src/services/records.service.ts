@@ -19,7 +19,7 @@ export type { RecordData, RecordListItem } from '@/types/records.types';
  */
 export const getRecords = async (params: GetRecordsParams): Promise<RecordListResponse> => {
 	const { collection, ...queryParams } = params;
-	const response = await apiClient.get<RecordListResponse>(`/${collection}`, {
+	const response = await apiClient.get<RecordListResponse>(`/records/${collection}`, {
 		params: queryParams,
 	});
 	return response.data;
@@ -29,7 +29,7 @@ export const getRecords = async (params: GetRecordsParams): Promise<RecordListRe
  * Get a single record by ID
  */
 export const getRecordById = async (collection: string, recordId: string): Promise<RecordDetail> => {
-	const response = await apiClient.get<RecordDetail>(`/${collection}/${recordId}`);
+	const response = await apiClient.get<RecordDetail>(`/records/${collection}/${recordId}`);
 	return response.data;
 };
 
@@ -37,7 +37,7 @@ export const getRecordById = async (collection: string, recordId: string): Promi
  * Create a new record
  */
 export const createRecord = async (collection: string, data: RecordData): Promise<RecordDetail> => {
-	const response = await apiClient.post<RecordDetail>(`/${collection}`, data);
+	const response = await apiClient.post<RecordDetail>(`/records/${collection}`, data);
 	return response.data;
 };
 
@@ -49,7 +49,7 @@ export const updateRecord = async (
 	recordId: string,
 	data: RecordData,
 ): Promise<RecordDetail> => {
-	const response = await apiClient.put<RecordDetail>(`/${collection}/${recordId}`, data);
+	const response = await apiClient.put<RecordDetail>(`/records/${collection}/${recordId}`, data);
 	return response.data;
 };
 
@@ -61,7 +61,7 @@ export const patchRecord = async (
 	recordId: string,
 	data: Partial<RecordData>,
 ): Promise<RecordDetail> => {
-	const response = await apiClient.patch<RecordDetail>(`/${collection}/${recordId}`, data);
+	const response = await apiClient.patch<RecordDetail>(`/records/${collection}/${recordId}`, data);
 	return response.data;
 };
 
@@ -69,5 +69,5 @@ export const patchRecord = async (
  * Delete a record
  */
 export const deleteRecord = async (collection: string, recordId: string): Promise<void> => {
-	await apiClient.delete(`/${collection}/${recordId}`);
+	await apiClient.delete(`/records/${collection}/${recordId}`);
 };

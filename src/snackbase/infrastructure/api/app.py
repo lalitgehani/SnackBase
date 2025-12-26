@@ -308,9 +308,10 @@ def register_routes(app: FastAPI) -> None:
         users_router, prefix=f"{settings.api_prefix}/users", tags=["users"]
     )
 
-    # Register dynamic record routes (must be last to avoid capturing specific routes)
+    # Register dynamic record routes with /records prefix to avoid conflicts
+    # Collections are accessed via /api/v1/records/{collection}
     app.include_router(
-        records_router, prefix=settings.api_prefix, tags=["records"]
+        records_router, prefix=f"{settings.api_prefix}/records", tags=["records"]
     )
 
     # These will be registered as we implement features

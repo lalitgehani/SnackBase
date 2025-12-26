@@ -1,5 +1,7 @@
 """Repository for group database operations."""
 
+from __future__ import annotations
+
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -80,6 +82,23 @@ class GroupRepository:
         result = await self.session.execute(
             select(GroupModel)
             .where(GroupModel.account_id == account_id)
+            .offset(skip)
+            .limit(limit)
+        )
+        return list(result.scalars().all())
+
+    async def list_all(self, skip: int = 0, limit: int = 100) -> list[GroupModel]:
+        """List all groups across all accounts (for superadmins).
+
+        Args:
+            skip: Number of records to skip.
+            limit: Maximum number of records to return.
+
+        Returns:
+            List of group models.
+        """
+        result = await self.session.execute(
+            select(GroupModel)
             .offset(skip)
             .limit(limit)
         )

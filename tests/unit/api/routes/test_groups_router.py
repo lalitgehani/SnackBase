@@ -42,8 +42,16 @@ def current_user():
     )
 
 
+@pytest.fixture
+def mock_session():
+    """Create a mock AsyncSession."""
+    session = AsyncMock()
+    session.commit = AsyncMock()
+    return session
+
+
 @pytest.mark.asyncio
-async def test_create_group(mock_group_repo, current_user):
+async def test_create_group(mock_group_repo, current_user, mock_session):
     """Test creating a group successfully."""
     group_data = GroupCreate(name="Devs", description="Developers")
     mock_group_repo.get_by_name_and_account.return_value = None
@@ -54,21 +62,22 @@ async def test_create_group(mock_group_repo, current_user):
         description="Developers"
     )
 
-    result = await create_group(group_data, current_user, mock_group_repo)
+    result = await create_group(group_data, current_user, mock_group_repo, mock_session)
 
     assert result.name == "Devs"
     assert result.account_id == "acc1"
     mock_group_repo.create.assert_called_once()
+    mock_session.commit.assert_called_once()
 
 
 @pytest.mark.asyncio
-async def test_create_group_duplicate(mock_group_repo, current_user):
+async def test_create_group_duplicate(mock_group_repo, current_user, mock_session):
     """Test creating a duplicate group."""
     group_data = GroupCreate(name="Devs")
     mock_group_repo.get_by_name_and_account.return_value = GroupModel(id="g1")
 
     with pytest.raises(HTTPException) as exc:
-        await create_group(group_data, current_user, mock_group_repo)
+        await create_group(group_data, current_user, mock_group_repo, mock_session)
     
     assert exc.value.status_code == status.HTTP_409_CONFLICT
 
@@ -117,7 +126,7 @@ async def test_get_group_wrong_account(mock_group_repo, current_user):
 
 
 @pytest.mark.asyncio
-async def test_add_user_to_group(mock_group_repo, current_user):
+async def test_add_user_to_group(mock_group_repo, current_user, mock_session):
     """Test adding user to group."""
     group_id = "g1"
     user_data = UserGroupUpdate(user_id="u2")
@@ -125,6 +134,7 @@ async def test_add_user_to_group(mock_group_repo, current_user):
     mock_group_repo.get_by_id.return_value = GroupModel(id=group_id, account_id="acc1")
     mock_group_repo.is_user_in_group.return_value = False
 
-    await add_user_to_group(group_id, user_data, current_user, mock_group_repo)
+    await add_user_to_group(group_id, user_data, current_user, mock_group_repo, mock_session)
 
     mock_group_repo.add_user.assert_called_once_with(group_id, "u2")
+    mock_session.commit.assert_called_once()

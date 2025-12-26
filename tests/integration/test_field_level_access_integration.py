@@ -220,7 +220,7 @@ async def test_create_with_allowed_fields(
     }
     
     response = await client.post(
-        f"/api/v1/{test_collection['name']}",
+        f"/api/v1/records/{test_collection['name']}",
         json=record_data,
         headers=limited_user_headers,
     )
@@ -247,7 +247,7 @@ async def test_create_with_unauthorized_field(
     }
     
     response = await client.post(
-        f"/api/v1/{test_collection['name']}",
+        f"/api/v1/records/{test_collection['name']}",
         json=record_data,
         headers=limited_user_headers,
     )
@@ -273,7 +273,7 @@ async def test_create_with_system_field(
     }
     
     response = await client.post(
-        f"/api/v1/{test_collection['name']}",
+        f"/api/v1/records/{test_collection['name']}",
         json=record_data,
         headers=limited_user_headers,
     )
@@ -303,7 +303,7 @@ async def test_read_filters_response_fields(
     }
     
     create_response = await client.post(
-        f"/api/v1/{test_collection['name']}",
+        f"/api/v1/records/{test_collection['name']}",
         json=record_data,
         headers=account_admin_headers,
     )
@@ -312,7 +312,7 @@ async def test_read_filters_response_fields(
     
     # Read as limited user
     response = await client.get(
-        f"/api/v1/{test_collection['name']}/{record_id}",
+        f"/api/v1/records/{test_collection['name']}/{record_id}",
         headers=limited_user_headers,
     )
     
@@ -365,7 +365,7 @@ async def test_read_wildcard_returns_all_fields(
     }
     
     create_response = await client.post(
-        f"/api/v1/{test_collection['name']}",
+        f"/api/v1/records/{test_collection['name']}",
         json=record_data,
         headers=account_admin_headers,
     )
@@ -373,7 +373,7 @@ async def test_read_wildcard_returns_all_fields(
     
     # Read record
     response = await client.get(
-        f"/api/v1/{test_collection['name']}/{record_id}",
+        f"/api/v1/records/{test_collection['name']}/{record_id}",
         headers=account_admin_headers,
     )
     
@@ -405,7 +405,7 @@ async def test_update_with_allowed_fields(
     }
     
     create_response = await client.post(
-        f"/api/v1/{test_collection['name']}",
+        f"/api/v1/records/{test_collection['name']}",
         json=record_data,
         headers=account_admin_headers,
     )
@@ -418,7 +418,7 @@ async def test_update_with_allowed_fields(
     }
     
     response = await client.patch(
-        f"/api/v1/{test_collection['name']}/{record_id}",
+        f"/api/v1/records/{test_collection['name']}/{record_id}",
         json=update_data,
         headers=limited_user_headers,
     )
@@ -447,7 +447,7 @@ async def test_update_with_unauthorized_field(
     }
     
     create_response = await client.post(
-        f"/api/v1/{test_collection['name']}",
+        f"/api/v1/records/{test_collection['name']}",
         json=record_data,
         headers=account_admin_headers,
     )
@@ -459,7 +459,7 @@ async def test_update_with_unauthorized_field(
     }
     
     response = await client.patch(
-        f"/api/v1/{test_collection['name']}/{record_id}",
+        f"/api/v1/records/{test_collection['name']}/{record_id}",
         json=update_data,
         headers=limited_user_headers,
     )
@@ -486,7 +486,7 @@ async def test_update_with_system_field(
     }
     
     create_response = await client.post(
-        f"/api/v1/{test_collection['name']}",
+        f"/api/v1/records/{test_collection['name']}",
         json=record_data,
         headers=account_admin_headers,
     )
@@ -499,7 +499,7 @@ async def test_update_with_system_field(
     }
     
     response = await client.patch(
-        f"/api/v1/{test_collection['name']}/{record_id}",
+        f"/api/v1/records/{test_collection['name']}/{record_id}",
         json=update_data,
         headers=limited_user_headers,
     )
@@ -528,7 +528,7 @@ async def test_list_filters_response_fields(
     
     for record_data in records_data:
         response = await client.post(
-        f"/api/v1/{test_collection['name']}",
+        f"/api/v1/records/{test_collection['name']}",
             json=record_data,
             headers=account_admin_headers,
         )
@@ -536,7 +536,7 @@ async def test_list_filters_response_fields(
     
     # List as limited user
     response = await client.get(
-        f"/api/v1/{test_collection['name']}",
+        f"/api/v1/records/{test_collection['name']}",
         headers=limited_user_headers,
     )
     
@@ -630,7 +630,7 @@ async def test_pii_masking_after_field_filtering(
     }
 
     create_response = await client.post(
-        f"/api/v1/{collection_name}",
+        f"/api/v1/records/{collection_name}",
         json=record_data,
         headers=account_admin_headers,
     )
@@ -638,7 +638,7 @@ async def test_pii_masking_after_field_filtering(
 
     # Read as limited user (no pii_access group)
     response = await client.get(
-        f"/api/v1/{collection_name}/{record_id}",
+        f"/api/v1/records/{collection_name}/{record_id}",
         headers=limited_user_headers,
     )
     

@@ -14,7 +14,8 @@ class GroupBase(BaseModel):
 
 class GroupCreate(GroupBase):
     """Schema for creating a group."""
-    pass
+    
+    account_id: str | None = Field(None, description="Account ID (optional, for superadmins)")
 
 
 class GroupUpdate(BaseModel):

@@ -23,7 +23,7 @@ from snackbase.infrastructure.api.schemas.group_schemas import (
 from snackbase.infrastructure.persistence.models import GroupModel
 from snackbase.infrastructure.persistence.repositories.group_repository import GroupRepository
 
-router = APIRouter(prefix="/groups", tags=["Groups"])
+router = APIRouter(tags=["Groups"])
 logger = get_logger(__name__)
 
 
@@ -48,15 +48,19 @@ async def create_group(
     group_data: GroupCreate,
     current_user: AuthenticatedUser,
     group_repo: GroupRepo,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> GroupModel:
     """Create a new group in the user's account.
 
     Requires authenticated user (usually admin, but enforced via permissions logic if needed).
     For now, any authenticated user can create groups in their account (or restrict to admin).
     """
+    # Determine account_id: use provided account_id if superadmin, otherwise use current user's account
+    target_account_id = group_data.account_id if group_data.account_id else current_user.account_id
+    
     # Check uniqueness
     existing = await group_repo.get_by_name_and_account(
-        group_data.name, current_user.account_id
+        group_data.name, target_account_id
     )
     if existing:
         raise HTTPException(
@@ -66,12 +70,14 @@ async def create_group(
 
     new_group = GroupModel(
         id=str(uuid.uuid4()),
-        account_id=current_user.account_id,
+        account_id=target_account_id,
         name=group_data.name,
         description=group_data.description,
     )
 
-    return await group_repo.create(new_group)
+    result = await group_repo.create(new_group)
+    await session.commit()
+    return result
 
 
 @router.get(
@@ -85,7 +91,11 @@ async def list_groups(
     skip: int = 0,
     limit: int = 100,
 ) -> list[GroupModel]:
-    """List all groups in the user's account."""
+    """List all groups in the user's account (or all groups if superadmin)."""
+    # Superadmins (account_id == SY0000) see all groups across all accounts
+    if current_user.account_id == "SY0000":
+        return await group_repo.list_all(skip, limit)
+    # Regular users see only groups in their account
     return await group_repo.list(current_user.account_id, skip, limit)
 
 
@@ -128,6 +138,7 @@ async def update_group(
     group_data: GroupUpdate,
     current_user: AuthenticatedUser,
     group_repo: GroupRepo,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> GroupModel:
     """Update a group."""
     group = await group_repo.get_by_id(group_id)
@@ -160,7 +171,9 @@ async def update_group(
     if group_data.description is not None:
         group.description = group_data.description
         
-    return await group_repo.update(group)
+    result = await group_repo.update(group)
+    await session.commit()
+    return result
 
 
 @router.delete(
@@ -172,6 +185,7 @@ async def delete_group(
     group_id: str,
     current_user: AuthenticatedUser,
     group_repo: GroupRepo,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> None:
     """Delete a group."""
     group = await group_repo.get_by_id(group_id)
@@ -189,6 +203,7 @@ async def delete_group(
         )
         
     await group_repo.delete(group)
+    await session.commit()
 
 
 @router.post(
@@ -201,6 +216,7 @@ async def add_user_to_group(
     user_data: UserGroupUpdate,
     current_user: AuthenticatedUser,
     group_repo: GroupRepo,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> dict[str, str]:
     """Add a user to a group."""
     group = await group_repo.get_by_id(group_id)
@@ -227,6 +243,7 @@ async def add_user_to_group(
         )
         
     await group_repo.add_user(group_id, user_data.user_id)
+    await session.commit()
     
     return {"message": "User added to group"}
 
@@ -241,6 +258,7 @@ async def remove_user_from_group(
     user_id: str,
     current_user: AuthenticatedUser,
     group_repo: GroupRepo,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> None:
     """Remove a user from a group."""
     group = await group_repo.get_by_id(group_id)
@@ -258,3 +276,4 @@ async def remove_user_from_group(
         )
         
     await group_repo.remove_user(group_id, user_id)
+    await session.commit()
