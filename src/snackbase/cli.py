@@ -182,12 +182,15 @@ Example:
 def init_db(force: bool) -> None:
     """Initialize the database.
 
-    Creates all database tables. Use this only in development.
+    Creates all database tables and seeds default data. Use this only in development.
     In production, use migrations instead.
     """
     import asyncio
 
-    from snackbase.infrastructure.persistence.database import get_db_manager
+    from snackbase.infrastructure.persistence.database import (
+        get_db_manager,
+        init_database,
+    )
 
     settings = get_settings()
     configure_logging(settings)
@@ -206,12 +209,15 @@ def init_db(force: bool) -> None:
             default=False,
         )
 
-    async def create_tables():
-        db = get_db_manager()
-        await db.create_tables()
-        click.echo("Database tables created successfully.")
+    async def initialize():
+        try:
+            await init_database()
+            click.echo("Database initialized successfully.")
+        finally:
+            db = get_db_manager()
+            await db.disconnect()
 
-    asyncio.run(create_tables())
+    asyncio.run(initialize())
 
 
 @cli.command()
@@ -250,63 +256,68 @@ def create_superadmin(email: str | None, password: str | None, force: bool) -> N
     logger = get_logger(__name__)
 
     async def create() -> None:
+        nonlocal email, password  # Allow modification of outer scope variables
         db = get_db_manager()
 
-        # Check if superadmin already exists
-        has_superadmin = await SuperadminService.has_superadmin(db.session_factory)
-        if has_superadmin and not force:
-            if not click.confirm(
-                "A superadmin already exists. Do you want to create another one?",
-                default=False,
-            ):
-                click.echo("Cancelled.")
-                raise SystemExit(0)
-
-        # Prompt for email if not provided
-        if email is None:
-            email = click.prompt("Superadmin email", type=str)
-
-        # Validate email format
-        if "@" not in email or "." not in email.split("@")[-1]:
-            click.echo("Error: Invalid email format", err=True)
-            raise SystemExit(1)
-
-        # Prompt for password if not provided
-        if password is None:
-            password = click.prompt(
-                "Superadmin password",
-                hide_input=True,
-                confirmation_prompt=True,
-            )
-
-        # Create superadmin
         try:
+            # Check if superadmin already exists
             async with db.session() as session:
-                user_id, account_id = await SuperadminService.create_superadmin(
-                    email=email,
-                    password=password,
-                    session=session,
+                has_superadmin = await SuperadminService.has_superadmin(session)
+            if has_superadmin and not force:
+                if not click.confirm(
+                    "A superadmin already exists. Do you want to create another one?",
+                    default=False,
+                ):
+                    click.echo("Cancelled.")
+                    raise SystemExit(0)
+
+            # Prompt for email if not provided
+            if email is None:
+                email = click.prompt("Superadmin email", type=str)
+
+            # Validate email format
+            if "@" not in email or "." not in email.split("@")[-1]:
+                click.echo("Error: Invalid email format", err=True)
+                raise SystemExit(1)
+
+            # Prompt for password if not provided
+            if password is None:
+                password = click.prompt(
+                    "Superadmin password",
+                    hide_input=True,
+                    confirmation_prompt=True,
                 )
 
-            click.echo(
-                f"\nSuperadmin created successfully!\n"
-                f"  User ID:    {user_id}\n"
-                f"  Account ID: {account_id}\n"
-                f"  Email:      {email}\n"
-                f"\nYou can now log in using:\n"
-                f"  Account: {account_id} or 'system'\n"
-                f"  Email:   {email}\n"
-            )
-            logger.info(
-                "Superadmin created via CLI",
-                user_id=user_id,
-                account_id=account_id,
-                email=email,
-            )
-        except SuperadminCreationError as e:
-            click.echo(f"Error: {e.message}", err=True)
-            logger.error("Superadmin creation failed", error=str(e))
-            raise SystemExit(1)
+            # Create superadmin
+            try:
+                async with db.session() as session:
+                    user_id, account_id = await SuperadminService.create_superadmin(
+                        email=email,
+                        password=password,
+                        session=session,
+                    )
+
+                click.echo(
+                    f"\nSuperadmin created successfully!\n"
+                    f"  User ID:    {user_id}\n"
+                    f"  Account ID: {account_id}\n"
+                    f"  Email:      {email}\n"
+                    f"\nYou can now log in using:\n"
+                    f"  Account: {account_id} or 'system'\n"
+                    f"  Email:   {email}\n"
+                )
+                logger.info(
+                    "Superadmin created via CLI",
+                    user_id=user_id,
+                    account_id=account_id,
+                    email=email,
+                )
+            except SuperadminCreationError as e:
+                click.echo(f"Error: {e.message}", err=True)
+                logger.error("Superadmin creation failed", error=str(e))
+                raise SystemExit(1)
+        finally:
+            await db.disconnect()
 
     asyncio.run(create())
 
