@@ -4,6 +4,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,6 +29,8 @@ import {
 import { handleApiError } from '@/lib/api';
 
 export default function CollectionsPage() {
+    const navigate = useNavigate();
+
     const [data, setData] = useState<CollectionListResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -125,6 +128,10 @@ export default function CollectionsPage() {
     const handleDeleteCollection = async (collectionId: string) => {
         await deleteCollection(collectionId);
         await fetchCollections();
+    };
+
+    const handleManageRecords = (collection: CollectionListItem) => {
+        navigate(`/admin/collections/${collection.name}/records`);
     };
 
     const totalPages = data?.total_pages || 1;
@@ -227,6 +234,7 @@ export default function CollectionsPage() {
                                 onView={handleView}
                                 onEdit={handleEdit}
                                 onDelete={handleDelete}
+                                onManageRecords={handleManageRecords}
                             />
 
                             {/* Pagination */}

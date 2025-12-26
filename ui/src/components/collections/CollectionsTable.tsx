@@ -5,7 +5,7 @@
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Eye, Pencil, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
+import { Eye, Pencil, Trash2, ArrowUp, ArrowDown, Database } from 'lucide-react';
 import type { CollectionListItem } from '@/services/collections.service';
 
 interface CollectionsTableProps {
@@ -16,6 +16,7 @@ interface CollectionsTableProps {
     onView: (collection: CollectionListItem) => void;
     onEdit: (collection: CollectionListItem) => void;
     onDelete: (collection: CollectionListItem) => void;
+    onManageRecords?: (collection: CollectionListItem) => void;
 }
 
 export default function CollectionsTable({
@@ -26,6 +27,7 @@ export default function CollectionsTable({
     onView,
     onEdit,
     onDelete,
+    onManageRecords,
 }: CollectionsTableProps) {
     const SortIcon = ({ column }: { column: string }) => {
         if (sortBy !== column) return null;
@@ -96,6 +98,14 @@ export default function CollectionsTable({
                                 <TableCell>{formatDate(collection.created_at)}</TableCell>
                                 <TableCell className="text-right">
                                     <div className="flex justify-end gap-2">
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => onManageRecords?.(collection)}
+                                            title="Manage records"
+                                        >
+                                            <Database className="h-4 w-4" />
+                                        </Button>
                                         <Button
                                             variant="ghost"
                                             size="sm"

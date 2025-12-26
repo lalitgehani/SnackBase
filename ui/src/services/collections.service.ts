@@ -78,6 +78,22 @@ export const getCollectionById = async (collectionId: string): Promise<Collectio
 };
 
 /**
+ * Get collection by name
+ */
+export const getCollectionByName = async (collectionName: string): Promise<Collection> => {
+  const response = await apiClient.get<CollectionListResponse>('/collections', {
+    params: { search: collectionName }
+  });
+  // Find exact match from results
+  const collection = response.data.items.find((c: CollectionListItem) => c.name === collectionName);
+  if (!collection) {
+    throw new Error(`Collection '${collectionName}' not found`);
+  }
+  // Need to fetch full schema using getCollectionById
+  return getCollectionById(collection.id);
+};
+
+/**
  * Create a new collection
  */
 export const createCollection = async (data: CreateCollectionData): Promise<Collection> => {

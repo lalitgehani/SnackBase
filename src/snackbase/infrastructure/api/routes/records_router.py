@@ -380,12 +380,13 @@ async def list_records(
     records = masked_records
     
     # 8. Apply additional field limiting if requested via query param
-    if fields:
+    # Note: '*' means all fields, skip filtering in that case
+    if fields and fields.strip() != "*":
         field_list = [f.strip() for f in fields.split(",")]
-        # Always include ID
-        if "id" not in field_list:
-            field_list.append("id")
-            
+        # Always include system fields - RecordResponse requires them
+        system_fields = {"id", "account_id", "created_at", "updated_at", "created_by", "updated_by"}
+        field_list = list(set(field_list) | system_fields)
+
         filtered_records = []
         for record in records:
             filtered_record = {k: v for k, v in record.items() if k in field_list}
@@ -393,8 +394,21 @@ async def list_records(
         records = filtered_records
 
     # 9. Return response
+    # Debug: Log records before response creation
+    logger.debug(f"Creating response with {len(records)} records")
+    for i, r in enumerate(records):
+        logger.debug(f"Record {i}: keys={list(r.keys())}, id={r.get('id')}")
+
+    response_items = []
+    for r in records:
+        try:
+            response_items.append(RecordResponse.from_record(r))
+        except Exception as e:
+            logger.error(f"Failed to create RecordResponse for record: {r}", error=str(e))
+            raise
+
     return RecordListResponse(
-        items=[RecordResponse.from_record(r) for r in records],
+        items=response_items,
         total=total,
         skip=skip,
         limit=limit,

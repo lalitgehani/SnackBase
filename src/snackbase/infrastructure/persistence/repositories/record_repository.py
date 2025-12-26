@@ -192,10 +192,13 @@ class RecordRepository:
             
         # 4. Convert back to dict
         record = dict(row._mapping)
-        
+
         # Type conversion
         for key, value in list(record.items()):
-            if key in schema_lookup:
+            # System fields: convert datetime to ISO string
+            if key in ("created_at", "updated_at") and isinstance(value, datetime):
+                record[key] = value.isoformat()
+            elif key in schema_lookup:
                 field_type = schema_lookup[key].get("type", "text").lower()
                 if field_type == "json" and value is not None:
                     try:
@@ -204,7 +207,7 @@ class RecordRepository:
                         pass
                 elif field_type == "boolean":
                     record[key] = bool(value)
-                    
+
         return record
 
     async def get_by_id(
@@ -247,7 +250,10 @@ class RecordRepository:
         # Convert types back from SQL storage
         schema_lookup = {f["name"]: f for f in schema}
         for key, value in list(record.items()):
-            if key in schema_lookup:
+            # System fields: convert datetime to ISO string
+            if key in ("created_at", "updated_at") and isinstance(value, datetime):
+                record[key] = value.isoformat()
+            elif key in schema_lookup:
                 field_type = schema_lookup[key].get("type", "text").lower()
                 if field_type == "json" and value is not None:
                     try:
@@ -394,10 +400,13 @@ class RecordRepository:
 
         for row in rows:
             record = dict(row._mapping)
-            
+
             # Type conversion (same as get_by_id)
             for key, value in list(record.items()):
-                if key in schema_lookup:
+                # System fields: convert datetime to ISO string
+                if key in ("created_at", "updated_at") and isinstance(value, datetime):
+                    record[key] = value.isoformat()
+                elif key in schema_lookup:
                     field_type = schema_lookup[key].get("type", "text").lower()
                     if field_type == "json" and value is not None:
                         try:
@@ -406,7 +415,7 @@ class RecordRepository:
                             pass
                     elif field_type == "boolean":
                         record[key] = bool(value)
-            
+
             records.append(record)
 
         return records, total_count

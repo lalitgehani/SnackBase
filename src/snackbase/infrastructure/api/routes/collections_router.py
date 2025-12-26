@@ -306,7 +306,9 @@ async def create_collection(
     try:
         # Use session's engine to ensure we're using the correct database (especially for tests)
         engine = cast(AsyncEngine, session.bind)
+        logger.debug(f"Session bind type: {type(session.bind)}, engine: {engine}")
         await TableBuilder.create_table(engine, request.name, schema_dicts)
+        logger.info(f"Table created successfully: {table_name}")
     except Exception as e:
         logger.error(
             "Collection creation failed: table creation error",

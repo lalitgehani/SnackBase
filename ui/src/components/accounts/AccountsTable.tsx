@@ -40,7 +40,10 @@ export default function AccountsTable({
                 className="h-8 px-2 lg:px-3"
             >
                 {label}
-                <ArrowUpDown className="ml-2 h-4 w-4" />
+                {sortBy === column && (
+                    <ArrowUpDown className={`ml-2 h-4 w-4 ${sortOrder === 'asc' ? 'rotate-180' : ''}`} />
+                )}
+                {sortBy !== column && <ArrowUpDown className="ml-2 h-4 w-4 opacity-50" />}
             </Button>
         </TableHead>
     );

@@ -4,6 +4,7 @@ import LoginPage from '@/pages/LoginPage';
 import DashboardPage from '@/pages/DashboardPage';
 import AccountsPage from '@/pages/AccountsPage';
 import CollectionsPage from '@/pages/CollectionsPage';
+import RecordsPage from '@/pages/RecordsPage';
 import RolesPage from '@/pages/RolesPage';
 import AuditLogsPage from '@/pages/AuditLogsPage';
 import AdminLayout from '@/layouts/AdminLayout';
@@ -31,6 +32,7 @@ function App() {
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="accounts" element={<AccountsPage />} />
         <Route path="collections" element={<CollectionsPage />} />
+        <Route path="collections/:collectionName/records" element={<RecordsPage />} />
         <Route path="roles" element={<RolesPage />} />
         <Route path="audit-logs" element={<AuditLogsPage />} />
       </Route>
