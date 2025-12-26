@@ -5,9 +5,9 @@ and configuring the FastAPI application with all middleware, routes,
 and lifecycle handlers.
 """
 
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import AsyncGenerator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -248,12 +248,13 @@ def register_routes(app: FastAPI) -> None:
         auth_router,
         collections_router,
         dashboard_router,
+        groups_router,
         invitations_router,
         macros_router,
         permissions_router,
-        groups_router,
         records_router,
         roles_router,
+        users_router,
     )
 
     settings = get_settings()
@@ -300,6 +301,11 @@ def register_routes(app: FastAPI) -> None:
     # Register accounts routes
     app.include_router(
         accounts_router, prefix=f"{settings.api_prefix}/accounts", tags=["accounts"]
+    )
+
+    # Register users routes (must be before dynamic record routes)
+    app.include_router(
+        users_router, prefix=f"{settings.api_prefix}/users", tags=["users"]
     )
 
     # Register dynamic record routes (must be last to avoid capturing specific routes)

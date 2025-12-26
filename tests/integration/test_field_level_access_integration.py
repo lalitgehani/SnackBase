@@ -569,9 +569,11 @@ async def test_pii_masking_after_field_filtering(
     superadmin_headers,
 ):
     """Test that PII masking is applied after field filtering."""
-    # Create collection with PII field
+    # Create collection with PII field (use unique name to avoid conflict with users router)
+    import uuid
+    collection_name = f"test_users_{uuid.uuid4().hex[:8]}"
     collection_data = {
-        "name": "users",
+        "name": collection_name,
         "schema": [
             {"name": "name", "type": "text", "required": True},
             {"name": "email", "type": "email", "required": True, "pii": True, "mask_type": "email"},
@@ -579,18 +581,18 @@ async def test_pii_masking_after_field_filtering(
             {"name": "department", "type": "text", "required": False},
         ],
     }
-    
+
     response = await client.post(
         "/api/v1/collections",
         json=collection_data,
         headers=superadmin_headers,
     )
     assert response.status_code == 201
-    
+
     # Create permission with limited fields (including PII field)
     permission_data = {
         "role_id": 2,  # user role
-        "collection": "users",
+        "collection": collection_name,
         "rules": {
             "read": {
                 "rule": "true",
@@ -598,17 +600,17 @@ async def test_pii_masking_after_field_filtering(
             },
         },
     }
-    
+
     await client.post(
         "/api/v1/permissions",
         json=permission_data,
         headers=superadmin_headers,
     )
 
-    # Grant admin access to users collection
+    # Grant admin access to the test collection
     admin_permission = {
         "role_id": 1,  # admin role
-        "collection": "users",
+        "collection": collection_name,
         "rules": {
             "create": {"rule": "true", "fields": "*"},
             "read": {"rule": "true", "fields": "*"},
@@ -618,7 +620,7 @@ async def test_pii_masking_after_field_filtering(
         "/api/v1/permissions",
         json=admin_permission,
         headers=superadmin_headers,
-    )  
+    )
     # Create record with PII data
     record_data = {
         "name": "John Doe",
@@ -626,17 +628,17 @@ async def test_pii_masking_after_field_filtering(
         "phone": "+1-555-123-4567",
         "department": "Engineering",
     }
-    
+
     create_response = await client.post(
-        "/api/v1/users",
+        f"/api/v1/{collection_name}",
         json=record_data,
         headers=account_admin_headers,
     )
     record_id = create_response.json()["id"]
-    
+
     # Read as limited user (no pii_access group)
     response = await client.get(
-        f"/api/v1/users/{record_id}",
+        f"/api/v1/{collection_name}/{record_id}",
         headers=limited_user_headers,
     )
     

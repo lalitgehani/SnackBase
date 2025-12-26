@@ -10,6 +10,7 @@ from .macros_router import router as macros_router
 from .permissions_router import router as permissions_router
 from .records_router import router as records_router
 from .roles_router import router as roles_router
+from .users_router import router as users_router
 
 __all__ = [
     "accounts_router",
@@ -22,5 +23,6 @@ __all__ = [
     "permissions_router",
     "records_router",
     "roles_router",
+    "users_router",
 ]
 

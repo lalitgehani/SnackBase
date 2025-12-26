@@ -7,6 +7,7 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router';
 import {
     LayoutDashboard,
     Users,
+    UserCog,
     Database,
     Shield,
     FileText,
@@ -21,6 +22,7 @@ import { cn } from '@/lib/utils';
 const navigation = [
     { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
     { name: 'Accounts', href: '/admin/accounts', icon: Users },
+    { name: 'Users', href: '/admin/users', icon: UserCog },
     { name: 'Collections', href: '/admin/collections', icon: Database },
     { name: 'Roles', href: '/admin/roles', icon: Shield },
     { name: 'Audit Logs', href: '/admin/audit-logs', icon: FileText },

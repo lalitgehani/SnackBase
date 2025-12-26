@@ -1,6 +1,6 @@
 """User repository for database operations."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import and_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -117,7 +117,7 @@ class UserRepository:
         await self.session.execute(
             update(UserModel)
             .where(UserModel.id == user_id)
-            .values(last_login=datetime.now(timezone.utc))
+            .values(last_login=datetime.now(UTC))
         )
         await self.session.flush()
 
@@ -205,4 +205,166 @@ class UserRepository:
         users = list(result.scalars().all())
 
         return users, total
+
+    async def update(self, user: UserModel) -> UserModel:
+        """Update a user record.
+
+        Args:
+            user: User model with updated fields.
+
+        Returns:
+            Updated user model.
+        """
+        self.session.add(user)
+        await self.session.flush()
+        # Refresh to get updated values from triggers (e.g., updated_at)
+        await self.session.refresh(user)
+        return user
+
+    async def soft_delete(self, user_id: str) -> UserModel | None:
+        """Soft delete a user by setting is_active=False.
+
+        Args:
+            user_id: ID of the user to deactivate.
+
+        Returns:
+            Updated user model if found, None otherwise.
+        """
+        await self.session.execute(
+            update(UserModel)
+            .where(UserModel.id == user_id)
+            .values(is_active=False)
+        )
+        await self.session.flush()
+        return await self.get_by_id(user_id)
+
+    async def list_paginated(
+        self,
+        account_id: str | None = None,
+        role_id: int | None = None,
+        is_active: bool | None = None,
+        search: str | None = None,
+        skip: int = 0,
+        limit: int = 30,
+        sort_field: str = "created_at",
+        sort_desc: bool = True,
+    ) -> tuple[list[UserModel], int]:
+        """List users with optional filters and pagination.
+
+        Args:
+            account_id: Filter by account ID.
+            role_id: Filter by role ID.
+            is_active: Filter by active status.
+            search: Search by email (case-insensitive partial match).
+            skip: Number of records to skip (pagination offset).
+            limit: Maximum number of records to return.
+            sort_field: Field to sort by (default: created_at).
+            sort_desc: Sort descending if True, ascending if False.
+
+        Returns:
+            Tuple of (list of users, total count).
+        """
+        from sqlalchemy import func
+        from sqlalchemy.orm import selectinload
+
+        # Build base query with eager loads
+        query = select(UserModel).options(
+            selectinload(UserModel.account),
+            selectinload(UserModel.role),
+        )
+
+        # Build conditions
+        conditions = []
+
+        if account_id:
+            conditions.append(UserModel.account_id == account_id)
+
+        if role_id:
+            conditions.append(UserModel.role_id == role_id)
+
+        if is_active is not None:
+            conditions.append(UserModel.is_active == is_active)
+
+        if search:
+            conditions.append(UserModel.email.ilike(f"%{search}%"))
+
+        # Apply conditions
+        if conditions:
+            query = query.where(and_(*conditions))
+
+        # Get total count - use subquery when conditions exist for accurate count
+        if conditions:
+            # For filtered queries, count from subquery
+            total = (await self.session.execute(
+                select(func.count()).select_from(query.subquery())
+            )).scalar_one() or 0
+        else:
+            # For unfiltered queries, count directly from table
+            total = (await self.session.execute(
+                select(func.count(UserModel.id))
+            )).scalar_one() or 0
+
+        # Apply sorting
+        sort_column = getattr(UserModel, sort_field, UserModel.created_at)
+        if sort_desc:
+            query = query.order_by(sort_column.desc())
+        else:
+            query = query.order_by(sort_column.asc())
+
+        # Apply pagination
+        query = query.offset(skip).limit(limit)
+
+        # Execute query
+        result = await self.session.execute(query)
+        users = list(result.scalars().all())
+
+        return users, total
+
+    async def update_password(self, user_id: str, password_hash: str) -> UserModel | None:
+        """Update a user's password.
+
+        Args:
+            user_id: ID of the user to update.
+            password_hash: New password hash (Argon2).
+
+        Returns:
+            Updated user model if found, None otherwise.
+        """
+        await self.session.execute(
+            update(UserModel)
+            .where(UserModel.id == user_id)
+            .values(password_hash=password_hash)
+        )
+        await self.session.flush()
+        return await self.get_by_id(user_id)
+
+    async def invalidate_refresh_tokens(self, user_id: str) -> None:
+        """Delete all refresh tokens for a user.
+
+        This forces the user to log in again on all devices.
+
+        Args:
+            user_id: ID of the user whose tokens to invalidate.
+        """
+        from snackbase.infrastructure.persistence.models import RefreshTokenModel
+
+        await self.session.execute(
+            select(RefreshTokenModel)
+            .where(RefreshTokenModel.user_id == user_id)
+        )
+        # Delete all refresh tokens for the user
+        await self.session.execute(
+            select(RefreshTokenModel).where(
+                RefreshTokenModel.user_id == user_id
+            )
+        )
+        # Actually delete them
+        from sqlalchemy import delete as sql_delete
+
+        await self.session.execute(
+            sql_delete(RefreshTokenModel).where(
+                RefreshTokenModel.user_id == user_id
+            )
+        )
+        await self.session.flush()
 
