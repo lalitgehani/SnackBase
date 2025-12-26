@@ -112,6 +112,7 @@ async def create_user(
     )
 
     created_user = await user_repo.create(new_user)
+    await session.commit()
 
     return UserResponse(
         id=created_user.id,
@@ -287,6 +288,7 @@ async def update_user(
         user.is_active = user_data.is_active
 
     updated_user = await user_repo.update(user)
+    await session.commit()
 
     # Reload relationships to get fresh data
     await session.refresh(updated_user, ["account", "role"])
@@ -314,6 +316,7 @@ async def reset_user_password(
     password_data: PasswordResetRequest,
     current_user: Annotated[SuperadminUser, Depends(require_superadmin)],
     user_repo: UserRepo,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> dict[str, str]:
     """Reset a user's password (superadmin only).
 
@@ -352,6 +355,8 @@ async def reset_user_password(
 
     # Invalidate all refresh tokens for the user
     await user_repo.invalidate_refresh_tokens(user_id)
+    
+    await session.commit()
 
     logger.info(
         "password_reset",
@@ -371,6 +376,7 @@ async def deactivate_user(
     user_id: str,
     current_user: Annotated[SuperadminUser, Depends(require_superadmin)],
     user_repo: UserRepo,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> None:
     """Deactivate a user (soft delete via is_active flag) (superadmin only).
 
@@ -394,6 +400,7 @@ async def deactivate_user(
 
     # Soft delete (set is_active=False)
     await user_repo.soft_delete(user_id)
+    await session.commit()
 
     logger.info(
         "user_deactivated",
