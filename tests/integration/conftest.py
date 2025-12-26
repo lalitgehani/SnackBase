@@ -92,7 +92,7 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
 async def superadmin_token(db_session: AsyncSession) -> str:
     """Create a superadmin user and return their access token."""
     # Create valid account
-    account = AccountModel(id="SA0000", name="System Admin", slug="system-admin")
+    account = AccountModel(id="SY0000", name="System Admin", slug="system-admin")
     db_session.add(account)
     
     # Get admin role
@@ -102,7 +102,7 @@ async def superadmin_token(db_session: AsyncSession) -> str:
     user = UserModel(
         id="superadmin",
         email="superadmin@snackbase.com",
-        account_id="SA0000",
+        account_id="SY0000",
         password_hash="hashed_secret",
         role=admin_role,
         is_active=True,

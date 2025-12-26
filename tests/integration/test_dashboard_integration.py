@@ -208,12 +208,20 @@ async def test_dashboard_stats_recent_registrations_order(
     registrations = data["recent_registrations"]
     if len(registrations) >= 2:
         for i in range(len(registrations) - 1):
-            current_time = datetime.fromisoformat(
-                registrations[i]["created_at"].replace("Z", "+00:00")
-            )
-            next_time = datetime.fromisoformat(
-                registrations[i + 1]["created_at"].replace("Z", "+00:00")
-            )
+            # Parse datetimes, handling both Z suffix and +00:00 format
+            current_str = registrations[i]["created_at"]
+            next_str = registrations[i + 1]["created_at"]
+            
+            # Normalize Z to +00:00 for fromisoformat compatibility
+            current_time = datetime.fromisoformat(current_str.replace("Z", "+00:00"))
+            next_time = datetime.fromisoformat(next_str.replace("Z", "+00:00"))
+            
+            # Ensure both are timezone-aware (add UTC if naive)
+            if current_time.tzinfo is None:
+                current_time = current_time.replace(tzinfo=timezone.utc)
+            if next_time.tzinfo is None:
+                next_time = next_time.replace(tzinfo=timezone.utc)
+            
             assert current_time >= next_time, "Registrations should be in DESC order"
 
 
@@ -269,7 +277,7 @@ async def test_dashboard_stats_active_sessions_count(
     await db_session.commit()
 
     # Make request
-    response = await async_client.get(
+    response = await client.get(
         "/api/v1/dashboard/stats",
         headers={"Authorization": f"Bearer {superadmin_token}"},
     )
