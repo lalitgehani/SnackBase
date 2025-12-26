@@ -167,3 +167,42 @@ class UserRepository:
         )
         return list(result.scalars().all())
 
+    async def get_by_account_paginated(
+        self,
+        account_id: str,
+        page: int = 1,
+        page_size: int = 25,
+    ) -> tuple[list[UserModel], int]:
+        """Get paginated list of users for a specific account.
+
+        Args:
+            account_id: Account ID to filter by.
+            page: Page number (1-indexed).
+            page_size: Number of items per page.
+
+        Returns:
+            Tuple of (list of users, total count).
+        """
+        from sqlalchemy import func
+        from sqlalchemy.orm import selectinload
+
+        # Get total count
+        count_result = await self.session.execute(
+            select(func.count(UserModel.id)).where(UserModel.account_id == account_id)
+        )
+        total = count_result.scalar_one() or 0
+
+        # Get paginated users
+        offset = (page - 1) * page_size
+        result = await self.session.execute(
+            select(UserModel)
+            .where(UserModel.account_id == account_id)
+            .options(selectinload(UserModel.role))
+            .order_by(UserModel.created_at.desc())
+            .offset(offset)
+            .limit(page_size)
+        )
+        users = list(result.scalars().all())
+
+        return users, total
+

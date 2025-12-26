@@ -44,13 +44,28 @@ from snackbase.infrastructure.api.schemas.dashboard_schemas import (
     RecentRegistration,
     SystemHealthStats,
 )
+from snackbase.infrastructure.api.schemas.account_schemas import (
+    AccountDetailResponse,
+    AccountListItem,
+    AccountListResponse,
+    AccountUserResponse,
+    AccountUsersResponse,
+    CreateAccountRequest,
+    UpdateAccountRequest,
+)
 
 __all__ = [
+    "AccountDetailResponse",
+    "AccountListItem",
+    "AccountListResponse",
     "AccountResponse",
+    "AccountUserResponse",
+    "AccountUsersResponse",
     "AuditLogEntry",
     "AuthResponse",
     "CollectionResponse",
     "ConflictErrorResponse",
+    "CreateAccountRequest",
     "CreateCollectionRequest",
     "CreatePermissionRequest",
     "DashboardStats",
@@ -75,6 +90,7 @@ __all__ = [
     "SchemaFieldResponse",
     "SystemHealthStats",
     "TokenRefreshResponse",
+    "UpdateAccountRequest",
     "UserResponse",
     "ValidationErrorDetail",
     "ValidationErrorResponse",

@@ -39,11 +39,13 @@ from snackbase.domain.services.superadmin_service import (
     SuperadminService,
 )
 from snackbase.domain.services.dashboard_service import DashboardService
+from snackbase.domain.services.account_service import AccountService
 
 
 __all__ = [
     "AccountIdExhaustedError",
     "AccountIdGenerator",
+    "AccountService",
     "CollectionValidationError",
     "CollectionValidator",
     "DashboardService",

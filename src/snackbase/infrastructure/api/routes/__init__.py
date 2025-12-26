@@ -1,6 +1,7 @@
 """API Routes for SnackBase."""
 
 from snackbase.infrastructure.api.routes.auth_router import router as auth_router
+from .accounts_router import router as accounts_router
 from .collections_router import router as collections_router
 from .dashboard_router import router as dashboard_router
 from .groups_router import router as groups_router
@@ -10,6 +11,7 @@ from .permissions_router import router as permissions_router
 from .records_router import router as records_router
 
 __all__ = [
+    "accounts_router",
     "auth_router",
     "collections_router",
     "dashboard_router",
