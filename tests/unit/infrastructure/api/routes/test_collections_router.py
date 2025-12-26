@@ -41,10 +41,8 @@ def valid_request():
 @patch("snackbase.infrastructure.api.routes.collections_router.TableBuilder")
 @patch("snackbase.infrastructure.api.routes.collections_router.CollectionRepository")
 @patch("snackbase.infrastructure.api.routes.collections_router.CollectionValidator")
-@patch("snackbase.infrastructure.api.routes.collections_router.get_db_manager")
 @pytest.mark.asyncio
 async def test_create_collection_success(
-    mock_get_db_manager,
     mock_validator,
     mock_repo_cls,
     mock_table_builder,
@@ -62,6 +60,10 @@ async def test_create_collection_success(
     
     mock_table_builder.create_table = AsyncMock()
     mock_table_builder.generate_table_name.return_value = "col_testcollection"
+    
+    # Mock session.bind to return a mock engine
+    mock_engine = MagicMock()
+    mock_session.bind = mock_engine
     
     # Mock session.refresh to populate timestamps
     async def mock_refresh(instance):
@@ -137,10 +139,8 @@ async def test_create_collection_name_conflict(
 @patch("snackbase.infrastructure.api.routes.collections_router.TableBuilder")
 @patch("snackbase.infrastructure.api.routes.collections_router.CollectionRepository")
 @patch("snackbase.infrastructure.api.routes.collections_router.CollectionValidator")
-@patch("snackbase.infrastructure.api.routes.collections_router.get_db_manager")
 @pytest.mark.asyncio
 async def test_create_collection_table_creation_error(
-    mock_get_db_manager,
     mock_validator,
     mock_repo_cls,
     mock_table_builder,
@@ -157,7 +157,10 @@ async def test_create_collection_table_creation_error(
     # Make table creation fail
     mock_table_builder.create_table = AsyncMock(side_effect=Exception("DB error"))
     mock_table_builder.generate_table_name.return_value = "col_testcollection"
-
+    
+    # Mock session.bind to return a mock engine
+    mock_engine = MagicMock()
+    mock_session.bind = mock_engine
     
     # Execute
     response = await create_collection(valid_request, mock_user, mock_session)
@@ -171,10 +174,8 @@ async def test_create_collection_table_creation_error(
 @patch("snackbase.infrastructure.api.routes.collections_router.TableBuilder")
 @patch("snackbase.infrastructure.api.routes.collections_router.CollectionRepository")
 @patch("snackbase.infrastructure.api.routes.collections_router.CollectionValidator")
-@patch("snackbase.infrastructure.api.routes.collections_router.get_db_manager")
 @pytest.mark.asyncio
 async def test_create_collection_with_pii_fields(
-    mock_get_db_manager,
     mock_validator,
     mock_repo_cls,
     mock_table_builder,
@@ -201,6 +202,10 @@ async def test_create_collection_with_pii_fields(
     
     mock_table_builder.create_table = AsyncMock()
     mock_table_builder.generate_table_name.return_value = "col_customers"
+    
+    # Mock session.bind to return a mock engine
+    mock_engine = MagicMock()
+    mock_session.bind = mock_engine
     
     # Mock session.refresh to populate timestamps
     async def mock_refresh(instance):

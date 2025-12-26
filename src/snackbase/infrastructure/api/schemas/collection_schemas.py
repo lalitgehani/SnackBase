@@ -134,3 +134,52 @@ class CollectionResponse(BaseModel):
     updated_at: datetime = Field(..., description="When the collection was last updated")
 
     model_config = {"from_attributes": True, "populate_by_name": True}
+
+
+class CollectionListItem(BaseModel):
+    """Collection item for list view."""
+
+    id: str = Field(..., description="Collection ID (UUID)")
+    name: str = Field(..., description="Collection name")
+    table_name: str = Field(..., description="Physical table name in database")
+    fields_count: int = Field(..., description="Number of fields in the schema")
+    records_count: int = Field(default=0, description="Number of records in the collection")
+    created_at: datetime = Field(..., description="When the collection was created")
+
+    model_config = {"from_attributes": True}
+
+
+class CollectionListResponse(BaseModel):
+    """Paginated list of collections."""
+
+    items: list[CollectionListItem] = Field(..., description="List of collections")
+    total: int = Field(..., description="Total number of collections")
+    page: int = Field(..., description="Current page number")
+    page_size: int = Field(..., description="Number of items per page")
+    total_pages: int = Field(..., description="Total number of pages")
+
+
+class UpdateCollectionRequest(BaseModel):
+    """Request body for updating a collection schema."""
+
+    fields: list[FieldDefinition] = Field(
+        ...,
+        min_length=1,
+        description="Updated list of field definitions (at least one required)",
+        alias="schema",
+    )
+
+    model_config = {"populate_by_name": True}
+
+
+class GetCollectionsParams(BaseModel):
+    """Query parameters for listing collections."""
+
+    page: int = Field(default=1, ge=1, description="Page number")
+    page_size: int = Field(default=25, ge=1, le=100, description="Items per page")
+    sort_by: str = Field(default="created_at", description="Field to sort by")
+    sort_order: str = Field(default="desc", description="Sort order: asc or desc")
+    search: str | None = Field(default=None, description="Search term for name or ID")
+
+    model_config = {"from_attributes": True}
+

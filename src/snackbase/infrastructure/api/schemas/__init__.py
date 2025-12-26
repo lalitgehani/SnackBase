@@ -13,10 +13,14 @@ from snackbase.infrastructure.api.schemas.auth_schemas import (
     ValidationErrorResponse,
 )
 from snackbase.infrastructure.api.schemas.collection_schemas import (
+    CollectionListItem,
+    CollectionListResponse,
     CollectionResponse,
     CreateCollectionRequest,
     FieldDefinition,
+    GetCollectionsParams,
     SchemaFieldResponse,
+    UpdateCollectionRequest,
 )
 from snackbase.infrastructure.api.schemas.invitation_schemas import (
     InvitationAcceptRequest,
@@ -63,6 +67,8 @@ __all__ = [
     "AccountUsersResponse",
     "AuditLogEntry",
     "AuthResponse",
+    "CollectionListItem",
+    "CollectionListResponse",
     "CollectionResponse",
     "ConflictErrorResponse",
     "CreateAccountRequest",
@@ -70,6 +76,7 @@ __all__ = [
     "CreatePermissionRequest",
     "DashboardStats",
     "FieldDefinition",
+    "GetCollectionsParams",
     "InvitationAcceptRequest",
     "InvitationCreateRequest",
     "InvitationListResponse",
@@ -91,6 +98,7 @@ __all__ = [
     "SystemHealthStats",
     "TokenRefreshResponse",
     "UpdateAccountRequest",
+    "UpdateCollectionRequest",
     "UserResponse",
     "ValidationErrorDetail",
     "ValidationErrorResponse",

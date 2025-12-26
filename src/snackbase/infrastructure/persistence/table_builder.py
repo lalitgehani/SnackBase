@@ -99,7 +99,7 @@ class TableBuilder:
         if field_type == FieldType.REFERENCE.value:
             target_collection = field.get("collection", "")
             on_delete = field.get("on_delete", OnDeleteAction.RESTRICT.value).upper()
-            
+
             # Map on_delete values to SQL
             on_delete_map = {
                 "CASCADE": "CASCADE",
@@ -107,7 +107,7 @@ class TableBuilder:
                 "RESTRICT": "RESTRICT",
             }
             on_delete_sql = on_delete_map.get(on_delete.replace("_", ""), "RESTRICT")
-            
+
             # Generate target table name
             target_table = cls.generate_table_name(target_collection)
             fk_constraint = f'FOREIGN KEY ("{name}") REFERENCES "{target_table}"("id") ON DELETE {on_delete_sql}'
@@ -126,10 +126,10 @@ class TableBuilder:
             The DDL statement as a string.
         """
         table_name = cls.generate_table_name(collection_name)
-        
+
         # Start with system columns
         column_defs = [f'"{col}" {col_type}' for col, col_type in SYSTEM_COLUMNS]
-        
+
         # Build user field columns
         fk_constraints = []
         for field in schema:
@@ -173,7 +173,7 @@ class TableBuilder:
         for field in schema:
             name = field["name"]
             field_type = field.get("type", "").lower()
-            
+
             if field_type == FieldType.REFERENCE.value:
                 indexes.append(
                     f'CREATE INDEX "idx_{table_name}_{name}" ON "{table_name}"("{name}");'
@@ -193,7 +193,7 @@ class TableBuilder:
             schema: List of field definitions.
         """
         table_name = cls.generate_table_name(collection_name)
-        
+
         # Build DDL statements
         create_table_ddl = cls.build_create_table_ddl(collection_name, schema)
         index_ddls = cls.build_index_ddl(collection_name, schema)
@@ -228,13 +228,114 @@ class TableBuilder:
             True if table exists, False otherwise.
         """
         table_name = cls.generate_table_name(collection_name)
-        
+
         # SQLite-specific query to check table existence
         check_sql = """
-            SELECT name FROM sqlite_master 
+            SELECT name FROM sqlite_master
             WHERE type='table' AND name=:table_name
         """
-        
+
         async with engine.connect() as conn:
             result = await conn.execute(text(check_sql), {"table_name": table_name})
             return result.scalar_one_or_none() is not None
+
+    @classmethod
+    def build_add_column_ddl(
+        cls, collection_name: str, fields: list[dict[str, Any]]
+    ) -> list[str]:
+        """Build ALTER TABLE ADD COLUMN statements for new fields.
+
+        Args:
+            collection_name: The collection name.
+            fields: List of new field definitions to add.
+
+        Returns:
+            List of DDL statements.
+        """
+        table_name = cls.generate_table_name(collection_name)
+        ddl_statements = []
+
+        for field in fields:
+            name = field["name"]
+            field_type = field["type"].lower()
+            sql_type = FIELD_TYPE_TO_SQL.get(field_type, "TEXT")
+
+            # Build column definition parts
+            parts = [f'"{name}"', sql_type]
+
+            # Note: SQLite doesn't support adding NOT NULL columns without a default
+            # So we only add NOT NULL if there's a default value
+            default = field.get("default")
+            if default is not None:
+                if isinstance(default, str):
+                    parts.append(f"DEFAULT '{default}'")
+                elif isinstance(default, bool):
+                    parts.append(f"DEFAULT {1 if default else 0}")
+                else:
+                    parts.append(f"DEFAULT {default}")
+
+                # Now we can add NOT NULL if required
+                if field.get("required", False):
+                    parts.append("NOT NULL")
+
+            column_def = " ".join(parts)
+            ddl = f'ALTER TABLE "{table_name}" ADD COLUMN {column_def};'
+            ddl_statements.append(ddl)
+
+        return ddl_statements
+
+    @classmethod
+    async def add_columns(
+        cls, engine: AsyncEngine, collection_name: str, fields: list[dict[str, Any]]
+    ) -> None:
+        """Execute ALTER TABLE to add new columns.
+
+        Args:
+            engine: SQLAlchemy async engine.
+            collection_name: The collection name.
+            fields: List of new field definitions to add.
+        """
+        table_name = cls.generate_table_name(collection_name)
+        ddl_statements = cls.build_add_column_ddl(collection_name, fields)
+
+        logger.info(
+            "Adding columns to collection table",
+            table_name=table_name,
+            collection_name=collection_name,
+            field_count=len(fields),
+        )
+
+        async with engine.begin() as conn:
+            for ddl in ddl_statements:
+                await conn.execute(text(ddl))
+                logger.debug("Column added", ddl=ddl)
+
+        logger.info(
+            "Columns added successfully",
+            table_name=table_name,
+            field_count=len(fields),
+        )
+
+    @classmethod
+    async def drop_table(cls, engine: AsyncEngine, collection_name: str) -> None:
+        """Drop a collection table.
+
+        Args:
+            engine: SQLAlchemy async engine.
+            collection_name: The collection name.
+        """
+        table_name = cls.generate_table_name(collection_name)
+
+        logger.info(
+            "Dropping collection table",
+            table_name=table_name,
+            collection_name=collection_name,
+        )
+
+        async with engine.begin() as conn:
+            ddl = f'DROP TABLE IF EXISTS "{table_name}";'
+            await conn.execute(text(ddl))
+            logger.debug("Table dropped", ddl=ddl)
+
+        logger.info("Collection table dropped successfully", table_name=table_name)
+

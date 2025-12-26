@@ -15,6 +15,7 @@ from snackbase.domain.services.collection_validator import (
     OnDeleteAction,
     RESERVED_FIELD_NAMES,
 )
+from snackbase.domain.services.collection_service import CollectionService
 from snackbase.domain.services.password_validator import (
     PasswordValidationError,
     PasswordValidator,
@@ -46,6 +47,7 @@ __all__ = [
     "AccountIdExhaustedError",
     "AccountIdGenerator",
     "AccountService",
+    "CollectionService",
     "CollectionValidationError",
     "CollectionValidator",
     "DashboardService",
