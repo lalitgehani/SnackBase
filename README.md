@@ -2,11 +2,16 @@
 
 > Open-source Backend-as-a-Service (BaaS) - A self-hosted alternative to PocketBase
 
-SnackBase is a Python/FastAPI-based BaaS providing auto-generated REST APIs, multi-tenancy, row-level security, authentication, and GxP-compliant audit logging.
+[![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green.svg)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-19-cyan.svg)](https://react.dev/)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+SnackBase is a Python/FastAPI-based BaaS providing auto-generated REST APIs, multi-tenancy, row-level security, authentication, and comprehensive admin UI.
 
 ## Status
 
-**Phase 1: Foundation & MVP** (11/13 features complete)
+**Phase 1: Foundation & MVP** (Complete except for audit logging)
 
 - [x] F1.1: Project Scaffolding & Architecture Setup
 - [x] F1.2: Database Schema & Core System Tables
@@ -18,8 +23,10 @@ SnackBase is a Python/FastAPI-based BaaS providing auto-generated REST APIs, mul
 - [x] F1.11: User Invitation System
 - [x] F1.12: Hook System Infrastructure
 - [x] F1.13: Account ID Generator
-- [x] Additional: Full React Admin UI
-- [x] Additional: Rule Engine & Permission System
+- [x] Full React Admin UI with Dashboard
+- [x] Rule Engine & Permission System
+- [x] Group Management
+- [x] User Management UI
 - [ ] GxP-compliant audit logging
 - [ ] Real-time subscriptions (WebSocket/SSE)
 
@@ -271,12 +278,15 @@ uv run pytest -k "test_name"               # Run specific test
 
 ### Frontend
 
+**Tech Stack**: React 19 + React Router v7 + Vite 7 + TailwindCSS 4 + Radix UI + TanStack Query + Zustand + Zod
+
 ```bash
 cd ui
 npm run dev        # Start dev server (Vite)
 npm run build      # Production build
 npm run lint       # ESLint
 npm run preview    # Preview production build
+npx shadcn@latest add {component}  # Install ShadCN components
 ```
 
 ## Architecture
@@ -334,9 +344,9 @@ status in ["draft", "published"]
 See [PRD_PHASES.md](PRD_PHASES.md) for detailed specifications.
 
 - [x] **Phase 1**: Foundation & MVP - Multi-tenancy, auth, dynamic collections, UI
-- [x] **Phase 2**: Security & Authorization - RLS, permissions, rule engine
-- [ ] **Phase 3**: Operations - Audit logging, migrations
-- [ ] **Phase 4**: Advanced Features - Real-time, file storage
+- [x] **Phase 2**: Security & Authorization - RBAC, permissions, rule engine, groups
+- [ ] **Phase 3**: Operations - GxP audit logging, migrations
+- [ ] **Phase 4**: Advanced Features - Real-time (WebSocket/SSE), file storage
 - [ ] **Phase 5**: Enterprise - OAuth/SAML, rate limiting, monitoring
 
 ## Contributing
