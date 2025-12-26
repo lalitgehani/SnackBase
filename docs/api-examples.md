@@ -8,9 +8,15 @@ Complete guide to using the SnackBase REST API with practical examples.
 
 - [Getting Started](#getting-started)
 - [Authentication](#authentication)
+- [Accounts Management](#accounts-management)
 - [Collections](#collections)
 - [Records (CRUD)](#records-crud)
+- [Roles & Permissions](#roles--permissions)
+- [Groups](#groups)
 - [Invitations](#invitations)
+- [Macros](#macros)
+- [Dashboard](#dashboard)
+- [Health Checks](#health-checks)
 - [Error Handling](#error-handling)
 - [Best Practices](#best-practices)
 
@@ -59,6 +65,8 @@ Create a new account with the first admin user.
 
 **Endpoint**: `POST /api/v1/auth/register`
 
+**Authentication**: None (public endpoint)
+
 **Request**:
 
 ```bash
@@ -79,9 +87,8 @@ curl -X POST http://localhost:8000/api/v1/auth/register \
   "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "expires_in": 3600,
-  "token_type": "bearer",
   "account": {
-    "id": "AC1234",
+    "id": "AB1234",
     "slug": "acme",
     "name": "Acme Corporation",
     "created_at": "2025-12-24T22:00:00Z"
@@ -98,27 +105,36 @@ curl -X POST http://localhost:8000/api/v1/auth/register \
 
 **Validation Rules**:
 
-- `account_name`: 3-64 characters
+- `account_name`: 1-255 characters
 - `account_slug`: 3-32 characters, alphanumeric + hyphens, starts with letter (optional, auto-generated from name)
 - `email`: Valid email format
 - `password`: Min 12 characters, must include uppercase, lowercase, number, and special character
 
+**Password Strength Requirements**:
+- Minimum 12 characters
+- At least one uppercase letter (A-Z)
+- At least one lowercase letter (a-z)
+- At least one digit (0-9)
+- At least one special character: `!@#$%^&*()_+\-=\[\]{};':\"\\|,.<>\/?~`
+
 **Error Examples**:
 
-```bash
-# Weak password
+```json
+// Weak password
 {
-  "detail": "Password must be at least 12 characters and include uppercase, lowercase, number, and special character"
+  "error": "Validation error",
+  "details": [
+    {
+      "field": "password",
+      "message": "Password must be at least 12 characters and include uppercase, lowercase, number, and special character"
+    }
+  ]
 }
 
-# Duplicate slug
+// Duplicate slug
 {
-  "detail": "Account slug 'acme' already exists"
-}
-
-# Invalid email
-{
-  "detail": "Invalid email format"
+  "error": "Conflict",
+  "message": "Account slug 'acme' already exists"
 }
 ```
 
@@ -130,13 +146,15 @@ Authenticate with email, password, and account identifier.
 
 **Endpoint**: `POST /api/v1/auth/login`
 
+**Authentication**: None (public endpoint)
+
 **Request**:
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{
-    "account_identifier": "acme",
+    "account": "acme",
     "email": "admin@acme.com",
     "password": "SecurePass123!"
   }'
@@ -149,9 +167,8 @@ curl -X POST http://localhost:8000/api/v1/auth/login \
   "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "expires_in": 3600,
-  "token_type": "bearer",
   "account": {
-    "id": "AC1234",
+    "id": "AB1234",
     "slug": "acme",
     "name": "Acme Corporation"
   },
@@ -164,23 +181,20 @@ curl -X POST http://localhost:8000/api/v1/auth/login \
 ```
 
 **Account Identifier Options**:
-
 - Account slug: `"acme"`
-- Account ID: `"AC1234"`
+- Account ID: `"AB1234"`
 
 **Error Examples**:
 
-```bash
-# Invalid credentials (401)
+```json
+// Invalid credentials (401)
 {
-  "detail": "Invalid credentials"
-}
-
-# Inactive user (401)
-{
-  "detail": "User account is inactive"
+  "error": "Authentication failed",
+  "message": "Invalid credentials"
 }
 ```
+
+**Note**: All authentication failures return a generic 401 message (prevents user enumeration).
 
 ---
 
@@ -189,6 +203,8 @@ curl -X POST http://localhost:8000/api/v1/auth/login \
 Get a new access token using a refresh token.
 
 **Endpoint**: `POST /api/v1/auth/refresh`
+
+**Authentication**: None (uses refresh token)
 
 **Request**:
 
@@ -206,14 +222,12 @@ curl -X POST http://localhost:8000/api/v1/auth/refresh \
 {
   "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "expires_in": 3600,
-  "token_type": "bearer"
+  "expires_in": 3600
 }
 ```
 
 **Notes**:
-
-- Old refresh token is invalidated after successful refresh
+- Old refresh token is invalidated after successful refresh (token rotation)
 - Access tokens expire in 1 hour (configurable)
 - Refresh tokens expire in 7 days (configurable)
 
@@ -224,6 +238,8 @@ curl -X POST http://localhost:8000/api/v1/auth/refresh \
 Get information about the authenticated user.
 
 **Endpoint**: `GET /api/v1/auth/me`
+
+**Authentication**: Required (Bearer token)
 
 **Request**:
 
@@ -236,13 +252,198 @@ curl -X GET http://localhost:8000/api/v1/auth/me \
 
 ```json
 {
-  "id": "usr_abc123",
+  "user_id": "usr_abc123",
+  "account_id": "AB1234",
   "email": "admin@acme.com",
-  "role": "admin",
-  "account_id": "AC1234",
-  "is_active": true,
+  "role": "admin"
+}
+```
+
+---
+
+## Accounts Management
+
+All account management endpoints require **Superadmin** access (user must belong to system account `SY0000`).
+
+### 1. List Accounts
+
+**Endpoint**: `GET /api/v1/accounts`
+
+**Authentication**: Superadmin required
+
+**Query Parameters**:
+
+| Parameter | Type | Default | Constraints |
+|-----------|------|---------|-------------|
+| `page` | int | 1 | >= 1 |
+| `page_size` | int | 25 | >= 1, <= 100 |
+| `sort_by` | str | "created_at" | id, slug, name, created_at |
+| `sort_order` | str | "desc" | asc, desc |
+| `search` | str | null | - |
+
+**Request**:
+
+```bash
+curl -X GET "http://localhost:8000/api/v1/accounts?page=1&page_size=25" \
+  -H "Authorization: Bearer <superadmin_token>"
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "items": [
+    {
+      "id": "AB1234",
+      "slug": "acme",
+      "name": "Acme Corporation",
+      "created_at": "2025-12-24T22:00:00Z",
+      "user_count": 5,
+      "status": "active"
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "page_size": 25,
+  "total_pages": 1
+}
+```
+
+---
+
+### 2. Get Account Details
+
+**Endpoint**: `GET /api/v1/accounts/{account_id}`
+
+**Authentication**: Superadmin required
+
+**Request**:
+
+```bash
+curl -X GET http://localhost:8000/api/v1/accounts/AB1234 \
+  -H "Authorization: Bearer <superadmin_token>"
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "id": "AB1234",
+  "slug": "acme",
+  "name": "Acme Corporation",
   "created_at": "2025-12-24T22:00:00Z",
-  "last_login": "2025-12-24T22:30:00Z"
+  "updated_at": "2025-12-24T22:00:00Z",
+  "user_count": 5,
+  "collections_used": []
+}
+```
+
+---
+
+### 3. Create Account
+
+**Endpoint**: `POST /api/v1/accounts`
+
+**Authentication**: Superadmin required
+
+**Request**:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/accounts \
+  -H "Authorization: Bearer <superadmin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "New Company LLC",
+    "slug": "newcompany"
+  }'
+```
+
+**Response** (201 Created):
+
+```json
+{
+  "id": "AB1235",
+  "slug": "newcompany",
+  "name": "New Company LLC",
+  "created_at": "2025-12-24T22:00:00Z",
+  "updated_at": "2025-12-24T22:00:00Z",
+  "user_count": 0,
+  "collections_used": []
+}
+```
+
+---
+
+### 4. Update Account
+
+**Endpoint**: `PUT /api/v1/accounts/{account_id}`
+
+**Authentication**: Superadmin required
+
+**Note**: Only the account `name` can be updated. Account ID and slug are immutable.
+
+**Request**:
+
+```bash
+curl -X PUT http://localhost:8000/api/v1/accounts/AB1234 \
+  -H "Authorization: Bearer <superadmin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Acme Corporation Updated"
+  }'
+```
+
+---
+
+### 5. Delete Account
+
+**Endpoint**: `DELETE /api/v1/accounts/{account_id}`
+
+**Authentication**: Superadmin required
+
+**Request**:
+
+```bash
+curl -X DELETE http://localhost:8000/api/v1/accounts/AB1234 \
+  -H "Authorization: Bearer <superadmin_token>"
+```
+
+**Response**: `204 No Content` (empty body)
+
+**Note**: System account (`SY0000`) cannot be deleted.
+
+---
+
+### 6. Get Account Users
+
+**Endpoint**: `GET /api/v1/accounts/{account_id}/users`
+
+**Authentication**: Superadmin required
+
+**Request**:
+
+```bash
+curl -X GET "http://localhost:8000/api/v1/accounts/AB1234/users?page=1&page_size=25" \
+  -H "Authorization: Bearer <superadmin_token>"
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "items": [
+    {
+      "id": "usr_abc123",
+      "email": "admin@acme.com",
+      "role": "admin",
+      "is_active": true,
+      "created_at": "2025-12-24T22:00:00Z"
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "page_size": 25,
+  "total_pages": 1
 }
 ```
 
@@ -250,19 +451,133 @@ curl -X GET http://localhost:8000/api/v1/auth/me \
 
 ## Collections
 
-### 1. Create Collection
+All collection endpoints require **Superadmin** access.
 
-Create a new dynamic collection with a custom schema.
+### 1. List Collections
 
-**Endpoint**: `POST /api/v1/collections`
+**Endpoint**: `GET /api/v1/collections/`
 
-**Authentication**: Requires superadmin role
+**Authentication**: Superadmin required
+
+**Query Parameters**:
+
+| Parameter | Type | Default | Constraints |
+|-----------|------|---------|-------------|
+| `page` | int | 1 | >= 1 |
+| `page_size` | int | 25 | >= 1, <= 100 |
+| `sort_by` | str | "created_at" | - |
+| `sort_order` | str | "desc" | asc, desc |
+| `search` | str | null | - |
 
 **Request**:
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/collections \
-  -H "Authorization: Bearer <token>" \
+curl -X GET "http://localhost:8000/api/v1/collections/?page=1&page_size=25" \
+  -H "Authorization: Bearer <superadmin_token>"
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "items": [
+    {
+      "id": "col_xyz789",
+      "name": "posts",
+      "table_name": "col_posts",
+      "fields_count": 5,
+      "records_count": 42,
+      "created_at": "2025-12-24T22:00:00Z"
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "page_size": 25,
+  "total_pages": 1
+}
+```
+
+---
+
+### 2. Get Collection Names
+
+**Endpoint**: `GET /api/v1/collections/names`
+
+**Authentication**: Superadmin required
+
+**Response** (200 OK):
+
+```json
+{
+  "names": ["posts", "users", "products"],
+  "total": 3
+}
+```
+
+---
+
+### 3. Get Single Collection
+
+**Endpoint**: `GET /api/v1/collections/{collection_id}`
+
+**Authentication**: Superadmin required
+
+**Request**:
+
+```bash
+curl -X GET http://localhost:8000/api/v1/collections/col_xyz789 \
+  -H "Authorization: Bearer <superadmin_token>"
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "id": "col_xyz789",
+  "name": "posts",
+  "table_name": "col_posts",
+  "fields": [
+    {
+      "name": "title",
+      "type": "text",
+      "required": true,
+      "default": null,
+      "unique": false,
+      "options": null,
+      "pii": false
+    },
+    {
+      "name": "content",
+      "type": "text",
+      "required": true,
+      "pii": false
+    },
+    {
+      "name": "author_id",
+      "type": "reference",
+      "collection": "users",
+      "on_delete": "cascade",
+      "required": false
+    }
+  ],
+  "created_at": "2025-12-24T22:00:00Z",
+  "updated_at": "2025-12-24T22:00:00Z"
+}
+```
+
+---
+
+### 4. Create Collection
+
+**Endpoint**: `POST /api/v1/collections/`
+
+**Authentication**: Superadmin required
+
+**Request**:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/collections/ \
+  -H "Authorization: Bearer <superadmin_token>" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "posts",
@@ -292,6 +607,29 @@ curl -X POST http://localhost:8000/api/v1/collections \
         "type": "reference",
         "collection": "users",
         "on_delete": "cascade"
+      },
+      {
+        "name": "status",
+        "type": "text",
+        "options": ["draft", "published", "archived"]
+      },
+      {
+        "name": "email",
+        "type": "email"
+      },
+      {
+        "name": "website",
+        "type": "url"
+      },
+      {
+        "name": "metadata",
+        "type": "json"
+      },
+      {
+        "name": "social_security",
+        "type": "text",
+        "pii": true,
+        "mask_type": "ssn"
       }
     ]
   }'
@@ -303,7 +641,8 @@ curl -X POST http://localhost:8000/api/v1/collections \
 {
   "id": "col_xyz789",
   "name": "posts",
-  "schema": [...],
+  "table_name": "col_posts",
+  "fields": [...],
   "created_at": "2025-12-24T22:00:00Z",
   "updated_at": "2025-12-24T22:00:00Z"
 }
@@ -311,14 +650,16 @@ curl -X POST http://localhost:8000/api/v1/collections \
 
 **Field Types**:
 
-- `text`: String values
-- `number`: Numeric values (int or float)
-- `boolean`: True/false
-- `datetime`: ISO 8601 datetime strings
-- `email`: Email addresses (validated)
-- `url`: URLs (validated)
-- `json`: JSON objects
-- `reference`: Foreign key to another collection
+| Type | SQL Type | Description |
+|------|----------|-------------|
+| `text` | TEXT | String values |
+| `number` | REAL | Numeric values (int or float, not bool) |
+| `boolean` | INTEGER (0/1) | True/false |
+| `datetime` | DATETIME | ISO 8601 datetime strings |
+| `email` | TEXT | Email addresses (validated) |
+| `url` | TEXT | URLs (validated, must start with http:// or https://) |
+| `json` | TEXT | JSON objects |
+| `reference` | TEXT | Foreign key to another collection |
 
 **Field Options**:
 
@@ -326,72 +667,91 @@ curl -X POST http://localhost:8000/api/v1/collections \
 - `default`: Default value
 - `unique`: Boolean (default: false)
 - `options`: Array of allowed values (enum)
+- `pii`: Boolean - Enable PII masking
+- `mask_type`: For PII fields - email, ssn, phone, name, full, custom
 
 **Auto-Added Fields**:
 Every collection automatically includes:
+- `id` (TEXT PRIMARY KEY) - Auto-generated UUID
+- `account_id` (TEXT NOT NULL) - For multi-tenancy
+- `created_at` (DATETIME) - ISO 8601 timestamp
+- `created_by` (TEXT) - User ID who created the record
+- `updated_at` (DATETIME) - ISO 8601 timestamp
+- `updated_by` (TEXT) - User ID who last updated the record
 
-- `id` (TEXT PRIMARY KEY)
-- `account_id` (TEXT, for multi-tenancy)
-- `created_at` (DATETIME)
-- `created_by` (TEXT, user ID)
-- `updated_at` (DATETIME)
-- `updated_by` (TEXT, user ID)
+**Physical Table Naming**:
+Tables are prefixed with `col_` (e.g., collection "posts" becomes `col_posts`).
 
-**Example with All Field Types**:
+**Validation Rules**:
+- Collection name: 3-64 chars, starts with letter, alphanumeric + underscores only
+- Field names: Cannot use reserved names (id, account_id, created_at, created_by, updated_at, updated_by)
+- Reference fields require `collection` and `on_delete` attributes
 
-```json
-{
-  "name": "products",
-  "schema": [
-    {
-      "name": "name",
-      "type": "text",
-      "required": true
-    },
-    {
-      "name": "description",
-      "type": "text"
-    },
-    {
-      "name": "price",
-      "type": "number",
-      "required": true
-    },
-    {
-      "name": "in_stock",
-      "type": "boolean",
-      "default": true
-    },
-    {
-      "name": "release_date",
-      "type": "datetime"
-    },
-    {
-      "name": "contact_email",
-      "type": "email"
-    },
-    {
-      "name": "product_url",
-      "type": "url"
-    },
-    {
-      "name": "metadata",
-      "type": "json"
-    },
-    {
-      "name": "category_id",
-      "type": "reference",
-      "collection": "categories",
-      "on_delete": "set_null"
-    },
-    {
-      "name": "status",
-      "type": "text",
-      "options": ["draft", "published", "archived"]
-    }
-  ]
-}
+---
+
+### 5. Update Collection
+
+**Endpoint**: `PUT /api/v1/collections/{collection_id}`
+
+**Authentication**: Superadmin required
+
+**Constraints**:
+- Cannot delete existing fields
+- Cannot change field types
+- Can only add new fields
+
+**Request**:
+
+```bash
+curl -X PUT http://localhost:8000/api/v1/collections/col_xyz789 \
+  -H "Authorization: Bearer <superadmin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "schema": [
+      {
+        "name": "title",
+        "type": "text",
+        "required": true
+      },
+      {
+        "name": "content",
+        "type": "text",
+        "required": true
+      },
+      {
+        "name": "published",
+        "type": "boolean",
+        "default": false
+      },
+      {
+        "name": "views",
+        "type": "number",
+        "default": 0
+      },
+      {
+        "name": "category",
+        "type": "text"
+      }
+    ]
+  }'
 ```
+
+---
+
+### 6. Delete Collection
+
+**Endpoint**: `DELETE /api/v1/collections/{collection_id}`
+
+**Authentication**: Superadmin required
+
+**Request**:
+
+```bash
+curl -X DELETE http://localhost:8000/api/v1/collections/col_xyz789 \
+  -H "Authorization: Bearer <superadmin_token>"
+```
+
+**Response**: `200 OK` with record count confirmation
 
 ---
 
@@ -403,6 +763,8 @@ All record operations are performed on dynamic collection endpoints: `/api/v1/{c
 
 **Endpoint**: `POST /api/v1/{collection}`
 
+**Authentication**: Required
+
 **Example - Create Post**:
 
 ```bash
@@ -412,7 +774,8 @@ curl -X POST http://localhost:8000/api/v1/posts \
   -d '{
     "title": "Getting Started with SnackBase",
     "content": "SnackBase is an open-source Backend-as-a-Service...",
-    "published": true
+    "published": true,
+    "author_id": "usr_abc123"
   }'
 ```
 
@@ -425,7 +788,7 @@ curl -X POST http://localhost:8000/api/v1/posts \
   "content": "SnackBase is an open-source Backend-as-a-Service...",
   "published": true,
   "views": 0,
-  "account_id": "AC1234",
+  "account_id": "AB1234",
   "created_at": "2025-12-24T22:00:00Z",
   "created_by": "usr_abc123",
   "updated_at": "2025-12-24T22:00:00Z",
@@ -434,10 +797,11 @@ curl -X POST http://localhost:8000/api/v1/posts \
 ```
 
 **Notes**:
-
 - `account_id`, `created_at`, `created_by`, `updated_at`, `updated_by` are auto-set by built-in hooks
 - Required fields must be provided
 - Default values are applied for missing optional fields
+- Reference values are validated for existence
+- PII fields are automatically masked for users without `pii_access` group
 
 ---
 
@@ -445,12 +809,17 @@ curl -X POST http://localhost:8000/api/v1/posts \
 
 **Endpoint**: `GET /api/v1/{collection}`
 
+**Authentication**: Required
+
 **Query Parameters**:
 
-- `skip`: Offset for pagination (default: 0)
-- `limit`: Number of records to return (default: 30, max: 100)
-- `sort`: Sort field with +/- prefix (e.g., `+created_at`, `-views`)
-- `fields`: Comma-separated list of fields to return
+| Parameter | Type | Default | Constraints |
+|-----------|------|---------|-------------|
+| `skip` | int | 0 | >= 0 |
+| `limit` | int | 30 | >= 1, <= 100 |
+| `sort` | str | "-created_at" | +/- prefix for asc/desc |
+| `fields` | str | null | Comma-separated field list |
+| `{field}` | any | - | Filter by field value |
 
 **Example - List Posts**:
 
@@ -509,11 +878,25 @@ curl -X GET "http://localhost:8000/api/v1/posts?fields=id,title,created_at" \
 }
 ```
 
+**Example - Filtering**:
+
+```bash
+# Filter by field value
+curl -X GET "http://localhost:8000/api/v1/posts?published=true" \
+  -H "Authorization: Bearer <token>"
+
+# Multiple filters
+curl -X GET "http://localhost:8000/api/v1/posts?published=true&views_gt=10" \
+  -H "Authorization: Bearer <token>"
+```
+
 ---
 
 ### 3. Get Single Record
 
 **Endpoint**: `GET /api/v1/{collection}/{id}`
+
+**Authentication**: Required
 
 **Example**:
 
@@ -531,7 +914,7 @@ curl -X GET http://localhost:8000/api/v1/posts/rec_abc123 \
   "content": "SnackBase is an open-source Backend-as-a-Service...",
   "published": true,
   "views": 42,
-  "account_id": "AC1234",
+  "account_id": "AB1234",
   "created_at": "2025-12-24T22:00:00Z",
   "created_by": "usr_abc123",
   "updated_at": "2025-12-24T22:00:00Z",
@@ -543,17 +926,18 @@ curl -X GET http://localhost:8000/api/v1/posts/rec_abc123 \
 
 ```json
 {
-  "detail": "Record not found"
+  "error": "Not found",
+  "message": "Record not found"
 }
 ```
-
-**Note**: Returns 404 for both non-existent records and records from other accounts (security).
 
 ---
 
 ### 4. Update Record (Full)
 
 **Endpoint**: `PUT /api/v1/{collection}/{id}`
+
+**Authentication**: Required
 
 **Example**:
 
@@ -578,21 +962,20 @@ curl -X PUT http://localhost:8000/api/v1/posts/rec_abc123 \
   "content": "Updated content...",
   "published": true,
   "views": 100,
-  "account_id": "AC1234",
-  "created_at": "2025-12-24T22:00:00Z",
-  "created_by": "usr_abc123",
   "updated_at": "2025-12-24T22:30:00Z",
   "updated_by": "usr_abc123"
 }
 ```
 
-**Note**: PUT replaces the entire record. All required fields must be provided.
+**Note**: PUT replaces the entire record. All non-system fields must be provided.
 
 ---
 
 ### 5. Update Record (Partial)
 
 **Endpoint**: `PATCH /api/v1/{collection}/{id}`
+
+**Authentication**: Required
 
 **Example**:
 
@@ -619,13 +1002,15 @@ curl -X PATCH http://localhost:8000/api/v1/posts/rec_abc123 \
 }
 ```
 
-**Note**: PATCH updates only the provided fields. Other fields remain unchanged.
+**Note**: PATCH updates only the provided fields.
 
 ---
 
 ### 6. Delete Record
 
 **Endpoint**: `DELETE /api/v1/{collection}/{id}`
+
+**Authentication**: Required
 
 **Example**:
 
@@ -634,19 +1019,536 @@ curl -X DELETE http://localhost:8000/api/v1/posts/rec_abc123 \
   -H "Authorization: Bearer <token>"
 ```
 
-**Response** (204 No Content):
-
-```
-(Empty body)
-```
+**Response** (204 No Content): Empty body
 
 **Error - Foreign Key Restriction** (409 Conflict):
 
 ```json
 {
-  "detail": "Cannot delete record: foreign key constraint violation"
+  "error": "Conflict",
+  "message": "Cannot delete record: it is referenced by other records"
 }
 ```
+
+---
+
+## Roles & Permissions
+
+### Roles Endpoints
+
+All roles endpoints require **Superadmin** access.
+
+#### 1. List Roles
+
+**Endpoint**: `GET /api/v1/roles`
+
+**Request**:
+
+```bash
+curl -X GET http://localhost:8000/api/v1/roles \
+  -H "Authorization: Bearer <superadmin_token>"
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "name": "admin",
+      "description": "Administrator with full access",
+      "collections_count": 10
+    },
+    {
+      "id": 2,
+      "name": "user",
+      "description": "Regular user with limited access",
+      "collections_count": 5
+    }
+  ],
+  "total": 2
+}
+```
+
+---
+
+#### 2. Create Role
+
+**Endpoint**: `POST /api/v1/roles`
+
+**Request**:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/roles \
+  -H "Authorization: Bearer <superadmin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "editor",
+    "description": "Can edit but not delete content"
+  }'
+```
+
+**Response** (201 Created):
+
+```json
+{
+  "id": 3,
+  "name": "editor",
+  "description": "Can edit but not delete content"
+}
+```
+
+---
+
+#### 3. Get Single Role
+
+**Endpoint**: `GET /api/v1/roles/{role_id}`
+
+**Request**:
+
+```bash
+curl -X GET http://localhost:8000/api/v1/roles/3 \
+  -H "Authorization: Bearer <superadmin_token>"
+```
+
+---
+
+#### 4. Update Role
+
+**Endpoint**: `PUT /api/v1/roles/{role_id}`
+
+**Request**:
+
+```bash
+curl -X PUT http://localhost:8000/api/v1/roles/3 \
+  -H "Authorization: Bearer <superadmin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "senior_editor",
+    "description": "Senior editor with additional privileges"
+  }'
+```
+
+---
+
+#### 5. Delete Role
+
+**Endpoint**: `DELETE /api/v1/roles/{role_id}`
+
+**Note**: Default roles ("admin", "user") cannot be deleted.
+
+---
+
+#### 6. Get Role Permissions
+
+**Endpoint**: `GET /api/v1/roles/{role_id}/permissions`
+
+**Request**:
+
+```bash
+curl -X GET http://localhost:8000/api/v1/roles/3/permissions \
+  -H "Authorization: Bearer <superadmin_token>"
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "role_id": 3,
+  "role_name": "editor",
+  "permissions": [
+    {
+      "collection": "posts",
+      "permission_id": 10,
+      "create": {"rule": "true", "fields": ["title", "content"]},
+      "read": {"rule": "true", "fields": "*"},
+      "update": {"rule": "@owns_record()", "fields": ["title", "content"]},
+      "delete": null
+    }
+  ]
+}
+```
+
+---
+
+#### 7. Get Permissions Matrix
+
+**Endpoint**: `GET /api/v1/roles/{role_id}/permissions/matrix`
+
+**Purpose**: Returns permissions for ALL collections (including those without permissions set).
+
+**Request**:
+
+```bash
+curl -X GET http://localhost:8000/api/v1/roles/3/permissions/matrix \
+  -H "Authorization: Bearer <superadmin_token>"
+```
+
+---
+
+#### 8. Bulk Update Permissions
+
+**Endpoint**: `PUT /api/v1/roles/{role_id}/permissions/bulk`
+
+**Request**:
+
+```bash
+curl -X PUT http://localhost:8000/api/v1/roles/3/permissions/bulk \
+  -H "Authorization: Bearer <superadmin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "updates": [
+      {
+        "collection": "posts",
+        "operation": "create",
+        "rule": "user.role == \"editor\"",
+        "fields": ["title", "content"]
+      },
+      {
+        "collection": "posts",
+        "operation": "read",
+        "rule": "true",
+        "fields": "*"
+      },
+      {
+        "collection": "posts",
+        "operation": "update",
+        "rule": "@owns_record() or @has_role(\"admin\")",
+        "fields": ["title", "content", "status"]
+      },
+      {
+        "collection": "posts",
+        "operation": "delete",
+        "rule": "@has_role(\"admin\")",
+        "fields": "*"
+      }
+    ]
+  }'
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "success_count": 4,
+  "failure_count": 0,
+  "errors": []
+}
+```
+
+---
+
+#### 9. Validate Rule
+
+**Endpoint**: `POST /api/v1/roles/validate-rule`
+
+**Request**:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/roles/validate-rule \
+  -H "Authorization: Bearer <superadmin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "rule": "@has_role(\"admin\") or @owns_record()"
+  }'
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "valid": true,
+  "error": null,
+  "position": null
+}
+```
+
+---
+
+#### 10. Test Rule
+
+**Endpoint**: `POST /api/v1/roles/test-rule`
+
+**Request**:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/roles/test-rule \
+  -H "Authorization: Bearer <superadmin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "rule": "@has_role(\"admin\") or user.id == record.created_by",
+    "context": {
+      "user": {"id": "usr_123", "role": "editor"},
+      "record": {"created_by": "usr_123"}
+    }
+  }'
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "allowed": true,
+  "error": null,
+  "evaluation_details": null
+}
+```
+
+---
+
+### Permission Rule Syntax
+
+SnackBase uses a custom DSL for permission rules:
+
+**Supported Syntax Examples**:
+
+```python
+# Always allow
+"true"
+
+# User-based checks
+"user.id == record.owner_id"
+"user.id == \"user_abc123\""
+
+# Role checks
+"@has_role(\"admin\")"
+
+# Group membership
+"@in_group(\"managers\")"
+
+# Record ownership
+"@owns_record()"
+
+# Field comparisons
+"status in [\"draft\", \"published\"]"
+"priority > 5"
+
+# Complex expressions
+"@has_role(\"admin\") or @owns_record()"
+"user.id == record.created_by and status != \"archived\""
+
+# Macro execution
+"@has_permission(\"read\", \"posts\")"
+"@in_time_range(9, 17)"
+```
+
+**Permission Structure**:
+
+```json
+{
+  "create": {
+    "rule": "user.role == \"admin\"",
+    "fields": ["title", "content"]
+  },
+  "read": {
+    "rule": "true",
+    "fields": "*"
+  },
+  "update": {
+    "rule": "@owns_record()",
+    "fields": ["title", "status"]
+  },
+  "delete": {
+    "rule": "@has_role(\"admin\")",
+    "fields": "*"
+  }
+}
+```
+
+**Operations**: `create`, `read`, `update`, `delete`
+**Fields**: `"*"` for all fields, or list of specific field names
+
+---
+
+### Permissions Endpoints
+
+All permissions endpoints require **Superadmin** access.
+
+#### 1. Create Permission
+
+**Endpoint**: `POST /api/v1/permissions`
+
+**Request**:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/permissions \
+  -H "Authorization: Bearer <superadmin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "role_id": 3,
+    "collection": "posts",
+    "rules": {
+      "create": {"rule": "true", "fields": ["title", "content"]},
+      "read": {"rule": "true", "fields": "*"},
+      "update": {"rule": "@owns_record()", "fields": ["title", "content"]},
+      "delete": {"rule": "false", "fields": []}
+    }
+  }'
+```
+
+---
+
+#### 2. List Permissions
+
+**Endpoint**: `GET /api/v1/permissions`
+
+**Request**:
+
+```bash
+curl -X GET http://localhost:8000/api/v1/permissions \
+  -H "Authorization: Bearer <superadmin_token>"
+```
+
+---
+
+#### 3. Get Single Permission
+
+**Endpoint**: `GET /api/v1/permissions/{permission_id}`
+
+---
+
+#### 4. Delete Permission
+
+**Endpoint**: `DELETE /api/v1/permissions/{permission_id}`
+
+---
+
+## Groups
+
+Groups are account-isolated (not superadmin).
+
+### 1. Create Group
+
+**Endpoint**: `POST /api/v1/groups`
+
+**Authentication**: Required (account-isolated)
+
+**Request**:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/groups \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "managers",
+    "description": "Manager group with elevated permissions"
+  }'
+```
+
+**Response** (201 Created):
+
+```json
+{
+  "id": "grp_abc123",
+  "account_id": "AB1234",
+  "name": "managers",
+  "description": "Manager group with elevated permissions",
+  "created_at": "2025-12-24T22:00:00Z",
+  "updated_at": "2025-12-24T22:00:00Z"
+}
+```
+
+---
+
+### 2. List Groups
+
+**Endpoint**: `GET /api/v1/groups`
+
+**Query Parameters**:
+- `skip`: Default 0
+- `limit`: Default 100
+
+**Request**:
+
+```bash
+curl -X GET "http://localhost:8000/api/v1/groups?skip=0&limit=100" \
+  -H "Authorization: Bearer <token>"
+```
+
+**Response** (200 OK):
+
+```json
+[
+  {
+    "id": "grp_abc123",
+    "account_id": "AB1234",
+    "name": "managers",
+    "description": "Manager group with elevated permissions",
+    "created_at": "2025-12-24T22:00:00Z",
+    "updated_at": "2025-12-24T22:00:00Z"
+  }
+]
+```
+
+---
+
+### 3. Get Single Group
+
+**Endpoint**: `GET /api/v1/groups/{group_id}`
+
+---
+
+### 4. Update Group
+
+**Endpoint**: `PATCH /api/v1/groups/{group_id}`
+
+**Request**:
+
+```bash
+curl -X PATCH http://localhost:8000/api/v1/groups/grp_abc123 \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "description": "Updated description"
+  }'
+```
+
+---
+
+### 5. Delete Group
+
+**Endpoint**: `DELETE /api/v1/groups/{group_id}`
+
+---
+
+### 6. Add User to Group
+
+**Endpoint**: `POST /api/v1/groups/{group_id}/users`
+
+**Request**:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/groups/grp_abc123/users \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "usr_def456"
+  }'
+```
+
+**Response** (201 Created):
+
+```json
+{
+  "message": "User added to group"
+}
+```
+
+---
+
+### 7. Remove User from Group
+
+**Endpoint**: `DELETE /api/v1/groups/{group_id}/users/{user_id}`
+
+**Request**:
+
+```bash
+curl -X DELETE http://localhost:8000/api/v1/groups/grp_abc123/users/usr_def456 \
+  -H "Authorization: Bearer <token>"
+```
+
+**Response**: `204 No Content`
 
 ---
 
@@ -658,6 +1560,8 @@ Invite a user to your account.
 
 **Endpoint**: `POST /api/v1/invitations`
 
+**Authentication**: Required
+
 **Request**:
 
 ```bash
@@ -666,7 +1570,7 @@ curl -X POST http://localhost:8000/api/v1/invitations \
   -H "Content-Type: application/json" \
   -d '{
     "email": "newuser@example.com",
-    "role_id": "role_user"
+    "role_id": "2"
   }'
 ```
 
@@ -675,16 +1579,17 @@ curl -X POST http://localhost:8000/api/v1/invitations \
 ```json
 {
   "id": "inv_xyz789",
+  "account_id": "AB1234",
   "email": "newuser@example.com",
-  "account_id": "AC1234",
   "invited_by": "usr_abc123",
   "expires_at": "2025-12-26T22:00:00Z",
-  "status": "pending",
-  "created_at": "2025-12-24T22:00:00Z"
+  "accepted_at": null,
+  "created_at": "2025-12-24T22:00:00Z",
+  "status": "pending"
 }
 ```
 
-**Note**: Token is not returned for security. It's sent via email (future feature).
+**Note**: Token is not returned for security. It's sent via email (future feature). Invitations expire after 48 hours.
 
 ---
 
@@ -693,13 +1598,12 @@ curl -X POST http://localhost:8000/api/v1/invitations \
 **Endpoint**: `GET /api/v1/invitations`
 
 **Query Parameters**:
-
-- `status`: Filter by status (pending, accepted, expired, cancelled)
+- `status_filter`: "pending" | "accepted" | "expired" | "cancelled"
 
 **Request**:
 
 ```bash
-curl -X GET "http://localhost:8000/api/v1/invitations?status=pending" \
+curl -X GET "http://localhost:8000/api/v1/invitations?status_filter=pending" \
   -H "Authorization: Bearer <token>"
 ```
 
@@ -707,13 +1611,16 @@ curl -X GET "http://localhost:8000/api/v1/invitations?status=pending" \
 
 ```json
 {
-  "items": [
+  "invitations": [
     {
       "id": "inv_xyz789",
+      "account_id": "AB1234",
       "email": "newuser@example.com",
-      "status": "pending",
+      "invited_by": "usr_abc123",
       "expires_at": "2025-12-26T22:00:00Z",
-      "created_at": "2025-12-24T22:00:00Z"
+      "accepted_at": null,
+      "created_at": "2025-12-24T22:00:00Z",
+      "status": "pending"
     }
   ],
   "total": 1
@@ -725,6 +1632,8 @@ curl -X GET "http://localhost:8000/api/v1/invitations?status=pending" \
 ### 3. Accept Invitation
 
 **Endpoint**: `POST /api/v1/invitations/{token}/accept`
+
+**Authentication**: None (public)
 
 **Request**:
 
@@ -743,10 +1652,18 @@ curl -X POST http://localhost:8000/api/v1/invitations/inv_token_abc123/accept \
   "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "expires_in": 3600,
+  "account": {
+    "id": "AB1234",
+    "slug": "acme",
+    "name": "Acme Corporation",
+    "created_at": "2025-12-24T22:00:00Z"
+  },
   "user": {
     "id": "usr_new123",
     "email": "newuser@example.com",
-    "role": "user"
+    "role": "user",
+    "is_active": true,
+    "created_at": "2025-12-24T22:00:00Z"
   }
 }
 ```
@@ -755,7 +1672,7 @@ curl -X POST http://localhost:8000/api/v1/invitations/inv_token_abc123/accept \
 
 ### 4. Cancel Invitation
 
-**Endpoint**: `DELETE /api/v1/invitations/{id}`
+**Endpoint**: `DELETE /api/v1/invitations/{invitation_id}`
 
 **Request**:
 
@@ -764,10 +1681,245 @@ curl -X DELETE http://localhost:8000/api/v1/invitations/inv_xyz789 \
   -H "Authorization: Bearer <token>"
 ```
 
-**Response** (204 No Content):
+**Response**: `204 No Content`
 
+---
+
+## Macros
+
+### 1. Create Macro
+
+**Endpoint**: `POST /api/v1/macros/`
+
+**Authentication**: Superadmin required
+
+**Request**:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/macros/ \
+  -H "Authorization: Bearer <superadmin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "user_post_count",
+    "sql_query": "SELECT COUNT(*) FROM col_posts WHERE created_by = :user_id",
+    "parameters": ["user_id"],
+    "description": "Count posts created by a user"
+  }'
 ```
-(Empty body)
+
+**Response** (201 Created):
+
+```json
+{
+  "id": 1,
+  "name": "user_post_count",
+  "description": "Count posts created by a user",
+  "sql_query": "SELECT COUNT(*) FROM col_posts WHERE created_by = :user_id",
+  "parameters": ["user_id"],
+  "created_at": "2025-12-24T22:00:00Z",
+  "updated_at": "2025-12-24T22:00:00Z",
+  "created_by": "usr_abc123"
+}
+```
+
+**SQL Validation Rules**:
+- Must start with `SELECT`
+- Forbidden keywords: INSERT, UPDATE, DELETE, DROP, ALTER, TRUNCATE, GRANT, REVOKE
+- Name must be valid Python identifier
+
+---
+
+### 2. List Macros
+
+**Endpoint**: `GET /api/v1/macros/`
+
+**Query Parameters**:
+- `skip`: Default 0
+- `limit`: Default 100
+
+**Request**:
+
+```bash
+curl -X GET "http://localhost:8000/api/v1/macros/?skip=0&limit=100" \
+  -H "Authorization: Bearer <token>"
+```
+
+---
+
+### 3. Get Single Macro
+
+**Endpoint**: `GET /api/v1/macros/{macro_id}`
+
+---
+
+### 4. Update Macro
+
+**Endpoint**: `PUT /api/v1/macros/{macro_id}`
+
+**Authentication**: Superadmin required
+
+---
+
+### 5. Test Macro
+
+**Endpoint**: `POST /api/v1/macros/{macro_id}/test`
+
+**Authentication**: Superadmin required
+
+**Request**:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/macros/1/test \
+  -H "Authorization: Bearer <superadmin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "parameters": ["usr_abc123"]
+  }'
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "result": "42",
+  "execution_time": 12.5,
+  "rows_affected": 0
+}
+```
+
+**Note**: Executes in a transaction that is rolled back. 5-second timeout enforced.
+
+---
+
+### 6. Delete Macro
+
+**Endpoint**: `DELETE /api/v1/macros/{macro_id}`
+
+**Authentication**: Superadmin required
+
+**Note**: Fails if macro is used in any active permission rules.
+
+---
+
+### Built-in Macros
+
+These macros are executed directly by the macro engine:
+
+| Macro | Description |
+|-------|-------------|
+| `@has_group(group_name)` | Check if user has a group |
+| `@has_role(role_name)` | Check if user has a role |
+| `@owns_record()` / `@is_creator()` | Check if user owns the record |
+| `@in_time_range(start_hour, end_hour)` | Check if current time is in range |
+| `@has_permission(action, collection)` | Check specific permission |
+
+---
+
+## Dashboard
+
+### Get Dashboard Statistics
+
+**Endpoint**: `GET /api/v1/dashboard/stats`
+
+**Authentication**: Superadmin required
+
+**Request**:
+
+```bash
+curl -X GET http://localhost:8000/api/v1/dashboard/stats \
+  -H "Authorization: Bearer <superadmin_token>"
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "total_accounts": 10,
+  "total_users": 45,
+  "total_collections": 12,
+  "total_records": 1523,
+  "new_accounts_7d": 2,
+  "new_users_7d": 8,
+  "recent_registrations": [
+    {
+      "id": "usr_new123",
+      "email": "user@example.com",
+      "account_id": "AB1234",
+      "account_name": "Acme Corporation",
+      "created_at": "2025-12-24T22:00:00Z"
+    }
+  ],
+  "system_health": {
+    "database_status": "connected",
+    "storage_usage_mb": 45.2
+  },
+  "active_sessions": 15,
+  "recent_audit_logs": []
+}
+```
+
+---
+
+## Health Checks
+
+Health check endpoints have no authentication requirement.
+
+### 1. Basic Health Check
+
+**Endpoint**: `GET /health`
+
+**Response** (200 OK):
+
+```json
+{
+  "status": "healthy",
+  "service": "SnackBase",
+  "version": "0.1.0"
+}
+```
+
+---
+
+### 2. Readiness Check
+
+**Endpoint**: `GET /ready`
+
+**Response** (200 OK):
+
+```json
+{
+  "status": "ready",
+  "service": "SnackBase",
+  "version": "0.1.0",
+  "database": "connected"
+}
+```
+
+**Error Response** (503 Service Unavailable):
+
+```json
+{
+  "status": "not_ready",
+  "service": "SnackBase",
+  "version": "0.1.0",
+  "database": "disconnected"
+}
+```
+
+---
+
+### 3. Liveness Check
+
+**Endpoint**: `GET /live`
+
+**Response** (200 OK):
+
+```json
+{
+  "status": "alive",
+  "service": "SnackBase",
+  "version": "0.1.0"
+}
 ```
 
 ---
@@ -793,53 +1945,36 @@ curl -X DELETE http://localhost:8000/api/v1/invitations/inv_xyz789 \
 
 ```json
 {
-  "detail": "Error message describing what went wrong"
+  "error": "Error type",
+  "message": "Error message describing what went wrong"
 }
 ```
 
-### Common Errors
+### Validation Error Response
 
-**401 Unauthorized**:
-
-```bash
-# Missing token
-curl -X GET http://localhost:8000/api/v1/posts
-# Response: {"detail": "Not authenticated"}
-
-# Invalid token
-curl -X GET http://localhost:8000/api/v1/posts \
-  -H "Authorization: Bearer invalid_token"
-# Response: {"detail": "Could not validate credentials"}
+```json
+{
+  "error": "Validation error",
+  "details": [
+    {
+      "field": "password",
+      "message": "Password must be at least 12 characters...",
+      "code": "password_too_weak"
+    }
+  ]
+}
 ```
 
-**400 Bad Request**:
+### Field Access Denied Response
 
-```bash
-# Missing required field
-curl -X POST http://localhost:8000/api/v1/posts \
-  -H "Authorization: Bearer <token>" \
-  -H "Content-Type: application/json" \
-  -d '{"content": "Missing title"}'
-# Response: {"detail": "Field 'title' is required"}
-```
-
-**403 Forbidden**:
-
-```bash
-# Non-superadmin trying to create collection
-curl -X POST http://localhost:8000/api/v1/collections \
-  -H "Authorization: Bearer <user_token>" \
-  -d '{...}'
-# Response: {"detail": "Superadmin access required"}
-```
-
-**409 Conflict**:
-
-```bash
-# Duplicate account slug
-curl -X POST http://localhost:8000/api/v1/auth/register \
-  -d '{"account_slug": "acme", ...}'
-# Response: {"detail": "Account slug 'acme' already exists"}
+```json
+{
+  "error": "Field access denied",
+  "message": "Permission denied to update fields: salary, ssn",
+  "unauthorized_fields": ["salary", "ssn"],
+  "allowed_fields": ["name", "email"],
+  "field_type": "restricted"
+}
 ```
 
 ---
@@ -849,22 +1984,26 @@ curl -X POST http://localhost:8000/api/v1/auth/register \
 ### 1. Always Use HTTPS in Production
 
 ```bash
-# ❌ Bad (production)
+# Bad (production)
 http://api.yourdomain.com/api/v1/posts
 
-# ✅ Good (production)
+# Good (production)
 https://api.yourdomain.com/api/v1/posts
 ```
+
+---
 
 ### 2. Store Tokens Securely
 
 ```javascript
-// ❌ Bad - localStorage is vulnerable to XSS
+// Bad - localStorage is vulnerable to XSS
 localStorage.setItem("token", token);
 
-// ✅ Good - httpOnly cookie (server-side)
+// Good - httpOnly cookie (server-side)
 // Or use secure session storage with proper CSP
 ```
+
+---
 
 ### 3. Handle Token Expiration
 
@@ -884,26 +2023,32 @@ async function makeRequest(url) {
 }
 ```
 
+---
+
 ### 4. Use Pagination for Large Datasets
 
 ```bash
-# ❌ Bad - fetching all records
+# Bad - fetching too many records
 curl -X GET http://localhost:8000/api/v1/posts?limit=1000
 
-# ✅ Good - paginate results
+# Good - paginate results
 curl -X GET "http://localhost:8000/api/v1/posts?skip=0&limit=30"
 curl -X GET "http://localhost:8000/api/v1/posts?skip=30&limit=30"
 ```
 
+---
+
 ### 5. Use Field Limiting
 
 ```bash
-# ❌ Bad - fetching all fields when you only need a few
+# Bad - fetching all fields when you only need a few
 curl -X GET http://localhost:8000/api/v1/posts
 
-# ✅ Good - limit to needed fields
+# Good - limit to needed fields
 curl -X GET "http://localhost:8000/api/v1/posts?fields=id,title,created_at"
 ```
+
+---
 
 ### 6. Add Correlation IDs
 
@@ -914,6 +2059,8 @@ curl -X POST http://localhost:8000/api/v1/posts \
   -H "X-Correlation-ID: req_abc123" \
   -d '{...}'
 ```
+
+---
 
 ### 7. Handle Errors Gracefully
 
@@ -931,7 +2078,7 @@ async function createPost(data) {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.detail);
+      throw new Error(error.message || error.detail);
     }
 
     return await response.json();
@@ -941,6 +2088,8 @@ async function createPost(data) {
   }
 }
 ```
+
+---
 
 ### 8. Use Appropriate HTTP Methods
 
@@ -959,14 +2108,6 @@ Rate limiting will be added in a future phase. Recommended limits:
 - **Authenticated requests**: 1000 requests/hour
 - **Unauthenticated requests**: 100 requests/hour
 - **Burst limit**: 20 requests/second
-
-Headers (future):
-
-```
-X-RateLimit-Limit: 1000
-X-RateLimit-Remaining: 999
-X-RateLimit-Reset: 1640390400
-```
 
 ---
 
