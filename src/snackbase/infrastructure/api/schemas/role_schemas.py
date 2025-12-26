@@ -156,10 +156,12 @@ class ValidateRuleResponse(BaseModel):
     Attributes:
         valid: Whether the rule is valid.
         error: Error message if invalid.
+        position: Error position (line and column) if invalid.
     """
 
     valid: bool
     error: str | None = None
+    position: dict[str, int] | None = None  # {"line": 1, "column": 5}
 
 
 class TestRuleRequest(BaseModel):

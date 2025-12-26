@@ -71,6 +71,11 @@ from snackbase.infrastructure.api.schemas.role_schemas import (
     ValidateRuleRequest,
     ValidateRuleResponse,
 )
+from snackbase.infrastructure.api.schemas.bulk_permissions_schema import (
+    BulkPermissionUpdate,
+    BulkPermissionUpdateRequest,
+    BulkPermissionUpdateResponse,
+)
 
 __all__ = [
     "AccountDetailResponse",
@@ -81,6 +86,9 @@ __all__ = [
     "AccountUsersResponse",
     "AuditLogEntry",
     "AuthResponse",
+    "BulkPermissionUpdate",
+    "BulkPermissionUpdateRequest",
+    "BulkPermissionUpdateResponse",
     "CollectionListItem",
     "CollectionListResponse",
     "CollectionPermission",

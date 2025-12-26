@@ -114,6 +114,47 @@ async def list_collections(
 
 
 @router.get(
+    "/names",
+    status_code=status.HTTP_200_OK,
+    responses={
+        403: {"description": "Superadmin access required"},
+    },
+)
+async def get_collection_names(
+    current_user: SuperadminUser,
+    session: AsyncSession = Depends(get_db_session),
+) -> JSONResponse:
+    """Get simple list of all collection names.
+
+    Returns a simple list of collection names without pagination,
+    suitable for populating dropdowns and permission matrices.
+    Only superadmins can access this endpoint.
+
+    Args:
+        current_user: Authenticated superadmin user.
+        session: Database session.
+
+    Returns:
+        List of collection names.
+    """
+    collection_repo = CollectionRepository(session)
+    collections = await collection_repo.list_all()
+
+    names = [collection.name for collection in collections]
+
+    logger.debug(
+        "Collection names retrieved",
+        count=len(names),
+        requested_by=current_user.user_id,
+    )
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={"names": names, "total": len(names)},
+    )
+
+
+@router.get(
     "/{collection_id}",
     status_code=status.HTTP_200_OK,
     response_model=CollectionResponse,

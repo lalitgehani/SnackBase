@@ -15,18 +15,16 @@ from snackbase.core.rules.lexer import Lexer
 from snackbase.core.rules.parser import Parser
 from snackbase.infrastructure.api.dependencies import SuperadminUser, get_permission_cache
 from snackbase.infrastructure.api.schemas import (
+    BulkPermissionUpdateRequest,
+    BulkPermissionUpdateResponse,
     CollectionPermission,
-    CreatePermissionRequest,
     CreateRoleRequest,
-    OperationRuleSchema,
-    PermissionRulesSchema,
     RoleListItem,
     RoleListResponse,
     RolePermissionsResponse,
     RoleResponse,
     TestRuleRequest,
     TestRuleResponse,
-    UpdateRolePermissionsRequest,
     UpdateRoleRequest,
     ValidateRuleRequest,
     ValidateRuleResponse,
@@ -34,6 +32,7 @@ from snackbase.infrastructure.api.schemas import (
 from snackbase.infrastructure.persistence.database import get_db_session
 from snackbase.infrastructure.persistence.models import PermissionModel, RoleModel
 from snackbase.infrastructure.persistence.repositories import (
+    CollectionRepository,
     PermissionRepository,
     RoleRepository,
 )
@@ -424,6 +423,241 @@ async def get_role_permissions(
     )
 
 
+@router.get(
+    "/{role_id}/permissions/matrix",
+    status_code=status.HTTP_200_OK,
+    response_model=RolePermissionsResponse,
+    responses={
+        403: {"description": "Superadmin access required"},
+        404: {"description": "Role not found"},
+    },
+)
+async def get_permissions_matrix(
+    role_id: int,
+    current_user: SuperadminUser,
+    session: AsyncSession = Depends(get_db_session),
+) -> RolePermissionsResponse:
+    """Get permissions in matrix format for a role.
+
+    Returns permissions for ALL collections (even those without permissions set),
+    making it suitable for displaying in a permission matrix UI.
+
+    Only superadmins can access this endpoint.
+
+    Args:
+        role_id: Role ID.
+        current_user: Authenticated superadmin user.
+        session: Database session.
+
+    Returns:
+        Role permissions in matrix format with all collections.
+    """
+    role_repo = RoleRepository(session)
+    permission_repo = PermissionRepository(session)
+    collection_repo = CollectionRepository(session)
+
+    # Check if role exists
+    role = await role_repo.get_by_id(role_id)
+    if role is None:
+        logger.info(
+            "Role not found",
+            role_id=role_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Role with ID {role_id} not found",
+        )
+
+    # Get all collections
+    all_collections = await collection_repo.list_all()
+
+    # Get all permissions for this role
+    permissions = await permission_repo.get_by_role_id(role_id)
+
+    # Create a map of collection -> permission
+    permission_map: dict[str, PermissionModel] = {}
+    for perm in permissions:
+        permission_map[perm.collection] = perm
+
+    # Build matrix with all collections
+    collection_permissions: list[CollectionPermission] = []
+    for collection in all_collections:
+        collection_name = collection.name
+        perm = permission_map.get(collection_name)
+
+        if perm:
+            # Parse existing rules
+            rules_dict = json.loads(perm.rules)
+            collection_permissions.append(
+                CollectionPermission(
+                    collection=collection_name,
+                    permission_id=perm.id,
+                    create=rules_dict.get("create"),
+                    read=rules_dict.get("read"),
+                    update=rules_dict.get("update"),
+                    delete=rules_dict.get("delete"),
+                )
+            )
+        else:
+            # No permission set for this collection
+            collection_permissions.append(
+                CollectionPermission(
+                    collection=collection_name,
+                    permission_id=None,
+                    create=None,
+                    read=None,
+                    update=None,
+                    delete=None,
+                )
+            )
+
+    logger.debug(
+        "Permission matrix retrieved",
+        role_id=role_id,
+        collections_count=len(collection_permissions),
+        requested_by=current_user.user_id,
+    )
+
+    return RolePermissionsResponse(
+        role_id=role.id,
+        role_name=role.name,
+        permissions=collection_permissions,
+    )
+
+
+@router.put(
+    "/{role_id}/permissions/bulk",
+    status_code=status.HTTP_200_OK,
+    response_model=BulkPermissionUpdateResponse,
+    responses={
+        400: {"description": "Validation error"},
+        403: {"description": "Superadmin access required"},
+        404: {"description": "Role not found"},
+    },
+)
+async def bulk_update_permissions(
+    role_id: int,
+    bulk_request: BulkPermissionUpdateRequest,
+    current_user: SuperadminUser,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+) -> BulkPermissionUpdateResponse:
+    """Bulk update permissions for a role.
+
+    Updates multiple collection-operation permissions in a single request.
+    Only superadmins can update permissions.
+
+    Args:
+        role_id: Role ID.
+        bulk_request: Bulk update request with list of updates.
+        current_user: Authenticated superadmin user.
+        request: FastAPI request object.
+        session: Database session.
+
+    Returns:
+        Bulk update response with success/failure counts.
+    """
+    role_repo = RoleRepository(session)
+    permission_repo = PermissionRepository(session)
+    collection_repo = CollectionRepository(session)
+
+    # Check if role exists
+    role = await role_repo.get_by_id(role_id)
+    if role is None:
+        logger.info(
+            "Bulk update failed: role not found",
+            role_id=role_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Role with ID {role_id} not found",
+        )
+
+    success_count = 0
+    failure_count = 0
+    errors: list[str] = []
+
+    # Process each update
+    for update in bulk_request.updates:
+        try:
+            # Validate collection exists
+            collection = await collection_repo.get_by_name(update.collection)
+            if not collection:
+                errors.append(f"Collection '{update.collection}' not found")
+                failure_count += 1
+                continue
+
+            # Validate rule syntax
+            try:
+                lexer = Lexer(update.rule)
+                parser = Parser(lexer)
+                parser.parse()
+            except Exception as e:
+                errors.append(
+                    f"Invalid rule for {update.collection}/{update.operation}: {str(e)}"
+                )
+                failure_count += 1
+                continue
+
+            # Find or create permission for this collection
+            existing_perms = await permission_repo.get_by_role_id(role_id)
+            existing_perm = next(
+                (p for p in existing_perms if p.collection == update.collection), None
+            )
+
+            if existing_perm:
+                # Update existing permission
+                rules_dict = json.loads(existing_perm.rules)
+                rules_dict[update.operation] = {
+                    "rule": update.rule,
+                    "fields": update.fields,
+                }
+                existing_perm.rules = json.dumps(rules_dict)
+            else:
+                # Create new permission
+                rules_dict = {
+                    update.operation: {
+                        "rule": update.rule,
+                        "fields": update.fields,
+                    }
+                }
+                new_perm = PermissionModel(
+                    role_id=role_id,
+                    collection=update.collection,
+                    rules=json.dumps(rules_dict),
+                )
+                await permission_repo.create(new_perm)
+
+            success_count += 1
+
+        except Exception as e:
+            errors.append(
+                f"Error updating {update.collection}/{update.operation}: {str(e)}"
+            )
+            failure_count += 1
+
+    # Commit all changes
+    await session.commit()
+
+    # Invalidate permission cache
+    permission_cache = get_permission_cache(request)
+    permission_cache.invalidate_all()
+
+    logger.info(
+        "Bulk permission update completed",
+        role_id=role_id,
+        success_count=success_count,
+        failure_count=failure_count,
+        updated_by=current_user.user_id,
+    )
+
+    return BulkPermissionUpdateResponse(
+        success_count=success_count,
+        failure_count=failure_count,
+        errors=errors,
+    )
+
+
 @router.post(
     "/validate-rule",
     status_code=status.HTTP_200_OK,
@@ -446,7 +680,7 @@ async def validate_rule(
         current_user: Authenticated superadmin user.
 
     Returns:
-        Validation result.
+        Validation result with position information if error.
     """
     try:
         # Try to parse the rule
@@ -462,12 +696,28 @@ async def validate_rule(
 
         return ValidateRuleResponse(valid=True)
     except Exception as e:
+        error_str = str(e)
+        position = None
+
+        # Try to extract position from error message if available
+        # Common format: "Error at line X, column Y: ..."
+        try:
+            if "line" in error_str.lower() and "column" in error_str.lower():
+                import re
+
+                match = re.search(r"line\s+(\d+).*column\s+(\d+)", error_str, re.IGNORECASE)
+                if match:
+                    position = {"line": int(match.group(1)), "column": int(match.group(2))}
+        except Exception:
+            pass  # Position extraction failed, continue without it
+
         logger.debug(
             "Rule validation failed",
             rule=validate_request.rule,
-            error=str(e),
+            error=error_str,
+            position=position,
         )
-        return ValidateRuleResponse(valid=False, error=str(e))
+        return ValidateRuleResponse(valid=False, error=error_str, position=position)
 
 
 @router.post(
