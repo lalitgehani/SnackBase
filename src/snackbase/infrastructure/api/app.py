@@ -253,6 +253,7 @@ def register_routes(app: FastAPI) -> None:
         permissions_router,
         groups_router,
         records_router,
+        roles_router,
     )
 
     settings = get_settings()
@@ -274,6 +275,11 @@ def register_routes(app: FastAPI) -> None:
     # Register permissions routes
     app.include_router(
         permissions_router, prefix=f"{settings.api_prefix}/permissions", tags=["permissions"]
+    )
+
+    # Register roles routes
+    app.include_router(
+        roles_router, prefix=f"{settings.api_prefix}/roles", tags=["roles"]
     )
 
     # Register macros routes

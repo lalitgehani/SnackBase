@@ -73,7 +73,59 @@ class RoleRepository:
         role = result.scalar_one_or_none()
         if not role:
             return False
-        
+
         await self.session.delete(role)
         await self.session.flush()
         return True
+
+    async def list_all(self) -> list[RoleModel]:
+        """Get all roles.
+
+        Returns:
+            List of all role models.
+        """
+        result = await self.session.execute(select(RoleModel))
+        return list(result.scalars().all())
+
+    async def update(self, role_id: int, name: str, description: str | None) -> RoleModel | None:
+        """Update a role.
+
+        Args:
+            role_id: Role ID.
+            name: New role name.
+            description: New role description.
+
+        Returns:
+            Updated role model if found, None otherwise.
+        """
+        result = await self.session.execute(
+            select(RoleModel).where(RoleModel.id == role_id)
+        )
+        role = result.scalar_one_or_none()
+        if not role:
+            return None
+
+        role.name = name
+        role.description = description
+        await self.session.flush()
+        return role
+
+    async def get_permissions_count(self, role_id: int) -> int:
+        """Get count of unique collections this role has permissions for.
+
+        Args:
+            role_id: Role ID.
+
+        Returns:
+            Number of unique collections.
+        """
+        from sqlalchemy import func, select as sql_select
+        from snackbase.infrastructure.persistence.models import PermissionModel
+
+        result = await self.session.execute(
+            sql_select(func.count(func.distinct(PermissionModel.collection))).where(
+                PermissionModel.role_id == role_id
+            )
+        )
+        return result.scalar_one()
+
