@@ -138,3 +138,76 @@ async def test_add_user_to_group(mock_group_repo, current_user, mock_session):
 
     mock_group_repo.add_user.assert_called_once_with(group_id, "u2")
     mock_session.commit.assert_called_once()
+
+
+@pytest.fixture
+def superadmin_user():
+    """Create a mock superadmin user."""
+    return CurrentUser(
+        user_id="superadmin1",
+        account_id="SY0000",
+        email="superadmin@example.com",
+        role="superadmin",
+        groups=[],
+    )
+
+
+@pytest.mark.asyncio
+async def test_superadmin_can_get_group_from_any_account(mock_group_repo, superadmin_user):
+    """Test that superadmin can get a group from any account."""
+    mock_group_repo.get_by_id.return_value = GroupModel(id="g1", account_id="acc1")
+
+    result = await get_group("g1", superadmin_user, mock_group_repo)
+
+    assert result.id == "g1"
+    assert result.account_id == "acc1"
+
+
+@pytest.mark.asyncio
+async def test_superadmin_can_update_group_from_any_account(
+    mock_group_repo, superadmin_user, mock_session
+):
+    """Test that superadmin can update a group from any account."""
+    group_data = GroupUpdate(name="Updated Name")
+    mock_group_repo.get_by_id.return_value = GroupModel(
+        id="g1", account_id="acc1", name="Old Name"
+    )
+    mock_group_repo.get_by_name_and_account.return_value = None
+    mock_group_repo.update.return_value = GroupModel(
+        id="g1", account_id="acc1", name="Updated Name"
+    )
+
+    result = await update_group("g1", group_data, superadmin_user, mock_group_repo, mock_session)
+
+    assert result.name == "Updated Name"
+    mock_session.commit.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_superadmin_can_delete_group_from_any_account(
+    mock_group_repo, superadmin_user, mock_session
+):
+    """Test that superadmin can delete a group from any account."""
+    mock_group_repo.get_by_id.return_value = GroupModel(id="g1", account_id="acc1")
+
+    await delete_group("g1", superadmin_user, mock_group_repo, mock_session)
+
+    mock_group_repo.delete.assert_called_once()
+    mock_session.commit.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_superadmin_can_add_user_to_group_from_any_account(
+    mock_group_repo, superadmin_user, mock_session
+):
+    """Test that superadmin can add user to a group from any account."""
+    group_id = "g1"
+    user_data = UserGroupUpdate(user_id="u2")
+    
+    mock_group_repo.get_by_id.return_value = GroupModel(id=group_id, account_id="acc1")
+    mock_group_repo.is_user_in_group.return_value = False
+
+    await add_user_to_group(group_id, user_data, superadmin_user, mock_group_repo, mock_session)
+
+    mock_group_repo.add_user.assert_called_once_with(group_id, "u2")
+    mock_session.commit.assert_called_once()

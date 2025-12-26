@@ -118,8 +118,8 @@ async def get_group(
             detail="Group not found",
         )
         
-    # Ensure account isolation
-    if group.account_id != current_user.account_id:
+    # Ensure account isolation (skip for superadmins)
+    if current_user.account_id != "SY0000" and group.account_id != current_user.account_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Group not found",
@@ -149,7 +149,8 @@ async def update_group(
             detail="Group not found",
         )
         
-    if group.account_id != current_user.account_id:
+    # Ensure account isolation (skip for superadmins)
+    if current_user.account_id != "SY0000" and group.account_id != current_user.account_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Group not found",
@@ -196,7 +197,8 @@ async def delete_group(
             detail="Group not found",
         )
         
-    if group.account_id != current_user.account_id:
+    # Ensure account isolation (skip for superadmins)
+    if current_user.account_id != "SY0000" and group.account_id != current_user.account_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Group not found",
@@ -227,7 +229,8 @@ async def add_user_to_group(
             detail="Group not found",
         )
         
-    if group.account_id != current_user.account_id:
+    # Ensure account isolation (skip for superadmins)
+    if current_user.account_id != "SY0000" and group.account_id != current_user.account_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Group not found",
@@ -269,7 +272,8 @@ async def remove_user_from_group(
             detail="Group not found",
         )
         
-    if group.account_id != current_user.account_id:
+    # Ensure account isolation (skip for superadmins)
+    if current_user.account_id != "SY0000" and group.account_id != current_user.account_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Group not found",
