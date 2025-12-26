@@ -108,3 +108,31 @@ class AccountRepository:
         )
         return result.scalar_one_or_none()
 
+    async def count_all(self) -> int:
+        """Count total number of accounts.
+
+        Returns:
+            Total count of accounts.
+        """
+        from sqlalchemy import func
+
+        result = await self.session.execute(select(func.count(AccountModel.id)))
+        return result.scalar_one() or 0
+
+    async def count_created_since(self, since: "datetime") -> int:
+        """Count accounts created since a given datetime.
+
+        Args:
+            since: Datetime to count from.
+
+        Returns:
+            Count of accounts created since the given datetime.
+        """
+        from datetime import datetime
+        from sqlalchemy import func
+
+        result = await self.session.execute(
+            select(func.count(AccountModel.id)).where(AccountModel.created_at >= since)
+        )
+        return result.scalar_one() or 0
+

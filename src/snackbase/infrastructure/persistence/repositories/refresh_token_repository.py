@@ -118,3 +118,20 @@ class RefreshTokenRepository:
         if token_model.expires_at < datetime.now(timezone.utc):
             return False
         return True
+
+    async def count_active_sessions(self) -> int:
+        """Count active (non-revoked, non-expired) refresh tokens.
+
+        Returns:
+            Count of active sessions.
+        """
+        from sqlalchemy import func
+
+        now = datetime.now(timezone.utc)
+        result = await self._session.execute(
+            select(func.count(RefreshTokenModel.id)).where(
+                RefreshTokenModel.is_revoked == False,  # noqa: E712
+                RefreshTokenModel.expires_at > now,
+            )
+        )
+        return result.scalar_one() or 0

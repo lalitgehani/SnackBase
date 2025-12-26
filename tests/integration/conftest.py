@@ -11,6 +11,10 @@ from sqlalchemy.pool import StaticPool
 
 from snackbase.infrastructure.persistence.database import Base
 from httpx import AsyncClient, ASGITransport
+from datetime import datetime, timezone
+from sqlalchemy import select
+from snackbase.infrastructure.persistence.models import AccountModel, UserModel, RoleModel
+from snackbase.infrastructure.auth.jwt_service import jwt_service
 
 
 @pytest.fixture(scope="session")
@@ -82,3 +86,69 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
         yield ac
 
     app.dependency_overrides = {}
+
+
+@pytest_asyncio.fixture
+async def superadmin_token(db_session: AsyncSession) -> str:
+    """Create a superadmin user and return their access token."""
+    # Create valid account
+    account = AccountModel(id="SA0000", name="System Admin", slug="system-admin")
+    db_session.add(account)
+    
+    # Get admin role
+    admin_role = (await db_session.execute(select(RoleModel).where(RoleModel.name == "admin"))).scalar_one()
+
+    # Create superadmin user
+    user = UserModel(
+        id="superadmin",
+        email="superadmin@snackbase.com",
+        account_id="SA0000",
+        password_hash="hashed_secret",
+        role=admin_role,
+        is_active=True,
+        created_at=datetime.now(timezone.utc),
+    )
+    db_session.add(user)
+    await db_session.commit()
+
+    # Generate token
+    token = jwt_service.create_access_token(
+        user_id=user.id,
+        account_id=user.account_id,
+        email=user.email,
+        role="admin",
+    )
+    return token
+
+
+@pytest_asyncio.fixture
+async def regular_user_token(db_session: AsyncSession) -> str:
+    """Create a regular user and return their access token."""
+    # Create valid account
+    account = AccountModel(id="RU0000", name="Regular User Account", slug="reg-user-acc")
+    db_session.add(account)
+
+    # Get user role
+    user_role = (await db_session.execute(select(RoleModel).where(RoleModel.name == "user"))).scalar_one()
+
+    # Create regular user
+    user = UserModel(
+        id="regular_user",
+        email="user@snackbase.com",
+        account_id="RU0000",
+        password_hash="hashed_secret",
+        role=user_role,
+        is_active=True,
+        created_at=datetime.now(timezone.utc),
+    )
+    db_session.add(user)
+    await db_session.commit()
+
+    # Generate token
+    token = jwt_service.create_access_token(
+        user_id=user.id,
+        account_id=user.account_id,
+        email=user.email,
+        role="user",
+    )
+    return token

@@ -74,3 +74,14 @@ class CollectionRepository:
             select(CollectionModel).where(CollectionModel.id == collection_id)
         )
         return result.scalar_one_or_none()
+
+    async def count_all(self) -> int:
+        """Count total number of collections.
+
+        Returns:
+            Total count of collections.
+        """
+        from sqlalchemy import func
+
+        result = await self.session.execute(select(func.count(CollectionModel.id)))
+        return result.scalar_one() or 0

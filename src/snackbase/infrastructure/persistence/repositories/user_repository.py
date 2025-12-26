@@ -121,3 +121,49 @@ class UserRepository:
         )
         await self.session.flush()
 
+    async def count_all(self) -> int:
+        """Count total number of users across all accounts.
+
+        Returns:
+            Total count of users.
+        """
+        from sqlalchemy import func
+
+        result = await self.session.execute(select(func.count(UserModel.id)))
+        return result.scalar_one() or 0
+
+    async def count_created_since(self, since: datetime) -> int:
+        """Count users created since a given datetime.
+
+        Args:
+            since: Datetime to count from.
+
+        Returns:
+            Count of users created since the given datetime.
+        """
+        from sqlalchemy import func
+
+        result = await self.session.execute(
+            select(func.count(UserModel.id)).where(UserModel.created_at >= since)
+        )
+        return result.scalar_one() or 0
+
+    async def get_recent_registrations(self, limit: int = 10) -> list[UserModel]:
+        """Get recent user registrations with account information.
+
+        Args:
+            limit: Maximum number of registrations to return.
+
+        Returns:
+            List of recent user models with account relationship loaded.
+        """
+        from sqlalchemy.orm import selectinload
+
+        result = await self.session.execute(
+            select(UserModel)
+            .options(selectinload(UserModel.account))
+            .order_by(UserModel.created_at.desc())
+            .limit(limit)
+        )
+        return list(result.scalars().all())
+

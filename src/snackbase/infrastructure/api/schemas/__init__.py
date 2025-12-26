@@ -38,14 +38,22 @@ from snackbase.infrastructure.api.schemas.record_schemas import (
     RecordValidationErrorDetail,
     RecordValidationErrorResponse,
 )
+from snackbase.infrastructure.api.schemas.dashboard_schemas import (
+    AuditLogEntry,
+    DashboardStats,
+    RecentRegistration,
+    SystemHealthStats,
+)
 
 __all__ = [
     "AccountResponse",
+    "AuditLogEntry",
     "AuthResponse",
     "CollectionResponse",
     "ConflictErrorResponse",
     "CreateCollectionRequest",
     "CreatePermissionRequest",
+    "DashboardStats",
     "FieldDefinition",
     "InvitationAcceptRequest",
     "InvitationCreateRequest",
@@ -57,6 +65,7 @@ __all__ = [
     "PermissionListResponse",
     "PermissionResponse",
     "PermissionRulesSchema",
+    "RecentRegistration",
     "RecordListResponse",
     "RecordResponse",
     "RecordValidationErrorDetail",
@@ -64,6 +73,7 @@ __all__ = [
     "RefreshRequest",
     "RegisterRequest",
     "SchemaFieldResponse",
+    "SystemHealthStats",
     "TokenRefreshResponse",
     "UserResponse",
     "ValidationErrorDetail",
