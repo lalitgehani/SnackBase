@@ -108,6 +108,7 @@ ui/                               # React + TypeScript Admin UI
 ```
 
 **Key Principles**:
+
 - Domain layer has ZERO dependencies on FastAPI or infrastructure
 - Infrastructure layer contains ALL external dependencies
 - Repository pattern abstracts data access
@@ -126,16 +127,17 @@ Accounts represent isolated tenants within a single database using row-level iso
 ### Account ID Format
 
 Accounts use auto-generated IDs in format `XX####` (2 letters + 4 digits, e.g., `AB1234`).
+
 - `id`: XX#### format (primary key, immutable)
 - `slug`: URL-friendly identifier for login (globally unique)
 - `name`: Display name (not unique)
 
 ### Superadmin vs Admin
 
-| Aspect | Superadmin | Admin (role) |
-|--------|------------|--------------|
-| Account | Linked to `system` account (ID: `SY0000`) | Linked to specific account |
-| Access | All accounts and system operations | Full CRUD within their account only |
+| Aspect  | Superadmin                                | Admin (role)                        |
+| ------- | ----------------------------------------- | ----------------------------------- |
+| Account | Linked to `system` account (ID: `SY0000`) | Linked to specific account          |
+| Access  | All accounts and system operations        | Full CRUD within their account only |
 
 ## Authentication
 
@@ -216,6 +218,7 @@ status in ["draft", "published"]
 **Tools**: pytest, pytest-asyncio, httpx AsyncClient with ASGITransport
 
 **Fixtures** (in `tests/conftest.py`):
+
 - `db_session` - In-memory SQLite session
 - `client` - Test HTTP client with dependency overrides
 - `superadmin_token` - Pre-authenticated superadmin JWT
@@ -245,3 +248,6 @@ SNACKBASE_CORS_ORIGINS=http://localhost:3000,http://localhost:8000
 - TanStack Query for data fetching
 - Zustand for state management
 - Zod for validation
+- **ShadCN**: Use existing components in `ui/src/components/ui/`.
+- Intall new ShadCN components using npx shadcn@latest add {component name}
+- Never create ShadCN component file. Always install using CLI.

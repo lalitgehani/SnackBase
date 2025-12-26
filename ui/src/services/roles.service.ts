@@ -61,13 +61,30 @@ export interface ValidateRuleResponse {
 
 export interface TestRuleRequest {
   rule: string;
-  context: Record<string, any>;
+  context: Record<string, unknown>;
 }
 
 export interface TestRuleResponse {
   allowed: boolean;
   error: string | null;
   evaluation_details: string | null;
+}
+
+export interface PermissionUpdate {
+  collection: string;
+  operation: 'create' | 'read' | 'update' | 'delete';
+  rule: string;
+  fields: string[] | '*';
+}
+
+export interface BulkPermissionUpdateRequest {
+  updates: PermissionUpdate[];
+}
+
+export interface BulkPermissionUpdateResponse {
+  success_count: number;
+  failure_count: number;
+  errors: string[];
 }
 
 /**
@@ -118,6 +135,14 @@ export const getRolePermissions = async (roleId: number): Promise<RolePermission
 };
 
 /**
+ * Get permissions in matrix format for a role (includes all collections)
+ */
+export const getRolePermissionsMatrix = async (roleId: number): Promise<RolePermissionsResponse> => {
+  const response = await apiClient.get<RolePermissionsResponse>(`/roles/${roleId}/permissions/matrix`);
+  return response.data;
+};
+
+/**
  * Validate a permission rule
  */
 export const validateRule = async (rule: string): Promise<ValidateRuleResponse> => {
@@ -130,8 +155,29 @@ export const validateRule = async (rule: string): Promise<ValidateRuleResponse> 
  */
 export const testRule = async (
   rule: string,
-  context: Record<string, any>
+  context: Record<string, unknown>
 ): Promise<TestRuleResponse> => {
   const response = await apiClient.post<TestRuleResponse>('/roles/test-rule', { rule, context });
   return response.data;
+};
+
+/**
+ * Bulk update permissions for a role
+ */
+export const updateRolePermissionsBulk = async (
+  roleId: number,
+  request: BulkPermissionUpdateRequest
+): Promise<BulkPermissionUpdateResponse> => {
+  const response = await apiClient.put<BulkPermissionUpdateResponse>(
+    `/roles/${roleId}/permissions/bulk`,
+    request
+  );
+  return response.data;
+};
+
+/**
+ * Delete a permission by ID
+ */
+export const deletePermission = async (permissionId: number): Promise<void> => {
+  await apiClient.delete(`/permissions/${permissionId}`);
 };

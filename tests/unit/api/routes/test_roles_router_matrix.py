@@ -40,7 +40,7 @@ def test_get_permissions_matrix_success(
     coll1.name = "customers"
     coll2 = MagicMock()
     coll2.name = "orders"
-    coll_repo.list_all = AsyncMock(return_value=[coll1, coll2])
+    coll_repo.get_all = AsyncMock(return_value=([coll1, coll2], 2))
 
     # Mock permissions (only for customers)
     perm_repo = mock_perm_repo.return_value
@@ -131,7 +131,7 @@ def test_get_permissions_matrix_empty_role(
     coll_repo = mock_coll_repo.return_value
     coll1 = MagicMock()
     coll1.name = "customers"
-    coll_repo.list_all = AsyncMock(return_value=[coll1])
+    coll_repo.get_all = AsyncMock(return_value=([coll1], 1))
 
     perm_repo = mock_perm_repo.return_value
     perm_repo.get_by_role_id = AsyncMock(return_value=[])  # No permissions
@@ -204,7 +204,7 @@ def test_get_permissions_matrix_format(
     coll_repo = mock_coll_repo.return_value
     coll1 = MagicMock()
     coll1.name = "customers"
-    coll_repo.list_all = AsyncMock(return_value=[coll1])
+    coll_repo.get_all = AsyncMock(return_value=([coll1], 1))
 
     perm_repo = mock_perm_repo.return_value
     perm_repo.get_by_role_id = AsyncMock(return_value=[])

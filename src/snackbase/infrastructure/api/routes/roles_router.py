@@ -469,7 +469,7 @@ async def get_permissions_matrix(
         )
 
     # Get all collections
-    all_collections = await collection_repo.list_all()
+    all_collections, _ = await collection_repo.get_all()
 
     # Get all permissions for this role
     permissions = await permission_repo.get_by_role_id(role_id)
