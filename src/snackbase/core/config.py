@@ -89,6 +89,16 @@ class Settings(BaseSettings):
     rate_limit_per_minute: int = 60
     rate_limit_per_hour: int = 1000
 
+    # Superadmin Settings
+    superadmin_email: str | None = Field(
+        default=None,
+        description="Email for initial superadmin creation (auto-created on startup if set)",
+    )
+    superadmin_password: str | None = Field(
+        default=None,
+        description="Password for initial superadmin creation (auto-created on startup if set)",
+    )
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, v: str | list[str]) -> list[str]:

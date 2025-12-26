@@ -215,6 +215,103 @@ def init_db(force: bool) -> None:
 
 
 @cli.command()
+@click.option(
+    "--email",
+    type=str,
+    default=None,
+    help="Superadmin email (prompts if not provided)",
+)
+@click.option(
+    "--password",
+    type=str,
+    default=None,
+    help="Superadmin password (prompts if not provided)",
+)
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Skip confirmation prompt if superadmin already exists",
+)
+def create_superadmin(email: str | None, password: str | None, force: bool) -> None:
+    """Create a superadmin user.
+
+    Superadmin users have full access to all accounts and system operations.
+    The superadmin is linked to the special system account (SY0000).
+    """
+    import asyncio
+
+    from snackbase.core.config import get_settings
+    from snackbase.core.logging import get_logger
+    from snackbase.domain.services import SuperadminService, SuperadminCreationError
+    from snackbase.infrastructure.persistence.database import get_db_manager
+
+    settings = get_settings()
+    configure_logging(settings)
+    logger = get_logger(__name__)
+
+    async def create() -> None:
+        db = get_db_manager()
+
+        # Check if superadmin already exists
+        has_superadmin = await SuperadminService.has_superadmin(db.session_factory)
+        if has_superadmin and not force:
+            if not click.confirm(
+                "A superadmin already exists. Do you want to create another one?",
+                default=False,
+            ):
+                click.echo("Cancelled.")
+                raise SystemExit(0)
+
+        # Prompt for email if not provided
+        if email is None:
+            email = click.prompt("Superadmin email", type=str)
+
+        # Validate email format
+        if "@" not in email or "." not in email.split("@")[-1]:
+            click.echo("Error: Invalid email format", err=True)
+            raise SystemExit(1)
+
+        # Prompt for password if not provided
+        if password is None:
+            password = click.prompt(
+                "Superadmin password",
+                hide_input=True,
+                confirmation_prompt=True,
+            )
+
+        # Create superadmin
+        try:
+            async with db.session() as session:
+                user_id, account_id = await SuperadminService.create_superadmin(
+                    email=email,
+                    password=password,
+                    session=session,
+                )
+
+            click.echo(
+                f"\nSuperadmin created successfully!\n"
+                f"  User ID:    {user_id}\n"
+                f"  Account ID: {account_id}\n"
+                f"  Email:      {email}\n"
+                f"\nYou can now log in using:\n"
+                f"  Account: {account_id} or 'system'\n"
+                f"  Email:   {email}\n"
+            )
+            logger.info(
+                "Superadmin created via CLI",
+                user_id=user_id,
+                account_id=account_id,
+                email=email,
+            )
+        except SuperadminCreationError as e:
+            click.echo(f"Error: {e.message}", err=True)
+            logger.error("Superadmin creation failed", error=str(e))
+            raise SystemExit(1)
+
+    asyncio.run(create())
+
+
+@cli.command()
 def info() -> None:
     """Display SnackBase configuration and system information."""
     settings = get_settings()

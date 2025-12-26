@@ -34,6 +34,10 @@ from snackbase.domain.services.slug_generator import (
     SlugGenerator,
     SlugValidationError,
 )
+from snackbase.domain.services.superadmin_service import (
+    SuperadminCreationError,
+    SuperadminService,
+)
 
 __all__ = [
     "AccountIdExhaustedError",
@@ -53,6 +57,8 @@ __all__ = [
     "RESERVED_FIELD_NAMES",
     "SlugGenerator",
     "SlugValidationError",
+    "SuperadminCreationError",
+    "SuperadminService",
     "default_password_validator",
 ]
 

@@ -244,6 +244,9 @@ async def init_database() -> None:
     else:
         logger.info("Production mode: Skipping auto-create, use migrations")
 
+    # Create superadmin from environment variables if configured
+    await _create_superadmin_from_env(db)
+
 
 async def _seed_default_roles(db: DatabaseManager, RoleModel: type) -> None:
     """Seed default roles if they don't exist.
@@ -328,6 +331,61 @@ async def _seed_default_permissions(db: DatabaseManager) -> None:
                 )
 
         await session.commit()
+
+
+async def _create_superadmin_from_env(db: DatabaseManager) -> None:
+    """Create superadmin from environment variables if configured.
+
+    Checks if SUPERADMIN_EMAIL and SUPERADMIN_PASSWORD are set,
+    and creates a superadmin user if one doesn't already exist.
+
+    Args:
+        db: Database manager instance.
+    """
+    from snackbase.core.config import get_settings
+    from snackbase.domain.services import (
+        SuperadminCreationError,
+        SuperadminService,
+    )
+
+    settings = get_settings()
+
+    # Only proceed if both email and password are configured
+    if not settings.superadmin_email or not settings.superadmin_password:
+        logger.debug("Superadmin environment variables not configured, skipping")
+        return
+
+    # Check if superadmin already exists
+    has_existing = await SuperadminService.has_superadmin(db.session_factory)
+    if has_existing:
+        logger.info(
+            "Superadmin already exists, skipping environment-based creation",
+            email=settings.superadmin_email,
+        )
+        return
+
+    # Create superadmin from environment variables
+    try:
+        async with db.session() as session:
+            user_id, account_id = await SuperadminService.create_superadmin(
+                email=settings.superadmin_email,
+                password=settings.superadmin_password,
+                session=session,
+            )
+
+        logger.info(
+            "Superadmin created from environment variables",
+            user_id=user_id,
+            account_id=account_id,
+            email=settings.superadmin_email,
+        )
+    except SuperadminCreationError as e:
+        logger.error(
+            "Failed to create superadmin from environment variables",
+            error=str(e),
+            email=settings.superadmin_email,
+        )
+        # Don't raise - allow application to start
 
 
 async def close_database() -> None:
