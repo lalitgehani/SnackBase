@@ -461,16 +461,17 @@ class TestHookContext:
 
     def test_hook_context_creation(self) -> None:
         """Test that HookContext can be created with all fields."""
+        test_account_id = "550e8400-e29b-41d4-a716-446655440000"
         context = HookContext(
             app=None,
             user=None,
-            account_id="AB1234",
+            account_id=test_account_id,
             request_id="req_123",
         )
 
         assert context.app is None
         assert context.user is None
-        assert context.account_id == "AB1234"
+        assert context.account_id == test_account_id
         assert context.request_id == "req_123"
 
     def test_hook_context_generates_request_id(self) -> None:

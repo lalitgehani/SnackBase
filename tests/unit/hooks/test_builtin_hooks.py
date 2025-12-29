@@ -89,7 +89,8 @@ class TestAccountIsolationHook:
     async def test_sets_account_id_on_create(self) -> None:
         """Test that account_id is set from context on creation."""
         data = {"title": "Test"}
-        context = HookContext(app=None, account_id="AB1234")
+        test_account_id = "550e8400-e29b-41d4-a716-446655440000"
+        context = HookContext(app=None, account_id=test_account_id)
 
         result = await account_isolation_hook(
             event=HookEvent.ON_RECORD_BEFORE_CREATE,
@@ -97,7 +98,7 @@ class TestAccountIsolationHook:
             context=context,
         )
 
-        assert result["account_id"] == "AB1234"
+        assert result["account_id"] == test_account_id
 
     @pytest.mark.asyncio
     async def test_does_not_set_without_context_account_id(self) -> None:
@@ -116,7 +117,7 @@ class TestAccountIsolationHook:
     @pytest.mark.asyncio
     async def test_handles_none_data(self) -> None:
         """Test that None data is handled gracefully."""
-        context = HookContext(app=None, account_id="AB1234")
+        context = HookContext(app=None, account_id="550e8400-e29b-41d4-a716-446655440000")
 
         result = await account_isolation_hook(
             event=HookEvent.ON_RECORD_BEFORE_CREATE,
@@ -213,10 +214,11 @@ class TestRegisterBuiltinHooks:
         registry = HookRegistry()
         register_builtin_hooks(registry)
 
+        test_account_id = "550e8400-e29b-41d4-a716-446655440001"
         context = HookContext(
             app=None,
             user=MockUser("user_xyz"),
-            account_id="AB9999",
+            account_id=test_account_id,
         )
 
         result = await registry.trigger(
@@ -228,7 +230,7 @@ class TestRegisterBuiltinHooks:
         assert result.success is True
         assert result.data["created_at"] is not None
         assert result.data["updated_at"] is not None
-        assert result.data["account_id"] == "AB9999"
+        assert result.data["account_id"] == test_account_id
         assert result.data["created_by"] == "user_xyz"
         assert result.data["updated_by"] == "user_xyz"
 
@@ -241,7 +243,7 @@ class TestRegisterBuiltinHooks:
         context = HookContext(
             app=None,
             user=MockUser("user_xyz"),
-            account_id="AB9999",
+            account_id="550e8400-e29b-41d4-a716-446655440001",
         )
 
         result = await registry.trigger(
