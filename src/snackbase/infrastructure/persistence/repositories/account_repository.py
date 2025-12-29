@@ -91,12 +91,21 @@ class AccountRepository:
     async def get_all_ids(self) -> list[str]:
         """Get all account IDs.
 
-        Used for account ID generation to avoid collisions.
-
         Returns:
-            List of all account IDs.
+            List of all account IDs (UUIDs).
         """
         result = await self.session.execute(select(AccountModel.id))
+        return list(result.scalars().all())
+
+    async def get_all_account_codes(self) -> list[str]:
+        """Get all account codes.
+
+        Used for account code generation to avoid collisions.
+
+        Returns:
+            List of all account codes in XX#### format.
+        """
+        result = await self.session.execute(select(AccountModel.account_code))
         return list(result.scalars().all())
 
     async def get_by_slug_or_code(self, identifier: str) -> AccountModel | None:
@@ -188,6 +197,7 @@ class AccountRepository:
                     AccountModel.name.ilike(search_pattern),
                     AccountModel.slug.ilike(search_pattern),
                     AccountModel.account_code.ilike(search_pattern),
+                    AccountModel.id.ilike(search_pattern),
                 )
             )
 

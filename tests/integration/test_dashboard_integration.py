@@ -25,6 +25,7 @@ async def test_dashboard_stats_endpoint_success(
     # Account
     account = AccountModel(
         id="TS0001",
+        account_code="TS0001",
         name="Test Account",
         slug="test-account",
         created_at=datetime.now(timezone.utc) - timedelta(days=3),
@@ -175,7 +176,7 @@ async def test_dashboard_stats_recent_registrations_order(
 ):
     """Test recent registrations are ordered by created_at DESC."""
     # Create multiple users with different timestamps
-    account = AccountModel(id="TS0002", name="Test2", slug="test2")
+    account = AccountModel(id="TS0002", account_code="TS0002", name="Test2", slug="test2")
     db_session.add(account)
 
     now = datetime.now(timezone.utc)
@@ -230,7 +231,7 @@ async def test_dashboard_stats_active_sessions_count(
     client: AsyncClient, superadmin_token: str, db_session
 ):
     """Test active sessions count excludes revoked and expired tokens."""
-    account = AccountModel(id="TS0003", name="Test3", slug="test3")
+    account = AccountModel(id="TS0003", account_code="TS0003", name="Test3", slug="test3")
     role = (await db_session.execute(select(RoleModel).where(RoleModel.name == "user"))).scalar_one()
     user = UserModel(
         id="user_sessions",

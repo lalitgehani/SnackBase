@@ -67,6 +67,7 @@ class DashboardService:
                 id=user.id,
                 email=user.email,
                 account_id=user.account_id,
+                account_code=user.account.account_code if user.account else "UNKNOWN",
                 account_name=user.account.name if user.account else "Unknown",
                 created_at=user.created_at,
             )

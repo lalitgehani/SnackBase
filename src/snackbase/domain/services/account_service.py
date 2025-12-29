@@ -47,8 +47,8 @@ class AccountService:
         account_id = str(uuid.uuid4())
 
         # Generate account code
-        existing_ids = await self.account_repo.get_all_ids()
-        account_code = AccountCodeGenerator.generate(existing_ids)
+        existing_codes = await self.account_repo.get_all_account_codes()
+        account_code = AccountCodeGenerator.generate(existing_codes)
 
         # Generate or validate slug
         if slug:

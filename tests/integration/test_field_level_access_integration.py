@@ -26,6 +26,7 @@ async def test_account_and_users(db_session: AsyncSession):
     account_repo = AccountRepository(db_session)
     account = AccountModel(
         id="TE1234",  # Format: 2 letters + 4 digits
+        account_code="TE1234",
         slug="testaccount",
         name="Test Account",
     )

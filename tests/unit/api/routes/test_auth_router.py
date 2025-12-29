@@ -79,7 +79,7 @@ async def test_register_success(mock_session):
 @patch("snackbase.infrastructure.api.routes.auth_router.RefreshTokenRepository")
 @patch("snackbase.infrastructure.api.routes.auth_router.jwt_service")
 @patch("snackbase.infrastructure.api.routes.auth_router.hash_password")
-@patch("snackbase.infrastructure.api.routes.auth_router.AccountIdGenerator")
+@patch("snackbase.infrastructure.api.routes.auth_router.AccountCodeGenerator")
 def test_register_endpoint_success(
     mock_id_gen,
     mock_hash,
@@ -100,7 +100,7 @@ def test_register_endpoint_success(
     
     account_repo_instance = mock_account_repo.return_value
     account_repo_instance.slug_exists = AsyncMock(return_value=False)
-    account_repo_instance.get_all_ids = AsyncMock(return_value=[])
+    account_repo_instance.get_all_account_codes = AsyncMock(return_value=[])
     account_repo_instance.create = AsyncMock()
     
     role_repo_instance = mock_role_repo.return_value
@@ -247,7 +247,7 @@ def test_login_success(
     account_mock.slug = "test-account"
     account_mock.name = "Test Account"
     account_mock.created_at = datetime.now()
-    account_repo.get_by_slug_or_id = AsyncMock(return_value=account_mock)
+    account_repo.get_by_slug_or_code = AsyncMock(return_value=account_mock)
     
     user_repo = mock_user_repo.return_value
     user_mock = MagicMock()
@@ -305,7 +305,7 @@ def test_login_success(
 def test_login_account_not_found(mock_account_repo, client):
     """Test login fails when account not found."""
     
-    mock_account_repo.return_value.get_by_slug_or_id = AsyncMock(return_value=None)
+    mock_account_repo.return_value.get_by_slug_or_code = AsyncMock(return_value=None)
     
     # Override DB session
     from snackbase.infrastructure.persistence.database import get_db_session
@@ -333,7 +333,7 @@ def test_login_user_not_found(mock_account_repo, mock_user_repo, client):
     
     account_mock = MagicMock()
     account_mock.id = "XY1234"
-    mock_account_repo.return_value.get_by_slug_or_id = AsyncMock(return_value=account_mock)
+    mock_account_repo.return_value.get_by_slug_or_code = AsyncMock(return_value=account_mock)
     
     mock_user_repo.return_value.get_by_email_and_account = AsyncMock(return_value=None)
     
@@ -364,7 +364,7 @@ def test_login_invalid_password(mock_account_repo, mock_user_repo, mock_verify, 
     
     account_mock = MagicMock()
     account_mock.id = "XY1234"
-    mock_account_repo.return_value.get_by_slug_or_id = AsyncMock(return_value=account_mock)
+    mock_account_repo.return_value.get_by_slug_or_code = AsyncMock(return_value=account_mock)
     
     user_mock = MagicMock()
     user_mock.password_hash = "hashed_password"
@@ -399,7 +399,7 @@ def test_login_inactive_user(mock_account_repo, mock_user_repo, mock_verify, cli
     
     account_mock = MagicMock()
     account_mock.id = "XY1234"
-    mock_account_repo.return_value.get_by_slug_or_id = AsyncMock(return_value=account_mock)
+    mock_account_repo.return_value.get_by_slug_or_code = AsyncMock(return_value=account_mock)
     
     user_mock = MagicMock()
     user_mock.is_active = False

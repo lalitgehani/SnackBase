@@ -50,6 +50,7 @@ async def test_get_dashboard_stats_with_data(dashboard_service, mock_session):
         mock_user1.created_at = datetime.now(timezone.utc)
         mock_user1.account = MagicMock()
         mock_user1.account.name = "Test Account"
+        mock_user1.account.account_code = "AC0001"
 
         dashboard_service.user_repo.get_recent_registrations = AsyncMock(
             return_value=[mock_user1]

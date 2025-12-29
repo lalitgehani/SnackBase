@@ -1,5 +1,7 @@
 """Integration tests for Users API."""
 
+import uuid
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
@@ -14,7 +16,8 @@ async def test_create_user(client: AsyncClient, superadmin_token: str, db_sessio
     headers = {"Authorization": f"Bearer {superadmin_token}"}
 
     # First, create an account for the user
-    account = AccountModel(id="AB1234", name="Test Account", slug="test-account")
+    account_id = str(uuid.uuid4())
+    account = AccountModel(id=account_id, account_code="AB1234", name="Test Account", slug="test-account")
     db_session.add(account)
     await db_session.commit()
 
@@ -25,7 +28,7 @@ async def test_create_user(client: AsyncClient, superadmin_token: str, db_sessio
     payload = {
         "email": "testuser@example.com",
         "password": "TestPass123!@#",
-        "account_id": "AB1234",
+        "account_id": account_id,
         "role_id": role.id,
         "is_active": True,
     }
@@ -33,7 +36,7 @@ async def test_create_user(client: AsyncClient, superadmin_token: str, db_sessio
     assert response.status_code == 201
     data = response.json()
     assert data["email"] == "testuser@example.com"
-    assert data["account_id"] == "AB1234"
+    assert data["account_id"] == account_id
     assert data["is_active"] is True
     assert "id" in data
 
@@ -44,7 +47,8 @@ async def test_create_user_weak_password(client: AsyncClient, superadmin_token: 
     headers = {"Authorization": f"Bearer {superadmin_token}"}
 
     # Create account
-    account = AccountModel(id="AB1235", name="Test Account 2", slug="test-account-2")
+    account_id = str(uuid.uuid4())
+    account = AccountModel(id=account_id, account_code="AB1235", name="Test Account 2", slug="test-account-2")
     db_session.add(account)
     await db_session.commit()
 
@@ -54,7 +58,7 @@ async def test_create_user_weak_password(client: AsyncClient, superadmin_token: 
     payload = {
         "email": "weakpass@example.com",
         "password": "weakpass123",
-        "account_id": "AB1235",
+        "account_id": account_id,
         "role_id": role.id,
     }
     response = await client.post("/api/v1/users", json=payload, headers=headers)
@@ -67,7 +71,8 @@ async def test_create_user_duplicate_email(client: AsyncClient, superadmin_token
     headers = {"Authorization": f"Bearer {superadmin_token}"}
 
     # Create account
-    account = AccountModel(id="AB1236", name="Test Account 3", slug="test-account-3")
+    account_id = str(uuid.uuid4())
+    account = AccountModel(id=account_id, account_code="AB1236", name="Test Account 3", slug="test-account-3")
     db_session.add(account)
     await db_session.commit()
 
@@ -76,7 +81,7 @@ async def test_create_user_duplicate_email(client: AsyncClient, superadmin_token
     payload = {
         "email": "duplicate@example.com",
         "password": "TestPass123!@#",
-        "account_id": "AB1236",
+        "account_id": account_id,
         "role_id": role.id,
     }
 
@@ -108,7 +113,8 @@ async def test_list_users_with_filters(client: AsyncClient, superadmin_token: st
     headers = {"Authorization": f"Bearer {superadmin_token}"}
 
     # Create test account
-    account = AccountModel(id="AB1237", name="Filter Test", slug="filter-test")
+    account_id = str(uuid.uuid4())
+    account = AccountModel(id=account_id, account_code="AB1237", name="Filter Test", slug="filter-test")
     db_session.add(account)
     await db_session.commit()
 
@@ -119,18 +125,18 @@ async def test_list_users_with_filters(client: AsyncClient, superadmin_token: st
         payload = {
             "email": f"filter{i}@example.com",
             "password": "TestPass123!@#",
-            "account_id": "AB1237",
+            "account_id": account_id,
             "role_id": role.id,
         }
         await client.post("/api/v1/users", json=payload, headers=headers)
 
     # Filter by account_id
-    response = await client.get(f"/api/v1/users?account_id=AB1237", headers=headers)
+    response = await client.get(f"/api/v1/users?account_id={account_id}", headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert len(data["items"]) >= 3
     for user in data["items"]:
-        assert user["account_id"] == "AB1237"
+        assert user["account_id"] == account_id
 
     # Filter by search
     response = await client.get(f"/api/v1/users?search=filter1", headers=headers)
@@ -145,7 +151,8 @@ async def test_list_users_pagination(client: AsyncClient, superadmin_token: str,
     headers = {"Authorization": f"Bearer {superadmin_token}"}
 
     # Create test account
-    account = AccountModel(id="AB1238", name="Pagination Test", slug="pagination-test")
+    account_id = str(uuid.uuid4())
+    account = AccountModel(id=account_id, account_code="AB1238", name="Pagination Test", slug="pagination-test")
     db_session.add(account)
     await db_session.commit()
 
@@ -156,7 +163,7 @@ async def test_list_users_pagination(client: AsyncClient, superadmin_token: str,
         payload = {
             "email": f"page{i}@example.com",
             "password": "TestPass123!@#",
-            "account_id": "AB1238",
+            "account_id": account_id,
             "role_id": role.id,
         }
         await client.post("/api/v1/users", json=payload, headers=headers)
@@ -175,7 +182,8 @@ async def test_get_user_by_id(client: AsyncClient, superadmin_token: str, db_ses
     headers = {"Authorization": f"Bearer {superadmin_token}"}
 
     # Create test account
-    account = AccountModel(id="AB1239", name="Get Test", slug="get-test")
+    account_id = str(uuid.uuid4())
+    account = AccountModel(id=account_id, account_code="AB1239", name="Get Test", slug="get-test")
     db_session.add(account)
     await db_session.commit()
 
@@ -185,7 +193,7 @@ async def test_get_user_by_id(client: AsyncClient, superadmin_token: str, db_ses
     payload = {
         "email": "getbyid@example.com",
         "password": "TestPass123!@#",
-        "account_id": "AB1239",
+        "account_id": account_id,
         "role_id": role.id,
     }
     response = await client.post("/api/v1/users", json=payload, headers=headers)
@@ -205,7 +213,8 @@ async def test_update_user(client: AsyncClient, superadmin_token: str, db_sessio
     headers = {"Authorization": f"Bearer {superadmin_token}"}
 
     # Create test account
-    account = AccountModel(id="AB1240", name="Update Test", slug="update-test")
+    account_id = str(uuid.uuid4())
+    account = AccountModel(id=account_id, account_code="AB1240", name="Update Test", slug="update-test")
     db_session.add(account)
     await db_session.commit()
 
@@ -215,7 +224,7 @@ async def test_update_user(client: AsyncClient, superadmin_token: str, db_sessio
     payload = {
         "email": "updateuser@example.com",
         "password": "TestPass123!@#",
-        "account_id": "AB1240",
+        "account_id": account_id,
         "role_id": role.id,
     }
     response = await client.post("/api/v1/users", json=payload, headers=headers)
@@ -235,7 +244,8 @@ async def test_update_user_deactivate(client: AsyncClient, superadmin_token: str
     headers = {"Authorization": f"Bearer {superadmin_token}"}
 
     # Create test account
-    account = AccountModel(id="AB1241", name="Deactivate Test", slug="deactivate-test")
+    account_id = str(uuid.uuid4())
+    account = AccountModel(id=account_id, account_code="AB1241", name="Deactivate Test", slug="deactivate-test")
     db_session.add(account)
     await db_session.commit()
 
@@ -245,7 +255,7 @@ async def test_update_user_deactivate(client: AsyncClient, superadmin_token: str
     payload = {
         "email": "deactivate@example.com",
         "password": "TestPass123!@#",
-        "account_id": "AB1241",
+        "account_id": account_id,
         "role_id": role.id,
     }
     response = await client.post("/api/v1/users", json=payload, headers=headers)
@@ -265,7 +275,8 @@ async def test_reset_user_password(client: AsyncClient, superadmin_token: str, d
     headers = {"Authorization": f"Bearer {superadmin_token}"}
 
     # Create test account
-    account = AccountModel(id="AB1242", name="Password Test", slug="password-test")
+    account_id = str(uuid.uuid4())
+    account = AccountModel(id=account_id, account_code="AB1242", name="Password Test", slug="password-test")
     db_session.add(account)
     await db_session.commit()
 
@@ -275,7 +286,7 @@ async def test_reset_user_password(client: AsyncClient, superadmin_token: str, d
     payload = {
         "email": "password@example.com",
         "password": "TestPass123!@#",
-        "account_id": "AB1242",
+        "account_id": account_id,
         "role_id": role.id,
     }
     response = await client.post("/api/v1/users", json=payload, headers=headers)
@@ -293,7 +304,8 @@ async def test_reset_user_password_weak_password(client: AsyncClient, superadmin
     headers = {"Authorization": f"Bearer {superadmin_token}"}
 
     # Create test account
-    account = AccountModel(id="AB1243", name="Weak Password Test", slug="weak-password-test")
+    account_id = str(uuid.uuid4())
+    account = AccountModel(id=account_id, account_code="AB1243", name="Weak Password Test", slug="weak-password-test")
     db_session.add(account)
     await db_session.commit()
 
@@ -303,7 +315,7 @@ async def test_reset_user_password_weak_password(client: AsyncClient, superadmin
     payload = {
         "email": "weakreset@example.com",
         "password": "TestPass123!@#",
-        "account_id": "AB1243",
+        "account_id": account_id,
         "role_id": role.id,
     }
     response = await client.post("/api/v1/users", json=payload, headers=headers)
@@ -321,7 +333,8 @@ async def test_deactivate_user(client: AsyncClient, superadmin_token: str, db_se
     headers = {"Authorization": f"Bearer {superadmin_token}"}
 
     # Create test account
-    account = AccountModel(id="AB1244", name="Soft Delete Test", slug="soft-delete-test")
+    account_id = str(uuid.uuid4())
+    account = AccountModel(id=account_id, account_code="AB1244", name="Soft Delete Test", slug="soft-delete-test")
     db_session.add(account)
     await db_session.commit()
 
@@ -331,7 +344,7 @@ async def test_deactivate_user(client: AsyncClient, superadmin_token: str, db_se
     payload = {
         "email": "softdelete@example.com",
         "password": "TestPass123!@#",
-        "account_id": "AB1244",
+        "account_id": account_id,
         "role_id": role.id,
     }
     response = await client.post("/api/v1/users", json=payload, headers=headers)
@@ -381,7 +394,8 @@ async def test_user_crud_lifecycle(client: AsyncClient, superadmin_token: str, d
     headers = {"Authorization": f"Bearer {superadmin_token}"}
 
     # Create test account
-    account = AccountModel(id="AB1245", name="Lifecycle Test", slug="lifecycle-test")
+    account_id = str(uuid.uuid4())
+    account = AccountModel(id=account_id, account_code="AB1245", name="Lifecycle Test", slug="lifecycle-test")
     db_session.add(account)
     await db_session.commit()
 
@@ -391,7 +405,7 @@ async def test_user_crud_lifecycle(client: AsyncClient, superadmin_token: str, d
     payload = {
         "email": "lifecycle@example.com",
         "password": "TestPass123!@#",
-        "account_id": "AB1245",
+        "account_id": account_id,
         "role_id": role.id,
         "is_active": True,
     }
@@ -423,7 +437,7 @@ async def test_user_crud_lifecycle(client: AsyncClient, superadmin_token: str, d
     assert response.status_code == 200
 
     # 5. List Users - verify user appears
-    response = await client.get(f"/api/v1/users?account_id=AB1245", headers=headers)
+    response = await client.get(f"/api/v1/users?account_id={account_id}", headers=headers)
     assert response.status_code == 200
     items = response.json()["items"]
     assert any(item["id"] == user_id for item in items)

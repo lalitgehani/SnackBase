@@ -44,6 +44,7 @@ def sample_dashboard_stats():
                 id="user1",
                 email="user1@example.com",
                 account_id="AC0001",
+                account_code="AC0001",
                 account_name="Test Account",
                 created_at=datetime.now(timezone.utc),
             )

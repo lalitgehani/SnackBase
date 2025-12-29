@@ -146,18 +146,17 @@ async def register(
         )
 
     # 4. Generate account ID and code
-    # TODO: In Phase 2, update to generate UUID for id and use account_code
-    existing_ids = await account_repo.get_all_ids()
+    existing_codes = await account_repo.get_all_account_codes()
     account_id = str(uuid.uuid4())  # Generate UUID
-    account_code = AccountCodeGenerator.generate(existing_ids)  # Generate code
+    account_code = AccountCodeGenerator.generate(existing_codes)  # Generate code
 
     # 5. Hash password
     password_hash = hash_password(request.password)
 
     # 6. Create account record
-    # TODO: In Phase 2, add account_code field to AccountModel
     account = AccountModel(
         id=account_id,
+        account_code=account_code,
         slug=slug,
         name=request.account_name,
     )
@@ -288,7 +287,7 @@ async def login(
     role_repo = RoleRepository(session)
 
     # 1. Resolve account by slug or ID
-    account = await account_repo.get_by_slug_or_id(request.account)
+    account = await account_repo.get_by_slug_or_code(request.account)
 
     if account is None:
         # Account not found - still verify password to prevent timing attacks
