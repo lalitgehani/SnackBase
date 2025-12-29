@@ -124,6 +124,7 @@ async def test_account_creation(db_session: AsyncSession):
     """Test creating an account with validation."""
     account = AccountModel(
         id="XX1234",
+        account_code="XX1234",
         slug="test-account",
         name="Test Account"
     )
@@ -141,7 +142,9 @@ async def test_account_creation(db_session: AsyncSession):
 async def test_group_relationships(db_session: AsyncSession):
     """Test group relationships with users."""
     # Setup account and role needed for user/group
-    account = AccountModel(id="XY5678", slug="group-test", name="Group Test")
+    account = AccountModel(
+        id="XY5678", account_code="XY5678", slug="group-test", name="Group Test"
+    )
     role = RoleModel(name="group_user", description="Group User")
     db_session.add_all([account, role])
     await db_session.commit()

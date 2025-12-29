@@ -29,7 +29,7 @@ FIELD_TYPE_TO_SQL = {
 # System columns auto-added to every collection table
 SYSTEM_COLUMNS = [
     ("id", "TEXT PRIMARY KEY"),
-    ("account_id", "TEXT NOT NULL"),
+    ("account_id", "VARCHAR(36) NOT NULL"),
     ("created_at", "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP"),
     ("created_by", "TEXT NOT NULL"),
     ("updated_at", "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP"),
