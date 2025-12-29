@@ -34,7 +34,7 @@ class AccountRepository:
         """Get an account by ID.
 
         Args:
-            account_id: Account ID in XX#### format.
+            account_id: Account ID (UUID).
 
         Returns:
             Account model if found, None otherwise.
@@ -83,22 +83,25 @@ class AccountRepository:
         result = await self.session.execute(select(AccountModel.id))
         return list(result.scalars().all())
 
-    async def get_by_slug_or_id(self, identifier: str) -> AccountModel | None:
-        """Get an account by slug or ID (XX#### format).
+    async def get_by_slug_or_code(self, identifier: str) -> AccountModel | None:
+        """Get an account by slug or account code (XX#### format).
 
-        Attempts to find by ID first (if format matches XX####), then by slug.
+        Attempts to find by account code first (if format matches XX####), then by slug.
 
         Args:
-            identifier: Account slug or ID.
+            identifier: Account slug or account code.
 
         Returns:
             Account model if found, None otherwise.
         """
         import re
 
-        # Check if identifier matches account ID format (2 letters + 4 digits)
+        # Check if identifier matches account code format (2 letters + 4 digits)
         if re.match(r"^[A-Z]{2}\d{4}$", identifier.upper()):
-            account = await self.get_by_id(identifier.upper())
+            result = await self.session.execute(
+                select(AccountModel).where(AccountModel.account_code == identifier.upper())
+            )
+            account = result.scalar_one_or_none()
             if account:
                 return account
 
@@ -151,7 +154,7 @@ class AccountRepository:
             page_size: Number of items per page.
             sort_by: Column to sort by (id, slug, name, created_at).
             sort_order: Sort order (asc or desc).
-            search_query: Optional search query (searches name, slug, ID).
+            search_query: Optional search query (searches name, slug, account_code).
 
         Returns:
             Tuple of (list of accounts, total count).
@@ -168,7 +171,7 @@ class AccountRepository:
                 or_(
                     AccountModel.name.ilike(search_pattern),
                     AccountModel.slug.ilike(search_pattern),
-                    AccountModel.id.ilike(search_pattern),
+                    AccountModel.account_code.ilike(search_pattern),
                 )
             )
 

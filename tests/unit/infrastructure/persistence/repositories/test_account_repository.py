@@ -14,18 +14,20 @@ async def test_create_account(db_session):
     """Test creating an account."""
     repo = AccountRepository(db_session)
     account = AccountModel(
-        id="AA0001",
+        id="00000000-0000-0000-0000-000000000001",
+        account_code="AA0001",
         name="Test Account",
         slug="test-account",
         created_at=datetime.now(timezone.utc),
     )
 
     created = await repo.create(account)
-    assert created.id == "AA0001"
+    assert created.id == "00000000-0000-0000-0000-000000000001"
+    assert created.account_code == "AA0001"
     assert created.name == "Test Account"
 
     # Verify persistence
-    fetched = await repo.get_by_id("AA0001")
+    fetched = await repo.get_by_id("00000000-0000-0000-0000-000000000001")
     assert fetched is not None
     assert fetched.name == "Test Account"
 
@@ -38,7 +40,8 @@ async def test_get_all_paginated_default(db_session):
     # Create 30 accounts
     for i in range(30):
         account = AccountModel(
-            id=f"AA{i:04d}",
+            id=f"00000000-0000-0000-0000-{i:012d}",
+            account_code=f"AA{i:04d}",
             name=f"Account {i}",
             slug=f"account-{i}",
             created_at=datetime.now(timezone.utc) + timedelta(minutes=i),
@@ -50,7 +53,7 @@ async def test_get_all_paginated_default(db_session):
     accounts, total = await repo.get_all_paginated(page=1, page_size=10)
     assert len(accounts) == 10
     assert total == 30
-    assert accounts[0].id == "AA0029"  # Newest first
+    assert accounts[0].account_code == "AA0029"  # Newest first
     
     # Page 2
     accounts_p2, total_p2 = await repo.get_all_paginated(page=2, page_size=10)
@@ -67,9 +70,9 @@ async def test_get_all_paginated_with_search(db_session):
     repo = AccountRepository(db_session)
     
     accounts = [
-        AccountModel(id="AA0001", name="Alpha Corp", slug="alpha-corp"),
-        AccountModel(id="BB0002", name="Beta Inc", slug="beta-inc"),
-        AccountModel(id="CC0003", name="Gamma Ltd", slug="gamma-ltd"),
+        AccountModel(id="00000000-0000-0000-0000-000000000001", account_code="AA0001", name="Alpha Corp", slug="alpha-corp"),
+        AccountModel(id="00000000-0000-0000-0000-000000000002", account_code="BB0002", name="Beta Inc", slug="beta-inc"),
+        AccountModel(id="00000000-0000-0000-0000-000000000003", account_code="CC0003", name="Gamma Ltd", slug="gamma-ltd"),
     ]
     for acc in accounts:
         db_session.add(acc)
@@ -85,10 +88,10 @@ async def test_get_all_paginated_with_search(db_session):
     assert total == 1
     assert results[0].slug == "beta-inc"
 
-    # Search by ID
+    # Search by account code
     results, total = await repo.get_all_paginated(search_query="CC0003")
     assert total == 1
-    assert results[0].id == "CC0003"
+    assert results[0].account_code == "CC0003"
 
 
 @pytest.mark.asyncio
@@ -99,9 +102,9 @@ async def test_get_all_paginated_with_sort(db_session):
     # Add accounts with different attributes
     now = datetime.now(timezone.utc)
     accounts = [
-        AccountModel(id="AA0001", name="C Name", slug="c-slug", created_at=now),
-        AccountModel(id="BB0002", name="A Name", slug="a-slug", created_at=now + timedelta(hours=1)),
-        AccountModel(id="CC0003", name="B Name", slug="b-slug", created_at=now + timedelta(hours=2)),
+        AccountModel(id="00000000-0000-0000-0000-000000000001", account_code="AA0001", name="C Name", slug="c-slug", created_at=now),
+        AccountModel(id="00000000-0000-0000-0000-000000000002", account_code="BB0002", name="A Name", slug="a-slug", created_at=now + timedelta(hours=1)),
+        AccountModel(id="00000000-0000-0000-0000-000000000003", account_code="CC0003", name="B Name", slug="b-slug", created_at=now + timedelta(hours=2)),
     ]
     for acc in accounts:
         db_session.add(acc)
@@ -113,14 +116,14 @@ async def test_get_all_paginated_with_sort(db_session):
 
     # Sort by Created At DESC
     results, _ = await repo.get_all_paginated(sort_by="created_at", sort_order="desc")
-    assert [a.id for a in results] == ["CC0003", "BB0002", "AA0001"]
+    assert [a.account_code for a in results] == ["CC0003", "BB0002", "AA0001"]
 
 
 @pytest.mark.asyncio
 async def test_update_account(db_session):
     """Verify account update."""
     repo = AccountRepository(db_session)
-    account = AccountModel(id="AA0001", name="Old Name", slug="old-slug")
+    account = AccountModel(id="00000000-0000-0000-0000-000000000001", account_code="AA0001", name="Old Name", slug="old-slug")
     await repo.create(account)
 
     account.name = "New Name"
@@ -129,7 +132,7 @@ async def test_update_account(db_session):
     assert updated.name == "New Name"
     
     # Verify in DB
-    refreshed = await repo.get_by_id("AA0001")
+    refreshed = await repo.get_by_id("00000000-0000-0000-0000-000000000001")
     assert refreshed.name == "New Name"
 
 
@@ -137,12 +140,12 @@ async def test_update_account(db_session):
 async def test_delete_account(db_session):
     """Verify account deletion."""
     repo = AccountRepository(db_session)
-    account = AccountModel(id="AA0001", name="To Delete", slug="to-delete")
+    account = AccountModel(id="00000000-0000-0000-0000-000000000001", account_code="AA0001", name="To Delete", slug="to-delete")
     await repo.create(account)
 
     await repo.delete(account)
     
-    found = await repo.get_by_id("AA0001")
+    found = await repo.get_by_id("00000000-0000-0000-0000-000000000001")
     assert found is None
 
 
@@ -150,7 +153,7 @@ async def test_delete_account(db_session):
 async def test_get_user_count(db_session):
     """Verify user count calculation."""
     repo = AccountRepository(db_session)
-    account = AccountModel(id="AA0001", name="Account 1", slug="acc-1")
+    account = AccountModel(id="00000000-0000-0000-0000-000000000001", account_code="AA0001", name="Account 1", slug="acc-1")
     await repo.create(account)
     
     # Add role required for user
@@ -163,14 +166,14 @@ async def test_get_user_count(db_session):
         user = UserModel(
             id=f"user{i}",
             email=f"user{i}@example.com",
-            account_id="AA0001",
+            account_id="00000000-0000-0000-0000-000000000001",
             role=role,  # Assign role
             password_hash="hash"
         )
         db_session.add(user)
     await db_session.commit()
 
-    count = await repo.get_user_count("AA0001")
+    count = await repo.get_user_count("00000000-0000-0000-0000-000000000001")
     assert count == 5
     
     count_empty = await repo.get_user_count("NONEXISTENT")
@@ -187,8 +190,8 @@ async def test_get_with_stats(db_session):
     old = now - timedelta(days=2)
     new = now
     
-    db_session.add(AccountModel(id="AA0001", name="Old", slug="old", created_at=old))
-    db_session.add(AccountModel(id="BB0002", name="New", slug="new", created_at=new))
+    db_session.add(AccountModel(id="00000000-0000-0000-0000-000000000001", account_code="AA0001", name="Old", slug="old", created_at=old))
+    db_session.add(AccountModel(id="00000000-0000-0000-0000-000000000002", account_code="BB0002", name="New", slug="new", created_at=new))
     await db_session.commit()
 
     assert await repo.count_all() == 2

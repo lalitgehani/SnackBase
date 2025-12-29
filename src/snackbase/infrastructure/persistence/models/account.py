@@ -15,7 +15,8 @@ class AccountModel(Base):
     """SQLAlchemy model for the accounts table.
 
     Attributes:
-        id: Primary key in XX#### format (2 uppercase letters + 4 digits).
+        id: Primary key (UUID).
+        account_code: Human-readable account code in XX#### format.
         slug: URL-friendly identifier, unique across all accounts.
         name: Display name for the account.
         created_at: Timestamp when the account was created.
@@ -25,9 +26,16 @@ class AccountModel(Base):
     __tablename__ = "accounts"
 
     id: Mapped[str] = mapped_column(
-        String(6),
+        String(36),
         primary_key=True,
-        comment="Account ID in XX#### format (e.g., AB1234)",
+        comment="Account ID (UUID)",
+    )
+    account_code: Mapped[str] = mapped_column(
+        String(6),
+        nullable=False,
+        unique=True,
+        index=True,
+        comment="Human-readable account code in XX#### format (e.g., AB1234)",
     )
     slug: Mapped[str] = mapped_column(
         String(32),
@@ -76,18 +84,17 @@ class AccountModel(Base):
     )
 
     __table_args__ = (
-        # Validate account ID format: 2 uppercase letters + 4 digits
+        # Validate account_code format: 2 uppercase letters + 4 digits
         CheckConstraint(
-            "id GLOB '[A-Z][A-Z][0-9][0-9][0-9][0-9]'",
-            name="ck_accounts_id_format",
+            "account_code GLOB '[A-Z][A-Z][0-9][0-9][0-9][0-9]'",
+            name="ck_accounts_code_format",
         ),
         # Validate slug format: 3-32 chars, alphanumeric + hyphens
         CheckConstraint(
             "length(slug) >= 3 AND length(slug) <= 32",
             name="ck_accounts_slug_length",
         ),
-        Index("ix_accounts_id", "id"),
     )
 
     def __repr__(self) -> str:
-        return f"<Account(id={self.id}, slug={self.slug})>"
+        return f"<Account(id={self.id}, account_code={self.account_code}, slug={self.slug})>"

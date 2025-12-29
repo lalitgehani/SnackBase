@@ -36,7 +36,7 @@ class InvitationModel(Base):
         comment="Invitation ID (UUID)",
     )
     account_id: Mapped[str] = mapped_column(
-        String(6),
+        String(36),
         ForeignKey("accounts.id", ondelete="CASCADE"),
         nullable=False,
         index=True,

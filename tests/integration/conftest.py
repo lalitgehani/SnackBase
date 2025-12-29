@@ -92,7 +92,12 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
 async def superadmin_token(db_session: AsyncSession) -> str:
     """Create a superadmin user and return their access token."""
     # Create valid account
-    account = AccountModel(id="SY0000", name="System Admin", slug="system-admin")
+    account = AccountModel(
+        id="00000000-0000-0000-0000-000000000000",
+        account_code="SY0000",
+        name="System Admin",
+        slug="system-admin"
+    )
     db_session.add(account)
     
     # Get admin role
@@ -102,7 +107,7 @@ async def superadmin_token(db_session: AsyncSession) -> str:
     user = UserModel(
         id="superadmin",
         email="superadmin@snackbase.com",
-        account_id="SY0000",
+        account_id="00000000-0000-0000-0000-000000000000",
         password_hash="hashed_secret",
         role=admin_role,
         is_active=True,
@@ -125,7 +130,12 @@ async def superadmin_token(db_session: AsyncSession) -> str:
 async def regular_user_token(db_session: AsyncSession) -> str:
     """Create a regular user and return their access token."""
     # Create valid account
-    account = AccountModel(id="RU0000", name="Regular User Account", slug="reg-user-acc")
+    account = AccountModel(
+        id="00000000-0000-0000-0000-000000000001",
+        account_code="RU0000",
+        name="Regular User Account",
+        slug="reg-user-acc"
+    )
     db_session.add(account)
 
     # Get user role
@@ -135,7 +145,7 @@ async def regular_user_token(db_session: AsyncSession) -> str:
     user = UserModel(
         id="regular_user",
         email="user@snackbase.com",
-        account_id="RU0000",
+        account_id="00000000-0000-0000-0000-000000000001",
         password_hash="hashed_secret",
         role=user_role,
         is_active=True,

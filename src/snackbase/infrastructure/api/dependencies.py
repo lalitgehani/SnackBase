@@ -119,7 +119,7 @@ AuthenticatedUser = Annotated[CurrentUser, Depends(get_current_user)]
 
 
 # System account ID for superadmins
-SYSTEM_ACCOUNT_ID = "SY0000"
+SYSTEM_ACCOUNT_ID = "00000000-0000-0000-0000-000000000000"  # Nil UUID
 
 
 async def require_superadmin(
