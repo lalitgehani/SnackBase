@@ -95,6 +95,42 @@ async def test_get_all_paginated_with_search(db_session):
 
 
 @pytest.mark.asyncio
+async def test_get_by_code(db_session):
+    """Test getting an account by account code."""
+    repo = AccountRepository(db_session)
+    
+    # Create test accounts
+    accounts = [
+        AccountModel(id="00000000-0000-0000-0000-000000000001", account_code="AA0001", name="Alpha Corp", slug="alpha-corp"),
+        AccountModel(id="00000000-0000-0000-0000-000000000002", account_code="BB0002", name="Beta Inc", slug="beta-inc"),
+    ]
+    for acc in accounts:
+        db_session.add(acc)
+    await db_session.commit()
+
+    # Test exact match
+    result = await repo.get_by_code("AA0001")
+    assert result is not None
+    assert result.account_code == "AA0001"
+    assert result.name == "Alpha Corp"
+
+    # Test case insensitivity
+    result = await repo.get_by_code("bb0002")
+    assert result is not None
+    assert result.account_code == "BB0002"
+    assert result.name == "Beta Inc"
+
+
+@pytest.mark.asyncio
+async def test_get_by_code_not_found(db_session):
+    """Test getting an account by non-existent account code."""
+    repo = AccountRepository(db_session)
+    
+    result = await repo.get_by_code("ZZ9999")
+    assert result is None
+
+
+@pytest.mark.asyncio
 async def test_get_all_paginated_with_sort(db_session):
     """Verify sorting by each column."""
     repo = AccountRepository(db_session)

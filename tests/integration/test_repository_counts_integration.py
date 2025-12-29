@@ -30,8 +30,8 @@ async def test_account_repository_count_all(db_session):
     initial_count = await repo.count_all()
 
     # Add accounts
-    account1 = AccountModel(id="AC0001", name="Account 1", slug="account-1")
-    account2 = AccountModel(id="AC0002", name="Account 2", slug="account-2")
+    account1 = AccountModel(id="AC0001", account_code="AA0001", name="Account 1", slug="account-1")
+    account2 = AccountModel(id="AC0002", account_code="AA0002", name="Account 2", slug="account-2")
     db_session.add_all([account1, account2])
     await db_session.commit()
 
@@ -52,12 +52,14 @@ async def test_account_repository_count_created_since(db_session):
     # Add accounts with different timestamps
     old_account = AccountModel(
         id="AC0003",
+        account_code="AA0003",
         name="Old Account",
         slug="old-account",
         created_at=five_days_ago,
     )
     recent_account = AccountModel(
         id="AC0004",
+        account_code="AA0004",
         name="Recent Account",
         slug="recent-account",
         created_at=three_days_ago,
@@ -77,7 +79,7 @@ async def test_user_repository_count_all(db_session):
     repo = UserRepository(db_session)
 
     # Create account first
-    account = AccountModel(id="AC0005", name="Test", slug="test")
+    account = AccountModel(id="AC0005", account_code="AA0005", name="Test", slug="test")
     db_session.add(account)
     await db_session.commit()
 
@@ -116,7 +118,7 @@ async def test_user_repository_count_created_since(db_session):
     repo = UserRepository(db_session)
 
     # Create account
-    account = AccountModel(id="AC0006", name="Test2", slug="test2")
+    account = AccountModel(id="AC0006", account_code="AA0006", name="Test2", slug="test2")
     db_session.add(account)
     await db_session.commit()
 
@@ -153,7 +155,7 @@ async def test_user_repository_get_recent_registrations(db_session):
     repo = UserRepository(db_session)
 
     # Create account
-    account = AccountModel(id="AC0007", name="Test3", slug="test3")
+    account = AccountModel(id="AC0007", account_code="AA0007", name="Test3", slug="test3")
     db_session.add(account)
     await db_session.commit()
 
@@ -219,7 +221,7 @@ async def test_refresh_token_repository_count_active_sessions(db_session):
     repo = RefreshTokenRepository(db_session)
 
     # Create account and user
-    account = AccountModel(id="AC0008", name="Test4", slug="test4")
+    account = AccountModel(id="AC0008", account_code="AA0008", name="Test4", slug="test4")
     role = (await db_session.execute(select(RoleModel).where(RoleModel.name == "user"))).scalar_one()
     user = UserModel(
         id="user_token",
@@ -275,7 +277,7 @@ async def test_refresh_token_repository_count_active_sessions_empty(db_session):
 
     # Create account and user
     # Create account and user
-    account = AccountModel(id="AC0009", name="Test5", slug="test5")
+    account = AccountModel(id="AC0009", account_code="AA0009", name="Test5", slug="test5")
     role = (await db_session.execute(select(RoleModel).where(RoleModel.name == "user"))).scalar_one()
     user = UserModel(
         id="user_no_tokens",

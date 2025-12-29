@@ -58,6 +58,22 @@ class AccountRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_by_code(self, account_code: str) -> AccountModel | None:
+        """Get an account by account code.
+
+        Args:
+            account_code: Account code in XX#### format (e.g., AB1234).
+
+        Returns:
+            Account model if found, None otherwise.
+        """
+        result = await self.session.execute(
+            select(AccountModel).where(
+                AccountModel.account_code == account_code.upper()
+            )
+        )
+        return result.scalar_one_or_none()
+
     async def slug_exists(self, slug: str) -> bool:
         """Check if an account slug already exists.
 
