@@ -68,7 +68,7 @@ class TestPIIMasking:
         # Format must be AC + 4 digits? Or just valid string?
         # Previous error: CHECK constraint failed: ck_accounts_id_format
         # Let's use AC0010 to be safe
-        account = AccountModel(id="AC0010", name="Test Account", slug="test-acc-1")
+        account = AccountModel(id="AC0010", account_code="AC0010", name="Test Account", slug="test-acc-1")
         db_session.add(account)
         await db_session.flush()
         
@@ -147,7 +147,7 @@ class TestPIIMasking:
         result = await db_session.execute(select(RoleModel).where(RoleModel.name == "user"))
         role = result.scalar_one()
 
-        account = AccountModel(id="AC0011", name="Test Account 2", slug="test-acc-2")
+        account = AccountModel(id="AC0011", account_code="AC0011", name="Test Account 2", slug="test-acc-2")
         db_session.add(account)
         await db_session.flush()
 
@@ -228,7 +228,7 @@ class TestPIIMasking:
          result = await db_session.execute(select(RoleModel).where(RoleModel.name == "user"))
          role = result.scalar_one()
 
-         account = AccountModel(id="AC0012", name="Test Account 3", slug="test-acc-3")
+         account = AccountModel(id="AC0012", account_code="AC0012", name="Test Account 3", slug="test-acc-3")
          db_session.add(account)
          await db_session.flush()
 
@@ -284,7 +284,7 @@ class TestPIIMasking:
          result = await db_session.execute(select(RoleModel).where(RoleModel.name == "user"))
          role = result.scalar_one()
 
-         account = AccountModel(id="AC0013", name="Acc4", slug="acc-4")
+         account = AccountModel(id="AC0013", account_code="AC0013", name="Acc4", slug="acc-4")
          db_session.add(account)
          await db_session.flush()
 

@@ -120,6 +120,7 @@ AuthenticatedUser = Annotated[CurrentUser, Depends(get_current_user)]
 
 # System account ID for superadmins
 SYSTEM_ACCOUNT_ID = "00000000-0000-0000-0000-000000000000"  # Nil UUID
+SYSTEM_ACCOUNT_CODE = "SY0000"  # Human-readable code
 
 
 async def require_superadmin(
@@ -127,7 +128,7 @@ async def require_superadmin(
 ) -> CurrentUser:
     """Ensure the current user is a superadmin.
 
-    Superadmins are users linked to the special system account (SY0000).
+    Superadmins are users linked to the special system account (UUID: nil UUID, Code: SY0000).
 
     Args:
         current_user: The authenticated user from the JWT token.
