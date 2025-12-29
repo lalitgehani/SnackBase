@@ -1,4 +1,4 @@
-"""Integration tests for AccountIdGenerator with database.
+"""Integration tests for AccountCodeGenerator with database.
 
 Tests thread-safety and concurrent account creation scenarios.
 """
@@ -8,7 +8,7 @@ import asyncio
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from snackbase.domain.services.account_id_generator import AccountIdGenerator
+from snackbase.domain.services.account_code_generator import AccountCodeGenerator
 from snackbase.infrastructure.persistence.models import AccountModel
 from snackbase.infrastructure.persistence.repositories.account_repository import (
     AccountRepository,
@@ -16,7 +16,7 @@ from snackbase.infrastructure.persistence.repositories.account_repository import
 
 
 @pytest.mark.asyncio
-class TestAccountIdGeneratorIntegration:
+class TestAccountCodeGeneratorIntegration:
     """Integration tests for account ID generation with database."""
 
     async def test_generate_with_database(self, db_session: AsyncSession):
@@ -34,7 +34,7 @@ class TestAccountIdGeneratorIntegration:
 
         # Generate next ID
         existing_ids = await repo.get_all_ids()
-        new_id = AccountIdGenerator.generate(existing_ids)
+        new_id = AccountCodeGenerator.generate(existing_ids)
         assert new_id == "AA0002"
 
         # Create second account
@@ -66,7 +66,7 @@ class TestAccountIdGeneratorIntegration:
             existing_ids = await repo.get_all_ids()
 
             # Generate new ID
-            new_id = AccountIdGenerator.generate(existing_ids)
+            new_id = AccountCodeGenerator.generate(existing_ids)
 
             # Create account
             account = AccountModel(
@@ -91,7 +91,7 @@ class TestAccountIdGeneratorIntegration:
 
         # Verify all IDs are valid
         for account_id in created_ids:
-            assert AccountIdGenerator.validate(account_id)
+            assert AccountCodeGenerator.validate(account_id)
 
     async def test_restart_scenario(self, db_session: AsyncSession):
         """Test that generator works correctly after application restart."""
@@ -113,7 +113,7 @@ class TestAccountIdGeneratorIntegration:
         assert len(existing_ids) == 3
 
         # Generate new ID (should continue from highest: AB0001 -> AB0002)
-        new_id = AccountIdGenerator.generate(existing_ids)
+        new_id = AccountCodeGenerator.generate(existing_ids)
         assert new_id == "AB0002"
 
         # Create new account
@@ -147,7 +147,7 @@ class TestAccountIdGeneratorIntegration:
 
         # Generate new ID
         existing_ids = await repo.get_all_ids()
-        new_id = AccountIdGenerator.generate(existing_ids)
+        new_id = AccountCodeGenerator.generate(existing_ids)
 
         # Should continue from highest (AA0005 -> AA0006)
         assert new_id == "AA0006"
@@ -169,7 +169,7 @@ class TestAccountIdGeneratorIntegration:
 
         # Generate new ID
         existing_ids = await repo.get_all_ids()
-        new_id = AccountIdGenerator.generate(existing_ids)
+        new_id = AccountCodeGenerator.generate(existing_ids)
 
         # Should continue from AA0001, not SY9999
         assert new_id == "AA0002"
@@ -189,7 +189,7 @@ class TestAccountIdGeneratorIntegration:
 
         # Generate new ID
         existing_ids = await repo.get_all_ids()
-        new_id = AccountIdGenerator.generate(existing_ids)
+        new_id = AccountCodeGenerator.generate(existing_ids)
 
         # Should overflow to next letter pair
         assert new_id == "AB0000"

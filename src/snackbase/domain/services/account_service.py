@@ -5,11 +5,12 @@ creation, updates, deletion, and listing with business rules.
 """
 
 import re
+import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from snackbase.domain.services.account_id_generator import AccountIdGenerator
+from snackbase.domain.services.account_code_generator import AccountCodeGenerator
 from snackbase.infrastructure.persistence.models import AccountModel
 from snackbase.infrastructure.persistence.repositories import AccountRepository
 
@@ -17,7 +18,8 @@ from snackbase.infrastructure.persistence.repositories import AccountRepository
 class AccountService:
     """Service for account management business logic."""
 
-    SYSTEM_ACCOUNT_ID = "SY0000"
+    SYSTEM_ACCOUNT_ID = "00000000-0000-0000-0000-000000000000"  # Nil UUID
+    SYSTEM_ACCOUNT_CODE = "SY0000"  # Human-readable code
 
     def __init__(self, session: AsyncSession) -> None:
         """Initialize the account service.
@@ -41,9 +43,12 @@ class AccountService:
         Raises:
             ValueError: If slug already exists or is invalid.
         """
-        # Generate account ID
+        # Generate UUID for account ID
+        account_id = str(uuid.uuid4())
+
+        # Generate account code
         existing_ids = await self.account_repo.get_all_ids()
-        account_id = AccountIdGenerator.generate(existing_ids)
+        account_code = AccountCodeGenerator.generate(existing_ids)
 
         # Generate or validate slug
         if slug:
@@ -69,6 +74,7 @@ class AccountService:
         now = datetime.now(timezone.utc)
         account = AccountModel(
             id=account_id,
+            account_code=account_code,
             slug=slug,
             name=name,
             created_at=now,

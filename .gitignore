@@ -87,7 +87,7 @@ logs/
 *.backup
 
 
-PRD_PHASES.md
+PRD_*.md
 REQUIREMENTS.md
 
 # Agent workspace rules (do not ignore)

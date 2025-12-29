@@ -57,7 +57,8 @@ class SuperadminService:
 
         # Create system account
         account = AccountModel(
-            id=SYSTEM_ACCOUNT_ID,
+            id="00000000-0000-0000-0000-000000000000",  # Nil UUID
+            account_code="SY0000",  # Human-readable code
             slug="system",
             name="SnackBase System",
         )

@@ -4,9 +4,9 @@ Services contain business logic that doesn't naturally fit within a single entit
 They have no dependencies on infrastructure or external frameworks.
 """
 
-from snackbase.domain.services.account_id_generator import (
-    AccountIdExhaustedError,
-    AccountIdGenerator,
+from snackbase.domain.services.account_code_generator import (
+    AccountCodeExhaustedError,
+    AccountCodeGenerator,
 )
 from snackbase.domain.services.collection_validator import (
     CollectionValidationError,
@@ -44,8 +44,8 @@ from snackbase.domain.services.account_service import AccountService
 
 
 __all__ = [
-    "AccountIdExhaustedError",
-    "AccountIdGenerator",
+    "AccountCodeExhaustedError",
+    "AccountCodeGenerator",
     "AccountService",
     "CollectionService",
     "CollectionValidationError",

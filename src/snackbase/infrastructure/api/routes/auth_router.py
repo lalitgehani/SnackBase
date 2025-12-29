@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from snackbase.core.config import get_settings
 from snackbase.core.logging import get_logger
 from snackbase.domain.services import (
-    AccountIdGenerator,
+    AccountCodeGenerator,
     SlugGenerator,
     default_password_validator,
 )
@@ -145,14 +145,17 @@ async def register(
             },
         )
 
-    # 4. Generate account ID
+    # 4. Generate account ID and code
+    # TODO: In Phase 2, update to generate UUID for id and use account_code
     existing_ids = await account_repo.get_all_ids()
-    account_id = AccountIdGenerator.generate(existing_ids)
+    account_id = str(uuid.uuid4())  # Generate UUID
+    account_code = AccountCodeGenerator.generate(existing_ids)  # Generate code
 
     # 5. Hash password
     password_hash = hash_password(request.password)
 
     # 6. Create account record
+    # TODO: In Phase 2, add account_code field to AccountModel
     account = AccountModel(
         id=account_id,
         slug=slug,

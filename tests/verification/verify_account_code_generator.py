@@ -10,9 +10,9 @@ Demonstrates all acceptance criteria:
 - Descriptive error messages
 """
 
-from snackbase.domain.services.account_id_generator import (
+from snackbase.domain.services.account_code_generator import (
     AccountIdExhaustedError,
-    AccountIdGenerator,
+    AccountCodeGenerator,
 )
 
 
@@ -38,7 +38,7 @@ def test_format_validation() -> None:
     # Valid IDs
     valid_ids = ["AB1234", "XY9876", "AA0001", "ZZ9999"]
     for account_id in valid_ids:
-        result = AccountIdGenerator.validate(account_id)
+        result = AccountCodeGenerator.validate(account_id)
         print_test(
             f"Validate '{account_id}'",
             result is True,
@@ -56,7 +56,7 @@ def test_format_validation() -> None:
     ]
 
     for account_id, reason in invalid_test_cases:
-        result = AccountIdGenerator.validate(account_id)
+        result = AccountCodeGenerator.validate(account_id)
         print_test(
             f"Reject '{account_id}' ({reason})",
             result is False,
@@ -78,7 +78,7 @@ def test_validation_with_errors() -> None:
     ]
 
     for value, expected_valid, expected_error_keyword in test_cases:
-        is_valid, error = AccountIdGenerator.validate_with_error(value)
+        is_valid, error = AccountCodeGenerator.validate_with_error(value)
         passed = is_valid == expected_valid
 
         if not expected_valid and expected_error_keyword:
@@ -97,7 +97,7 @@ def test_id_generation() -> None:
     print_section("3. ID Generation and Uniqueness")
 
     # First ID
-    first_id = AccountIdGenerator.generate([])
+    first_id = AccountCodeGenerator.generate([])
     print_test(
         "First ID generation (no existing IDs)",
         first_id == "AA0001",
@@ -106,7 +106,7 @@ def test_id_generation() -> None:
 
     # Sequential generation
     existing = ["AA0001"]
-    next_id = AccountIdGenerator.generate(existing)
+    next_id = AccountCodeGenerator.generate(existing)
     print_test(
         "Sequential generation",
         next_id == "AA0002",
@@ -117,11 +117,11 @@ def test_id_generation() -> None:
     existing = []
     generated = []
     for i in range(10):
-        new_id = AccountIdGenerator.generate(existing + generated)
+        new_id = AccountCodeGenerator.generate(existing + generated)
         generated.append(new_id)
 
     all_unique = len(generated) == len(set(generated))
-    all_valid = all(AccountIdGenerator.validate(id_) for id_ in generated)
+    all_valid = all(AccountCodeGenerator.validate(id_) for id_ in generated)
     print_test(
         "Generate 10 unique IDs",
         all_unique and all_valid,
@@ -135,7 +135,7 @@ def test_collision_handling() -> None:
 
     # Continue from highest (implementation increments from highest, doesn't fill gaps)
     existing = ["AA0001", "AA0002", "AA0004"]
-    new_id = AccountIdGenerator.generate(existing)
+    new_id = AccountCodeGenerator.generate(existing)
     print_test(
         "Continue from highest ID (doesn't fill gaps)",
         new_id == "AA0005",
@@ -144,7 +144,7 @@ def test_collision_handling() -> None:
 
     # Continue from highest with gaps
     existing = ["AA0001", "AA0005", "AA0003"]
-    new_id = AccountIdGenerator.generate(existing)
+    new_id = AccountCodeGenerator.generate(existing)
     print_test(
         "Continue from highest ID",
         new_id == "AA0006",
@@ -164,7 +164,7 @@ def test_letter_number_cycling() -> None:
     ]
 
     for existing, expected, description in test_cases:
-        new_id = AccountIdGenerator.generate(existing)
+        new_id = AccountCodeGenerator.generate(existing)
         print_test(
             description,
             new_id == expected,
@@ -178,7 +178,7 @@ def test_sy_prefix_handling() -> None:
 
     # Skip SY prefix
     existing = ["SX9999"]
-    new_id = AccountIdGenerator.generate(existing)
+    new_id = AccountCodeGenerator.generate(existing)
     print_test(
         "Skip SY prefix (reserved)",
         new_id == "SZ0000",
@@ -187,7 +187,7 @@ def test_sy_prefix_handling() -> None:
 
     # Ignore SY in existing IDs
     existing = ["SY0001", "SY9999", "AA0001"]
-    new_id = AccountIdGenerator.generate(existing)
+    new_id = AccountCodeGenerator.generate(existing)
     print_test(
         "Ignore SY IDs when finding highest",
         new_id == "AA0002",
@@ -212,7 +212,7 @@ def test_capacity() -> None:
 
     # Test near exhaustion
     existing = ["ZZ9998"]
-    new_id = AccountIdGenerator.generate(existing)
+    new_id = AccountCodeGenerator.generate(existing)
     print_test(
         "Generate near exhaustion",
         new_id == "ZZ9999",
@@ -226,7 +226,7 @@ def test_exhaustion_error() -> None:
 
     try:
         # Try to generate after last possible ID
-        AccountIdGenerator.generate(["ZZ9999"])
+        AccountCodeGenerator.generate(["ZZ9999"])
         print_test("Exhaustion error raised", False, "No error was raised!")
     except AccountIdExhaustedError as e:
         error_msg = str(e)
@@ -246,7 +246,7 @@ def test_restart_behavior() -> None:
 
     # Simulate existing IDs from database (non-sequential)
     existing = ["AA0001", "AB0001", "AA0005", "MN5432", "XY9876"]
-    new_id = AccountIdGenerator.generate(existing)
+    new_id = AccountCodeGenerator.generate(existing)
 
     # Should find highest (XY9876) and increment
     print_test(
@@ -257,7 +257,7 @@ def test_restart_behavior() -> None:
 
     # With gaps
     existing = ["AA0001", "AA0010", "AA0005"]
-    new_id = AccountIdGenerator.generate(existing)
+    new_id = AccountCodeGenerator.generate(existing)
     print_test(
         "Handle gaps in sequence",
         new_id == "AA0011",
@@ -270,7 +270,7 @@ def test_edge_cases() -> None:
     print_section("10. Edge Cases")
 
     # Empty existing IDs
-    new_id = AccountIdGenerator.generate([])
+    new_id = AccountCodeGenerator.generate([])
     print_test(
         "Empty existing IDs",
         new_id == "AA0001",
@@ -278,7 +278,7 @@ def test_edge_cases() -> None:
     )
 
     # Single existing ID
-    new_id = AccountIdGenerator.generate(["AA0001"])
+    new_id = AccountCodeGenerator.generate(["AA0001"])
     print_test(
         "Single existing ID",
         new_id == "AA0002",
@@ -287,7 +287,7 @@ def test_edge_cases() -> None:
 
     # Invalid IDs in existing set (should be ignored)
     existing = ["AA0001", "invalid", "AB12", "AA0002"]
-    new_id = AccountIdGenerator.generate(existing)
+    new_id = AccountCodeGenerator.generate(existing)
     print_test(
         "Ignore invalid IDs in existing set",
         new_id == "AA0003",
@@ -295,7 +295,7 @@ def test_edge_cases() -> None:
     )
 
     # Boundary: AA0000
-    new_id = AccountIdGenerator.generate(["AA0000"])
+    new_id = AccountCodeGenerator.generate(["AA0000"])
     print_test(
         "Boundary case: AA0000",
         new_id == "AA0001",
@@ -323,9 +323,9 @@ def main() -> None:
     print_section("Verification Complete")
     print("All acceptance criteria have been demonstrated.")
     print("\nNext steps:")
-    print("  1. Run unit tests: uv run pytest tests/unit/domain/test_account_id_generator.py -v")
-    print("  2. Run integration tests: uv run pytest tests/integration/test_account_id_generator_integration.py -v")
-    print("  3. Check test coverage: uv run pytest tests/ --cov=snackbase.domain.services.account_id_generator")
+    print("  1. Run unit tests: uv run pytest tests/unit/domain/test_account_code_generator.py -v")
+    print("  2. Run integration tests: uv run pytest tests/integration/test_account_code_generator_integration.py -v")
+    print("  3. Check test coverage: uv run pytest tests/ --cov=snackbase.domain.services.account_code_generator")
     print()
 
 
