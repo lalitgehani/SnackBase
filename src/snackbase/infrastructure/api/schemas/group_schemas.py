@@ -15,7 +15,7 @@ class GroupBase(BaseModel):
 class GroupCreate(GroupBase):
     """Schema for creating a group."""
     
-    account_id: str | None = Field(None, description="Account ID (optional, for superadmins)")
+    account_id: str | None = Field(None, description="Account ID (UUID, optional for superadmins)")
 
 
 class GroupUpdate(BaseModel):
@@ -29,7 +29,8 @@ class GroupResponse(GroupBase):
     """Schema for group response."""
     
     id: str = Field(..., description="Group ID")
-    account_id: str = Field(..., description="Account ID")
+    account_id: str = Field(..., description="Account ID (UUID)")
+    account_code: str = Field(..., description="Human-readable account code in XX#### format (e.g., AB1234)")
     created_at: datetime
     updated_at: datetime
     

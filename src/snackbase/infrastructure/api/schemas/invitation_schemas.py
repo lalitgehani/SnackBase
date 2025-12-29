@@ -31,7 +31,8 @@ class InvitationResponse(BaseModel):
     """Response schema for invitation details."""
 
     id: str = Field(..., description="Invitation ID")
-    account_id: str = Field(..., description="Account ID")
+    account_id: str = Field(..., description="Account ID (UUID)")
+    account_code: str = Field(..., description="Human-readable account code in XX#### format (e.g., AB1234)")
     email: str = Field(..., description="Email address of the invited user")
     invited_by: str = Field(..., description="User ID of the inviter")
     expires_at: datetime = Field(..., description="Expiration timestamp")

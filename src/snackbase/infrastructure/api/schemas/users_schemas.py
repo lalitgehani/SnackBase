@@ -19,10 +19,9 @@ class UserCreateRequest(BaseModel):
     password: SecretStr = Field(..., min_length=1, description="User's password")
     account_id: str = Field(
         ...,
-        min_length=6,
-        max_length=6,
-        pattern="^[A-Z]{2}\\d{4}$",
-        description="Account ID in XX#### format",
+        min_length=36,
+        max_length=36,
+        description="Account ID (UUID)",
     )
     role_id: int = Field(..., ge=1, description="Role ID (must exist)")
     is_active: bool = Field(True, description="Whether the user can log in")
@@ -83,7 +82,8 @@ class UserResponse(BaseModel):
 
     id: str = Field(..., description="User ID")
     email: str = Field(..., description="User's email address")
-    account_id: str = Field(..., description="Account ID in XX#### format")
+    account_id: str = Field(..., description="Account ID (UUID)")
+    account_code: str = Field(..., description="Human-readable account code in XX#### format (e.g., AB1234)")
     account_name: str = Field(..., description="Account display name")
     role_id: int = Field(..., description="Role ID")
     role_name: str = Field(..., description="Role name")
@@ -102,7 +102,8 @@ class UserListItem(BaseModel):
 
     id: str = Field(..., description="User ID")
     email: str = Field(..., description="User's email address")
-    account_id: str = Field(..., description="Account ID in XX#### format")
+    account_id: str = Field(..., description="Account ID (UUID)")
+    account_code: str = Field(..., description="Human-readable account code in XX#### format (e.g., AB1234)")
     account_name: str = Field(..., description="Account display name")
     role_id: int = Field(..., description="Role ID")
     role_name: str = Field(..., description="Role name")

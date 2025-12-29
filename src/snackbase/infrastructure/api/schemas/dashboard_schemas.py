@@ -5,7 +5,7 @@ Pydantic schemas for dashboard statistics and metrics.
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class SystemHealthStats(BaseModel):
@@ -22,7 +22,8 @@ class RecentRegistration(BaseModel):
 
     id: str
     email: str
-    account_id: str
+    account_id: str = Field(..., description="Account ID (UUID)")
+    account_code: str = Field(..., description="Human-readable account code in XX#### format (e.g., AB1234)")
     account_name: str
     created_at: datetime
 

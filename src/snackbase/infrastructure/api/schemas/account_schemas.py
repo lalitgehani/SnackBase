@@ -8,7 +8,8 @@ from pydantic import BaseModel, Field
 class AccountListItem(BaseModel):
     """Account item in list view with statistics."""
 
-    id: str = Field(..., description="Account ID in XX#### format")
+    id: str = Field(..., description="Account ID (UUID)")
+    account_code: str = Field(..., description="Human-readable account code in XX#### format (e.g., AB1234)")
     slug: str = Field(..., description="URL-friendly account identifier")
     name: str = Field(..., description="Display name for the account")
     created_at: datetime = Field(..., description="When the account was created")
@@ -31,7 +32,8 @@ class AccountListResponse(BaseModel):
 class AccountDetailResponse(BaseModel):
     """Detailed account information."""
 
-    id: str = Field(..., description="Account ID in XX#### format")
+    id: str = Field(..., description="Account ID (UUID)")
+    account_code: str = Field(..., description="Human-readable account code in XX#### format (e.g., AB1234)")
     slug: str = Field(..., description="URL-friendly account identifier")
     name: str = Field(..., description="Display name for the account")
     created_at: datetime = Field(..., description="When the account was created")
