@@ -36,7 +36,7 @@ async def get_dashboard_stats(
     - Active sessions count
     - Recent audit logs (placeholder until F3.7)
 
-    Only superadmins (users in the SY0000 system account) can access this endpoint.
+    Only superadmins (users in the system account with nil UUID) can access this endpoint.
     """
     dashboard_service = DashboardService(session)
     return await dashboard_service.get_dashboard_stats()

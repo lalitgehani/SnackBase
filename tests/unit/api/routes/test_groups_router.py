@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import HTTPException, status
 
-from snackbase.infrastructure.api.dependencies import CurrentUser
+from snackbase.infrastructure.api.dependencies import CurrentUser, SYSTEM_ACCOUNT_ID
 from snackbase.infrastructure.api.routes.groups_router import (
     add_user_to_group,
     create_group,
@@ -145,7 +145,7 @@ def superadmin_user():
     """Create a mock superadmin user."""
     return CurrentUser(
         user_id="superadmin1",
-        account_id="SY0000",
+        account_id=SYSTEM_ACCOUNT_ID,
         email="superadmin@example.com",
         role="superadmin",
         groups=[],

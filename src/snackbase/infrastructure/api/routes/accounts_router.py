@@ -70,6 +70,7 @@ async def list_accounts(
     items = [
         AccountListItem(
             id=account.id,
+            account_code=account.account_code,
             slug=account.slug,
             name=account.name,
             created_at=account.created_at,
@@ -125,6 +126,7 @@ async def get_account(
 
     return AccountDetailResponse(
         id=account.id,
+        account_code=account.account_code,
         slug=account.slug,
         name=account.name,
         created_at=account.created_at,
@@ -172,6 +174,7 @@ async def create_account(
 
     return AccountDetailResponse(
         id=account.id,
+        account_code=account.account_code,
         slug=account.slug,
         name=account.name,
         created_at=account.created_at,
@@ -220,6 +223,7 @@ async def update_account(
 
     return AccountDetailResponse(
         id=account.id,
+        account_code=account.account_code,
         slug=account.slug,
         name=account.name,
         created_at=account.created_at,
@@ -246,7 +250,7 @@ async def delete_account(
     """Delete an account.
 
     Deletes the account and all associated users and data (cascade).
-    System account (SY0000) cannot be deleted.
+    System account (nil UUID) cannot be deleted.
     Only superadmins can access this endpoint.
     """
     account_service = AccountService(session)

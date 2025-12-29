@@ -5,6 +5,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID
 from snackbase.infrastructure.persistence.models import AccountModel, UserModel
 
 
@@ -203,5 +204,5 @@ async def test_non_superadmin_access_denied(
     assert resp.status_code == 403
 
     # Delete (try to delete system account for fun)
-    resp = await client.delete("/api/v1/accounts/SY0000", headers=headers)
+    resp = await client.delete(f"/api/v1/accounts/{SYSTEM_ACCOUNT_ID}", headers=headers)
     assert resp.status_code == 403

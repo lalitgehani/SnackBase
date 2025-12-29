@@ -51,7 +51,7 @@ async def list_collections(
 ) -> CollectionListResponse:
     """List all collections with pagination and search.
 
-    Only superadmins (users in the SY0000 system account) can list collections.
+    Only superadmins (users in the system account) can list collections.
     """
     collection_repo = CollectionRepository(session)
 
@@ -170,7 +170,7 @@ async def get_collection(
 ) -> CollectionResponse | JSONResponse:
     """Get collection details by ID.
 
-    Only superadmins (users in the SY0000 system account) can view collections.
+    Only superadmins (users in the system account) can view collections.
     """
     collection_repo = CollectionRepository(session)
     collection = await collection_repo.get_by_id(collection_id)
@@ -242,7 +242,7 @@ async def create_collection(
     """Create a new collection with custom schema.
 
     Creates a physical database table and stores the collection definition.
-    Only superadmins (users in the SY0000 system account) can create collections.
+    Only superadmins (users in the system account) can create collections.
 
     Flow:
     1. Validate collection name
@@ -387,7 +387,7 @@ async def update_collection(
     """Update collection schema.
 
     Allows adding new fields and modifying field properties (except type changes).
-    Only superadmins (users in the SY0000 system account) can update collections.
+    Only superadmins (users in the system account) can update collections.
     """
     # Convert schema to dict list
     schema_dicts = [field.model_dump() for field in request.fields]
@@ -480,7 +480,7 @@ async def delete_collection(
 ) -> JSONResponse:
     """Delete collection and drop its physical table.
 
-    Only superadmins (users in the SY0000 system account) can delete collections.
+    Only superadmins (users in the system account) can delete collections.
     """
     # Use CollectionService for business logic
     engine = cast(AsyncEngine, session.bind)

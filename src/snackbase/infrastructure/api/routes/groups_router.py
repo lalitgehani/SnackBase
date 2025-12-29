@@ -13,6 +13,7 @@ from snackbase.infrastructure.api.dependencies import (
     get_db_session,
     get_permission_cache,
     require_superadmin,
+    SYSTEM_ACCOUNT_ID,
 )
 from snackbase.infrastructure.api.schemas.group_schemas import (
     GroupCreate,
@@ -92,8 +93,8 @@ async def list_groups(
     limit: int = 100,
 ) -> list[GroupModel]:
     """List all groups in the user's account (or all groups if superadmin)."""
-    # Superadmins (account_id == SY0000) see all groups across all accounts
-    if current_user.account_id == "SY0000":
+    # Superadmins see all groups across all accounts
+    if current_user.account_id == SYSTEM_ACCOUNT_ID:
         return await group_repo.list_all(skip, limit)
     # Regular users see only groups in their account
     return await group_repo.list(current_user.account_id, skip, limit)
@@ -119,7 +120,7 @@ async def get_group(
         )
         
     # Ensure account isolation (skip for superadmins)
-    if current_user.account_id != "SY0000" and group.account_id != current_user.account_id:
+    if current_user.account_id != SYSTEM_ACCOUNT_ID and group.account_id != current_user.account_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Group not found",
@@ -150,7 +151,7 @@ async def update_group(
         )
         
     # Ensure account isolation (skip for superadmins)
-    if current_user.account_id != "SY0000" and group.account_id != current_user.account_id:
+    if current_user.account_id != SYSTEM_ACCOUNT_ID and group.account_id != current_user.account_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Group not found",
@@ -198,7 +199,7 @@ async def delete_group(
         )
         
     # Ensure account isolation (skip for superadmins)
-    if current_user.account_id != "SY0000" and group.account_id != current_user.account_id:
+    if current_user.account_id != SYSTEM_ACCOUNT_ID and group.account_id != current_user.account_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Group not found",
@@ -230,7 +231,7 @@ async def add_user_to_group(
         )
         
     # Ensure account isolation (skip for superadmins)
-    if current_user.account_id != "SY0000" and group.account_id != current_user.account_id:
+    if current_user.account_id != SYSTEM_ACCOUNT_ID and group.account_id != current_user.account_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Group not found",
@@ -273,7 +274,7 @@ async def remove_user_from_group(
         )
         
     # Ensure account isolation (skip for superadmins)
-    if current_user.account_id != "SY0000" and group.account_id != current_user.account_id:
+    if current_user.account_id != SYSTEM_ACCOUNT_ID and group.account_id != current_user.account_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Group not found",

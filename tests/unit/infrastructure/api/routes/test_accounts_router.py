@@ -60,8 +60,8 @@ async def test_list_accounts_success(async_client, mock_account_service):
     
     now = datetime.now(timezone.utc)
     mock_items = [
-        (AccountModel(id="AA0001", name="Acc 1", slug="acc-1", created_at=now), 5),
-        (AccountModel(id="BB0002", name="Acc 2", slug="acc-2", created_at=now), 10)
+        (AccountModel(id="AA0001", account_code="AA0001", name="Acc 1", slug="acc-1", created_at=now), 5),
+        (AccountModel(id="BB0002", account_code="BB0002", name="Acc 2", slug="acc-2", created_at=now), 10)
     ]
     mock_account_service.list_accounts = AsyncMock(return_value=(mock_items, 2))
 
@@ -118,7 +118,7 @@ async def test_get_account_success(async_client, mock_account_service):
     
     now = datetime.now(timezone.utc)
     account = AccountModel(
-        id="AA0001", name="Test", slug="test", created_at=now, updated_at=now
+        id="AA0001", account_code="AA0001", name="Test", slug="test", created_at=now, updated_at=now
     )
     mock_account_service.get_account_with_details = AsyncMock(return_value=(account, 3))
 
@@ -156,7 +156,7 @@ async def test_create_account_success(async_client, mock_account_service):
     app.dependency_overrides[require_superadmin] = create_superadmin_override()
     
     now = datetime.now(timezone.utc)
-    created = AccountModel(id="NEW001", name="New", slug="new", created_at=now, updated_at=now)
+    created = AccountModel(id="NEW001", account_code="NE0001", name="New", slug="new", created_at=now, updated_at=now)
     mock_account_service.create_account = AsyncMock(return_value=created)
 
     payload = {"name": "New", "slug": "new"}
@@ -199,7 +199,7 @@ async def test_update_account_success(async_client, mock_account_service):
     app.dependency_overrides[require_superadmin] = create_superadmin_override()
     
     now = datetime.now(timezone.utc)
-    updated = AccountModel(id="AA0001", name="Updated", slug="slug", created_at=now, updated_at=now)
+    updated = AccountModel(id="AA0001", account_code="AA0001", name="Updated", slug="slug", created_at=now, updated_at=now)
     
     mock_account_service.update_account = AsyncMock(return_value=updated)
     mock_account_service.get_account_with_details = AsyncMock(return_value=(updated, 5))
