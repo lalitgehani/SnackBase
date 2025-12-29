@@ -4,6 +4,7 @@
  */
 
 import { apiClient } from '@/lib/api';
+import type { User } from './users.service';
 
 // Types
 export interface Group {
@@ -13,6 +14,8 @@ export interface Group {
   description: string | null;
   created_at: string;
   updated_at: string;
+  member_count?: number;
+  users?: User[];
 }
 
 export interface GroupListParams {

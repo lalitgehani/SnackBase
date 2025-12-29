@@ -4,6 +4,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from snackbase.infrastructure.api.schemas.users_schemas import UserResponse
+
 
 class GroupBase(BaseModel):
     """Base schema for Group data."""
@@ -31,10 +33,17 @@ class GroupResponse(GroupBase):
     id: str = Field(..., description="Group ID")
     account_id: str = Field(..., description="Account ID (UUID)")
     account_code: str = Field(..., description="Human-readable account code in XX#### format (e.g., AB1234)")
+    member_count: int = Field(0, description="Number of users in the group")
     created_at: datetime
     updated_at: datetime
     
     model_config = ConfigDict(from_attributes=True)
+
+
+class GroupDetailResponse(GroupResponse):
+    """Schema for detailed group response including users."""
+    
+    users: list[UserResponse] = Field(default_factory=list, description="List of users in the group")
 
 
 class UserGroupUpdate(BaseModel):

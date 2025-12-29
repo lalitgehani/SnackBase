@@ -17,6 +17,7 @@ from snackbase.infrastructure.api.dependencies import (
 )
 from snackbase.infrastructure.api.schemas.group_schemas import (
     GroupCreate,
+    GroupDetailResponse,
     GroupResponse,
     GroupUpdate,
     UserGroupUpdate,
@@ -41,7 +42,7 @@ GroupRepo = Annotated[GroupRepository, Depends(get_group_repository)]
 
 @router.post(
     "",
-    response_model=GroupResponse,
+    response_model=GroupDetailResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create a new group",
 )
@@ -102,7 +103,7 @@ async def list_groups(
 
 @router.get(
     "/{group_id}",
-    response_model=GroupResponse,
+    response_model=GroupDetailResponse,
     summary="Get a group",
 )
 async def get_group(
@@ -131,7 +132,7 @@ async def get_group(
 
 @router.patch(
     "/{group_id}",
-    response_model=GroupResponse,
+    response_model=GroupDetailResponse,
     summary="Update a group",
 )
 async def update_group(

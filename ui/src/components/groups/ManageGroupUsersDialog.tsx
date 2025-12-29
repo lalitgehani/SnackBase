@@ -59,17 +59,29 @@ export default function ManageGroupUsersDialog({
     const loadUsers = async () => {
         setLoadingUsers(true);
         try {
-            // Get all users in the account
-            const response = await getUsers({
+            // Fetch all users in account (for adding new members)
+            const usersPromise = getUsers({
                 account_id: group?.account_id,
                 limit: 100,
             });
-            setUsers(response.items);
 
-            // TODO: In a real implementation, we would fetch the actual group members
-            // For now, we'll just show an empty list
-            // This would require a backend endpoint like GET /groups/{id}/users
-            setGroupUsers([]);
+            // Fetch current group members (by getting full group details)
+            // We use the imported getGroup from services which corresponds to the GET /groups/{id} endpoint
+            // Dynamically import to avoid circular dependency if needed, or assume it's available
+            const groupPromise = import('@/services/groups.service').then(m => m.getGroup(group!.id));
+
+            const [usersResponse, groupDetails] = await Promise.all([
+                usersPromise,
+                groupPromise
+            ]);
+
+            setUsers(usersResponse.items);
+
+            if (groupDetails && groupDetails.users) {
+                setGroupUsers(groupDetails.users);
+            } else {
+                setGroupUsers([]);
+            }
         } catch (err) {
             console.error('Failed to load users:', err);
         } finally {

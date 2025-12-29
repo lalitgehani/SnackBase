@@ -35,6 +35,11 @@ async def test_create_group(group_repo, mock_session):
     """Test creating a group."""
     group = GroupModel(id="g1", name="Admins", account_id="acc1")
     
+    # Mock the execute result for the reload query
+    mock_result = MagicMock()
+    mock_result.scalar_one.return_value = group
+    mock_session.execute.return_value = mock_result
+    
     result = await group_repo.create(group)
     
     assert result == group

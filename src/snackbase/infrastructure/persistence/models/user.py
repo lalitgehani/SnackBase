@@ -107,6 +107,36 @@ class UserModel(Base):
         cascade="all, delete-orphan",
     )
 
+    @property
+    def account_code(self) -> str | None:
+        """Get the account code from the related account.
+        
+        Note: This requires the 'account' relationship to be loaded.
+        """
+        if hasattr(self, "account") and self.account:
+            return self.account.account_code
+        return None
+
+    @property
+    def account_name(self) -> str | None:
+        """Get the account name from the related account.
+        
+        Note: This requires the 'account' relationship to be loaded.
+        """
+        if hasattr(self, "account") and self.account:
+            return self.account.name
+        return None
+
+    @property
+    def role_name(self) -> str | None:
+        """Get the role name from the related role.
+        
+        Note: This requires the 'role' relationship to be loaded.
+        """
+        if hasattr(self, "role") and self.role:
+            return self.role.name
+        return None
+
     __table_args__ = (
         # Unique constraint on (account_id, email)
         UniqueConstraint("account_id", "email", name="uq_users_account_email"),

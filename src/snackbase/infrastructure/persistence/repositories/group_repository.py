@@ -35,7 +35,20 @@ class GroupRepository:
         """
         self.session.add(group)
         await self.session.flush()
-        return group
+        
+        # Reload to get fresh DB state and required relationships
+        result = await self.session.execute(
+            select(GroupModel)
+            .options(
+                selectinload(GroupModel.account),
+                selectinload(GroupModel.users).options(
+                    selectinload(UserModel.account),
+                    selectinload(UserModel.role)
+                )
+            )
+            .where(GroupModel.id == group.id)
+        )
+        return result.scalar_one()
 
     async def get_by_id(self, group_id: str) -> GroupModel | None:
         """Get a group by ID.
@@ -47,7 +60,15 @@ class GroupRepository:
             Group model if found, None otherwise.
         """
         result = await self.session.execute(
-            select(GroupModel).where(GroupModel.id == group_id)
+            select(GroupModel)
+            .options(
+                selectinload(GroupModel.account),
+                selectinload(GroupModel.users).options(
+                    selectinload(UserModel.account),
+                    selectinload(UserModel.role)
+                )
+            )
+            .where(GroupModel.id == group_id)
         )
         return result.scalar_one_or_none()
 
@@ -62,7 +83,15 @@ class GroupRepository:
             Group model if found, None otherwise.
         """
         result = await self.session.execute(
-            select(GroupModel).where(
+            select(GroupModel)
+            .options(
+                selectinload(GroupModel.account),
+                selectinload(GroupModel.users).options(
+                    selectinload(UserModel.account),
+                    selectinload(UserModel.role)
+                )
+            )
+            .where(
                 (GroupModel.name == name) & (GroupModel.account_id == account_id)
             )
         )
@@ -81,6 +110,10 @@ class GroupRepository:
         """
         result = await self.session.execute(
             select(GroupModel)
+            .options(
+                selectinload(GroupModel.account),
+                selectinload(GroupModel.users),
+            )
             .where(GroupModel.account_id == account_id)
             .offset(skip)
             .limit(limit)
@@ -99,6 +132,10 @@ class GroupRepository:
         """
         result = await self.session.execute(
             select(GroupModel)
+            .options(
+                selectinload(GroupModel.account),
+                selectinload(GroupModel.users),
+            )
             .offset(skip)
             .limit(limit)
         )
@@ -118,7 +155,20 @@ class GroupRepository:
             self.session.add(group)
         
         await self.session.flush()
-        return group
+        
+        # Reload to get fresh DB state (including updated_at) and required relationships
+        result = await self.session.execute(
+            select(GroupModel)
+            .options(
+                selectinload(GroupModel.account),
+                selectinload(GroupModel.users).options(
+                    selectinload(UserModel.account),
+                    selectinload(UserModel.role)
+                )
+            )
+            .where(GroupModel.id == group.id)
+        )
+        return result.scalar_one()
 
     async def delete(self, group: GroupModel) -> None:
         """Delete a group.

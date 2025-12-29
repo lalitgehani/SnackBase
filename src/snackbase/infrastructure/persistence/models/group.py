@@ -79,5 +79,24 @@ class GroupModel(Base):
         Index("ix_groups_account_name", "account_id", "name"),
     )
 
+    @property
+    def account_code(self) -> str:
+        """Get the account code from the related account.
+        
+        Note: This requires the 'account' relationship to be loaded.
+        """
+        if hasattr(self, "account") and self.account:
+            return self.account.account_code
+        return None
+    @property
+    def member_count(self) -> int:
+        """Get the number of users in the group.
+        
+        Note: This requires the 'users' relationship to be loaded.
+        """
+        if hasattr(self, "users"):
+            return len(self.users)
+        return 0
+
     def __repr__(self) -> str:
         return f"<Group(id={self.id}, name={self.name}, account_id={self.account_id})>"
