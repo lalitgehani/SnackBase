@@ -242,7 +242,7 @@ def create_superadmin(email: str | None, password: str | None, force: bool) -> N
     """Create a superadmin user.
 
     Superadmin users have full access to all accounts and system operations.
-    The superadmin is linked to the special system account (SY0000).
+    The superadmin is linked to the special system account (nil UUID with code SY0000).
     """
     import asyncio
 
@@ -297,19 +297,31 @@ def create_superadmin(email: str | None, password: str | None, force: bool) -> N
                         session=session,
                     )
 
+                # Retrieve account details to get the account_code
+                async with db.session() as session:
+                    from snackbase.infrastructure.persistence.repositories import (
+                        AccountRepository,
+                    )
+
+                    account_repo = AccountRepository(session)
+                    account = await account_repo.get_by_id(account_id)
+                    account_code = account.account_code if account else "Unknown"
+
                 click.echo(
                     f"\nSuperadmin created successfully!\n"
-                    f"  User ID:    {user_id}\n"
-                    f"  Account ID: {account_id}\n"
-                    f"  Email:      {email}\n"
+                    f"  User ID:      {user_id}\n"
+                    f"  Account ID:   {account_id}\n"
+                    f"  Account Code: {account_code}\n"
+                    f"  Email:        {email}\n"
                     f"\nYou can now log in using:\n"
-                    f"  Account: {account_id} or 'system'\n"
+                    f"  Account: {account_code} or 'system'\n"
                     f"  Email:   {email}\n"
                 )
                 logger.info(
                     "Superadmin created via CLI",
                     user_id=user_id,
                     account_id=account_id,
+                    account_code=account_code,
                     email=email,
                 )
             except SuperadminCreationError as e:
