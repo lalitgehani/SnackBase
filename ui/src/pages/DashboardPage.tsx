@@ -304,7 +304,7 @@ export default function DashboardPage() {
                                             <div className="flex flex-col">
                                                 <span className="text-sm">{registration.account_name}</span>
                                                 <span className="text-xs text-muted-foreground">
-                                                    {registration.account_id}
+                                                    {registration.account_code}
                                                 </span>
                                             </div>
                                         </TableCell>

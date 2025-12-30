@@ -321,7 +321,7 @@ export default function UsersPage() {
                           <TableCell>
                             <div>
                               <div>{user.account_name}</div>
-                              <div className="text-xs text-muted-foreground">{user.account_id}</div>
+                              <div className="text-xs text-muted-foreground">{user.account_code}</div>
                             </div>
                           </TableCell>
                           <TableCell>

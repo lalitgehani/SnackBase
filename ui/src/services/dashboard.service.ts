@@ -14,6 +14,7 @@ export interface RecentRegistration {
   id: string;
   email: string;
   account_id: string;
+  account_code: string;
   account_name: string;
   created_at: string;
 }

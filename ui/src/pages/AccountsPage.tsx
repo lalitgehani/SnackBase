@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Users, Plus, Search, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import AccountsTable from '@/components/accounts/AccountsTable';
 import CreateAccountDialog from '@/components/accounts/CreateAccountDialog';
+import ViewAccountDialog from '@/components/accounts/ViewAccountDialog';
 import EditAccountDialog from '@/components/accounts/EditAccountDialog';
 import DeleteAccountDialog from '@/components/accounts/DeleteAccountDialog';
 import {
@@ -39,6 +40,7 @@ export default function AccountsPage() {
 
     // Dialog state
     const [createDialogOpen, setCreateDialogOpen] = useState(false);
+    const [viewDialogOpen, setViewDialogOpen] = useState(false);
     const [editDialogOpen, setEditDialogOpen] = useState(false);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [selectedAccount, setSelectedAccount] = useState<AccountListItem | null>(null);
@@ -98,8 +100,8 @@ export default function AccountsPage() {
     };
 
     const handleView = (account: AccountListItem) => {
-        // TODO: Implement view details sheet
-        console.log('View account:', account);
+        setSelectedAccount(account);
+        setViewDialogOpen(true);
     };
 
     const handleEdit = (account: AccountListItem) => {
@@ -266,6 +268,12 @@ export default function AccountsPage() {
                 open={createDialogOpen}
                 onOpenChange={setCreateDialogOpen}
                 onSubmit={handleCreateAccount}
+            />
+
+            <ViewAccountDialog
+                open={viewDialogOpen}
+                onOpenChange={setViewDialogOpen}
+                account={selectedAccount}
             />
 
             <EditAccountDialog
