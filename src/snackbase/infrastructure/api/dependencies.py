@@ -60,7 +60,11 @@ async def get_current_user(
 
     if authorization is None:
         logger.info("Authentication failed: missing Authorization header")
-        raise credentials_exception
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing Authorization header",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     # Extract Bearer token
     parts = authorization.split()
@@ -105,13 +109,25 @@ async def get_current_user(
         )
     except TokenExpiredError:
         logger.info("Authentication failed: token expired")
-        raise credentials_exception
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has expired",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     except InvalidTokenError as e:
         logger.info("Authentication failed: invalid token", error=str(e))
-        raise credentials_exception
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid token: {str(e)}",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     except KeyError as e:
         logger.warning("Authentication failed: missing claim in token", missing_claim=str(e))
-        raise credentials_exception
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Missing claim: {str(e)}",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 
 # Type alias for dependency injection

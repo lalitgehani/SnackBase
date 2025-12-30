@@ -4,6 +4,9 @@ This service handles the automatic capture of audit log entries for all
 CREATE, UPDATE, DELETE operations with column-level granularity.
 """
 
+import csv
+import io
+import json
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -424,3 +427,158 @@ class AuditLogService:
                 return PIIMaskingService.mask_name(value)
         
         return value
+
+    async def list_logs(
+        self,
+        account_id: str | None = None,
+        table_name: str | None = None,
+        record_id: str | None = None,
+        user_id: str | None = None,
+        operation: str | None = None,
+        from_date: datetime | None = None,
+        to_date: datetime | None = None,
+        skip: int = 0,
+        limit: int = 50,
+        sort_by: str = "occurred_at",
+        sort_order: str = "desc",
+    ) -> tuple[list[AuditLogModel], int]:
+        """List audit log entries with filters and pagination.
+
+        Args:
+            account_id: Filter by account.
+            table_name: Filter by table.
+            record_id: Filter by record.
+            user_id: Filter by user.
+            operation: Filter by operation (CREATE, UPDATE, DELETE).
+            from_date: Filter from this timestamp.
+            to_date: Filter to this timestamp.
+            skip: Number of records to skip.
+            limit: Maximum number of records to return.
+            sort_by: Field to sort by.
+            sort_order: Sort order (asc or desc).
+
+        Returns:
+            Tuple of (list of logs, total count).
+        """
+        return await self.repository.list_logs(
+            account_id=account_id,
+            table_name=table_name,
+            record_id=record_id,
+            user_id=user_id,
+            operation=operation,
+            from_date=from_date,
+            to_date=to_date,
+            skip=skip,
+            limit=limit,
+            sort_by=sort_by,
+            sort_order=sort_order,
+        )
+
+    async def get_log_by_id(self, log_id: int) -> Optional[AuditLogModel]:
+        """Get a single audit log entry by ID.
+
+        Args:
+            log_id: ID of the audit log entry.
+
+        Returns:
+            The audit log entry, or None if not found.
+        """
+        return await self.repository.get_by_id(log_id)
+
+    async def export_logs(
+        self,
+        format: str,
+        account_id: str | None = None,
+        table_name: str | None = None,
+        record_id: str | None = None,
+        user_id: str | None = None,
+        operation: str | None = None,
+        from_date: datetime | None = None,
+        to_date: datetime | None = None,
+    ) -> tuple[bytes, str]:
+        """Export audit logs in the specified format.
+
+        Args:
+            format: Export format (csv, json).
+            account_id: Filter by account.
+            table_name: Filter by table.
+            record_id: Filter by record.
+            user_id: Filter by user.
+            operation: Filter by operation.
+            from_date: Start date.
+            to_date: End date.
+
+        Returns:
+            Tuple of (content as bytes, media type).
+        """
+        # Fetch all matching logs (no pagination for export)
+        logs, _ = await self.repository.list_logs(
+            account_id=account_id,
+            table_name=table_name,
+            record_id=record_id,
+            user_id=user_id,
+            operation=operation,
+            from_date=from_date,
+            to_date=to_date,
+            limit=10000,  # Cap at 10k for safety
+        )
+
+        if format.lower() == "json":
+            data = [
+                {
+                    "id": log.id,
+                    "occurred_at": log.occurred_at.isoformat(),
+                    "operation": log.operation,
+                    "table_name": log.table_name,
+                    "record_id": log.record_id,
+                    "column_name": log.column_name,
+                    "old_value": log.old_value,
+                    "new_value": log.new_value,
+                    "user_email": log.user_email,
+                    "ip_address": log.ip_address,
+                    "checksum": log.checksum,
+                }
+                for log in logs
+            ]
+            content = json.dumps(data, indent=2).encode("utf-8")
+            return content, "application/json"
+
+        elif format.lower() == "csv":
+            output = io.StringIO()
+            writer = csv.writer(output)
+            writer.writerow(
+                [
+                    "ID",
+                    "Timestamp",
+                    "Operation",
+                    "Table",
+                    "Record ID",
+                    "Column",
+                    "Old Value",
+                    "New Value",
+                    "User",
+                    "IP Address",
+                    "Checksum",
+                ]
+            )
+            for log in logs:
+                writer.writerow(
+                    [
+                        log.id,
+                        log.occurred_at.isoformat(),
+                        log.operation,
+                        log.table_name,
+                        log.record_id,
+                        log.column_name,
+                        log.old_value,
+                        log.new_value,
+                        log.user_email,
+                        log.ip_address,
+                        log.checksum,
+                    ]
+                )
+            content = output.getvalue().encode("utf-8")
+            return content, "text/csv"
+
+        else:
+            raise ValueError(f"Unsupported export format: {format}")

@@ -11,6 +11,7 @@ from .permissions_router import router as permissions_router
 from .records_router import router as records_router
 from .roles_router import router as roles_router
 from .users_router import router as users_router
+from .audit_log_router import router as audit_log_router
 
 __all__ = [
     "accounts_router",
@@ -24,5 +25,6 @@ __all__ = [
     "records_router",
     "roles_router",
     "users_router",
+    "audit_log_router",
 ]
 

@@ -8,7 +8,7 @@ import hashlib
 import json
 from datetime import datetime, timezone
 
-from sqlalchemy import select, func
+from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.infrastructure.persistence.models.audit_log import AuditLogModel
@@ -162,6 +162,115 @@ class AuditLogRepository:
 
         # Calculate SHA-256 hash
         return hashlib.sha256(json_str.encode("utf-8")).hexdigest()
+
+    async def list_logs(
+        self,
+        account_id: str | None = None,
+        table_name: str | None = None,
+        record_id: str | None = None,
+        user_id: str | None = None,
+        operation: str | None = None,
+        from_date: datetime | None = None,
+        to_date: datetime | None = None,
+        skip: int = 0,
+        limit: int = 50,
+        sort_by: str = "occurred_at",
+        sort_order: str = "desc",
+    ) -> tuple[list[AuditLogModel], int]:
+        """List audit log entries with filters and pagination.
+
+        Args:
+            account_id: Filter by account.
+            table_name: Filter by table.
+            record_id: Filter by record.
+            user_id: Filter by user.
+            operation: Filter by operation (CREATE, UPDATE, DELETE).
+            from_date: Filter from this timestamp.
+            to_date: Filter to this timestamp.
+            skip: Number of records to skip.
+            limit: Maximum number of records to return.
+            sort_by: Field to sort by.
+            sort_order: Sort order (asc or desc).
+
+        Returns:
+            Tuple of (list of logs, total count).
+        """
+        query = select(AuditLogModel)
+
+        # Apply filters
+        filters = []
+        if account_id:
+            filters.append(AuditLogModel.account_id == account_id)
+        if table_name:
+            filters.append(AuditLogModel.table_name == table_name)
+        if record_id:
+            filters.append(AuditLogModel.record_id == record_id)
+        if user_id:
+            filters.append(AuditLogModel.user_id == user_id)
+        if operation:
+            filters.append(AuditLogModel.operation == operation)
+        if from_date:
+            filters.append(AuditLogModel.occurred_at >= from_date)
+        if to_date:
+            filters.append(AuditLogModel.occurred_at <= to_date)
+
+        if filters:
+            query = query.where(and_(*filters))
+
+        # Get total count before pagination
+        count_query = select(func.count(AuditLogModel.id))
+        if filters:
+            count_query = count_query.where(and_(*filters))
+        
+        total_result = await self.session.execute(count_query)
+        total = total_result.scalar_one() or 0
+
+        # Apply sorting
+        model_attr = getattr(AuditLogModel, sort_by, AuditLogModel.occurred_at)
+        if sort_order.lower() == "asc":
+            query = query.order_by(model_attr.asc())
+        else:
+            query = query.order_by(model_attr.desc())
+
+        # Final tie-break sort
+        query = query.order_by(AuditLogModel.id.desc())
+
+        # Apply pagination
+        query = query.offset(skip).limit(limit)
+
+        # Execute query
+        result = await self.session.execute(query)
+        logs = list(result.scalars().all())
+
+        return logs, total
+
+    async def get_by_id(self, log_id: int) -> AuditLogModel | None:
+        """Get a single audit log entry by ID.
+
+        Args:
+            log_id: ID of the audit log entry.
+
+        Returns:
+            The audit log entry, or None if not found.
+        """
+        result = await self.session.execute(
+            select(AuditLogModel).where(AuditLogModel.id == log_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_by_checksum(self, checksum: str) -> AuditLogModel | None:
+        """Get a single audit log entry by checksum.
+
+        Args:
+            checksum: SHA-256 checksum of the entry.
+
+        Returns:
+            The audit log entry, or None if not found.
+        """
+        result = await self.session.execute(
+            select(AuditLogModel).where(AuditLogModel.checksum == checksum)
+        )
+        return result.scalar_one_or_none()
 
     async def count_all(self) -> int:
         """Count total number of audit log entries.
