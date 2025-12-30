@@ -3,10 +3,11 @@
  * Handles API calls for account management
  */
 
-import { apiClient } from '@/lib/api';
+import { apiClient } from "@/lib/api";
 
 export interface Account {
   id: string;
+  account_code: string;
   slug: string;
   name: string;
   created_at: string;
@@ -60,22 +61,28 @@ export interface GetAccountsParams {
   page?: number;
   page_size?: number;
   sort_by?: string;
-  sort_order?: 'asc' | 'desc';
+  sort_order?: "asc" | "desc";
   search?: string;
 }
 
 /**
  * Get list of accounts with pagination and search
  */
-export const getAccounts = async (params: GetAccountsParams = {}): Promise<AccountListResponse> => {
-  const response = await apiClient.get<AccountListResponse>('/accounts', { params });
+export const getAccounts = async (
+  params: GetAccountsParams = {}
+): Promise<AccountListResponse> => {
+  const response = await apiClient.get<AccountListResponse>("/accounts", {
+    params,
+  });
   return response.data;
 };
 
 /**
  * Get account by ID
  */
-export const getAccountById = async (accountId: string): Promise<AccountDetail> => {
+export const getAccountById = async (
+  accountId: string
+): Promise<AccountDetail> => {
   const response = await apiClient.get<AccountDetail>(`/accounts/${accountId}`);
   return response.data;
 };
@@ -83,8 +90,10 @@ export const getAccountById = async (accountId: string): Promise<AccountDetail> 
 /**
  * Create a new account
  */
-export const createAccount = async (data: CreateAccountData): Promise<AccountDetail> => {
-  const response = await apiClient.post<AccountDetail>('/accounts', data);
+export const createAccount = async (
+  data: CreateAccountData
+): Promise<AccountDetail> => {
+  const response = await apiClient.post<AccountDetail>("/accounts", data);
   return response.data;
 };
 
@@ -95,7 +104,10 @@ export const updateAccount = async (
   accountId: string,
   data: UpdateAccountData
 ): Promise<AccountDetail> => {
-  const response = await apiClient.put<AccountDetail>(`/accounts/${accountId}`, data);
+  const response = await apiClient.put<AccountDetail>(
+    `/accounts/${accountId}`,
+    data
+  );
   return response.data;
 };
 
@@ -114,8 +126,11 @@ export const getAccountUsers = async (
   page: number = 1,
   page_size: number = 25
 ): Promise<AccountUsersResponse> => {
-  const response = await apiClient.get<AccountUsersResponse>(`/accounts/${accountId}/users`, {
-    params: { page, page_size },
-  });
+  const response = await apiClient.get<AccountUsersResponse>(
+    `/accounts/${accountId}/users`,
+    {
+      params: { page, page_size },
+    }
+  );
   return response.data;
 };

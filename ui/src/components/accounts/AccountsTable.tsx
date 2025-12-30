@@ -53,7 +53,7 @@ export default function AccountsTable({
             <Table>
                 <TableHeader>
                     <TableRow>
-                        <SortableHeader column="id" label="ID" />
+                        <SortableHeader column="account_code" label="Code" />
                         <SortableHeader column="slug" label="Slug" />
                         <SortableHeader column="name" label="Name" />
                         <SortableHeader column="created_at" label="Created At" />
@@ -72,7 +72,7 @@ export default function AccountsTable({
                     ) : (
                         accounts.map((account) => (
                             <TableRow key={account.id}>
-                                <TableCell className="font-mono text-sm">{account.id}</TableCell>
+                                <TableCell className="font-mono text-sm">{account.account_code}</TableCell>
                                 <TableCell className="font-medium">{account.slug}</TableCell>
                                 <TableCell>{account.name}</TableCell>
                                 <TableCell className="text-muted-foreground">

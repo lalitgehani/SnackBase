@@ -74,7 +74,7 @@ export default function DeleteAccountDialog({
                     </AlertDialogTitle>
                     <AlertDialogDescription className="space-y-3">
                         <p>
-                            You are about to delete account <strong>{account.name}</strong> ({account.id}).
+                            You are about to delete account <strong>{account.name}</strong> ({account.account_code}).
                         </p>
                         <div className="bg-destructive/10 border border-destructive/20 rounded-md p-3">
                             <p className="text-sm font-medium text-destructive">

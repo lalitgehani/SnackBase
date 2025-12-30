@@ -149,7 +149,7 @@ export default function AccountsPage() {
                             <Input
                                 value={searchInput}
                                 onChange={(e) => setSearchInput(e.target.value)}
-                                placeholder="Search by name, slug, or ID..."
+                                placeholder="Search by name, slug, or code..."
                                 className="pl-9"
                             />
                         </div>

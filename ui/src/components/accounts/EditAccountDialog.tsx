@@ -72,10 +72,10 @@ export default function EditAccountDialog({
 
                     <div className="space-y-4 py-4">
                         <div className="space-y-2">
-                            <Label htmlFor="edit-id">Account ID</Label>
+                            <Label htmlFor="edit-code">Account Code</Label>
                             <Input
-                                id="edit-id"
-                                value={account.id}
+                                id="edit-code"
+                                value={account.account_code}
                                 disabled
                                 className="font-mono"
                             />
