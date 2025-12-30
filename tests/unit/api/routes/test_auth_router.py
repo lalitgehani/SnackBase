@@ -80,7 +80,9 @@ async def test_register_success(mock_session):
 @patch("snackbase.infrastructure.api.routes.auth_router.jwt_service")
 @patch("snackbase.infrastructure.api.routes.auth_router.hash_password")
 @patch("snackbase.infrastructure.api.routes.auth_router.AccountCodeGenerator")
+@patch("snackbase.infrastructure.api.routes.auth_router.GroupRepository")
 def test_register_endpoint_success(
+    mock_group_repo,
     mock_id_gen,
     mock_hash,
     mock_jwt,
@@ -116,6 +118,10 @@ def test_register_endpoint_success(
     refresh_repo_instance.hash_token.return_value = "hashed_token"
     refresh_repo_instance.create = AsyncMock()
     
+    group_repo_instance = mock_group_repo.return_value
+    group_repo_instance.create = AsyncMock()
+    group_repo_instance.add_user = AsyncMock()
+    
     mock_hash.return_value = "hashed_password"
     mock_id_gen.generate.return_value = "XY1234"
     
@@ -132,7 +138,10 @@ def test_register_endpoint_success(
 
     # We need to override the database dependency to return a mock session
     # effectively ignoring the real DB connection
-    session_mock = AsyncMock()
+    session_mock = MagicMock(spec=AsyncSession)
+    session_mock.add = MagicMock() # Sync method
+    session_mock.flush = AsyncMock()
+    session_mock.commit = AsyncMock()
     session_mock.refresh = AsyncMock(side_effect=mock_refresh)
     
     async def override_get_db_session():
