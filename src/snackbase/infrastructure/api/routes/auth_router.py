@@ -38,15 +38,18 @@ from snackbase.infrastructure.auth import (
 from snackbase.infrastructure.persistence.database import get_db_session
 from snackbase.infrastructure.persistence.models import (
     AccountModel,
+    GroupModel,
     RefreshTokenModel,
     UserModel,
 )
 from snackbase.infrastructure.persistence.repositories import (
     AccountRepository,
+    GroupRepository,
     RefreshTokenRepository,
     RoleRepository,
     UserRepository,
 )
+from snackbase.domain.services.pii_masking_service import PIIMaskingService
 
 logger = get_logger(__name__)
 
@@ -180,6 +183,24 @@ async def register(
         is_active=True,
     )
     await user_repo.create(user)
+
+    # 7.5. Create pii_access group and add user to it
+    group_repo = GroupRepository(session)
+    pii_group = GroupModel(
+        id=str(uuid.uuid4()),
+        account_id=account_id,
+        name=PIIMaskingService.PII_ACCESS_GROUP,  # "pii_access"
+        description="Users in this group can view unmasked PII data",
+    )
+    await group_repo.create(pii_group)
+    await group_repo.add_user(group_id=pii_group.id, user_id=user.id)
+
+    logger.info(
+        "pii_access group created and user added",
+        account_id=account_id,
+        group_id=pii_group.id,
+        user_id=user.id,
+    )
 
     # Commit the transaction
     await session.commit()

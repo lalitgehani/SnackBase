@@ -3,6 +3,7 @@
 import pytest
 
 from snackbase.domain.services import PIIMaskingService
+from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID
 
 
 class TestPIIMaskingService:
@@ -215,3 +216,43 @@ class TestPIIMaskingService:
         result = PIIMaskingService.mask_full("test@#$%")
         assert result == "********"
         assert len(result) == 8
+
+
+class TestSuperadminPIIBypass:
+    """Tests for superadmin PII bypass functionality."""
+
+    def test_should_mask_for_superadmin_with_no_groups(self):
+        """Test that superadmins without pii_access group see unmasked data."""
+        user_groups = []  # No groups
+        account_id = SYSTEM_ACCOUNT_ID  # Superadmin account
+        assert PIIMaskingService.should_mask_for_user(user_groups, account_id) is False
+
+    def test_should_mask_for_superadmin_with_other_groups(self):
+        """Test that superadmins in other groups (not pii_access) see unmasked data."""
+        user_groups = ["admin", "some_other_group"]  # No pii_access
+        account_id = SYSTEM_ACCOUNT_ID
+        assert PIIMaskingService.should_mask_for_user(user_groups, account_id) is False
+
+    def test_should_mask_for_regular_user_without_account_id(self):
+        """Test backward compatibility: regular users without account_id param."""
+        user_groups = ["admin"]  # No pii_access
+        # Not passing account_id (backward compatibility)
+        assert PIIMaskingService.should_mask_for_user(user_groups) is True
+
+    def test_should_mask_for_regular_user_with_account_id(self):
+        """Test regular users are masked even with account_id provided."""
+        user_groups = ["admin"]  # No pii_access
+        account_id = "12345678-1234-1234-1234-123456789012"  # Non-system account
+        assert PIIMaskingService.should_mask_for_user(user_groups, account_id) is True
+
+    def test_should_mask_for_regular_user_with_pii_access(self):
+        """Test regular users with pii_access group see unmasked data."""
+        user_groups = ["admin", "pii_access"]
+        account_id = "12345678-1234-1234-1234-123456789012"  # Non-system account
+        assert PIIMaskingService.should_mask_for_user(user_groups, account_id) is False
+
+    def test_should_mask_for_superadmin_with_none_account_id(self):
+        """Test that None account_id doesn't trigger superadmin bypass."""
+        user_groups = []  # No groups
+        account_id = None
+        assert PIIMaskingService.should_mask_for_user(user_groups, account_id) is True

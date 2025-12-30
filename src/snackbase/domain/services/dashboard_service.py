@@ -43,11 +43,14 @@ class DashboardService:
         self.refresh_token_repo = RefreshTokenRepository(session)
         self.audit_log_service = AuditLogService(session)
 
-    async def get_dashboard_stats(self, user_groups: list[str]) -> DashboardStats:
+    async def get_dashboard_stats(
+        self, user_groups: list[str], account_id: str | None = None
+    ) -> DashboardStats:
         """Get all dashboard statistics.
 
         Args:
             user_groups: List of group names the user belongs to for PII masking.
+            account_id: Optional account ID for superadmin PII bypass.
 
         Returns:
             DashboardStats with all metrics populated.
@@ -87,7 +90,7 @@ class DashboardService:
 
         # Get recent audit logs (last 20) - with PII masking (returns dicts)
         logs, _ = await self.audit_log_service.list_logs(limit=20, sort_by="occurred_at", sort_order="desc")
-        masked_logs = self.audit_log_service.mask_for_display(logs, user_groups)
+        masked_logs = self.audit_log_service.mask_for_display(logs, user_groups, account_id)
         recent_audit_logs = [
             AuditLogResponse(**log)
             for log in masked_logs

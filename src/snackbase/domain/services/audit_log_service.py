@@ -427,7 +427,7 @@ class AuditLogService:
         return value
 
     def mask_for_display(
-        self, logs: list[AuditLogModel], user_groups: list[str]
+        self, logs: list[AuditLogModel], user_groups: list[str], account_id: str | None = None
     ) -> list[dict]:
         """Mask PII in audit logs for display based on user permissions.
 
@@ -438,12 +438,13 @@ class AuditLogService:
         Args:
             logs: List of audit log models from database.
             user_groups: List of group names the user belongs to.
+            account_id: Optional account ID for superadmin bypass detection.
 
         Returns:
             List of dictionaries with PII values masked if user lacks pii_access.
         """
         # Check if user has PII access
-        should_mask = PIIMaskingService.should_mask_for_user(user_groups)
+        should_mask = PIIMaskingService.should_mask_for_user(user_groups, account_id)
 
         result = []
         for log in logs:
@@ -573,7 +574,8 @@ class AuditLogService:
         self,
         format: str,
         user_groups: list[str],
-        account_id: str | None = None,
+        account_id_for_filter: str | None = None,
+        account_id_for_pii: str | None = None,
         table_name: str | None = None,
         record_id: str | None = None,
         user_id: str | None = None,
@@ -586,7 +588,8 @@ class AuditLogService:
         Args:
             format: Export format (csv, json).
             user_groups: List of group names for PII masking.
-            account_id: Filter by account.
+            account_id_for_filter: Filter by account.
+            account_id_for_pii: Account ID for PII masking superadmin bypass.
             table_name: Filter by table.
             record_id: Filter by record.
             user_id: Filter by user.
@@ -599,7 +602,7 @@ class AuditLogService:
         """
         # Fetch all matching logs (no pagination for export)
         logs, _ = await self.repository.list_logs(
-            account_id=account_id,
+            account_id=account_id_for_filter,
             table_name=table_name,
             record_id=record_id,
             user_id=user_id,
@@ -610,7 +613,7 @@ class AuditLogService:
         )
 
         # Mask PII based on user's group membership (returns dicts)
-        logs = self.mask_for_display(logs, user_groups)
+        logs = self.mask_for_display(logs, user_groups, account_id_for_pii)
 
         if format.lower() == "json":
             data = [

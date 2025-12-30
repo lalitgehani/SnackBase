@@ -62,7 +62,7 @@ async def list_audit_logs(
     )
 
     # Mask PII based on user's group membership (returns dicts)
-    masked_logs = audit_service.mask_for_display(logs, current_user.groups)
+    masked_logs = audit_service.mask_for_display(logs, current_user.groups, current_user.account_id)
 
     return AuditLogListResponse(
         items=[AuditLogResponse(**log) for log in masked_logs],
@@ -104,7 +104,8 @@ async def export_audit_logs(
     content, media_type = await audit_service.export_logs(
         format=format.value,
         user_groups=current_user.groups,
-        account_id=account_id,
+        account_id_for_filter=account_id,
+        account_id_for_pii=current_user.account_id,
         table_name=table_name,
         record_id=record_id,
         user_id=user_id,
@@ -150,6 +151,6 @@ async def get_audit_log(
         )
 
     # Mask PII based on user's group membership (returns dicts)
-    masked_logs = audit_service.mask_for_display([log], current_user.groups)
+    masked_logs = audit_service.mask_for_display([log], current_user.groups, current_user.account_id)
 
     return AuditLogResponse(**masked_logs[0])

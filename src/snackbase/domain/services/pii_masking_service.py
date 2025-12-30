@@ -6,6 +6,8 @@ Provides masking functions for different types of PII data based on user permiss
 import re
 from typing import Any
 
+from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID
+
 
 class PIIMaskingService:
     """Service for masking PII data in API responses.
@@ -17,15 +19,22 @@ class PIIMaskingService:
     PII_ACCESS_GROUP = "pii_access"
 
     @classmethod
-    def should_mask_for_user(cls, user_groups: list[str]) -> bool:
+    def should_mask_for_user(
+        cls, user_groups: list[str], account_id: str | None = None
+    ) -> bool:
         """Check if data should be masked for the given user.
-        
+
         Args:
             user_groups: List of group names the user belongs to.
-            
+            account_id: Optional account ID for superadmin bypass detection.
+
         Returns:
-            True if data should be masked, False if user has pii_access.
+            True if data should be masked, False if user has pii_access or is superadmin.
         """
+        # Superadmin bypass - superadmins always see unmasked data
+        if account_id is not None and account_id == SYSTEM_ACCOUNT_ID:
+            return False
+
         return cls.PII_ACCESS_GROUP not in user_groups
 
     @classmethod

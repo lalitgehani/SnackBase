@@ -40,4 +40,6 @@ async def get_dashboard_stats(
     PII is masked unless the user belongs to the 'pii_access' group.
     """
     dashboard_service = DashboardService(session)
-    return await dashboard_service.get_dashboard_stats(user_groups=current_user.groups)
+    return await dashboard_service.get_dashboard_stats(
+        user_groups=current_user.groups, account_id=current_user.account_id
+    )

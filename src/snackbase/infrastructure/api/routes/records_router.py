@@ -40,20 +40,22 @@ def _mask_record_pii(
     record: dict[str, Any],
     schema: list[dict],
     user_groups: list[str],
+    account_id: str | None = None,
 ) -> dict[str, Any]:
     """Mask PII fields in a record based on user groups.
-    
+
     Args:
         record: The record data to mask.
         schema: The collection schema with PII field definitions.
         user_groups: List of group names the user belongs to.
-        
+        account_id: Optional account ID for superadmin PII bypass.
+
     Returns:
         Record with PII fields masked if user doesn't have pii_access group.
     """
-    # Check if user has pii_access group
-    if not PIIMaskingService.should_mask_for_user(user_groups):
-        # User has pii_access, return unmasked data
+    # Check if user has pii_access group or is superadmin
+    if not PIIMaskingService.should_mask_for_user(user_groups, account_id):
+        # User has pii_access or is superadmin, return unmasked data
         return record
     
     # User doesn't have pii_access, mask PII fields
@@ -270,7 +272,7 @@ async def create_record(
         created_record = apply_field_filter(created_record, allowed_fields)
     
     # 8. Apply PII masking to response
-    created_record = _mask_record_pii(created_record, schema, current_user.groups)
+    created_record = _mask_record_pii(created_record, schema, current_user.groups, current_user.account_id)
     
     return RecordResponse.from_record(created_record)
 
@@ -375,7 +377,7 @@ async def list_records(
     # 7. Apply PII masking to all records
     masked_records = []
     for record in records:
-        masked_record = _mask_record_pii(record, schema, current_user.groups)
+        masked_record = _mask_record_pii(record, schema, current_user.groups, current_user.account_id)
         masked_records.append(masked_record)
     records = masked_records
     
@@ -485,7 +487,7 @@ async def get_record(
         record = apply_field_filter(record, allowed_fields)
     
     # 5. Apply PII masking to response
-    record = _mask_record_pii(record, schema, current_user.groups)
+    record = _mask_record_pii(record, schema, current_user.groups, current_user.account_id)
 
     return RecordResponse.from_record(record)
 
@@ -722,7 +724,7 @@ async def _update_record(
         updated_record = apply_field_filter(updated_record, allowed_fields)
     
     # 9. Apply PII masking to response
-    updated_record = _mask_record_pii(updated_record, schema, current_user.groups)
+    updated_record = _mask_record_pii(updated_record, schema, current_user.groups, current_user.account_id)
 
     return RecordResponse.from_record(updated_record)
 

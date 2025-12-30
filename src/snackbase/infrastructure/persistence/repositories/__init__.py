@@ -27,11 +27,15 @@ from snackbase.infrastructure.persistence.repositories.user_repository import (
 from snackbase.infrastructure.persistence.repositories.audit_log_repository import (
     AuditLogRepository,
 )
+from snackbase.infrastructure.persistence.repositories.group_repository import (
+    GroupRepository,
+)
 
 __all__ = [
     "AccountRepository",
     "AuditLogRepository",
     "CollectionRepository",
+    "GroupRepository",
     "InvitationRepository",
     "PermissionRepository",
     "RecordRepository",
