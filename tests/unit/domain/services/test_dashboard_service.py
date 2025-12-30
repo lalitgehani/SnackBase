@@ -56,6 +56,10 @@ async def test_get_dashboard_stats_with_data(dashboard_service, mock_session):
             return_value=[mock_user1]
         )
 
+        dashboard_service.audit_log_repo.list_logs = AsyncMock(
+            return_value=([], 0)
+        )
+
         # Mock system health
         from snackbase.infrastructure.api.schemas import SystemHealthStats
 
@@ -100,6 +104,8 @@ async def test_get_dashboard_stats_empty_database(dashboard_service):
         dashboard_service.collection_repo, "count_all", return_value=0
     ), patch.object(
         dashboard_service.refresh_token_repo, "count_active_sessions", return_value=0
+    ), patch.object(
+        dashboard_service.audit_log_repo, "list_logs", return_value=([], 0)
     ), patch.object(
         dashboard_service, "_count_total_records", return_value=0
     ), patch.object(
