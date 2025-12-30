@@ -7,9 +7,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { FileText, Search, RefreshCw, ChevronLeft, ChevronRight, Download, Filter } from 'lucide-react';
+import { FileText, Search, RefreshCw, Download, Filter } from 'lucide-react';
 import AuditLogsTable from '@/components/audit-logs/AuditLogsTable';
 import AuditLogDetailDialog from '@/components/audit-logs/AuditLogDetailDialog';
+import {
+    Pagination,
+    PaginationContent,
+    PaginationEllipsis,
+    PaginationItem,
+    PaginationLink,
+    PaginationNext,
+    PaginationPrevious,
+} from '@/components/ui/pagination';
 import {
     getAuditLogs,
     exportAuditLogs,
@@ -26,7 +35,7 @@ export default function AuditLogsPage() {
 
     // Pagination and filtering state
     const [page, setPage] = useState(1);
-    const [pageSize] = useState(50);
+    const [pageSize, setPageSize] = useState(10);
     const [sortBy, setSortBy] = useState('occurred_at');
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
@@ -68,7 +77,7 @@ export default function AuditLogsPage() {
 
     useEffect(() => {
         fetchLogs();
-    }, [page, sortBy, sortOrder]); // Only refetch on page/sort change automatically
+    }, [page, pageSize, sortBy, sortOrder]); // Only refetch on page/sort/size change automatically
 
     const handleSearch = (e?: React.FormEvent) => {
         e?.preventDefault();
@@ -249,33 +258,140 @@ export default function AuditLogsPage() {
 
                             {/* Pagination */}
                             <div className="flex items-center justify-between mt-4">
-                                <p className="text-sm text-muted-foreground">
+                                <div className="flex items-center space-x-6 lg:space-x-8">
+                                    <div className="flex items-center space-x-2">
+                                        <p className="text-sm font-medium">Rows per page</p>
+                                        <Select
+                                            value={`${pageSize}`}
+                                            onValueChange={(value) => {
+                                                setPageSize(Number(value));
+                                                setPage(1);
+                                            }}
+                                        >
+                                            <SelectTrigger className="h-8 w-[70px]">
+                                                <SelectValue placeholder={pageSize} />
+                                            </SelectTrigger>
+                                            <SelectContent side="top">
+                                                {[10, 20, 30, 40, 50].map((pageSize) => (
+                                                    <SelectItem key={pageSize} value={`${pageSize}`}>
+                                                        {pageSize}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="flex w-[100px] items-center justify-center text-sm font-medium">
+                                        Page {page} of {totalPages}
+                                    </div>
+                                </div>
+                                <p className="text-sm text-muted-foreground hidden md:block">
                                     Showing {data.items.length === 0 ? 0 : data.skip + 1} to{' '}
                                     {Math.min(data.skip + data.limit, data.total)} of {data.total} entries
                                 </p>
-                                <div className="flex items-center gap-2">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setPage(page - 1)}
-                                        disabled={!canGoPrevious}
-                                    >
-                                        <ChevronLeft className="h-4 w-4 mr-1" />
-                                        Previous
-                                    </Button>
-                                    <span className="text-sm">
-                                        Page {page} of {totalPages}
-                                    </span>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setPage(page + 1)}
-                                        disabled={!canGoNext}
-                                    >
-                                        Next
-                                        <ChevronRight className="h-4 w-4 ml-1" />
-                                    </Button>
-                                </div>
+
+                                <Pagination className="justify-end w-auto">
+                                    <PaginationContent>
+                                        <PaginationItem>
+                                            <PaginationPrevious
+                                                onClick={() => canGoPrevious && setPage(page - 1)}
+                                                className={!canGoPrevious ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                                            />
+                                        </PaginationItem>
+
+                                        {/* Dynamic Pagination Items */}
+                                        {(() => {
+                                            const items = [];
+                                            const maxVisiblePages = 5;
+
+                                            if (totalPages <= maxVisiblePages) {
+                                                for (let i = 1; i <= totalPages; i++) {
+                                                    items.push(
+                                                        <PaginationItem key={i}>
+                                                            <PaginationLink
+                                                                isActive={page === i}
+                                                                onClick={() => setPage(i)}
+                                                                className="cursor-pointer"
+                                                            >
+                                                                {i}
+                                                            </PaginationLink>
+                                                        </PaginationItem>
+                                                    );
+                                                }
+                                            } else {
+                                                // Always show first page
+                                                items.push(
+                                                    <PaginationItem key={1}>
+                                                        <PaginationLink
+                                                            isActive={page === 1}
+                                                            onClick={() => setPage(1)}
+                                                            className="cursor-pointer"
+                                                        >
+                                                            1
+                                                        </PaginationLink>
+                                                    </PaginationItem>
+                                                );
+
+                                                // Show ellipsis if far from start
+                                                if (page > 3) {
+                                                    items.push(
+                                                        <PaginationItem key="ellipsis-start">
+                                                            <PaginationEllipsis />
+                                                        </PaginationItem>
+                                                    );
+                                                }
+
+                                                // Show current page and neighbors
+                                                const start = Math.max(2, page - 1);
+                                                const end = Math.min(totalPages - 1, page + 1);
+
+                                                for (let i = start; i <= end; i++) {
+                                                    items.push(
+                                                        <PaginationItem key={i}>
+                                                            <PaginationLink
+                                                                isActive={page === i}
+                                                                onClick={() => setPage(i)}
+                                                                className="cursor-pointer"
+                                                            >
+                                                                {i}
+                                                            </PaginationLink>
+                                                        </PaginationItem>
+                                                    );
+                                                }
+
+                                                // Show ellipsis if far from end
+                                                if (page < totalPages - 2) {
+                                                    items.push(
+                                                        <PaginationItem key="ellipsis-end">
+                                                            <PaginationEllipsis />
+                                                        </PaginationItem>
+                                                    );
+                                                }
+
+                                                // Always show last page
+                                                items.push(
+                                                    <PaginationItem key={totalPages}>
+                                                        <PaginationLink
+                                                            isActive={page === totalPages}
+                                                            onClick={() => setPage(totalPages)}
+                                                            className="cursor-pointer"
+                                                        >
+                                                            {totalPages}
+                                                        </PaginationLink>
+                                                    </PaginationItem>
+                                                );
+                                            }
+
+                                            return items;
+                                        })()}
+
+                                        <PaginationItem>
+                                            <PaginationNext
+                                                onClick={() => canGoNext && setPage(page + 1)}
+                                                className={!canGoNext ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                                            />
+                                        </PaginationItem>
+                                    </PaginationContent>
+                                </Pagination>
                             </div>
                         </>
                     )}
