@@ -15,6 +15,10 @@ from httpx import AsyncClient, ASGITransport
 from snackbase.infrastructure.persistence.database import Base
 from snackbase.infrastructure.persistence.models import AccountModel, UserModel, RoleModel
 from snackbase.infrastructure.auth.jwt_service import jwt_service
+from snackbase.core.logging import get_logger
+
+logger = get_logger(__name__)
+
 
 
 @pytest.fixture(scope="session")
@@ -25,8 +29,53 @@ def event_loop():
     loop.close()
 
 
+@pytest.fixture(scope="session")
+def _audit_hooks_registry():
+    """Provide access to the hook registry and track registration status.
+    
+    Returns a dict with 'registry' and 'registered' keys.
+    This prevents duplicate registrations across test sessions.
+    """
+    from snackbase.infrastructure.api.app import app
+    
+    registry = app.state.hook_registry if hasattr(app.state, "hook_registry") else None
+    return {"registry": registry, "registered": False}
+
+
+@pytest.fixture
+def _maybe_enable_audit_hooks(request, _audit_hooks_registry):
+    """Conditionally enable audit hooks based on test markers.
+    
+    By default, NO hooks are registered (matching original behavior for fast tests).
+    Only tests marked with @pytest.mark.enable_audit_hooks will have audit logging.
+    
+    IMPORTANT: The original conftest.py did NOT register builtin_hooks at all,
+    which is why tests were fast. We restore that behavior here.
+    """
+    # Check if this test wants audit hooks enabled
+    enable_audit = request.node.get_closest_marker("enable_audit_hooks") is not None
+    
+    if enable_audit and not _audit_hooks_registry["registered"]:
+        # First test requesting audit hooks - register them globally
+        registry = _audit_hooks_registry["registry"]
+        if registry:
+            from snackbase.infrastructure.hooks import register_builtin_hooks
+            from snackbase.infrastructure.persistence.event_listeners import register_sqlalchemy_listeners
+            
+            # Register built-in hooks (includes audit logging hooks)
+            register_builtin_hooks(registry)
+            
+            # Register SQLAlchemy listeners (global Mapper class listeners)
+            register_sqlalchemy_listeners(None, registry)
+            
+            _audit_hooks_registry["registered"] = True
+            logger.info("Audit hooks enabled for tests")
+    
+    return _audit_hooks_registry["registry"]
+
+
 @pytest_asyncio.fixture
-async def db_session() -> AsyncGenerator[AsyncSession, None]:
+async def db_session(_maybe_enable_audit_hooks) -> AsyncGenerator[AsyncSession, None]:
     """Create a test database session.
 
     Uses an in-memory SQLite database for testing.
@@ -43,19 +92,8 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         
-    # Register global listeners for tests
-    # We need the hook registry from the app
-    from snackbase.infrastructure.api.app import app
-    from snackbase.infrastructure.persistence.event_listeners import register_sqlalchemy_listeners
-    
-    # Ensure app hooks are initialized (lifespan might not have run yet)
-    if not hasattr(app.state, "hook_registry"):
-        # Manually init if needed, or rely on create_app having run it (it does in module scope)
-        # app = create_app() -> initializes hooks
-        pass
-        
-    if hasattr(app.state, "hook_registry"):
-        register_sqlalchemy_listeners(engine, app.state.hook_registry)
+    # Audit hooks are conditionally registered in _init_hooks_conditionally
+    # based on the @pytest.mark.enable_audit_hooks marker
 
     # Create session
     async_session_maker = sessionmaker(

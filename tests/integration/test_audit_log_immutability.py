@@ -6,6 +6,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, timezone
 
+
+# Enable audit hooks for all tests in this module
+pytestmark = pytest.mark.enable_audit_hooks
+
 from snackbase.infrastructure.persistence.models.audit_log import AuditLogModel
 
 

@@ -4,6 +4,10 @@ import pytest
 from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 
+
+# Enable audit hooks for all tests in this module
+pytestmark = pytest.mark.enable_audit_hooks
+
 from snackbase.infrastructure.persistence.models.audit_log import AuditLogModel
 from snackbase.infrastructure.persistence.repositories.audit_log_repository import (
     AuditLogRepository,

@@ -61,3 +61,9 @@ strict = true
 warn_return_any = true
 warn_unused_ignores = true
 disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+markers = [
+    "enable_audit_hooks: Enable audit logging hooks for this test (adds overhead)",
+]
+

@@ -670,6 +670,7 @@ async def _update_record(
             updated_by=current_user.user_id,
             data=processed_data,
             schema=schema,
+            old_values=existing_record,
         )
         
         if updated_record is None:
@@ -801,6 +802,7 @@ async def delete_record(
             collection_name=collection,
             record_id=record_id,
             account_id=current_user.account_id,
+            record_data=record,
         )
 
         if not deleted:

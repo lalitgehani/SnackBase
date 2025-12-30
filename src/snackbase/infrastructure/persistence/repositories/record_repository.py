@@ -13,6 +13,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.core.logging import get_logger
+from snackbase.core.context import get_current_context
+from snackbase.core.hooks.hook_events import HookEvent
 from snackbase.infrastructure.persistence.table_builder import TableBuilder
 
 logger = get_logger(__name__)
@@ -112,7 +114,7 @@ class RecordRepository:
 
 
         # Return the complete record
-        return {
+        created_record = {
             "id": record_id,
             "account_id": account_id,
             "created_at": now.isoformat(),
@@ -122,6 +124,18 @@ class RecordRepository:
             **data,  # Include original user data (not SQL-converted)
         }
 
+        # Trigger audit hook if context is available
+        context = get_current_context()
+        if context and hasattr(context, "app") and hasattr(context.app.state, "hook_registry"):
+            registry = context.app.state.hook_registry
+            await registry.trigger(
+                HookEvent.ON_RECORD_AFTER_CREATE,
+                {"record": created_record, "collection": collection_name, "session": self.session},
+                context
+            )
+
+        return created_record
+
     async def update_record(
         self,
         collection_name: str,
@@ -130,6 +144,7 @@ class RecordRepository:
         updated_by: str,
         data: dict[str, Any],
         schema: list[dict[str, Any]],
+        old_values: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
         """Update an existing record.
         
@@ -190,7 +205,7 @@ class RecordRepository:
         if row is None:
             return None
             
-        # 4. Convert back to dict
+        # Convert back to dict
         record = dict(row._mapping)
 
         # Type conversion
@@ -207,6 +222,33 @@ class RecordRepository:
                         pass
                 elif field_type == "boolean":
                     record[key] = bool(value)
+
+        # Trigger audit hook for update
+        context = get_current_context()
+        if context and hasattr(context, "app") and hasattr(context.app.state, "hook_registry"):
+            registry = context.app.state.hook_registry
+            # For updates, we pass the new record and optionally old_values.
+            # RecordRepository doesn't keep track of old_values easily, 
+            # but AuditLogService will compare. 
+            # Wait, AuditLogService needs old_values to compare!
+            # If we don't pass them, it won't see changes.
+            # But the 'data' passed to update_record ARE the changes.
+            
+            # TODO: If we want full audit, we might need to pass old_values here too.
+            # Let's see if we can get them from the RETURNING row? 
+            # SQLite RETURNING only returns NEW values.
+            
+            await registry.trigger(
+                HookEvent.ON_RECORD_AFTER_UPDATE,
+                {
+                    "record": record, 
+                    "collection": collection_name, 
+                    "data": data,
+                    "old_values": old_values,
+                    "session": self.session,
+                },
+                context
+            )
 
         return record
 
@@ -425,6 +467,7 @@ class RecordRepository:
         collection_name: str,
         record_id: str,
         account_id: str,
+        record_data: dict[str, Any] | None = None,
     ) -> bool:
         """Delete a record by ID, scoped to account.
 
@@ -448,4 +491,17 @@ class RecordRepository:
             {"record_id": record_id, "account_id": account_id},
         )
 
-        return result.rowcount > 0
+        success = result.rowcount > 0
+        
+        if success and record_data:
+            # Trigger audit hook if context is available
+            context = get_current_context()
+            if context and hasattr(context, "app") and hasattr(context.app.state, "hook_registry"):
+                registry = context.app.state.hook_registry
+                await registry.trigger(
+                    HookEvent.ON_RECORD_AFTER_DELETE,
+                    {"record": record_data, "collection": collection_name, "session": self.session},
+                    context
+                )
+
+        return success

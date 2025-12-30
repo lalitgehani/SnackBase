@@ -17,6 +17,10 @@ from snackbase.infrastructure.persistence.repositories.audit_log_repository impo
     AuditLogRepository,
 )
 
+# Enable audit hooks for all tests in this module
+pytestmark = pytest.mark.enable_audit_hooks
+
+
 
 @pytest.mark.asyncio
 async def test_audit_capture_create(db_session: AsyncSession):

@@ -5,6 +5,10 @@ from sqlalchemy import inspect
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
+# Enable audit hooks for all tests in this module
+pytestmark = pytest.mark.enable_audit_hooks
+
+
 @pytest.mark.asyncio
 async def test_audit_log_table_exists(db_session: AsyncSession):
     """Test that the audit_log table exists in the database."""

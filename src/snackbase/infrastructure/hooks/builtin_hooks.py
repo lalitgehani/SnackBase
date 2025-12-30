@@ -150,14 +150,29 @@ async def audit_capture_hook(
     if data is None or context is None:
         return data
 
-    # Only process model operation events
-    if not event.startswith("on_model_after_"):
+    # Only process model or record operation events
+    if not (event.startswith("on_model_after_") or event.startswith("on_record_after_")):
         return data
 
-    # Extract model from data
+    # Extract model or record from data
     model = data.get("model")
+    record_data = data.get("record")
+    collection_name = data.get("collection")
+
+    if model is None and record_data is None:
+        logger.warning("Audit capture hook: no model or record in data", hook_event=event)
+        return data
+
+    # If it's a record event, wrap the record data in a snapshot
+    if record_data is not None and collection_name is not None:
+        from snackbase.infrastructure.persistence.record_snapshot import RecordSnapshot
+        from snackbase.infrastructure.persistence.table_builder import TableBuilder
+        
+        table_name = TableBuilder.generate_table_name(collection_name)
+        model = RecordSnapshot(table_name, record_data)
+    
     if model is None:
-        logger.warning("Audit capture hook: no model in data", hook_event=event)
+        logger.warning("Audit capture hook: failed to resolve model/record", hook_event=event)
         return data
 
     # Extract user context
@@ -206,7 +221,7 @@ async def audit_capture_hook(
 
 
         # Capture audit based on event type
-        if event == HookEvent.ON_MODEL_AFTER_CREATE:
+        if event in (HookEvent.ON_MODEL_AFTER_CREATE, HookEvent.ON_RECORD_AFTER_CREATE):
             await audit_service.capture_create(
                 model=model,
                 user_id=str(user.id),
@@ -218,7 +233,7 @@ async def audit_capture_hook(
                 user_agent=context.user_agent,
                 request_id=context.request_id,
             )
-        elif event == HookEvent.ON_MODEL_AFTER_UPDATE:
+        elif event in (HookEvent.ON_MODEL_AFTER_UPDATE, HookEvent.ON_RECORD_AFTER_UPDATE):
             old_values = data.get("old_values", {})
             await audit_service.capture_update(
                 model=model,
@@ -232,7 +247,7 @@ async def audit_capture_hook(
                 user_agent=context.user_agent,
                 request_id=context.request_id,
             )
-        elif event == HookEvent.ON_MODEL_AFTER_DELETE:
+        elif event in (HookEvent.ON_MODEL_AFTER_DELETE, HookEvent.ON_RECORD_AFTER_DELETE):
             await audit_service.capture_delete(
                 model=model,
                 user_id=str(user.id),
@@ -242,6 +257,7 @@ async def audit_capture_hook(
                 user_groups=user_groups,
                 ip_address=context.ip_address,
                 user_agent=context.user_agent,
+                request_id=context.request_id,
             )
 
         if should_close_session:
@@ -331,30 +347,36 @@ def register_builtin_hooks(registry: HookRegistry) -> list[str]:
 
     # Audit capture hooks - run after all other hooks (positive priority)
     # Use priority 100 to run after user hooks
-    hook_ids.append(
-        registry.register(
-            event=HookEvent.ON_MODEL_AFTER_CREATE,
-            callback=audit_capture_hook,
-            priority=100,
-            is_builtin=True,
+    
+    # Model events (ORM)
+    for event in [
+        HookEvent.ON_MODEL_AFTER_CREATE,
+        HookEvent.ON_MODEL_AFTER_UPDATE,
+        HookEvent.ON_MODEL_AFTER_DELETE,
+    ]:
+        hook_ids.append(
+            registry.register(
+                event=event,
+                callback=audit_capture_hook,
+                priority=100,
+                is_builtin=True,
+            )
         )
-    )
-    hook_ids.append(
-        registry.register(
-            event=HookEvent.ON_MODEL_AFTER_UPDATE,
-            callback=audit_capture_hook,
-            priority=100,
-            is_builtin=True,
+        
+    # Record events (Dynamic Collections)
+    for event in [
+        HookEvent.ON_RECORD_AFTER_CREATE,
+        HookEvent.ON_RECORD_AFTER_UPDATE,
+        HookEvent.ON_RECORD_AFTER_DELETE,
+    ]:
+        hook_ids.append(
+            registry.register(
+                event=event,
+                callback=audit_capture_hook,
+                priority=100,
+                is_builtin=True,
+            )
         )
-    )
-    hook_ids.append(
-        registry.register(
-            event=HookEvent.ON_MODEL_AFTER_DELETE,
-            callback=audit_capture_hook,
-            priority=100,
-            is_builtin=True,
-        )
-    )
 
     logger.info(
         "Built-in hooks registered",
