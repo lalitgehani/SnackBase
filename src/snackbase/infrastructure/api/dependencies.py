@@ -80,25 +80,46 @@ async def get_current_user(
 
         user_id = payload["user_id"]
         
-        # Load user groups from database
-        # 1. Try to load from PermissionCache
+        # Load user info from database or cache
         permission_cache = get_permission_cache(request)
-        groups = permission_cache.get_user_groups(user_id)
+        user_info = permission_cache.get_user_info(user_id)
+        
+        db_account_id = None
+        groups = []
 
-        # 2. If miss, load from DB
-        if groups is None:
-            groups = []
+        if user_info:
+            groups = user_info["groups"]
+            db_account_id = user_info["account_id"]
+        else:
             if session is not None:
                 from snackbase.infrastructure.persistence.repositories import UserRepository
                 
                 user_repo = UserRepository(session)
                 user = await user_repo.get_by_id_with_groups(user_id)
                 
-                if user and user.groups:
-                    groups = [group.name for group in user.groups]
-            
-            # 3. Cache the result
-            permission_cache.set_user_groups(user_id, groups)
+                if user:
+                    db_account_id = user.account_id
+                    if user.groups:
+                        groups = [group.name for group in user.groups]
+                    
+                    # Cache for next time
+                    permission_cache.set_user_info(user_id, groups, db_account_id)
+            else:
+                # Without session and cache miss, we can't verify relationship 
+                # but we usually have session in normal request flow.
+                # If we don't have user, it's an invalid token user.
+                pass
+
+        # Verify that the user actually belongs to the account specified in the token
+        if db_account_id and db_account_id != payload["account_id"]:
+            logger.warning(
+                "Authentication failed: user-account mismatch",
+                user_id=user_id,
+                token_account_id=payload["account_id"],
+                db_account_id=db_account_id,
+            )
+            # Use InvalidTokenError to trigger 401
+            raise InvalidTokenError("User does not belong to this account")
 
         return CurrentUser(
             user_id=user_id,

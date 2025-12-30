@@ -149,16 +149,16 @@ class PermissionCache:
             return len(keys_to_delete)
     
     
-    def get_user_groups(self, user_id: str) -> list[str] | None:
-        """Get cached groups for a user.
+    def get_user_info(self, user_id: str) -> dict[str, Any] | None:
+        """Get cached info (groups, account_id) for a user.
         
         Args:
             user_id: User ID.
             
         Returns:
-            List of group names if found and not expired, None otherwise.
+            Dict with 'groups' and 'account_id' if found and not expired, None otherwise.
         """
-        key = f"{user_id}:__groups__"
+        key = f"{user_id}:__info__"
         with self._lock:
             entry = self._cache.get(key)
             if entry is None:
@@ -170,16 +170,46 @@ class PermissionCache:
             
             return entry.value
 
+    def set_user_info(self, user_id: str, groups: list[str], account_id: str) -> None:
+        """Cache info (groups, account_id) for a user.
+        
+        Args:
+            user_id: User ID.
+            groups: List of group names.
+            account_id: Account ID.
+        """
+        key = f"{user_id}:__info__"
+        expires_at = time.time() + self.ttl_seconds
+        
+        with self._lock:
+            self._cache[key] = CacheEntry(
+                value={"groups": groups, "account_id": account_id}, 
+                expires_at=expires_at
+            )
+
+    def get_user_groups(self, user_id: str) -> list[str] | None:
+        """Get cached groups for a user (deprecated: use get_user_info).
+        
+        Args:
+            user_id: User ID.
+            
+        Returns:
+            List of group names if found and not expired, None otherwise.
+        """
+        info = self.get_user_info(user_id)
+        return info["groups"] if info else None
+
     def set_user_groups(self, user_id: str, groups: list[str]) -> None:
-        """Cache groups for a user.
+        """Cache groups for a user (deprecated: use set_user_info).
         
         Args:
             user_id: User ID.
             groups: List of group names.
         """
+        # We don't have account_id here, so we can't fully update __info__ 
+        # unless we just keep groups. But for compatibility:
         key = f"{user_id}:__groups__"
         expires_at = time.time() + self.ttl_seconds
-        
         with self._lock:
             self._cache[key] = CacheEntry(value=groups, expires_at=expires_at)
 
