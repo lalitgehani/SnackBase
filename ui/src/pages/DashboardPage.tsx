@@ -14,14 +14,6 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import {
     LayoutDashboard,
@@ -35,8 +27,9 @@ import {
     HardDrive,
 } from 'lucide-react';
 import AuditLogsTable from '@/components/audit-logs/AuditLogsTable';
+import { DataTable, type Column } from '@/components/common/DataTable';
 import type { AuditLogItem } from '@/services/audit.service';
-import { getDashboardStats, type DashboardStats } from '@/services/dashboard.service';
+import { getDashboardStats, type DashboardStats, type RecentRegistration } from '@/services/dashboard.service';
 import { handleApiError } from '@/lib/api';
 
 const REFRESH_OPTIONS = [
@@ -60,6 +53,8 @@ export default function DashboardPage() {
     });
     const [auditPage, setAuditPage] = useState(1);
     const [auditPageSize, setAuditPageSize] = useState(10);
+    const [regPage, setRegPage] = useState(1);
+    const [regPageSize, setRegPageSize] = useState(10);
 
     const fetchStats = async (isManualRefresh = false) => {
         if (isManualRefresh) {
@@ -109,6 +104,34 @@ export default function DashboardPage() {
     const formatDate = (dateString: string) => {
         return new Date(dateString).toLocaleString();
     };
+
+    const registrationColumns: Column<RecentRegistration>[] = [
+        {
+            header: 'Email',
+            accessorKey: 'email',
+            className: 'font-medium'
+        },
+        {
+            header: 'Account',
+            render: (reg) => (
+                <div className="flex flex-col">
+                    <span className="text-sm">{reg.account_name}</span>
+                    <span className="text-xs text-muted-foreground">
+                        {reg.account_code}
+                    </span>
+                </div>
+            )
+        },
+        {
+            header: 'Registered At',
+            accessorKey: 'created_at',
+            render: (reg) => (
+                <span className="text-sm text-muted-foreground">
+                    {formatDate(reg.created_at)}
+                </span>
+            )
+        }
+    ];
 
     if (loading && !stats) {
         return (
@@ -291,40 +314,23 @@ export default function DashboardPage() {
                     <CardDescription>Last 10 user registrations</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    {stats?.recent_registrations && stats.recent_registrations.length > 0 ? (
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Email</TableHead>
-                                    <TableHead>Account</TableHead>
-                                    <TableHead>Registered At</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {stats.recent_registrations.map((registration) => (
-                                    <TableRow key={registration.id}>
-                                        <TableCell className="font-medium">{registration.email}</TableCell>
-                                        <TableCell>
-                                            <div className="flex flex-col">
-                                                <span className="text-sm">{registration.account_name}</span>
-                                                <span className="text-xs text-muted-foreground">
-                                                    {registration.account_code}
-                                                </span>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell className="text-sm text-muted-foreground">
-                                            {formatDate(registration.created_at)}
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    ) : (
-                        <div className="text-center py-8 text-muted-foreground">
-                            <Users className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                            <p>No recent registrations</p>
-                        </div>
-                    )}
+                    <DataTable
+                        data={stats?.recent_registrations || []}
+                        columns={registrationColumns}
+                        keyExtractor={(reg) => reg.id}
+                        isLoading={loading && !stats}
+                        totalItems={stats?.recent_registrations?.length || 0}
+                        pagination={{
+                            page: regPage,
+                            pageSize: regPageSize,
+                            onPageChange: setRegPage,
+                            onPageSizeChange: (size) => {
+                                setRegPageSize(size);
+                                setRegPage(1);
+                            }
+                        }}
+                        noDataMessage="No recent registrations"
+                    />
                 </CardContent>
             </Card>
 
