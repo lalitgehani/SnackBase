@@ -167,26 +167,34 @@ async def audit_capture_hook(
         return data
 
     # Get account_id from model or context
+    # Use robust extraction to handle AccountModel which doesn't have account_id field
     account_id = getattr(model, "account_id", None) or context.account_id
+    
+    # Special case: If audit is for AccountModel creation, use its own ID if not found
+    if not account_id and hasattr(model, "__tablename__") and model.__tablename__ == "accounts":
+         account_id = getattr(model, "id", None)
+
     if not account_id:
         logger.warning("Audit capture hook: no account_id found")
         return data
 
     # Import here to avoid circular dependency
     from snackbase.domain.services import AuditLogService
-    from snackbase.infrastructure.persistence.database import get_db_session
+    from snackbase.infrastructure.persistence.database import get_db_manager
 
-    # Get database session from context
-    # Note: We need to get a new session for audit logging
-    # to avoid interfering with the main transaction
+    # Get database session
+    # 1. Try to get logic-session passed in data (from manual triggers)
+    session = data.get("session")
+    
+    # 2. If None (from global listener), create a new dedicated session
+    should_close_session = False
+    if session is None:
+        db = get_db_manager()
+        session_factory = db.session_factory
+        session = session_factory()
+        should_close_session = True
+
     try:
-        # Use the same session as the main operation
-        # The audit repository will handle the transaction
-        session = data.get("session")
-        if session is None:
-            logger.warning("Audit capture hook: no session in data")
-            return data
-
         audit_service = AuditLogService(session)
 
         # Extract user groups
@@ -195,6 +203,7 @@ async def audit_capture_hook(
             # If groups are objects, extract names
             if hasattr(user_groups[0], "name"):
                 user_groups = [g.name for g in user_groups]
+
 
         # Capture audit based on event type
         if event == HookEvent.ON_MODEL_AFTER_CREATE:
@@ -233,10 +242,15 @@ async def audit_capture_hook(
                 user_groups=user_groups,
                 ip_address=context.ip_address,
                 user_agent=context.user_agent,
-                request_id=context.request_id,
             )
 
+        if should_close_session:
+            await session.commit()
+
     except Exception as e:
+        if should_close_session and session:
+            await session.rollback()
+
         # Log error but don't fail the main operation
         logger.error(
             "Audit capture hook failed",
@@ -244,6 +258,9 @@ async def audit_capture_hook(
             error=str(e),
             exc_info=True,
         )
+    finally:
+        if should_close_session and session:
+            await session.close()
 
     return data
 

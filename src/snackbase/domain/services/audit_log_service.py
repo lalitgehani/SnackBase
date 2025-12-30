@@ -334,15 +334,21 @@ class AuditLogService:
         return table_name in self.EXCLUDED_TABLES
 
     def _get_record_id(self, model: Any) -> Optional[str]:
-        """Extract the record ID from a SQLAlchemy model.
+        """Extract the record ID from a SQLAlchemy model or snapshot.
 
         Args:
-            model: SQLAlchemy model instance.
+            model: SQLAlchemy model instance or snapshot.
 
         Returns:
             Record ID as a string, or None if not found.
         """
-        # Try to get the primary key
+        # Handle snapshot
+        if hasattr(model, "__is_snapshot__"):
+             pk_name = model.primary_key_name
+             pk_value = getattr(model, pk_name, None)
+             return str(pk_value) if pk_value is not None else None
+
+        # Try to get the primary key from real model
         mapper = inspect(model.__class__)
         pk_columns = [col.name for col in mapper.primary_key]
         
@@ -356,17 +362,33 @@ class AuditLogService:
         return str(pk_value) if pk_value is not None else None
 
     def _extract_columns(self, model: Any) -> dict[str, Any]:
-        """Extract column names and values from a SQLAlchemy model.
+        """Extract column names and values from a SQLAlchemy model or snapshot.
 
         This method extracts values directly from the instance's internal
         state dictionary to avoid lazy loading issues.
 
         Args:
-            model: SQLAlchemy model instance.
+            model: SQLAlchemy model instance or snapshot.
 
         Returns:
             Dictionary mapping column names to their values.
         """
+        # Handle snapshot
+        if hasattr(model, "__is_snapshot__"):
+            columns = {}
+            for col_name, value in model.__dict__.items():
+                if col_name.startswith("__") or col_name == "primary_key_name":
+                    continue
+                
+                if value is not None:
+                    if isinstance(value, datetime):
+                        columns[col_name] = value.isoformat()
+                    else:
+                        columns[col_name] = str(value)
+                else:
+                    columns[col_name] = None
+            return columns
+
         mapper = inspect(model.__class__)
         columns = {}
         

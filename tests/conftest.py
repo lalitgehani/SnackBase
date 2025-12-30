@@ -42,6 +42,20 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
     # Create all tables
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        
+    # Register global listeners for tests
+    # We need the hook registry from the app
+    from snackbase.infrastructure.api.app import app
+    from snackbase.infrastructure.persistence.event_listeners import register_sqlalchemy_listeners
+    
+    # Ensure app hooks are initialized (lifespan might not have run yet)
+    if not hasattr(app.state, "hook_registry"):
+        # Manually init if needed, or rely on create_app having run it (it does in module scope)
+        # app = create_app() -> initializes hooks
+        pass
+        
+    if hasattr(app.state, "hook_registry"):
+        register_sqlalchemy_listeners(engine, app.state.hook_registry)
 
     # Create session
     async_session_maker = sessionmaker(

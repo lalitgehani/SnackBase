@@ -70,6 +70,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         register_builtin_hooks(app.state.hook_registry)
         logger.info("Built-in hooks registered")
 
+        # Register global SQLAlchemy listeners for systemic audit logging
+        from snackbase.infrastructure.persistence.database import get_db_manager
+        from snackbase.infrastructure.persistence.event_listeners import register_sqlalchemy_listeners
+        
+        db = get_db_manager()
+        # We need to ensure engine is created
+        _ = db.engine 
+        register_sqlalchemy_listeners(db.engine, app.state.hook_registry)
+
+
         # Trigger ON_BOOTSTRAP hook
         bootstrap_context = HookContext(app=app)
         await app.state.hook_registry.trigger(
@@ -363,6 +373,10 @@ def register_middleware(app: FastAPI) -> None:
     Args:
         app: FastAPI application instance.
     """
+    from snackbase.infrastructure.api.middleware.context_middleware import ContextMiddleware
+
+    # Register ContextMiddleware (should be early in the stack)
+    app.add_middleware(ContextMiddleware)
 
     @app.middleware("http")
     async def logging_middleware(request, call_next):

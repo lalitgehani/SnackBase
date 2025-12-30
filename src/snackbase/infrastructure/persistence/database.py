@@ -69,6 +69,11 @@ class DatabaseManager:
                 if self.settings.database_url.startswith("sqlite")
                 else {},
             )
+            
+            # Register systemic audit logging listeners
+            # We need the hook registry, but it's not easily available here in DatabaseManager
+            # Solution: We can register them in `lifespan` in app.py when we have both app.state.hook_registry and db manager.
+            
             logger.info(
                 "Database engine created",
                 database_url=self._engine.url.render_as_string(hide_password=True),
