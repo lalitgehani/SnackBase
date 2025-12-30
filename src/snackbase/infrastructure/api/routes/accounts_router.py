@@ -50,7 +50,7 @@ async def list_accounts(
     account_service = AccountService(session)
 
     # Validate sort_by column
-    valid_sort_columns = ["id", "slug", "name", "created_at"]
+    valid_sort_columns = ["id", "slug", "name", "created_at", "account_code"]
     if sort_by not in valid_sort_columns:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,

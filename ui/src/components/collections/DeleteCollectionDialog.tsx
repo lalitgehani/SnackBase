@@ -115,7 +115,7 @@ export default function DeleteCollectionDialog({
                     <AlertDialogAction
                         onClick={handleConfirm}
                         disabled={!isConfirmValid || isDeleting}
-                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        className="bg-destructive text-white hover:bg-destructive/90"
                     >
                         {isDeleting ? 'Deleting...' : 'Delete Collection'}
                     </AlertDialogAction>

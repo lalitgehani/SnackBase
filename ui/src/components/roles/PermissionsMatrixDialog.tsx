@@ -378,7 +378,7 @@ export default function PermissionsMatrixDialog({
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                 <AlertDialogAction
                   onClick={() => editingCell && handleDeletePermission(editingCell.collection, editingCell.operation)}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  className="bg-destructive text-white hover:bg-destructive/90"
                 >
                   Delete
                 </AlertDialogAction>
