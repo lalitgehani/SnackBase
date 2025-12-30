@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+ENV/
+env/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+.hypothesis/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+docs/
+CLAUDE.md
+PRD_PHASES.md
+REQUIREMENTS.md
+
+# Scripts
+scripts/
+
+# SQLite database (will be volume mounted)
+sb_data/
+*.db
+*.db-shm
+*.db-wal
+
+# Other
+.env.local
+.env.*.local
