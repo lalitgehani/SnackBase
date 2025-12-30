@@ -208,6 +208,7 @@ async def init_database() -> None:
     # This import must happen before create_tables() is called
     from snackbase.infrastructure.persistence.models import (  # noqa: F401
         AccountModel,
+        AuditLogModel,
         CollectionModel,
         GroupModel,
         InvitationModel,

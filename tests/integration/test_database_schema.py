@@ -31,6 +31,7 @@ async def test_database_tables_exist(db_session: AsyncSession):
     
     expected_tables = {
         "accounts",
+        "audit_log",
         "users",
         "roles",
         "groups",

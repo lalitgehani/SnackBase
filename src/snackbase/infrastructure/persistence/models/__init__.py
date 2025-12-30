@@ -5,6 +5,7 @@ automatically created on application startup in development mode.
 """
 
 from snackbase.infrastructure.persistence.models.account import AccountModel
+from snackbase.infrastructure.persistence.models.audit_log import AuditLogModel
 from snackbase.infrastructure.persistence.models.collection import CollectionModel
 from snackbase.infrastructure.persistence.models.group import GroupModel
 from snackbase.infrastructure.persistence.models.invitation import InvitationModel
@@ -17,6 +18,7 @@ from snackbase.infrastructure.persistence.models.macro import MacroModel
 
 __all__ = [
     "AccountModel",
+    "AuditLogModel",
     "CollectionModel",
     "GroupModel",
     "InvitationModel",
