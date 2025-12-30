@@ -202,9 +202,10 @@ async def test_audit_capture_update(db_session: AsyncSession):
     
     email_log = email_logs[0]
     assert email_log.operation == "UPDATE"
-    # Email should be PII-masked since user doesn't have pii_access group
-    assert email_log.old_value == "o***@example.com"  # PII masked
-    assert email_log.new_value == "u***@example.com"  # PII masked
+    # Email should be stored RAW in database (not masked)
+    # Masking happens on read based on user's group membership
+    assert email_log.old_value == "original@example.com"  # Raw data stored
+    assert email_log.new_value == "updated@example.com"  # Raw data stored
     assert email_log.user_id == "admin-456"
     assert email_log.user_email == "admin@example.com"
 

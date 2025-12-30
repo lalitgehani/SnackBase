@@ -18,9 +18,9 @@ from snackbase.infrastructure.api.schemas import (
     RecentRegistration,
     SystemHealthStats,
 )
+from snackbase.domain.services.audit_log_service import AuditLogService
 from snackbase.infrastructure.persistence.repositories import (
     AccountRepository,
-    AuditLogRepository,
     CollectionRepository,
     RefreshTokenRepository,
     UserRepository,
@@ -41,10 +41,13 @@ class DashboardService:
         self.user_repo = UserRepository(session)
         self.collection_repo = CollectionRepository(session)
         self.refresh_token_repo = RefreshTokenRepository(session)
-        self.audit_log_repo = AuditLogRepository(session)
+        self.audit_log_service = AuditLogService(session)
 
-    async def get_dashboard_stats(self) -> DashboardStats:
+    async def get_dashboard_stats(self, user_groups: list[str]) -> DashboardStats:
         """Get all dashboard statistics.
+
+        Args:
+            user_groups: List of group names the user belongs to for PII masking.
 
         Returns:
             DashboardStats with all metrics populated.
@@ -82,11 +85,12 @@ class DashboardService:
         # Get active sessions count
         active_sessions = await self.refresh_token_repo.count_active_sessions()
 
-        # Get recent audit logs (last 20)
-        logs, _ = await self.audit_log_repo.list_logs(limit=20, sort_by="occurred_at", sort_order="desc")
+        # Get recent audit logs (last 20) - with PII masking (returns dicts)
+        logs, _ = await self.audit_log_service.list_logs(limit=20, sort_by="occurred_at", sort_order="desc")
+        masked_logs = self.audit_log_service.mask_for_display(logs, user_groups)
         recent_audit_logs = [
-            AuditLogResponse.model_validate(log)
-            for log in logs
+            AuditLogResponse(**log)
+            for log in masked_logs
         ]
 
         return DashboardStats(

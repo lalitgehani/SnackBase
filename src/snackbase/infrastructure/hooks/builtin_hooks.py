@@ -212,15 +212,8 @@ async def audit_capture_hook(
     try:
         audit_service = AuditLogService(session)
 
-        # Extract user groups
-        user_groups = getattr(user, "groups", [])
-        if isinstance(user_groups, list) and user_groups:
-            # If groups are objects, extract names
-            if hasattr(user_groups[0], "name"):
-                user_groups = [g.name for g in user_groups]
-
-
         # Capture audit based on event type
+        # Note: user_groups no longer needed for capture - masking happens on read
         if event in (HookEvent.ON_MODEL_AFTER_CREATE, HookEvent.ON_RECORD_AFTER_CREATE):
             await audit_service.capture_create(
                 model=model,
@@ -228,7 +221,6 @@ async def audit_capture_hook(
                 user_email=user.email,
                 user_name=context.user_name or getattr(user, "name", user.email),
                 account_id=str(account_id),
-                user_groups=user_groups,
                 ip_address=context.ip_address,
                 user_agent=context.user_agent,
                 request_id=context.request_id,
@@ -242,7 +234,6 @@ async def audit_capture_hook(
                 user_email=user.email,
                 user_name=context.user_name or getattr(user, "name", user.email),
                 account_id=str(account_id),
-                user_groups=user_groups,
                 ip_address=context.ip_address,
                 user_agent=context.user_agent,
                 request_id=context.request_id,
@@ -254,7 +245,6 @@ async def audit_capture_hook(
                 user_email=user.email,
                 user_name=context.user_name or getattr(user, "name", user.email),
                 account_id=str(account_id),
-                user_groups=user_groups,
                 ip_address=context.ip_address,
                 user_agent=context.user_agent,
                 request_id=context.request_id,

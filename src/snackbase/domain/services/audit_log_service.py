@@ -56,7 +56,6 @@ class AuditLogService:
         user_email: str,
         user_name: str,
         account_id: str,
-        user_groups: Optional[list[str]] = None,
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None,
         request_id: Optional[str] = None,
@@ -64,6 +63,7 @@ class AuditLogService:
         """Capture audit log entries for a CREATE operation.
 
         Creates one audit log entry per column with old_value=NULL.
+        Stores raw data in database (except passwords which are always masked).
 
         Args:
             model: SQLAlchemy model instance that was created.
@@ -71,7 +71,6 @@ class AuditLogService:
             user_email: Email of the user who performed the operation.
             user_name: Name of the user who performed the operation.
             account_id: Account context for the operation.
-            user_groups: List of group names the user belongs to.
             ip_address: IP address of the client.
             user_agent: User agent string from the request.
             request_id: Correlation ID for the request.
@@ -99,11 +98,9 @@ class AuditLogService:
             occurred_at = datetime.now(timezone.utc)
             
             for column_name, new_value in columns.items():
-                # Mask sensitive values
-                masked_value = self._mask_sensitive_value(
-                    column_name, new_value, user_groups or []
-                )
-                
+                # Only mask passwords (security requirement), store everything else as-is
+                masked_value = self._mask_password_only(column_name, new_value)
+
                 audit_entry = AuditLogModel(
                     account_id=account_id,
                     operation="CREATE",
@@ -145,7 +142,6 @@ class AuditLogService:
         user_email: str,
         user_name: str,
         account_id: str,
-        user_groups: Optional[list[str]] = None,
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None,
         request_id: Optional[str] = None,
@@ -153,6 +149,7 @@ class AuditLogService:
         """Capture audit log entries for an UPDATE operation.
 
         Creates one audit log entry per changed column only.
+        Stores raw data in database (except passwords which are always masked).
 
         Args:
             model: SQLAlchemy model instance that was updated.
@@ -161,7 +158,6 @@ class AuditLogService:
             user_email: Email of the user who performed the operation.
             user_name: Name of the user who performed the operation.
             account_id: Account context for the operation.
-            user_groups: List of group names the user belongs to.
             ip_address: IP address of the client.
             user_agent: User agent string from the request.
             request_id: Correlation ID for the request.
@@ -193,14 +189,10 @@ class AuditLogService:
                 
                 # Only create audit entry if value changed
                 if old_value != new_value:
-                    # Mask sensitive values
-                    masked_old = self._mask_sensitive_value(
-                        column_name, old_value, user_groups or []
-                    )
-                    masked_new = self._mask_sensitive_value(
-                        column_name, new_value, user_groups or []
-                    )
-                    
+                    # Only mask passwords (security requirement), store everything else as-is
+                    masked_old = self._mask_password_only(column_name, old_value)
+                    masked_new = self._mask_password_only(column_name, new_value)
+
                     audit_entry = AuditLogModel(
                         account_id=account_id,
                         operation="UPDATE",
@@ -241,7 +233,6 @@ class AuditLogService:
         user_email: str,
         user_name: str,
         account_id: str,
-        user_groups: Optional[list[str]] = None,
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None,
         request_id: Optional[str] = None,
@@ -249,6 +240,7 @@ class AuditLogService:
         """Capture audit log entries for a DELETE operation.
 
         Creates one audit log entry per column with new_value=NULL.
+        Stores raw data in database (except passwords which are always masked).
 
         Args:
             model: SQLAlchemy model instance that was deleted.
@@ -256,7 +248,6 @@ class AuditLogService:
             user_email: Email of the user who performed the operation.
             user_name: Name of the user who performed the operation.
             account_id: Account context for the operation.
-            user_groups: List of group names the user belongs to.
             ip_address: IP address of the client.
             user_agent: User agent string from the request.
             request_id: Correlation ID for the request.
@@ -284,11 +275,9 @@ class AuditLogService:
             occurred_at = datetime.now(timezone.utc)
             
             for column_name, old_value in columns.items():
-                # Mask sensitive values
-                masked_value = self._mask_sensitive_value(
-                    column_name, old_value, user_groups or []
-                )
-                
+                # Only mask passwords (security requirement), store everything else as-is
+                masked_value = self._mask_password_only(column_name, old_value)
+
                 audit_entry = AuditLogModel(
                     account_id=account_id,
                     operation="DELETE",
@@ -413,41 +402,114 @@ class AuditLogService:
         
         return columns
 
-    def _mask_sensitive_value(
-        self, column_name: str, value: Optional[str], user_groups: list[str]
+    def _mask_password_only(
+        self, column_name: str, value: Optional[str]
     ) -> Optional[str]:
-        """Mask sensitive values based on column name and user permissions.
+        """Mask only password fields when writing to database.
+
+        Passwords are always masked for security. All other PII is stored
+        as-is in the database and masked only when retrieving for display.
 
         Args:
             column_name: Name of the column.
             value: Value to potentially mask.
-            user_groups: List of group names the user belongs to.
 
         Returns:
-            Masked value if sensitive, original value otherwise.
+            Masked value if password field, original value otherwise.
         """
         if value is None:
             return None
-        
-        # Always mask password fields
+
+        # Always mask password fields (security requirement)
         if column_name.lower() in self.PASSWORD_FIELDS:
             return "***"
-        
+
+        return value
+
+    def mask_for_display(
+        self, logs: list[AuditLogModel], user_groups: list[str]
+    ) -> list[dict]:
+        """Mask PII in audit logs for display based on user permissions.
+
+        This method returns dictionaries with masked values, avoiding
+        in-place modification of ORM objects which triggers SQLAlchemy
+        to persist changes.
+
+        Args:
+            logs: List of audit log models from database.
+            user_groups: List of group names the user belongs to.
+
+        Returns:
+            List of dictionaries with PII values masked if user lacks pii_access.
+        """
         # Check if user has PII access
-        if PIIMaskingService.should_mask_for_user(user_groups):
-            # Apply PII masking based on column name patterns
-            column_lower = column_name.lower()
-            
-            if "email" in column_lower:
-                return PIIMaskingService.mask_email(value)
-            elif "ssn" in column_lower or "social_security" in column_lower:
-                return PIIMaskingService.mask_ssn(value)
-            elif "phone" in column_lower or "mobile" in column_lower:
-                return PIIMaskingService.mask_phone(value)
-            elif "name" in column_lower and column_lower != "username":
-                # Mask name fields but not username
-                return PIIMaskingService.mask_name(value)
-        
+        should_mask = PIIMaskingService.should_mask_for_user(user_groups)
+
+        result = []
+        for log in logs:
+            log_dict = {
+                "id": log.id,
+                "account_id": log.account_id,
+                "operation": log.operation,
+                "table_name": log.table_name,
+                "record_id": log.record_id,
+                "column_name": log.column_name,
+                "old_value": log.old_value,
+                "new_value": log.new_value,
+                "user_id": log.user_id,
+                "user_email": log.user_email,
+                "user_name": log.user_name,
+                "es_username": log.es_username,
+                "es_reason": log.es_reason,
+                "es_timestamp": log.es_timestamp,
+                "ip_address": log.ip_address,
+                "user_agent": log.user_agent,
+                "request_id": log.request_id,
+                "occurred_at": log.occurred_at,
+                "checksum": log.checksum,
+                "previous_hash": log.previous_hash,
+                "extra_metadata": log.extra_metadata,
+            }
+
+            if should_mask:
+                # Mask old_value if it's PII
+                if log_dict["old_value"]:
+                    log_dict["old_value"] = self._mask_pii_value(
+                        log.column_name, log_dict["old_value"]
+                    )
+
+                # Mask new_value if it's PII
+                if log_dict["new_value"]:
+                    log_dict["new_value"] = self._mask_pii_value(
+                        log.column_name, log_dict["new_value"]
+                    )
+
+            result.append(log_dict)
+
+        return result
+
+    def _mask_pii_value(self, column_name: str, value: str) -> str:
+        """Mask PII value based on column name patterns.
+
+        Args:
+            column_name: Name of the column.
+            value: Value to mask.
+
+        Returns:
+            Masked value if PII column, original value otherwise.
+        """
+        column_lower = column_name.lower()
+
+        if "email" in column_lower:
+            return PIIMaskingService.mask_email(value)
+        elif "ssn" in column_lower or "social_security" in column_lower:
+            return PIIMaskingService.mask_ssn(value)
+        elif "phone" in column_lower or "mobile" in column_lower:
+            return PIIMaskingService.mask_phone(value)
+        elif "name" in column_lower and column_lower != "username":
+            # Mask name fields but not username
+            return PIIMaskingService.mask_name(value)
+
         return value
 
     async def list_logs(
@@ -510,6 +572,7 @@ class AuditLogService:
     async def export_logs(
         self,
         format: str,
+        user_groups: list[str],
         account_id: str | None = None,
         table_name: str | None = None,
         record_id: str | None = None,
@@ -522,6 +585,7 @@ class AuditLogService:
 
         Args:
             format: Export format (csv, json).
+            user_groups: List of group names for PII masking.
             account_id: Filter by account.
             table_name: Filter by table.
             record_id: Filter by record.
@@ -545,20 +609,23 @@ class AuditLogService:
             limit=10000,  # Cap at 10k for safety
         )
 
+        # Mask PII based on user's group membership (returns dicts)
+        logs = self.mask_for_display(logs, user_groups)
+
         if format.lower() == "json":
             data = [
                 {
-                    "id": log.id,
-                    "occurred_at": log.occurred_at.isoformat(),
-                    "operation": log.operation,
-                    "table_name": log.table_name,
-                    "record_id": log.record_id,
-                    "column_name": log.column_name,
-                    "old_value": log.old_value,
-                    "new_value": log.new_value,
-                    "user_email": log.user_email,
-                    "ip_address": log.ip_address,
-                    "checksum": log.checksum,
+                    "id": log["id"],
+                    "occurred_at": log["occurred_at"].isoformat(),
+                    "operation": log["operation"],
+                    "table_name": log["table_name"],
+                    "record_id": log["record_id"],
+                    "column_name": log["column_name"],
+                    "old_value": log["old_value"],
+                    "new_value": log["new_value"],
+                    "user_email": log["user_email"],
+                    "ip_address": log["ip_address"],
+                    "checksum": log["checksum"],
                 }
                 for log in logs
             ]
@@ -586,17 +653,17 @@ class AuditLogService:
             for log in logs:
                 writer.writerow(
                     [
-                        log.id,
-                        log.occurred_at.isoformat(),
-                        log.operation,
-                        log.table_name,
-                        log.record_id,
-                        log.column_name,
-                        log.old_value,
-                        log.new_value,
-                        log.user_email,
-                        log.ip_address,
-                        log.checksum,
+                        log["id"],
+                        log["occurred_at"].isoformat(),
+                        log["operation"],
+                        log["table_name"],
+                        log["record_id"],
+                        log["column_name"],
+                        log["old_value"],
+                        log["new_value"],
+                        log["user_email"],
+                        log["ip_address"],
+                        log["checksum"],
                     ]
                 )
             content = output.getvalue().encode("utf-8")

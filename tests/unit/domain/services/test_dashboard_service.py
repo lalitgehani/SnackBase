@@ -56,8 +56,11 @@ async def test_get_dashboard_stats_with_data(dashboard_service, mock_session):
             return_value=[mock_user1]
         )
 
-        dashboard_service.audit_log_repo.list_logs = AsyncMock(
+        dashboard_service.audit_log_service.list_logs = AsyncMock(
             return_value=([], 0)
+        )
+        dashboard_service.audit_log_service.mask_for_display = MagicMock(
+            return_value=[]
         )
 
         # Mock system health
@@ -68,7 +71,7 @@ async def test_get_dashboard_stats_with_data(dashboard_service, mock_session):
         )
 
         # Execute
-        result = await dashboard_service.get_dashboard_stats()
+        result = await dashboard_service.get_dashboard_stats(user_groups=[])
 
         # Verify
         assert isinstance(result, DashboardStats)
@@ -105,7 +108,9 @@ async def test_get_dashboard_stats_empty_database(dashboard_service):
     ), patch.object(
         dashboard_service.refresh_token_repo, "count_active_sessions", return_value=0
     ), patch.object(
-        dashboard_service.audit_log_repo, "list_logs", return_value=([], 0)
+        dashboard_service.audit_log_service, "list_logs", return_value=([], 0)
+    ), patch.object(
+        dashboard_service.audit_log_service, "mask_for_display", return_value=[]
     ), patch.object(
         dashboard_service, "_count_total_records", return_value=0
     ), patch.object(
@@ -118,7 +123,7 @@ async def test_get_dashboard_stats_empty_database(dashboard_service):
         )
 
         # Execute
-        result = await dashboard_service.get_dashboard_stats()
+        result = await dashboard_service.get_dashboard_stats(user_groups=[])
 
         # Verify
         assert result.total_accounts == 0

@@ -44,6 +44,7 @@ async def list_audit_logs(
     """List audit log entries with advanced filtering and pagination.
 
     Only superadmins can access audit logs.
+    PII is masked unless the user belongs to the 'pii_access' group.
     """
     audit_service = AuditLogService(session)
     logs, total = await audit_service.list_logs(
@@ -60,8 +61,11 @@ async def list_audit_logs(
         sort_order=sort_order,
     )
 
+    # Mask PII based on user's group membership (returns dicts)
+    masked_logs = audit_service.mask_for_display(logs, current_user.groups)
+
     return AuditLogListResponse(
-        items=[AuditLogResponse.model_validate(log) for log in logs],
+        items=[AuditLogResponse(**log) for log in masked_logs],
         total=total,
         skip=skip,
         limit=limit,
@@ -94,10 +98,12 @@ async def export_audit_logs(
 
     Applies current filters to the exported data.
     Only superadmins can export audit logs.
+    PII is masked unless the user belongs to the 'pii_access' group.
     """
     audit_service = AuditLogService(session)
     content, media_type = await audit_service.export_logs(
         format=format.value,
+        user_groups=current_user.groups,
         account_id=account_id,
         table_name=table_name,
         record_id=record_id,
@@ -131,6 +137,7 @@ async def get_audit_log(
 
     Includes full details and integrity chain information.
     Only superadmins can access audit logs.
+    PII is masked unless the user belongs to the 'pii_access' group.
     """
     audit_service = AuditLogService(session)
     log = await audit_service.get_log_by_id(log_id)
@@ -142,4 +149,7 @@ async def get_audit_log(
             detail=f"Audit log entry {log_id} not found",
         )
 
-    return AuditLogResponse.model_validate(log)
+    # Mask PII based on user's group membership (returns dicts)
+    masked_logs = audit_service.mask_for_display([log], current_user.groups)
+
+    return AuditLogResponse(**masked_logs[0])

@@ -34,9 +34,10 @@ async def get_dashboard_stats(
     - Recent registrations (last 10 users)
     - System health (database status, storage usage)
     - Active sessions count
-    - Recent audit logs (placeholder until F3.7)
+    - Recent audit logs (PII masked based on user group membership)
 
     Only superadmins (users in the system account with nil UUID) can access this endpoint.
+    PII is masked unless the user belongs to the 'pii_access' group.
     """
     dashboard_service = DashboardService(session)
-    return await dashboard_service.get_dashboard_stats()
+    return await dashboard_service.get_dashboard_stats(user_groups=current_user.groups)
