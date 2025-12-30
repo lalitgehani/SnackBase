@@ -123,8 +123,7 @@ async def create_record(
     )
     
     # Validate request fields (reject if contains unauthorized fields)
-    if allowed_fields != "*":
-        validate_request_fields(data, allowed_fields, "create")
+    validate_request_fields(data, allowed_fields, "create")
     
     # Filter request body to allowed fields only
     if allowed_fields != "*":
@@ -355,9 +354,16 @@ async def list_records(
 
     # 5. Query records
     record_repo = RecordRepository(session)
+    
+    # Superadmin bypass: pass None for account_id to see all records
+    repo_account_id = current_user.account_id
+    from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID
+    if repo_account_id == SYSTEM_ACCOUNT_ID:
+        repo_account_id = None
+        
     records, total = await record_repo.find_all(
         collection_name=collection,
-        account_id=current_user.account_id,
+        account_id=repo_account_id,
         schema=schema,
         skip=skip,
         limit=limit,
@@ -457,10 +463,17 @@ async def get_record(
 
     # 2. Get record
     record_repo = RecordRepository(session)
+    
+    # Superadmin bypass
+    repo_account_id = current_user.account_id
+    from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID
+    if repo_account_id == SYSTEM_ACCOUNT_ID:
+        repo_account_id = None
+        
     record = await record_repo.get_by_id(
         collection_name=collection,
         record_id=record_id,
-        account_id=current_user.account_id,
+        account_id=repo_account_id,
         schema=schema,
     )
 
@@ -579,10 +592,17 @@ async def _update_record(
     
     # 3. Fetch existing record for permission check context
     record_repo = RecordRepository(session)
+    
+    # Superadmin bypass
+    repo_account_id = current_user.account_id
+    from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID
+    if repo_account_id == SYSTEM_ACCOUNT_ID:
+        repo_account_id = None
+        
     existing_record = await record_repo.get_by_id(
         collection_name=collection,
         record_id=record_id,
-        account_id=current_user.account_id,
+        account_id=repo_account_id,
         schema=schema,
     )
     
@@ -605,8 +625,7 @@ async def _update_record(
     )
     
     # Validate request fields (reject if contains unauthorized fields)
-    if allowed_fields != "*":
-        validate_request_fields(data, allowed_fields, "update")
+    validate_request_fields(data, allowed_fields, "update")
     
     # Filter request body to allowed fields only
     if allowed_fields != "*":
@@ -665,10 +684,16 @@ async def _update_record(
 
     # 7. Update record
     try:
+        # Superadmin bypass
+        repo_account_id = current_user.account_id
+        from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID
+        if repo_account_id == SYSTEM_ACCOUNT_ID:
+            repo_account_id = None
+            
         updated_record = await record_repo.update_record(
             collection_name=collection,
             record_id=record_id,
-            account_id=current_user.account_id,
+            account_id=repo_account_id,
             updated_by=current_user.user_id,
             data=processed_data,
             schema=schema,
@@ -773,10 +798,17 @@ async def delete_record(
     
     # 3. Fetch record for permission check context
     record_repo = RecordRepository(session)
+    
+    # Superadmin bypass
+    repo_account_id = current_user.account_id
+    from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID
+    if repo_account_id == SYSTEM_ACCOUNT_ID:
+        repo_account_id = None
+        
     record = await record_repo.get_by_id(
         collection_name=collection,
         record_id=record_id,
-        account_id=current_user.account_id,
+        account_id=repo_account_id,
         schema=schema,
     )
     
@@ -800,10 +832,16 @@ async def delete_record(
 
     # 5. Delete record
     try:
+        # Superadmin bypass
+        repo_account_id = current_user.account_id
+        from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID
+        if repo_account_id == SYSTEM_ACCOUNT_ID:
+            repo_account_id = None
+            
         deleted = await record_repo.delete_record(
             collection_name=collection,
             record_id=record_id,
-            account_id=current_user.account_id,
+            account_id=repo_account_id,
             record_data=record,
         )
 

@@ -188,15 +188,20 @@ class RecordRepository:
         set_clauses = [f'"{k}" = :{k}' for k in sql_values.keys()]
         set_clause = ", ".join(set_clauses)
         
+        # Superadmin bypass check (account_id=None)
+        where_clause = '"id" = :record_id'
+        params = {**sql_values, "record_id": record_id}
+        
+        if account_id:
+            where_clause += ' AND "account_id" = :account_id'
+            params["account_id"] = account_id
+        
         update_sql = f'''
             UPDATE "{table_name}"
             SET {set_clause}
-            WHERE "id" = :record_id AND "account_id" = :account_id
+            WHERE {where_clause}
             RETURNING *
         '''
-        
-        # Add WHERE params
-        params = {**sql_values, "record_id": record_id, "account_id": account_id}
         
         # 3. Execute
         result = await self.session.execute(text(update_sql), params)
@@ -272,14 +277,22 @@ class RecordRepository:
         """
         table_name = TableBuilder.generate_table_name(collection_name)
 
+        # Superadmin bypass check (account_id=None)
+        where_clause = '"id" = :record_id'
+        params = {"record_id": record_id}
+        
+        if account_id:
+            where_clause += ' AND "account_id" = :account_id'
+            params["account_id"] = account_id
+
         select_sql = f'''
             SELECT * FROM "{table_name}"
-            WHERE "id" = :record_id AND "account_id" = :account_id
+            WHERE {where_clause}
         '''
 
         result = await self.session.execute(
             text(select_sql),
-            {"record_id": record_id, "account_id": account_id},
+            params,
         )
 
         row = result.fetchone()
@@ -380,8 +393,13 @@ class RecordRepository:
         filters = filters or {}
 
         # 1. Build base query components
-        where_clauses = ['"account_id" = :account_id']
-        params = {"account_id": account_id}
+        where_clauses = []
+        params = {}
+        
+        # Superadmin bypass check (account_id=None)
+        if account_id:
+            where_clauses.append('"account_id" = :account_id')
+            params["account_id"] = account_id
 
         # Validate sort field to prevent SQL injection
         # Allow system fields and schema fields
@@ -414,9 +432,10 @@ class RecordRepository:
                     params[param_name] = value
 
         where_clause = " AND ".join(where_clauses)
+        where_sql = f" WHERE {where_clause}" if where_clause else ""
 
         # 2. Get total count
-        count_sql = f'SELECT COUNT(*) FROM "{table_name}" WHERE {where_clause}'
+        count_sql = f'SELECT COUNT(*) FROM "{table_name}"{where_sql}'
         count_result = await self.session.execute(text(count_sql), params)
         total_count = count_result.scalar_one()
 
@@ -425,7 +444,7 @@ class RecordRepository:
         
         select_sql = f'''
             SELECT * FROM "{table_name}"
-            WHERE {where_clause}
+            {where_sql}
             ORDER BY "{sort_by}" {sort_order}
             LIMIT :limit OFFSET :skip
         '''
@@ -481,14 +500,22 @@ class RecordRepository:
         """
         table_name = TableBuilder.generate_table_name(collection_name)
 
+        # Superadmin bypass check (account_id=None)
+        where_clause = '"id" = :record_id'
+        params = {"record_id": record_id}
+        
+        if account_id:
+            where_clause += ' AND "account_id" = :account_id'
+            params["account_id"] = account_id
+
         delete_sql = f'''
             DELETE FROM "{table_name}"
-            WHERE "id" = :record_id AND "account_id" = :account_id
+            WHERE {where_clause}
         '''
 
         result = await self.session.execute(
             text(delete_sql),
-            {"record_id": record_id, "account_id": account_id},
+            params,
         )
 
         success = result.rowcount > 0
