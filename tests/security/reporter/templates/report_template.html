@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SnackBase Security Audit - {{ suite_name }}</title>
+    <style>
+      :root {
+        --primary-color: #2563eb;
+        --success-color: #16a34a;
+        --failure-color: #dc2626;
+        --warning-color: #ca8a04;
+        --bg-color: #f8fafc;
+        --card-bg: #ffffff;
+        --text-main: #1e293b;
+        --text-muted: #64748b;
+        --border-color: #e2e8f0;
+      }
+      body {
+        font-family: "Inter", -apple-system, blinkmacsystemfont, "Segoe UI",
+          roboto, oxygen, ubuntu, cantarell, "Open Sans", "Helvetica Neue",
+          sans-serif;
+        background-color: var(--bg-color);
+        color: var(--text-main);
+        line-height: 1.5;
+        margin: 0;
+        padding: 2rem;
+      }
+      header {
+        margin-bottom: 2rem;
+        border-bottom: 2px solid var(--border-color);
+        padding-bottom: 1rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+      }
+      h1 {
+        margin: 0;
+        color: var(--primary-color);
+      }
+      .meta {
+        text-align: right;
+      }
+      .status {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.875rem;
+      }
+      .status.passed {
+        background-color: #dcfce7;
+        color: var(--success-color);
+      }
+      .status.failed {
+        background-color: #fee2e2;
+        color: var(--failure-color);
+      }
+
+      section {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 0.5rem;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      }
+      h2 {
+        margin-top: 0;
+        border-bottom: 1px solid var(--border-color);
+        padding-bottom: 0.5rem;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 1rem;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 0.75rem;
+        border-bottom: 1px solid var(--border-color);
+      }
+      th {
+        background-color: #f1f5f9;
+        width: 30%;
+      }
+
+      .test-section {
+        margin-bottom: 3rem;
+        border: 1px solid var(--border-color);
+        border-radius: 0.5rem;
+        overflow: hidden;
+      }
+      .test-header {
+        background-color: #f8fafc;
+        padding: 1rem 1.5rem;
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .test-header h3 {
+        margin: 0;
+      }
+
+      .request-block {
+        border-bottom: 1px solid var(--border-color);
+        padding: 1rem 1.5rem;
+      }
+      .request-block:last-child {
+        border-bottom: none;
+      }
+
+      .request-info {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+      }
+
+      pre {
+        background-color: #1e293b;
+        color: #f8fafc;
+        padding: 1rem;
+        border-radius: 0.25rem;
+        overflow-x: auto;
+        font-size: 0.875rem;
+        margin: 0.5rem 0;
+      }
+
+      .metrics-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 1rem;
+        margin-top: 1rem;
+      }
+      .metric-card {
+        background: #f1f5f9;
+        padding: 1rem;
+        border-radius: 0.25rem;
+        text-align: center;
+      }
+      .metric-value {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: var(--primary-color);
+      }
+      .metric-label {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        color: var(--text-muted);
+      }
+
+      .severity-high {
+        color: var(--failure-color);
+        font-weight: bold;
+      }
+      .severity-medium {
+        color: var(--warning-color);
+        font-weight: bold;
+      }
+      .severity-low {
+        color: var(--primary-color);
+        font-weight: bold;
+      }
+
+      .vuln-badge {
+        background-color: #fee2e2;
+        color: var(--failure-color);
+        padding: 0.125rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        margin-left: 1rem;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div>
+        <h1>SnackBase Security Audit</h1>
+        <p>Suite: {{ suite_name }}</p>
+      </div>
+      <div class="meta">
+        <div class="status {{ overall_status | lower }}">
+          {{ overall_status }}
+        </div>
+        <p>{{ timestamp }}</p>
+      </div>
+    </header>
+
+    <section>
+      <h2>Audit Summary</h2>
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-value">{{ total_tests }}</div>
+          <div class="metric-label">Tests Executed</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value">{{ total_requests }}</div>
+          <div class="metric-label">Total Requests</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value" style="color: var(--success-color)">
+            {{ passed_requests }}
+          </div>
+          <div class="metric-label">Passed</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value" style="color: var(--failure-color)">
+            {{ failed_requests }}
+          </div>
+          <div class="metric-label">Failed</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value">{{ duration_ms }}ms</div>
+          <div class="metric-label">Duration</div>
+        </div>
+      </div>
+    </section>
+
+    {% for section in sections %}
+    <div class="test-section">
+      <div class="test-header">
+        <h3>{{ section.test_name }}</h3>
+        <div>
+          {% if section.vulnerabilities %}
+          <span class="vuln-badge"
+            >{{ section.vulnerabilities | length }} Vulnerability Detected</span
+          >
+          {% endif %}
+          <span
+            class="status {{ section.status | lower }}"
+            style="margin-left: 1rem"
+            >{{ section.status }}</span
+          >
+        </div>
+      </div>
+
+      {% if section.vulnerabilities %}
+      <div
+        style="
+          padding: 1rem 1.5rem;
+          background-color: #fff1f2;
+          border-bottom: 1px solid var(--border-color);
+        "
+      >
+        <h4 style="margin-top: 0; color: var(--failure-color)">Findings</h4>
+        <ul style="margin-bottom: 0">
+          {% for vuln in section.vulnerabilities %}
+          <li>
+            <span class="severity-{{ vuln.severity | lower }}"
+              >[{{ vuln.severity }}]</span
+            >
+            {{ vuln.description }}
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+
+      <div class="requests-list">
+        {% for req in section.requests %}
+        <div class="request-block">
+          <div class="request-info">
+            <span
+              ><strong>{{ loop.index }}. {{ req.description }}</strong></span
+            >
+            <span
+              class="status {{ req.status | lower }}"
+              style="font-size: 0.75rem"
+              >{{ req.status }}</span
+            >
+          </div>
+          <div class="request-details">
+            <p style="font-size: 0.875rem; margin: 0.25rem 0">
+              <code>{{ req.method }}</code>
+              <a href="#" style="color: var(--primary-color)">{{ req.url }}</a>
+              — Response Status: <strong>{{ req.response_status }}</strong>
+            </p>
+
+            {% if req.body %}
+            <details>
+              <summary
+                style="
+                  font-size: 0.75rem;
+                  cursor: pointer;
+                  color: var(--text-muted);
+                "
+              >
+                Request Body
+              </summary>
+              <pre>{{ req.body | tojson(indent=2) }}</pre>
+            </details>
+            {% endif %} {% if req.response_body %}
+            <details>
+              <summary
+                style="
+                  font-size: 0.75rem;
+                  cursor: pointer;
+                  color: var(--text-muted);
+                "
+              >
+                Response Body
+              </summary>
+              <pre>{{ req.response_body | tojson(indent=2) }}</pre>
+            </details>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+
+    <footer
+      style="
+        text-align: center;
+        color: var(--text-muted);
+        font-size: 0.875rem;
+        margin-top: 4rem;
+      "
+    >
+      Generated by SnackBase Security Test Suite
+    </footer>
+  </body>
+</html>

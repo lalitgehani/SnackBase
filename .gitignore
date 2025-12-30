@@ -81,6 +81,9 @@ sb_data/
 logs/
 *.log
 
+# Security Reports
+tests/security-reports/
+
 # Temporary files
 *.tmp
 *.bak
