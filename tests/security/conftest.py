@@ -13,13 +13,17 @@ class AttackClient:
         self.client = client
         self.reporter = reporter
 
-    async def post(self, url: str, json: Optional[Dict[str, Any]] = None, description: str = "", **kwargs) -> Any:
-        response = await self.client.post(url, json=json, **kwargs)
-        
+    async def _make_request(
+        self,
+        method: str,
+        url: str,
+        json: Optional[Dict[str, Any]] = None,
+        description: str = "",
+        **kwargs
+    ) -> Any:
+        response = await self.client.request(method, url, json=json, **kwargs)
+
         status = "PASSED"
-        # Most security tests expect failure (400, 401, 403)
-        # The specific test will override this if needed
-        
         # Try to parse response body
         try:
             response_body = response.json()
@@ -27,8 +31,8 @@ class AttackClient:
             response_body = response.text
 
         self.reporter.log_request(
-            description=description or f"POST {url}",
-            method="POST",
+            description=description or f"{method} {url}",
+            method=method,
             url=url,
             headers=dict(kwargs.get("headers", {})),
             body=json,
@@ -37,6 +41,21 @@ class AttackClient:
             status=status
         )
         return response
+
+    async def get(self, url: str, description: str = "", **kwargs) -> Any:
+        return await self._make_request("GET", url, description=description, **kwargs)
+
+    async def post(self, url: str, json: Optional[Dict[str, Any]] = None, description: str = "", **kwargs) -> Any:
+        return await self._make_request("POST", url, json=json, description=description, **kwargs)
+
+    async def put(self, url: str, json: Optional[Dict[str, Any]] = None, description: str = "", **kwargs) -> Any:
+        return await self._make_request("PUT", url, json=json, description=description, **kwargs)
+
+    async def delete(self, url: str, description: str = "", **kwargs) -> Any:
+        return await self._make_request("DELETE", url, description=description, **kwargs)
+
+    async def patch(self, url: str, json: Optional[Dict[str, Any]] = None, description: str = "", **kwargs) -> Any:
+        return await self._make_request("PATCH", url, json=json, description=description, **kwargs)
 
 
 @pytest.fixture(scope="session")
