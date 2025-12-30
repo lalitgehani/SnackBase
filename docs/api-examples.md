@@ -277,7 +277,7 @@ All account management endpoints require **Superadmin** access (user must belong
 |-----------|------|---------|-------------|
 | `page` | int | 1 | >= 1 |
 | `page_size` | int | 25 | >= 1, <= 100 |
-| `sort_by` | str | "created_at" | id, slug, name, created_at |
+| `sort_by` | str | "created_at" | id, account_code, slug, name, created_at |
 | `sort_order` | str | "desc" | asc, desc |
 | `search` | str | null | - |
 
@@ -295,6 +295,7 @@ curl -X GET "http://localhost:8000/api/v1/accounts?page=1&page_size=25" \
   "items": [
     {
       "id": "AB1234",
+      "account_code": "AB1234",
       "slug": "acme",
       "name": "Acme Corporation",
       "created_at": "2025-12-24T22:00:00Z",
@@ -329,6 +330,7 @@ curl -X GET http://localhost:8000/api/v1/accounts/AB1234 \
 ```json
 {
   "id": "AB1234",
+  "account_code": "AB1234",
   "slug": "acme",
   "name": "Acme Corporation",
   "created_at": "2025-12-24T22:00:00Z",
@@ -363,6 +365,7 @@ curl -X POST http://localhost:8000/api/v1/accounts \
 ```json
 {
   "id": "AB1235",
+  "account_code": "NE0001",
   "slug": "newcompany",
   "name": "New Company LLC",
   "created_at": "2025-12-24T22:00:00Z",
@@ -757,18 +760,18 @@ curl -X DELETE http://localhost:8000/api/v1/collections/col_xyz789 \
 
 ## Records (CRUD)
 
-All record operations are performed on dynamic collection endpoints: `/api/v1/{collection}`
+All record operations are performed on dynamic collection endpoints: `/api/v1/records/{collection}`
 
 ### 1. Create Record
 
-**Endpoint**: `POST /api/v1/{collection}`
+**Endpoint**: `POST /api/v1/records/{collection}`
 
 **Authentication**: Required
 
 **Example - Create Post**:
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/posts \
+curl -X POST http://localhost:8000/api/v1/records/posts \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -807,7 +810,7 @@ curl -X POST http://localhost:8000/api/v1/posts \
 
 ### 2. List Records
 
-**Endpoint**: `GET /api/v1/{collection}`
+**Endpoint**: `GET /api/v1/records/{collection}`
 
 **Authentication**: Required
 
@@ -824,7 +827,7 @@ curl -X POST http://localhost:8000/api/v1/posts \
 **Example - List Posts**:
 
 ```bash
-curl -X GET "http://localhost:8000/api/v1/posts?skip=0&limit=10&sort=-created_at" \
+curl -X GET "http://localhost:8000/api/v1/records/posts?skip=0&limit=10&sort=-created_at" \
   -H "Authorization: Bearer <token>"
 ```
 
@@ -859,7 +862,7 @@ curl -X GET "http://localhost:8000/api/v1/posts?skip=0&limit=10&sort=-created_at
 **Example - Field Limiting**:
 
 ```bash
-curl -X GET "http://localhost:8000/api/v1/posts?fields=id,title,created_at" \
+curl -X GET "http://localhost:8000/api/v1/records/posts?fields=id,title,created_at" \
   -H "Authorization: Bearer <token>"
 ```
 
@@ -881,12 +884,12 @@ curl -X GET "http://localhost:8000/api/v1/posts?fields=id,title,created_at" \
 **Example - Filtering**:
 
 ```bash
-# Filter by field value
-curl -X GET "http://localhost:8000/api/v1/posts?published=true" \
+# Filter by field value (exact match only)
+curl -X GET "http://localhost:8000/api/v1/records/posts?published=true" \
   -H "Authorization: Bearer <token>"
 
-# Multiple filters
-curl -X GET "http://localhost:8000/api/v1/posts?published=true&views_gt=10" \
+# Multiple filters (combined with AND)
+curl -X GET "http://localhost:8000/api/v1/records/posts?published=true&status=draft" \
   -H "Authorization: Bearer <token>"
 ```
 
@@ -894,14 +897,14 @@ curl -X GET "http://localhost:8000/api/v1/posts?published=true&views_gt=10" \
 
 ### 3. Get Single Record
 
-**Endpoint**: `GET /api/v1/{collection}/{id}`
+**Endpoint**: `GET /api/v1/records/{collection}/{id}`
 
 **Authentication**: Required
 
 **Example**:
 
 ```bash
-curl -X GET http://localhost:8000/api/v1/posts/rec_abc123 \
+curl -X GET http://localhost:8000/api/v1/records/posts/rec_abc123 \
   -H "Authorization: Bearer <token>"
 ```
 
@@ -935,14 +938,14 @@ curl -X GET http://localhost:8000/api/v1/posts/rec_abc123 \
 
 ### 4. Update Record (Full)
 
-**Endpoint**: `PUT /api/v1/{collection}/{id}`
+**Endpoint**: `PUT /api/v1/records/{collection}/{id}`
 
 **Authentication**: Required
 
 **Example**:
 
 ```bash
-curl -X PUT http://localhost:8000/api/v1/posts/rec_abc123 \
+curl -X PUT http://localhost:8000/api/v1/records/posts/rec_abc123 \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -973,14 +976,14 @@ curl -X PUT http://localhost:8000/api/v1/posts/rec_abc123 \
 
 ### 5. Update Record (Partial)
 
-**Endpoint**: `PATCH /api/v1/{collection}/{id}`
+**Endpoint**: `PATCH /api/v1/records/{collection}/{id}`
 
 **Authentication**: Required
 
 **Example**:
 
 ```bash
-curl -X PATCH http://localhost:8000/api/v1/posts/rec_abc123 \
+curl -X PATCH http://localhost:8000/api/v1/records/posts/rec_abc123 \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -1008,14 +1011,14 @@ curl -X PATCH http://localhost:8000/api/v1/posts/rec_abc123 \
 
 ### 6. Delete Record
 
-**Endpoint**: `DELETE /api/v1/{collection}/{id}`
+**Endpoint**: `DELETE /api/v1/records/{collection}/{id}`
 
 **Authentication**: Required
 
 **Example**:
 
 ```bash
-curl -X DELETE http://localhost:8000/api/v1/posts/rec_abc123 \
+curl -X DELETE http://localhost:8000/api/v1/records/posts/rec_abc123 \
   -H "Authorization: Bearer <token>"
 ```
 
@@ -1442,6 +1445,7 @@ curl -X POST http://localhost:8000/api/v1/groups \
 {
   "id": "grp_abc123",
   "account_id": "AB1234",
+  "account_code": "AB1234",
   "name": "managers",
   "description": "Manager group with elevated permissions",
   "created_at": "2025-12-24T22:00:00Z",
@@ -1473,6 +1477,7 @@ curl -X GET "http://localhost:8000/api/v1/groups?skip=0&limit=100" \
   {
     "id": "grp_abc123",
     "account_id": "AB1234",
+    "account_code": "AB1234",
     "name": "managers",
     "description": "Manager group with elevated permissions",
     "created_at": "2025-12-24T22:00:00Z",
@@ -1589,7 +1594,7 @@ curl -X POST http://localhost:8000/api/v1/invitations \
 }
 ```
 
-**Note**: Token is not returned for security. It's sent via email (future feature). Invitations expire after 48 hours.
+**Note**: Token is not returned for security. It's sent via email (future feature). Invitations expire after 48 hours. The `role_id` field is currently reserved for future use - all invited users are assigned the "user" role by default.
 
 ---
 
@@ -1598,7 +1603,7 @@ curl -X POST http://localhost:8000/api/v1/invitations \
 **Endpoint**: `GET /api/v1/invitations`
 
 **Query Parameters**:
-- `status_filter`: "pending" | "accepted" | "expired" | "cancelled"
+- `status_filter`: "pending" | "accepted" | "expired" | "cancelled" (note: cancelled invitations are deleted from database, so this filter returns no results)
 
 **Request**:
 
@@ -1733,6 +1738,8 @@ curl -X POST http://localhost:8000/api/v1/macros/ \
 
 **Endpoint**: `GET /api/v1/macros/`
 
+**Authentication**: Required (all authenticated users)
+
 **Query Parameters**:
 - `skip`: Default 0
 - `limit`: Default 100
@@ -1749,6 +1756,8 @@ curl -X GET "http://localhost:8000/api/v1/macros/?skip=0&limit=100" \
 ### 3. Get Single Macro
 
 **Endpoint**: `GET /api/v1/macros/{macro_id}`
+
+**Authentication**: Required (all authenticated users)
 
 ---
 
@@ -1845,6 +1854,7 @@ curl -X GET http://localhost:8000/api/v1/dashboard/stats \
       "id": "usr_new123",
       "email": "user@example.com",
       "account_id": "AB1234",
+      "account_code": "AB1234",
       "account_name": "Acme Corporation",
       "created_at": "2025-12-24T22:00:00Z"
     }
