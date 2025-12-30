@@ -138,7 +138,7 @@ export default function DashboardPage() {
                 </div>
                 <div className="flex items-center gap-3">
                     <Select value={refreshFrequency} onValueChange={setRefreshFrequency}>
-                        <SelectTrigger className="w-[160px]">
+                        <SelectTrigger className="w-40">
                             <SelectValue placeholder="Refresh frequency" />
                         </SelectTrigger>
                         <SelectContent>
