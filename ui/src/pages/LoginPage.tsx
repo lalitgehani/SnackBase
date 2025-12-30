@@ -1,17 +1,24 @@
-/**
- * Login page for superadmin authentication
- */
-
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Loader2, Lock } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from '@/components/ui/card';
+import {
+    Field,
+    FieldGroup,
+    FieldLabel,
+    FieldError,
+} from '@/components/ui/field';
 import { useAuthStore } from '@/stores/auth.store';
 import { handleApiError } from '@/lib/api';
 
@@ -49,83 +56,81 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-background p-4">
-            <Card className="w-full max-w-md">
-                <CardHeader className="space-y-3 text-center">
-                    <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary">
-                        <Lock className="h-8 w-8 text-primary-foreground" />
-                    </div>
-                    <CardTitle className="text-3xl font-bold">SnackBase Admin</CardTitle>
-                    <CardDescription>
-                        Sign in with your superadmin credentials
-                    </CardDescription>
-                </CardHeader>
+        <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
+            <div className="w-full max-w-sm">
+                <Card>
+                    <CardHeader className="text-left py-4">
+                        <CardTitle className="text-2xl font-semibold tracking-tight">
+                            Login to your account
+                        </CardTitle>
+                        <CardDescription className="text-muted-foreground">
+                            Enter your email below to login to your account
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <form onSubmit={handleSubmit(onSubmit)}>
+                            <FieldGroup>
+                                <Field>
+                                    <FieldLabel htmlFor="email" className="text-sm font-medium">
+                                        Email
+                                    </FieldLabel>
+                                    <Input
+                                        id="email"
+                                        type="email"
+                                        placeholder="m@example.com"
+                                        {...register('email')}
+                                        disabled={isSubmitting}
+                                    />
+                                    <FieldError errors={[errors.email]} />
+                                </Field>
+                                <Field>
+                                    <div className="flex items-center">
+                                        <FieldLabel
+                                            htmlFor="password"
+                                            className="text-sm font-medium"
+                                        >
+                                            Password
+                                        </FieldLabel>
 
-                <CardContent>
-                    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-                        {/* Email field */}
-                        <div className="space-y-2">
-                            <Label htmlFor="email">Email</Label>
-                            <Input
-                                id="email"
-                                type="email"
-                                placeholder="admin@example.com"
-                                {...register('email')}
-                                disabled={isSubmitting}
-                            />
-                            {errors.email && (
-                                <p className="text-sm text-destructive">{errors.email.message}</p>
-                            )}
-                        </div>
+                                    </div>
+                                    <Input
+                                        id="password"
+                                        type="password"
+                                        {...register('password')}
+                                        disabled={isSubmitting}
+                                    />
+                                    <FieldError errors={[errors.password]} />
+                                </Field>
 
-                        {/* Password field */}
-                        <div className="space-y-2">
-                            <Label htmlFor="password">Password</Label>
-                            <Input
-                                id="password"
-                                type="password"
-                                placeholder="••••••••"
-                                {...register('password')}
-                                disabled={isSubmitting}
-                            />
-                            {errors.password && (
-                                <p className="text-sm text-destructive">{errors.password.message}</p>
-                            )}
-                        </div>
+                                {error && (
+                                    <div className="rounded-md bg-destructive/10 border border-destructive/20 p-3">
+                                        <p className="text-sm text-destructive">{error}</p>
+                                    </div>
+                                )}
 
-                        {/* Error message */}
-                        {error && (
-                            <div className="rounded-md bg-destructive/10 border border-destructive/20 p-3">
-                                <p className="text-sm text-destructive">{error}</p>
-                            </div>
-                        )}
+                                <Field className="gap-4">
+                                    <Button type="submit" className="w-full" disabled={isSubmitting}>
+                                        {isSubmitting ? (
+                                            <>
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                Logging in...
+                                            </>
+                                        ) : (
+                                            'Login'
+                                        )}
+                                    </Button>
 
-                        {/* Submit button */}
-                        <Button
-                            type="submit"
-                            className="w-full"
-                            size="lg"
-                            disabled={isSubmitting}
-                        >
-                            {isSubmitting ? (
-                                <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Signing in...
-                                </>
-                            ) : (
-                                'Sign In'
-                            )}
-                        </Button>
-                    </form>
 
-                    {/* Info note */}
-                    <div className="mt-6 rounded-md bg-muted p-3">
-                        <p className="text-xs text-muted-foreground text-center">
-                            This is the superadmin login for SnackBase. Only authorized personnel should access this area.
-                        </p>
-                    </div>
-                </CardContent>
-            </Card>
+                                </Field>
+                            </FieldGroup>
+                        </form>
+                    </CardContent>
+                </Card>
+                <div className="text-balance text-muted-foreground text-center text-xs mt-6 px-8 leading-relaxed">
+                    This is the superadmin login for SnackBase. Only authorized personnel should
+                    access this area.
+                </div>
+            </div>
         </div>
     );
 }
