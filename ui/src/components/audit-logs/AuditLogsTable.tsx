@@ -74,6 +74,26 @@ export default function AuditLogsTable({
             accessorKey: 'column_name'
         },
         {
+            header: 'Old Value',
+            accessorKey: 'old_value',
+            className: 'max-w-[200px] truncate',
+            render: (log) => (
+                <span className="text-muted-foreground italic" title={log.old_value || 'None'}>
+                    {log.old_value || '-'}
+                </span>
+            )
+        },
+        {
+            header: 'New Value',
+            accessorKey: 'new_value',
+            className: 'max-w-[200px] truncate',
+            render: (log) => (
+                <span title={log.new_value || 'None'}>
+                    {log.new_value || '-'}
+                </span>
+            )
+        },
+        {
             header: 'User',
             accessorKey: 'user_name',
             render: (log) => (
