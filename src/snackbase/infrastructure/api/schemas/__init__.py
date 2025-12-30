@@ -43,11 +43,11 @@ from snackbase.infrastructure.api.schemas.record_schemas import (
     RecordValidationErrorResponse,
 )
 from snackbase.infrastructure.api.schemas.dashboard_schemas import (
-    AuditLogEntry,
     DashboardStats,
     RecentRegistration,
     SystemHealthStats,
 )
+from snackbase.infrastructure.api.schemas.audit_log_schemas import AuditLogResponse
 from snackbase.infrastructure.api.schemas.account_schemas import (
     AccountDetailResponse,
     AccountListItem,
@@ -84,7 +84,7 @@ __all__ = [
     "AccountResponse",
     "AccountUserResponse",
     "AccountUsersResponse",
-    "AuditLogEntry",
+    "AuditLogResponse",
     "AuthResponse",
     "BulkPermissionUpdate",
     "BulkPermissionUpdateRequest",

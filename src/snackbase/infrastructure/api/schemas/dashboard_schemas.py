@@ -8,6 +8,9 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
 
 
+from snackbase.infrastructure.api.schemas.audit_log_schemas import AuditLogResponse
+
+
 class SystemHealthStats(BaseModel):
     """System health statistics."""
 
@@ -26,18 +29,6 @@ class RecentRegistration(BaseModel):
     account_code: str = Field(..., description="Human-readable account code in XX#### format (e.g., AB1234)")
     account_name: str
     created_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class AuditLogEntry(BaseModel):
-    """Audit log entry (placeholder for F3.7)."""
-
-    id: str
-    operation: str
-    table_name: str
-    user_email: str
-    occurred_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -64,7 +55,7 @@ class DashboardStats(BaseModel):
     # Active sessions
     active_sessions: int
 
-    # Audit logs (placeholder until F3.7)
-    recent_audit_logs: list[AuditLogEntry]
+    # Audit logs
+    recent_audit_logs: list[AuditLogResponse]
 
     model_config = ConfigDict(from_attributes=True)

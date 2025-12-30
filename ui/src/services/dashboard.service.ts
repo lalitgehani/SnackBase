@@ -5,10 +5,14 @@
 
 import { apiClient } from '@/lib/api';
 
+import type { AuditLogItem } from './audit.service';
+
+
 export interface SystemHealthStats {
   database_status: string;
   storage_usage_mb: number;
 }
+
 
 export interface RecentRegistration {
   id: string;
@@ -19,13 +23,6 @@ export interface RecentRegistration {
   created_at: string;
 }
 
-export interface AuditLogEntry {
-  id: string;
-  operation: string;
-  table_name: string;
-  user_email: string;
-  occurred_at: string;
-}
 
 export interface DashboardStats {
   total_accounts: number;
@@ -37,7 +34,7 @@ export interface DashboardStats {
   recent_registrations: RecentRegistration[];
   system_health: SystemHealthStats;
   active_sessions: number;
-  recent_audit_logs: AuditLogEntry[];
+  recent_audit_logs: AuditLogItem[];
 }
 
 /**

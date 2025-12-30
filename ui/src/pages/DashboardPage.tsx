@@ -34,6 +34,8 @@ import {
     Activity,
     HardDrive,
 } from 'lucide-react';
+import AuditLogsTable from '@/components/audit-logs/AuditLogsTable';
+import type { AuditLogItem } from '@/services/audit.service';
 import { getDashboardStats, type DashboardStats } from '@/services/dashboard.service';
 import { handleApiError } from '@/lib/api';
 
@@ -56,6 +58,8 @@ export default function DashboardPage() {
     const [refreshFrequency, setRefreshFrequency] = useState<string>(() => {
         return localStorage.getItem(STORAGE_KEY) || '0';
     });
+    const [auditPage, setAuditPage] = useState(1);
+    const [auditPageSize, setAuditPageSize] = useState(10);
 
     const fetchStats = async (isManualRefresh = false) => {
         if (isManualRefresh) {
@@ -324,20 +328,53 @@ export default function DashboardPage() {
                 </CardContent>
             </Card>
 
-            {/* Recent Audit Logs (Placeholder) */}
+            {/* Recent Audit Logs */}
             <Card>
                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <FileText className="h-5 w-5 text-primary" />
-                        Recent Audit Logs
-                    </CardTitle>
-                    <CardDescription>Last 20 audit log entries</CardDescription>
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <CardTitle className="flex items-center gap-2">
+                                <FileText className="h-5 w-5 text-primary" />
+                                Recent Audit Logs
+                            </CardTitle>
+                            <CardDescription>Last 20 audit log entries</CardDescription>
+                        </div>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => navigate('/admin/audit-logs')}
+                            className="text-xs"
+                        >
+                            View All
+                        </Button>
+                    </div>
                 </CardHeader>
                 <CardContent>
-                    <div className="text-center py-8 text-muted-foreground">
-                        <FileText className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                        <p>Audit logging will be available in Phase 3.7</p>
-                    </div>
+                    {(() => {
+                        const logs = stats?.recent_audit_logs || [];
+                        const total = logs.length;
+                        const startIndex = (auditPage - 1) * auditPageSize;
+                        const paginatedLogs = logs.slice(startIndex, startIndex + auditPageSize);
+
+                        return (
+                            <AuditLogsTable
+                                logs={paginatedLogs}
+                                totalItems={total}
+                                page={auditPage}
+                                pageSize={auditPageSize}
+                                onPageChange={setAuditPage}
+                                onPageSizeChange={(newSize) => {
+                                    setAuditPageSize(newSize);
+                                    setAuditPage(1);
+                                }}
+                                sortBy="occurred_at"
+                                sortOrder="desc"
+                                onSort={() => { }}
+                                onView={(log: AuditLogItem) => navigate(`/admin/audit-logs?id=${log.id}`)}
+                                isLoading={loading && !stats}
+                            />
+                        );
+                    })()}
                 </CardContent>
             </Card>
 

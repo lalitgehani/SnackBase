@@ -13,13 +13,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.core.config import get_settings
 from snackbase.infrastructure.api.schemas import (
-    AuditLogEntry,
+    AuditLogResponse,
     DashboardStats,
     RecentRegistration,
     SystemHealthStats,
 )
 from snackbase.infrastructure.persistence.repositories import (
     AccountRepository,
+    AuditLogRepository,
     CollectionRepository,
     RefreshTokenRepository,
     UserRepository,
@@ -40,6 +41,7 @@ class DashboardService:
         self.user_repo = UserRepository(session)
         self.collection_repo = CollectionRepository(session)
         self.refresh_token_repo = RefreshTokenRepository(session)
+        self.audit_log_repo = AuditLogRepository(session)
 
     async def get_dashboard_stats(self) -> DashboardStats:
         """Get all dashboard statistics.
@@ -80,8 +82,12 @@ class DashboardService:
         # Get active sessions count
         active_sessions = await self.refresh_token_repo.count_active_sessions()
 
-        # Get recent audit logs (placeholder until F3.7)
-        recent_audit_logs: list[AuditLogEntry] = []
+        # Get recent audit logs (last 20)
+        logs, _ = await self.audit_log_repo.list_logs(limit=20, sort_by="occurred_at", sort_order="desc")
+        recent_audit_logs = [
+            AuditLogResponse.model_validate(log)
+            for log in logs
+        ]
 
         return DashboardStats(
             total_accounts=total_accounts,
