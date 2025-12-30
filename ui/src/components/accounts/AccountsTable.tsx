@@ -1,121 +1,143 @@
-/**
- * Accounts table component
- * Displays list of accounts with sorting and actions
- */
-
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Eye, Pencil, Trash2, ArrowUpDown } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Eye, Pencil, Trash2 } from 'lucide-react';
 import type { AccountListItem } from '@/services/accounts.service';
+import { DataTable, type Column } from '@/components/common/DataTable';
 
 interface AccountsTableProps {
     accounts: AccountListItem[];
+    totalItems: number;
+    page: number;
+    pageSize: number;
+    onPageChange: (page: number) => void;
+    onPageSizeChange: (pageSize: number) => void;
     sortBy: string;
     sortOrder: 'asc' | 'desc';
     onSort: (column: string) => void;
     onView: (account: AccountListItem) => void;
     onEdit: (account: AccountListItem) => void;
     onDelete: (account: AccountListItem) => void;
+    isLoading?: boolean;
 }
 
 export default function AccountsTable({
     accounts,
+    totalItems,
+    page,
+    pageSize,
+    onPageChange,
+    onPageSizeChange,
     sortBy,
     sortOrder,
     onSort,
     onView,
     onEdit,
     onDelete,
+    isLoading
 }: AccountsTableProps) {
     const formatDate = (dateString: string) => {
         return new Date(dateString).toLocaleDateString();
     };
 
-    const SortableHeader = ({ column, label }: { column: string; label: string }) => (
-        <TableHead>
-            <Button
-                variant="ghost"
-                onClick={() => onSort(column)}
-                className="h-8 px-2 lg:px-3"
-            >
-                {label}
-                {sortBy === column && (
-                    <ArrowUpDown className={`ml-2 h-4 w-4 ${sortOrder === 'asc' ? 'rotate-180' : ''}`} />
-                )}
-                {sortBy !== column && <ArrowUpDown className="ml-2 h-4 w-4 opacity-50" />}
-            </Button>
-        </TableHead>
-    );
+    const columns: Column<AccountListItem>[] = [
+        {
+            header: 'Code',
+            accessorKey: 'account_code',
+            sortable: true,
+            className: 'font-mono text-sm'
+        },
+        {
+            header: 'Slug',
+            accessorKey: 'slug',
+            sortable: true,
+            className: 'font-medium'
+        },
+        {
+            header: 'Name',
+            accessorKey: 'name',
+            sortable: true
+        },
+        {
+            header: 'Created At',
+            accessorKey: 'created_at',
+            sortable: true,
+            render: (account) => <span className="text-muted-foreground">{formatDate(account.created_at)}</span>
+        },
+        {
+            header: 'User Count',
+            accessorKey: 'user_count',
+            sortable: false
+        },
+        {
+            header: 'Status',
+            accessorKey: 'status',
+            sortable: true,
+            render: (account) => <Badge variant="default">{account.status}</Badge>
+        },
+        {
+            header: 'Actions',
+            className: 'text-right',
+            render: (account) => (
+                <div className="flex justify-end gap-2">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onView(account);
+                        }}
+                        title="View details"
+                    >
+                        <Eye className="h-4 w-4" />
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onEdit(account);
+                        }}
+                        title="Edit account"
+                    >
+                        <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onDelete(account);
+                        }}
+                        title="Delete account"
+                        className="text-destructive hover:text-destructive"
+                    >
+                        <Trash2 className="h-4 w-4" />
+                    </Button>
+                </div>
+            )
+        }
+    ];
 
     return (
-        <div className="rounded-md border">
-            <Table>
-                <TableHeader>
-                    <TableRow>
-                        <SortableHeader column="account_code" label="Code" />
-                        <SortableHeader column="slug" label="Slug" />
-                        <SortableHeader column="name" label="Name" />
-                        <SortableHeader column="created_at" label="Created At" />
-                        <TableHead>User Count</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {accounts.length === 0 ? (
-                        <TableRow>
-                            <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                                No accounts found
-                            </TableCell>
-                        </TableRow>
-                    ) : (
-                        accounts.map((account) => (
-                            <TableRow key={account.id}>
-                                <TableCell className="font-mono text-sm">{account.account_code}</TableCell>
-                                <TableCell className="font-medium">{account.slug}</TableCell>
-                                <TableCell>{account.name}</TableCell>
-                                <TableCell className="text-muted-foreground">
-                                    {formatDate(account.created_at)}
-                                </TableCell>
-                                <TableCell>{account.user_count}</TableCell>
-                                <TableCell>
-                                    <Badge variant="default">{account.status}</Badge>
-                                </TableCell>
-                                <TableCell className="text-right">
-                                    <div className="flex justify-end gap-2">
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            onClick={() => onView(account)}
-                                            title="View details"
-                                        >
-                                            <Eye className="h-4 w-4" />
-                                        </Button>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            onClick={() => onEdit(account)}
-                                            title="Edit account"
-                                        >
-                                            <Pencil className="h-4 w-4" />
-                                        </Button>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            onClick={() => onDelete(account)}
-                                            title="Delete account"
-                                            className="text-destructive hover:text-destructive"
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
-                                    </div>
-                                </TableCell>
-                            </TableRow>
-                        ))
-                    )}
-                </TableBody>
-            </Table>
-        </div>
+        <DataTable
+            data={accounts}
+            columns={columns}
+            keyExtractor={(account) => account.id}
+            isLoading={isLoading}
+            totalItems={totalItems}
+            pagination={{
+                page,
+                pageSize,
+                onPageChange,
+                onPageSizeChange
+            }}
+            sorting={{
+                sortBy,
+                sortOrder,
+                onSort
+            }}
+            onRowClick={onView}
+            noDataMessage="No accounts found."
+        />
     );
 }

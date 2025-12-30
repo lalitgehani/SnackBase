@@ -26,6 +26,7 @@ import { Loader2 } from 'lucide-react';
 import { getAccounts, type Account } from '@/services/accounts.service';
 import { getRoles, type RoleListItem } from '@/services/roles.service';
 import type { CreateUserRequest } from '@/services/users.service';
+import { handleApiError } from '@/lib/api';
 
 interface CreateUserDialogProps {
   open: boolean;
@@ -129,9 +130,8 @@ export default function CreateUserDialog({ open, onOpenChange, onSubmit }: Creat
       setIsActive(true);
       setPasswordError(null);
       onOpenChange(false);
-    } catch (err: unknown) {
-      const errorMsg = err.response?.data?.detail || err.message || 'Failed to create user';
-      setError(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
+    } catch (err) {
+      setError(handleApiError(err));
     } finally {
       setLoading(false);
     }

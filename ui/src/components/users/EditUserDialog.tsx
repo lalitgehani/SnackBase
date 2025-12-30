@@ -25,6 +25,7 @@ import {
 import { Loader2 } from 'lucide-react';
 import { getRoles, type RoleListItem } from '@/services/roles.service';
 import type { User, UpdateUserRequest } from '@/services/users.service';
+import { handleApiError } from '@/lib/api';
 
 interface EditUserDialogProps {
   open: boolean;
@@ -85,9 +86,8 @@ export default function EditUserDialog({ open, onOpenChange, user, onSubmit }: E
         is_active: isActive,
       });
       onOpenChange(false);
-    } catch (err: unknown) {
-      const errorMsg = err.response?.data?.detail || err.message || 'Failed to update user';
-      setError(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
+    } catch (err) {
+      setError(handleApiError(err));
     } finally {
       setLoading(false);
     }

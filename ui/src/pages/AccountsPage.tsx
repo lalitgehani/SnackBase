@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Users, Plus, Search, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Users, Plus, Search, RefreshCw } from 'lucide-react';
 import AccountsTable from '@/components/accounts/AccountsTable';
 import CreateAccountDialog from '@/components/accounts/CreateAccountDialog';
 import ViewAccountDialog from '@/components/accounts/ViewAccountDialog';
@@ -32,7 +32,7 @@ export default function AccountsPage() {
 
     // Pagination and filtering state
     const [page, setPage] = useState(1);
-    const [pageSize] = useState(25);
+    const [pageSize, setPageSize] = useState(10);
     const [sortBy, setSortBy] = useState('created_at');
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
     const [search, setSearch] = useState('');
@@ -67,7 +67,7 @@ export default function AccountsPage() {
 
     useEffect(() => {
         fetchAccounts();
-    }, [page, sortBy, sortOrder, search]);
+    }, [page, pageSize, sortBy, sortOrder, search]);
 
     const handleSort = (column: string) => {
         if (sortBy === column) {
@@ -113,10 +113,6 @@ export default function AccountsPage() {
         setSelectedAccount(account);
         setDeleteDialogOpen(true);
     };
-
-    const totalPages = data?.total_pages || 1;
-    const canGoPrevious = page > 1;
-    const canGoNext = page < totalPages;
 
     return (
         <div className="space-y-6">
@@ -201,49 +197,24 @@ export default function AccountsPage() {
                     )}
 
                     {/* Table */}
-                    {!loading && data && (
-                        <>
-                            <AccountsTable
-                                accounts={data.items}
-                                sortBy={sortBy}
-                                sortOrder={sortOrder}
-                                onSort={handleSort}
-                                onView={handleView}
-                                onEdit={handleEdit}
-                                onDelete={handleDelete}
-                            />
-
-                            {/* Pagination */}
-                            <div className="flex items-center justify-between">
-                                <p className="text-sm text-muted-foreground">
-                                    Showing {data.items.length === 0 ? 0 : (page - 1) * pageSize + 1} to{' '}
-                                    {Math.min(page * pageSize, data.total)} of {data.total} accounts
-                                </p>
-                                <div className="flex items-center gap-2">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setPage(page - 1)}
-                                        disabled={!canGoPrevious}
-                                    >
-                                        <ChevronLeft className="h-4 w-4 mr-1" />
-                                        Previous
-                                    </Button>
-                                    <span className="text-sm">
-                                        Page {page} of {totalPages}
-                                    </span>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setPage(page + 1)}
-                                        disabled={!canGoNext}
-                                    >
-                                        Next
-                                        <ChevronRight className="h-4 w-4 ml-1" />
-                                    </Button>
-                                </div>
-                            </div>
-                        </>
+                    {!loading && data && data.items.length > 0 && (
+                        <AccountsTable
+                            accounts={data.items}
+                            sortBy={sortBy}
+                            sortOrder={sortOrder}
+                            onSort={handleSort}
+                            onView={handleView}
+                            onEdit={handleEdit}
+                            onDelete={handleDelete}
+                            totalItems={data.total}
+                            page={page}
+                            pageSize={pageSize}
+                            onPageChange={setPage}
+                            onPageSizeChange={(size) => {
+                                setPageSize(size);
+                                setPage(1);
+                            }}
+                        />
                     )}
 
                     {/* Empty State */}

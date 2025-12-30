@@ -8,7 +8,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
     Plus,
     RefreshCw,
@@ -17,8 +16,6 @@ import {
     Trash2,
     UserPlus,
     Search,
-    ChevronLeft,
-    ChevronRight,
 } from 'lucide-react';
 import CreateGroupDialog from '@/components/groups/CreateGroupDialog';
 import EditGroupDialog from '@/components/groups/EditGroupDialog';
@@ -37,6 +34,7 @@ import {
     type UpdateGroupRequest,
 } from '@/services/groups.service';
 import { handleApiError } from '@/lib/api';
+import { DataTable, type Column } from '@/components/common/DataTable';
 
 export default function GroupsPage() {
     const [data, setData] = useState<Group[] | null>(null);
@@ -48,8 +46,8 @@ export default function GroupsPage() {
     const [search, setSearch] = useState('');
 
     // Pagination
-    const [skip, setSkip] = useState(0);
-    const limit = 30;
+    const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
 
     // Dialog state
     const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -64,8 +62,8 @@ export default function GroupsPage() {
 
         try {
             const params: GroupListParams = {
-                skip,
-                limit,
+                skip: (page - 1) * pageSize,
+                limit: pageSize,
             };
 
             if (search) params.search = search;
@@ -78,7 +76,7 @@ export default function GroupsPage() {
         } finally {
             setLoading(false);
         }
-    }, [search, skip, limit]);
+    }, [search, page, pageSize]);
 
     useEffect(() => {
         fetchGroups();
@@ -122,8 +120,70 @@ export default function GroupsPage() {
         setManageUsersDialogOpen(true);
     };
 
-    const totalPages = Math.ceil(total / limit);
-    const currentPage = Math.floor(skip / limit) + 1;
+    const columns: Column<Group>[] = [
+        {
+            header: 'Name',
+            accessorKey: 'name',
+            className: 'font-medium'
+        },
+        {
+            header: 'Description',
+            accessorKey: 'description',
+            render: (group) => <span className="text-sm text-muted-foreground">{group.description || '—'}</span>
+        },
+        {
+            header: 'Account',
+            accessorKey: 'account_id', // Note: API returns account_id, ideally we want account name, but let's stick to what's available or improve service later. The original code displayed account_id.
+            render: (group) => <span className="text-xs text-muted-foreground">{group.account_id}</span>
+        },
+        {
+            header: 'Created',
+            accessorKey: 'created_at',
+            render: (group) => <span>{new Date(group.created_at).toLocaleDateString()}</span>
+        },
+        {
+            header: 'Actions',
+            className: 'text-right',
+            render: (group) => (
+                <div className="flex justify-end gap-2">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            handleManageUsers(group);
+                        }}
+                        title="Manage users"
+                    >
+                        <UserPlus className="h-4 w-4" />
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            handleEdit(group);
+                        }}
+                        title="Edit group"
+                    >
+                        <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(group);
+                        }}
+                        title="Delete group"
+                        className="text-destructive hover:text-destructive"
+                    >
+                        <Trash2 className="h-4 w-4" />
+                    </Button>
+                </div>
+            )
+        }
+    ];
 
     return (
         <div className="space-y-6">
@@ -163,7 +223,7 @@ export default function GroupsPage() {
                                     value={search}
                                     onChange={(e) => {
                                         setSearch(e.target.value);
-                                        setSkip(0);
+                                        setPage(1);
                                     }}
                                     className="pl-8 w-64"
                                 />
@@ -196,108 +256,30 @@ export default function GroupsPage() {
                     )}
 
                     {/* Table */}
-                    {!loading && data && (
-                        <>
-                            <div className="rounded-md border">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Name</TableHead>
-                                            <TableHead>Description</TableHead>
-                                            <TableHead>Account</TableHead>
-                                            <TableHead>Created</TableHead>
-                                            <TableHead className="text-right">Actions</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {data.length === 0 ? (
-                                            <TableRow>
-                                                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                                                    No groups found
-                                                </TableCell>
-                                            </TableRow>
-                                        ) : (
-                                            data.map((group) => (
-                                                <TableRow key={group.id}>
-                                                    <TableCell className="font-medium">{group.name}</TableCell>
-                                                    <TableCell>
-                                                        <span className="text-sm text-muted-foreground">
-                                                            {group.description || '—'}
-                                                        </span>
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        <span className="text-xs text-muted-foreground">{group.account_id}</span>
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        {new Date(group.created_at).toLocaleDateString()}
-                                                    </TableCell>
-                                                    <TableCell className="text-right">
-                                                        <div className="flex justify-end gap-2">
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                onClick={() => handleManageUsers(group)}
-                                                                title="Manage users"
-                                                            >
-                                                                <UserPlus className="h-4 w-4" />
-                                                            </Button>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                onClick={() => handleEdit(group)}
-                                                                title="Edit group"
-                                                            >
-                                                                <Pencil className="h-4 w-4" />
-                                                            </Button>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                onClick={() => handleDelete(group)}
-                                                                title="Delete group"
-                                                                className="text-destructive hover:text-destructive"
-                                                            >
-                                                                <Trash2 className="h-4 w-4" />
-                                                            </Button>
-                                                        </div>
-                                                    </TableCell>
-                                                </TableRow>
-                                            ))
-                                        )}
-                                    </TableBody>
-                                </Table>
-                            </div>
-
-                            {/* Pagination */}
-                            <div className="flex items-center justify-between">
-                                <p className="text-sm text-muted-foreground">
-                                    Showing {skip + 1}-{Math.min(skip + limit, total)} of {total} groups
-                                </p>
-                                <div className="flex items-center gap-2">
-                                    <Button
-                                        variant="outline"
-                                        size="icon"
-                                        onClick={() => setSkip(Math.max(0, skip - limit))}
-                                        disabled={skip === 0}
-                                    >
-                                        <ChevronLeft className="h-4 w-4" />
-                                    </Button>
-                                    <span className="text-sm">
-                                        Page {currentPage} of {totalPages || 1}
-                                    </span>
-                                    <Button
-                                        variant="outline"
-                                        size="icon"
-                                        onClick={() => setSkip(skip + limit)}
-                                        disabled={skip + limit >= total}
-                                    >
-                                        <ChevronRight className="h-4 w-4" />
-                                    </Button>
-                                </div>
-                            </div>
-                        </>
+                    {!loading && data && data.length > 0 && (
+                        <DataTable
+                            data={data}
+                            columns={columns}
+                            keyExtractor={(group) => group.id}
+                            totalItems={total}
+                            pagination={{
+                                page,
+                                pageSize,
+                                onPageChange: setPage,
+                                onPageSizeChange: (size) => {
+                                    setPageSize(size);
+                                    setPage(1);
+                                }
+                            }}
+                            noDataMessage={
+                                search
+                                    ? 'Try adjusting your search'
+                                    : 'Get started by creating your first group'
+                            }
+                        />
                     )}
 
-                    {/* Empty State */}
+                    {/* Empty State with Action if needed */}
                     {!loading && data && data.length === 0 && (
                         <div className="text-center py-12">
                             <UsersIcon className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />

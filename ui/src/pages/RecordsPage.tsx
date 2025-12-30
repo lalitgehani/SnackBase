@@ -8,7 +8,7 @@ import { useParams, useNavigate } from 'react-router';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Database, Plus, Search, RefreshCw, ChevronLeft, ChevronRight, ArrowLeft } from 'lucide-react';
+import { Database, Plus, Search, RefreshCw, ArrowLeft } from 'lucide-react';
 import RecordsTable from '@/components/records/RecordsTable';
 import CreateRecordDialog from '@/components/records/CreateRecordDialog';
 import ViewRecordDialog from '@/components/records/ViewRecordDialog';
@@ -43,7 +43,7 @@ export default function RecordsPage() {
 
     // Pagination and filtering state
     const [page, setPage] = useState(1);
-    const [pageSize] = useState(25);
+    const [pageSize, setPageSize] = useState(25);
     const [sortBy, setSortBy] = useState('created_at');
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
     const [search, setSearch] = useState('');
@@ -108,7 +108,7 @@ export default function RecordsPage() {
         if (collection) {
             fetchRecords();
         }
-    }, [page, sortBy, sortOrder, search, collection]);
+    }, [page, pageSize, sortBy, sortOrder, search, collection]);
 
     const handleSort = (column: string) => {
         if (sortBy === column) {
@@ -190,10 +190,6 @@ export default function RecordsPage() {
         await deleteRecord(collectionName, recordId);
         await fetchRecords();
     };
-
-    const totalPages = Math.ceil(total / pageSize);
-    const canGoPrevious = page > 1;
-    const canGoNext = page < totalPages;
 
     return (
         <div className="space-y-6">
@@ -301,51 +297,26 @@ export default function RecordsPage() {
                     )}
 
                     {/* Table */}
-                    {!loading && data && collection && collection.schema && collection.schema.length > 0 && (
-                        <>
-                            <RecordsTable
-                                records={data}
-                                schema={collection.schema}
-                                sortBy={sortBy}
-                                sortOrder={sortOrder}
-                                onSort={handleSort}
-                                onView={handleView}
-                                onEdit={handleEdit}
-                                onDelete={handleDelete}
-                                hasPiiAccess={hasPiiAccess}
-                            />
-
-                            {/* Pagination */}
-                            <div className="flex items-center justify-between">
-                                <p className="text-sm text-muted-foreground">
-                                    Showing {data.length === 0 ? 0 : (page - 1) * pageSize + 1} to{' '}
-                                    {Math.min(page * pageSize, total)} of {total} records
-                                </p>
-                                <div className="flex items-center gap-2">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setPage(page - 1)}
-                                        disabled={!canGoPrevious}
-                                    >
-                                        <ChevronLeft className="h-4 w-4 mr-1" />
-                                        Previous
-                                    </Button>
-                                    <span className="text-sm">
-                                        Page {page} of {totalPages || 1}
-                                    </span>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setPage(page + 1)}
-                                        disabled={!canGoNext}
-                                    >
-                                        Next
-                                        <ChevronRight className="h-4 w-4 ml-1" />
-                                    </Button>
-                                </div>
-                            </div>
-                        </>
+                    {!loading && data && data.length > 0 && collection && collection.schema && collection.schema.length > 0 && (
+                        <RecordsTable
+                            records={data}
+                            schema={collection.schema}
+                            sortBy={sortBy}
+                            sortOrder={sortOrder}
+                            onSort={handleSort}
+                            onView={handleView}
+                            onEdit={handleEdit}
+                            onDelete={handleDelete}
+                            hasPiiAccess={hasPiiAccess}
+                            totalItems={total}
+                            page={page}
+                            pageSize={pageSize}
+                            onPageChange={setPage}
+                            onPageSizeChange={(size) => {
+                                setPageSize(size);
+                                setPage(1);
+                            }}
+                        />
                     )}
 
                     {/* Empty State */}

@@ -8,7 +8,7 @@ import { useNavigate } from 'react-router';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Database, Plus, Search, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Database, Plus, Search, RefreshCw } from 'lucide-react';
 import CollectionsTable from '@/components/collections/CollectionsTable';
 import CreateCollectionDialog from '@/components/collections/CreateCollectionDialog';
 import ViewCollectionDialog from '@/components/collections/ViewCollectionDialog';
@@ -37,7 +37,7 @@ export default function CollectionsPage() {
 
     // Pagination and filtering state
     const [page, setPage] = useState(1);
-    const [pageSize] = useState(25);
+    const [pageSize, setPageSize] = useState(10);
     const [sortBy, setSortBy] = useState('created_at');
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
     const [search, setSearch] = useState('');
@@ -73,7 +73,7 @@ export default function CollectionsPage() {
 
     useEffect(() => {
         fetchCollections();
-    }, [page, sortBy, sortOrder, search]);
+    }, [page, pageSize, sortBy, sortOrder, search]);
 
     const handleSort = (column: string) => {
         if (sortBy === column) {
@@ -133,10 +133,6 @@ export default function CollectionsPage() {
     const handleManageRecords = (collection: CollectionListItem) => {
         navigate(`/admin/collections/${collection.name}/records`);
     };
-
-    const totalPages = data?.total_pages || 1;
-    const canGoPrevious = page > 1;
-    const canGoNext = page < totalPages;
 
     // Get list of collection names for reference field selector
     const collectionNames = data?.items.map(c => c.name) || [];
@@ -224,50 +220,25 @@ export default function CollectionsPage() {
                     )}
 
                     {/* Table */}
-                    {!loading && data && (
-                        <>
-                            <CollectionsTable
-                                collections={data.items}
-                                sortBy={sortBy}
-                                sortOrder={sortOrder}
-                                onSort={handleSort}
-                                onView={handleView}
-                                onEdit={handleEdit}
-                                onDelete={handleDelete}
-                                onManageRecords={handleManageRecords}
-                            />
-
-                            {/* Pagination */}
-                            <div className="flex items-center justify-between">
-                                <p className="text-sm text-muted-foreground">
-                                    Showing {data.items.length === 0 ? 0 : (page - 1) * pageSize + 1} to{' '}
-                                    {Math.min(page * pageSize, data.total)} of {data.total} collections
-                                </p>
-                                <div className="flex items-center gap-2">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setPage(page - 1)}
-                                        disabled={!canGoPrevious}
-                                    >
-                                        <ChevronLeft className="h-4 w-4 mr-1" />
-                                        Previous
-                                    </Button>
-                                    <span className="text-sm">
-                                        Page {page} of {totalPages}
-                                    </span>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setPage(page + 1)}
-                                        disabled={!canGoNext}
-                                    >
-                                        Next
-                                        <ChevronRight className="h-4 w-4 ml-1" />
-                                    </Button>
-                                </div>
-                            </div>
-                        </>
+                    {!loading && data && data.items.length > 0 && (
+                        <CollectionsTable
+                            collections={data.items}
+                            sortBy={sortBy}
+                            sortOrder={sortOrder}
+                            onSort={handleSort}
+                            onView={handleView}
+                            onEdit={handleEdit}
+                            onDelete={handleDelete}
+                            onManageRecords={handleManageRecords}
+                            totalItems={data.total}
+                            page={page}
+                            pageSize={pageSize}
+                            onPageChange={setPage}
+                            onPageSizeChange={(size) => {
+                                setPageSize(size);
+                                setPage(1);
+                            }}
+                        />
                     )}
 
                     {/* Empty State */}
@@ -318,4 +289,3 @@ export default function CollectionsPage() {
         </div>
     );
 }
-

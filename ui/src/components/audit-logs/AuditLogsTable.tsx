@@ -1,33 +1,36 @@
-/**
- * Audit logs table component
- */
-
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Eye, ArrowUpDown } from 'lucide-react';
+import { Eye } from 'lucide-react';
 import { format } from 'date-fns';
 import type { AuditLogItem } from '@/services/audit.service';
+import { DataTable, type Column } from '@/components/common/DataTable';
 
 interface AuditLogsTableProps {
     logs: AuditLogItem[];
-    sortBy?: string;
-    sortOrder?: 'asc' | 'desc';
+    totalItems: number;
+    page: number;
+    pageSize: number;
+    onPageChange: (page: number) => void;
+    onPageSizeChange: (pageSize: number) => void;
+    sortBy: string;
+    sortOrder: 'asc' | 'desc';
     onSort: (column: string) => void;
     onView: (log: AuditLogItem) => void;
+    isLoading?: boolean;
 }
 
 export default function AuditLogsTable({
     logs,
+    totalItems,
+    page,
+    pageSize,
+    onPageChange,
+    onPageSizeChange,
+    sortBy,
+    sortOrder,
     onSort,
     onView,
+    isLoading,
 }: AuditLogsTableProps) {
     const getOperationBadge = (operation: string) => {
         switch (operation) {
@@ -42,76 +45,85 @@ export default function AuditLogsTable({
         }
     };
 
-    const SortButton = ({ column, label }: { column: string; label: string }) => (
-        <Button
-            variant="ghost"
-            size="sm"
-            className="-ml-3 h-8 data-[state=open]:bg-accent"
-            onClick={() => onSort(column)}
-        >
-            <span>{label}</span>
-            <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-    );
+    const columns: Column<AuditLogItem>[] = [
+        {
+            header: 'Timestamp',
+            accessorKey: 'occurred_at',
+            sortable: true,
+            render: (log) => <span className="whitespace-nowrap">{format(new Date(log.occurred_at), 'yyyy-MM-dd HH:mm:ss')}</span>
+        },
+        {
+            header: 'Operation',
+            accessorKey: 'operation',
+            sortable: true,
+            render: (log) => getOperationBadge(log.operation)
+        },
+        {
+            header: 'Collection',
+            accessorKey: 'table_name',
+            sortable: true,
+            className: 'font-medium'
+        },
+        {
+            header: 'Record ID',
+            accessorKey: 'record_id',
+            className: 'font-mono text-xs'
+        },
+        {
+            header: 'Column',
+            accessorKey: 'column_name'
+        },
+        {
+            header: 'User',
+            accessorKey: 'user_name',
+            render: (log) => (
+                <div className="flex flex-col">
+                    <span className="text-sm font-medium">{log.user_name}</span>
+                    <span className="text-xs text-muted-foreground">{log.user_email}</span>
+                </div>
+            )
+        },
+        {
+            header: 'Actions',
+            className: 'text-right',
+            render: (log) => (
+                <div className="flex justify-end">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onView(log);
+                        }}
+                        title="View Details"
+                    >
+                        <Eye className="h-4 w-4" />
+                    </Button>
+                </div>
+            )
+        }
+    ];
 
     return (
-        <div className="rounded-md border">
-            <Table>
-                <TableHeader>
-                    <TableRow>
-                        <TableHead>
-                            <SortButton column="occurred_at" label="Timestamp" />
-                        </TableHead>
-                        <TableHead>
-                            <SortButton column="operation" label="Operation" />
-                        </TableHead>
-                        <TableHead>
-                            <SortButton column="table_name" label="Collection" />
-                        </TableHead>
-                        <TableHead>Record ID</TableHead>
-                        <TableHead>Column</TableHead>
-                        <TableHead>User</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {logs.length === 0 ? (
-                        <TableRow>
-                            <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
-                                No audit logs found.
-                            </TableCell>
-                        </TableRow>
-                    ) : (
-                        logs.map((log) => (
-                            <TableRow key={log.id}>
-                                <TableCell className="whitespace-nowrap">
-                                    {format(new Date(log.occurred_at), 'yyyy-MM-dd HH:mm:ss')}
-                                </TableCell>
-                                <TableCell>{getOperationBadge(log.operation)}</TableCell>
-                                <TableCell className="font-medium">{log.table_name}</TableCell>
-                                <TableCell className="font-mono text-xs">{log.record_id}</TableCell>
-                                <TableCell>{log.column_name}</TableCell>
-                                <TableCell>
-                                    <div className="flex flex-col">
-                                        <span className="text-sm font-medium">{log.user_name}</span>
-                                        <span className="text-xs text-muted-foreground">{log.user_email}</span>
-                                    </div>
-                                </TableCell>
-                                <TableCell className="text-right">
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => onView(log)}
-                                        title="View Details"
-                                    >
-                                        <Eye className="h-4 w-4" />
-                                    </Button>
-                                </TableCell>
-                            </TableRow>
-                        ))
-                    )}
-                </TableBody>
-            </Table>
-        </div>
+        <DataTable
+            data={logs}
+            columns={columns}
+            keyExtractor={(log) => log.id}
+            isLoading={isLoading}
+            totalItems={totalItems}
+            pagination={{
+                page,
+                pageSize,
+                onPageChange,
+                onPageSizeChange
+            }}
+            sorting={{
+                sortBy,
+                sortOrder,
+                onSort
+            }}
+            onRowClick={onView}
+            noDataMessage="No audit logs found."
+        />
     );
 }

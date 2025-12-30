@@ -3,13 +3,13 @@
  * Dynamic table that renders columns based on collection schema
  */
 
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Eye, Pencil, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
+import { Eye, Pencil, Trash2 } from 'lucide-react';
 import type { FieldDefinition } from '@/services/collections.service';
 import type { RecordListItem } from '@/types/records.types';
 import { shouldMaskField, maskPiiValue } from '@/lib/form-helpers';
+import { DataTable, type Column, type DispatchPagination, type DispatchSorting } from '@/components/common/DataTable';
 
 interface RecordsTableProps {
 	records: RecordListItem[];
@@ -21,6 +21,13 @@ interface RecordsTableProps {
 	onEdit: (record: RecordListItem) => void;
 	onDelete: (record: RecordListItem) => void;
 	hasPiiAccess?: boolean;
+
+	// Pagination props
+	totalItems: number;
+	page: number;
+	pageSize: number;
+	onPageChange: (page: number) => void;
+	onPageSizeChange: (pageSize: number) => void;
 }
 
 export default function RecordsTable({
@@ -33,15 +40,12 @@ export default function RecordsTable({
 	onEdit,
 	onDelete,
 	hasPiiAccess = false,
+	totalItems,
+	page,
+	pageSize,
+	onPageChange,
+	onPageSizeChange,
 }: RecordsTableProps) {
-	const SortIcon = ({ column }: { column: string }) => {
-		if (sortBy !== column) return null;
-		return sortOrder === 'asc' ? (
-			<ArrowUp className="h-3 w-3 inline ml-1" />
-		) : (
-			<ArrowDown className="h-3 w-3 inline ml-1" />
-		);
-	};
 
 	const formatDate = (dateString: string) => {
 		return new Date(dateString).toLocaleString('en-US', {
@@ -125,93 +129,86 @@ export default function RecordsTable({
 	const visibleSchemaFields = schema.slice(0, MAX_SCHEMA_COLUMNS);
 	const remainingFieldsCount = Math.max(0, schema.length - MAX_SCHEMA_COLUMNS);
 
+	// Build dynamic columns
+	const columns: Column<RecordListItem>[] = [
+		...visibleSchemaFields.map((field) => ({
+			header: field.name,
+			accessorKey: field.name,
+			sortable: true,
+			render: (record: RecordListItem) => renderCellValue(record, field),
+		})),
+	];
+
+	if (remainingFieldsCount > 0) {
+		columns.push({
+			header: `+${remainingFieldsCount} more`,
+			render: () => <span className="text-muted-foreground text-xs">...</span>,
+			className: 'text-muted-foreground text-xs',
+		});
+	}
+
+	columns.push({
+		header: 'Created',
+		accessorKey: 'created_at',
+		sortable: true,
+		render: (record) => <span className="text-sm text-muted-foreground">{formatDate(record.created_at)}</span>,
+	});
+
+	columns.push({
+		header: 'Actions',
+		className: 'text-right',
+		render: (record) => (
+			<div className="flex justify-end gap-2">
+				<Button
+					variant="ghost"
+					size="sm"
+					onClick={() => onView(record)}
+					title="View record"
+				>
+					<Eye className="h-4 w-4" />
+				</Button>
+				<Button
+					variant="ghost"
+					size="sm"
+					onClick={() => onEdit(record)}
+					title="Edit record"
+				>
+					<Pencil className="h-4 w-4" />
+				</Button>
+				<Button
+					variant="ghost"
+					size="sm"
+					onClick={() => onDelete(record)}
+					title="Delete record"
+				>
+					<Trash2 className="h-4 w-4 text-destructive" />
+				</Button>
+			</div>
+		),
+	});
+
+	const pagination: DispatchPagination = {
+		page,
+		pageSize,
+		onPageChange,
+		onPageSizeChange,
+	};
+
+	const sorting: DispatchSorting = {
+		sortBy,
+		sortOrder,
+		onSort,
+	};
+
 	return (
-		<div className="border rounded-lg">
-			<Table>
-				<TableHeader>
-					<TableRow>
-						{visibleSchemaFields.map((field) => (
-							<TableHead
-								key={field.name}
-								className="cursor-pointer hover:bg-muted/50"
-								onClick={() => onSort(field.name)}
-							>
-								{field.name} <SortIcon column={field.name} />
-							</TableHead>
-						))}
-						{remainingFieldsCount > 0 && (
-							<TableHead className="text-muted-foreground text-xs">
-								+{remainingFieldsCount} more
-							</TableHead>
-						)}
-						<TableHead
-							className="cursor-pointer hover:bg-muted/50"
-							onClick={() => onSort('created_at')}
-						>
-							Created <SortIcon column="created_at" />
-						</TableHead>
-						<TableHead className="text-right">Actions</TableHead>
-					</TableRow>
-				</TableHeader>
-				<TableBody>
-					{records.length === 0 ? (
-						<TableRow>
-							<TableCell
-								colSpan={visibleSchemaFields.length + (remainingFieldsCount > 0 ? 1 : 0) + 2}
-								className="text-center text-muted-foreground py-8"
-							>
-								No records found. Create your first record to get started.
-							</TableCell>
-						</TableRow>
-					) : (
-						records.map((record) => (
-							<TableRow key={record.id}>
-								{visibleSchemaFields.map((field) => (
-									<TableCell key={field.name}>
-										{renderCellValue(record, field)}
-									</TableCell>
-								))}
-								{remainingFieldsCount > 0 && (
-									<TableCell className="text-muted-foreground text-xs">
-										...
-									</TableCell>
-								)}
-								<TableCell className="text-sm text-muted-foreground">
-									{formatDate(record.created_at)}
-								</TableCell>
-								<TableCell className="text-right">
-									<div className="flex justify-end gap-2">
-										<Button
-											variant="ghost"
-											size="sm"
-											onClick={() => onView(record)}
-											title="View record"
-										>
-											<Eye className="h-4 w-4" />
-										</Button>
-										<Button
-											variant="ghost"
-											size="sm"
-											onClick={() => onEdit(record)}
-											title="Edit record"
-										>
-											<Pencil className="h-4 w-4" />
-										</Button>
-										<Button
-											variant="ghost"
-											size="sm"
-											onClick={() => onDelete(record)}
-											title="Delete record"
-										>
-											<Trash2 className="h-4 w-4 text-destructive" />
-										</Button>
-									</div>
-								</TableCell>
-							</TableRow>
-						))
-					)}
-				</TableBody>
-			</Table>
-		</div>
+		<DataTable
+			data={records}
+			columns={columns}
+			keyExtractor={(item) => item.id}
+			pagination={pagination}
+			sorting={sorting}
+			totalItems={totalItems}
+			noDataMessage="No records found. Create your first record to get started."
+		/>
 	);
 }

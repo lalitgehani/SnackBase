@@ -11,15 +11,6 @@ import { FileText, Search, RefreshCw, Download, Filter } from 'lucide-react';
 import AuditLogsTable from '@/components/audit-logs/AuditLogsTable';
 import AuditLogDetailDialog from '@/components/audit-logs/AuditLogDetailDialog';
 import {
-    Pagination,
-    PaginationContent,
-    PaginationEllipsis,
-    PaginationItem,
-    PaginationLink,
-    PaginationNext,
-    PaginationPrevious,
-} from '@/components/ui/pagination';
-import {
     getAuditLogs,
     exportAuditLogs,
     type AuditLogItem,
@@ -112,9 +103,7 @@ export default function AuditLogsPage() {
         setDetailDialogOpen(true);
     };
 
-    const totalPages = data ? Math.ceil(data.total / pageSize) : 1;
-    const canGoPrevious = page > 1;
-    const canGoNext = page < totalPages;
+
 
     return (
         <div className="space-y-6">
@@ -247,153 +236,21 @@ export default function AuditLogsPage() {
 
                     {/* Table */}
                     {!loading && data && (
-                        <>
-                            <AuditLogsTable
-                                logs={data.items}
-                                sortBy={sortBy}
-                                sortOrder={sortOrder}
-                                onSort={handleSort}
-                                onView={handleView}
-                            />
-
-                            {/* Pagination */}
-                            <div className="flex items-center justify-between mt-4">
-                                <div className="flex items-center space-x-6 lg:space-x-8">
-                                    <div className="flex items-center space-x-2">
-                                        <p className="text-sm font-medium">Rows per page</p>
-                                        <Select
-                                            value={`${pageSize}`}
-                                            onValueChange={(value) => {
-                                                setPageSize(Number(value));
-                                                setPage(1);
-                                            }}
-                                        >
-                                            <SelectTrigger className="h-8 w-[70px]">
-                                                <SelectValue placeholder={pageSize} />
-                                            </SelectTrigger>
-                                            <SelectContent side="top">
-                                                {[10, 20, 30, 40, 50].map((pageSize) => (
-                                                    <SelectItem key={pageSize} value={`${pageSize}`}>
-                                                        {pageSize}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    <div className="flex w-[100px] items-center justify-center text-sm font-medium">
-                                        Page {page} of {totalPages}
-                                    </div>
-                                </div>
-                                <p className="text-sm text-muted-foreground hidden md:block">
-                                    Showing {data.items.length === 0 ? 0 : data.skip + 1} to{' '}
-                                    {Math.min(data.skip + data.limit, data.total)} of {data.total} entries
-                                </p>
-
-                                <Pagination className="justify-end w-auto">
-                                    <PaginationContent>
-                                        <PaginationItem>
-                                            <PaginationPrevious
-                                                onClick={() => canGoPrevious && setPage(page - 1)}
-                                                className={!canGoPrevious ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-                                            />
-                                        </PaginationItem>
-
-                                        {/* Dynamic Pagination Items */}
-                                        {(() => {
-                                            const items = [];
-                                            const maxVisiblePages = 5;
-
-                                            if (totalPages <= maxVisiblePages) {
-                                                for (let i = 1; i <= totalPages; i++) {
-                                                    items.push(
-                                                        <PaginationItem key={i}>
-                                                            <PaginationLink
-                                                                isActive={page === i}
-                                                                onClick={() => setPage(i)}
-                                                                className="cursor-pointer"
-                                                            >
-                                                                {i}
-                                                            </PaginationLink>
-                                                        </PaginationItem>
-                                                    );
-                                                }
-                                            } else {
-                                                // Always show first page
-                                                items.push(
-                                                    <PaginationItem key={1}>
-                                                        <PaginationLink
-                                                            isActive={page === 1}
-                                                            onClick={() => setPage(1)}
-                                                            className="cursor-pointer"
-                                                        >
-                                                            1
-                                                        </PaginationLink>
-                                                    </PaginationItem>
-                                                );
-
-                                                // Show ellipsis if far from start
-                                                if (page > 3) {
-                                                    items.push(
-                                                        <PaginationItem key="ellipsis-start">
-                                                            <PaginationEllipsis />
-                                                        </PaginationItem>
-                                                    );
-                                                }
-
-                                                // Show current page and neighbors
-                                                const start = Math.max(2, page - 1);
-                                                const end = Math.min(totalPages - 1, page + 1);
-
-                                                for (let i = start; i <= end; i++) {
-                                                    items.push(
-                                                        <PaginationItem key={i}>
-                                                            <PaginationLink
-                                                                isActive={page === i}
-                                                                onClick={() => setPage(i)}
-                                                                className="cursor-pointer"
-                                                            >
-                                                                {i}
-                                                            </PaginationLink>
-                                                        </PaginationItem>
-                                                    );
-                                                }
-
-                                                // Show ellipsis if far from end
-                                                if (page < totalPages - 2) {
-                                                    items.push(
-                                                        <PaginationItem key="ellipsis-end">
-                                                            <PaginationEllipsis />
-                                                        </PaginationItem>
-                                                    );
-                                                }
-
-                                                // Always show last page
-                                                items.push(
-                                                    <PaginationItem key={totalPages}>
-                                                        <PaginationLink
-                                                            isActive={page === totalPages}
-                                                            onClick={() => setPage(totalPages)}
-                                                            className="cursor-pointer"
-                                                        >
-                                                            {totalPages}
-                                                        </PaginationLink>
-                                                    </PaginationItem>
-                                                );
-                                            }
-
-                                            return items;
-                                        })()}
-
-                                        <PaginationItem>
-                                            <PaginationNext
-                                                onClick={() => canGoNext && setPage(page + 1)}
-                                                className={!canGoNext ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-                                            />
-                                        </PaginationItem>
-                                    </PaginationContent>
-                                </Pagination>
-                            </div>
-                        </>
+                        <AuditLogsTable
+                            logs={data.items}
+                            sortBy={sortBy}
+                            sortOrder={sortOrder}
+                            onSort={handleSort}
+                            onView={handleView}
+                            totalItems={data.total}
+                            page={page}
+                            pageSize={pageSize}
+                            onPageChange={setPage}
+                            onPageSizeChange={(size) => {
+                                setPageSize(size);
+                                setPage(1);
+                            }}
+                        />
                     )}
                 </CardContent>
             </Card>

@@ -16,7 +16,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
   Plus,
   RefreshCw,
@@ -25,8 +24,6 @@ import {
   Key,
   UserX,
   Search,
-  ChevronLeft,
-  ChevronRight,
 } from 'lucide-react';
 import CreateUserDialog from '@/components/users/CreateUserDialog';
 import EditUserDialog from '@/components/users/EditUserDialog';
@@ -46,6 +43,7 @@ import {
 import { getAccounts, type AccountListItem } from '@/services/accounts.service';
 import { getRoles, type RoleListItem } from '@/services/roles.service';
 import { handleApiError } from '@/lib/api';
+import { DataTable, type Column } from '@/components/common/DataTable';
 
 export default function UsersPage() {
   const [data, setData] = useState<User[] | null>(null);
@@ -60,8 +58,8 @@ export default function UsersPage() {
   const [search, setSearch] = useState('');
 
   // Pagination
-  const [skip, setSkip] = useState(0);
-  const limit = 30;
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // Dialog state
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -80,8 +78,8 @@ export default function UsersPage() {
 
     try {
       const params: UserListParams = {
-        skip,
-        limit,
+        skip: (page - 1) * pageSize,
+        limit: pageSize,
         sort: '-created_at',
       };
 
@@ -98,7 +96,7 @@ export default function UsersPage() {
     } finally {
       setLoading(false);
     }
-  }, [accountId, roleId, isActive, search, skip, limit]);
+  }, [accountId, roleId, isActive, search, page, pageSize]);
 
   const fetchDropdownData = async () => {
     try {
@@ -152,8 +150,91 @@ export default function UsersPage() {
     setDeactivateDialogOpen(true);
   };
 
-  const totalPages = Math.ceil(total / limit);
-  const currentPage = Math.floor(skip / limit) + 1;
+  const columns: Column<User>[] = [
+    {
+      header: 'Email',
+      accessorKey: 'email',
+      className: 'font-medium'
+    },
+    {
+      header: 'Account',
+      render: (user) => (
+        <div>
+          <div>{user.account_name}</div>
+          <div className="text-xs text-muted-foreground">{user.account_code}</div>
+        </div>
+      )
+    },
+    {
+      header: 'Role',
+      render: (user) => <Badge variant="secondary">{user.role_name}</Badge>
+    },
+    {
+      header: 'Status',
+      render: (user) => (
+        <Badge variant={user.is_active ? 'default' : 'secondary'}>
+          {user.is_active ? 'Active' : 'Inactive'}
+        </Badge>
+      )
+    },
+    {
+      header: 'Created',
+      render: (user) => <span>{new Date(user.created_at).toLocaleDateString()}</span>
+    },
+    {
+      header: 'Last Login',
+      render: (user) => (
+        <span>
+          {user.last_login
+            ? new Date(user.last_login).toLocaleDateString()
+            : 'Never'}
+        </span>
+      )
+    },
+    {
+      header: 'Actions',
+      className: 'text-right',
+      render: (user) => (
+        <div className="flex justify-end gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleEdit(user);
+            }}
+            title="Edit user"
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleResetPasswordClick(user);
+            }}
+            title="Reset password"
+          >
+            <Key className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDeactivateClick(user);
+            }}
+            title="Deactivate user"
+            className="text-destructive hover:text-destructive"
+            disabled={!user.is_active}
+          >
+            <UserX className="h-4 w-4" />
+          </Button>
+        </div>
+      )
+    }
+  ];
 
   return (
     <div className="space-y-6">
@@ -193,7 +274,7 @@ export default function UsersPage() {
                   value={search}
                   onChange={(e) => {
                     setSearch(e.target.value);
-                    setSkip(0);
+                    setPage(1); // Reset page on filter change
                   }}
                   className="pl-8 w-64"
                 />
@@ -206,7 +287,7 @@ export default function UsersPage() {
                 value={accountId}
                 onValueChange={(v) => {
                   setAccountId(v);
-                  setSkip(0);
+                  setPage(1);
                 }}
               >
                 <SelectTrigger id="account" className="w-48">
@@ -229,7 +310,7 @@ export default function UsersPage() {
                 value={roleId}
                 onValueChange={(v) => {
                   setRoleId(v);
-                  setSkip(0);
+                  setPage(1);
                 }}
               >
                 <SelectTrigger id="role" className="w-40">
@@ -252,7 +333,7 @@ export default function UsersPage() {
                 value={isActive}
                 onValueChange={(v) => {
                   setIsActive(v);
-                  setSkip(0);
+                  setPage(1);
                 }}
               >
                 <SelectTrigger id="status" className="w-32">
@@ -292,122 +373,29 @@ export default function UsersPage() {
           )}
 
           {/* Table */}
-          {!loading && data && (
-            <>
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
+
+
+          {/* Empty State visual embedded in DataTable if noDataMessage is simple string, but here we had actions.
+              DataTable supports complex noDataMessage? Currently it takes string.
+              But if data is empty, DataTable shows noDataMessage.
+              If we want the specific empty state with "Create User" button, we might need a custom empty state in DataTable or just wrap it.
+              Actually, the original code had a nice empty state.
+              DataTable implementation:
+                ) : data.length === 0 ? (
                     <TableRow>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Account</TableHead>
-                      <TableHead>Role</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Created</TableHead>
-                      <TableHead>Last Login</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {data.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                          No users found
+                        <TableCell colSpan={columns.length} className="h-24 text-center text-muted-foreground">
+                            {noDataMessage}
                         </TableCell>
-                      </TableRow>
-                    ) : (
-                      data.map((user) => (
-                        <TableRow key={user.id}>
-                          <TableCell className="font-medium">{user.email}</TableCell>
-                          <TableCell>
-                            <div>
-                              <div>{user.account_name}</div>
-                              <div className="text-xs text-muted-foreground">{user.account_code}</div>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="secondary">{user.role_name}</Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={user.is_active ? 'default' : 'secondary'}>
-                              {user.is_active ? 'Active' : 'Inactive'}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            {new Date(user.created_at).toLocaleDateString()}
-                          </TableCell>
-                          <TableCell>
-                            {user.last_login
-                              ? new Date(user.last_login).toLocaleDateString()
-                              : 'Never'}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-2">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleEdit(user)}
-                                title="Edit user"
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleResetPasswordClick(user)}
-                                title="Reset password"
-                              >
-                                <Key className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleDeactivateClick(user)}
-                                title="Deactivate user"
-                                className="text-destructive hover:text-destructive"
-                                disabled={!user.is_active}
-                              >
-                                <UserX className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-
-              {/* Pagination */}
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-muted-foreground">
-                  Showing {skip + 1}-{Math.min(skip + limit, total)} of {total} users
-                </p>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setSkip(Math.max(0, skip - limit))}
-                    disabled={skip === 0}
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <span className="text-sm">
-                    Page {currentPage} of {totalPages || 1}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setSkip(skip + limit)}
-                    disabled={skip + limit >= total}
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* Empty State */}
+                    </TableRow>
+              It's simple. 
+              If I want strict parity, I should probably handle empty state outside if I want buttons.
+              But `DataTable` handles the "No data" row.
+              If `data` is empty, generic table shows "No data found" or custom message.
+              The original empty state had a button "Create User".
+              I'll just pass a simple message for now to `DataTable`. 
+              Or I can conditionally render `DataTable` only if `data.length > 0`.
+              Start simple.
+          */}
           {!loading && data && data.length === 0 && (
             <div className="text-center py-12">
               <UsersIcon className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
@@ -423,6 +411,26 @@ export default function UsersPage() {
               </Button>
             </div>
           )}
+
+          {/* We only render DataTable if data.length > 0 to preserve the custom empty state which has a button */}
+          {!loading && data && data.length > 0 && (
+            <DataTable
+              data={data}
+              columns={columns}
+              keyExtractor={(user) => user.id}
+              totalItems={total}
+              pagination={{
+                page,
+                pageSize,
+                onPageChange: setPage,
+                onPageSizeChange: (size) => {
+                  setPageSize(size);
+                  setPage(1);
+                }
+              }}
+            />
+          )}
+
         </CardContent>
       </Card>
 

@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, AlertTriangle } from 'lucide-react';
 import type { User } from '@/services/users.service';
+import { handleApiError } from '@/lib/api';
 
 interface DeactivateUserDialogProps {
   open: boolean;
@@ -47,9 +48,8 @@ export default function DeactivateUserDialog({
       // Reset form
       setConfirmation('');
       onOpenChange(false);
-    } catch (err: unknown) {
-      const errorMsg = err.response?.data?.detail || err.message || 'Failed to deactivate user';
-      setError(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
+    } catch (err) {
+      setError(handleApiError(err));
     } finally {
       setLoading(false);
     }
