@@ -65,6 +65,9 @@ class HookContext:
     account_id: Optional[str] = None
     request_id: str = ""
     request: Optional["Request"] = None
+    ip_address: Optional[str] = None
+    user_agent: Optional[str] = None
+    user_name: Optional[str] = None
 
     def __post_init__(self) -> None:
         """Validate context after initialization."""

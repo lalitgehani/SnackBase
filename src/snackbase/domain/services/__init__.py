@@ -41,12 +41,14 @@ from snackbase.domain.services.superadmin_service import (
 )
 from snackbase.domain.services.dashboard_service import DashboardService
 from snackbase.domain.services.account_service import AccountService
+from snackbase.domain.services.audit_log_service import AuditLogService
 
 
 __all__ = [
     "AccountCodeExhaustedError",
     "AccountCodeGenerator",
     "AccountService",
+    "AuditLogService",
     "CollectionService",
     "CollectionValidationError",
     "CollectionValidator",

@@ -197,7 +197,8 @@ class TestRegisterBuiltinHooks:
         registry = HookRegistry()
         hook_ids = register_builtin_hooks(registry)
 
-        assert len(hook_ids) == 5  # 2 timestamp + 1 account + 2 created_by
+        # 2 timestamp + 1 account + 2 created_by + 3 audit capture
+        assert len(hook_ids) == 8
 
     def test_builtin_hooks_cannot_be_unregistered(self) -> None:
         """Test that built-in hooks cannot be unregistered."""

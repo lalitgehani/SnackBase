@@ -129,6 +129,125 @@ async def created_by_hook(
     return data
 
 
+async def audit_capture_hook(
+    event: str,
+    data: Optional[dict[str, Any]],
+    context: Optional[HookContext],
+) -> Optional[dict[str, Any]]:
+    """Built-in hook to capture audit log entries for model operations.
+
+    This hook automatically captures audit trails for CREATE, UPDATE, DELETE
+    operations on SQLAlchemy models with column-level granularity.
+
+    Args:
+        event: The hook event name.
+        data: The record data (contains 'model' and optionally 'old_values').
+        context: The hook context with user and request information.
+
+    Returns:
+        Unmodified data (audit capture doesn't modify the operation).
+    """
+    if data is None or context is None:
+        return data
+
+    # Only process model operation events
+    if not event.startswith("on_model_after_"):
+        return data
+
+    # Extract model from data
+    model = data.get("model")
+    if model is None:
+        logger.warning("Audit capture hook: no model in data", hook_event=event)
+        return data
+
+    # Extract user context
+    user = context.user
+    if user is None:
+        logger.debug("Audit capture hook: no user context, skipping audit")
+        return data
+
+    # Get account_id from model or context
+    account_id = getattr(model, "account_id", None) or context.account_id
+    if not account_id:
+        logger.warning("Audit capture hook: no account_id found")
+        return data
+
+    # Import here to avoid circular dependency
+    from snackbase.domain.services import AuditLogService
+    from snackbase.infrastructure.persistence.database import get_db_session
+
+    # Get database session from context
+    # Note: We need to get a new session for audit logging
+    # to avoid interfering with the main transaction
+    try:
+        # Use the same session as the main operation
+        # The audit repository will handle the transaction
+        session = data.get("session")
+        if session is None:
+            logger.warning("Audit capture hook: no session in data")
+            return data
+
+        audit_service = AuditLogService(session)
+
+        # Extract user groups
+        user_groups = getattr(user, "groups", [])
+        if isinstance(user_groups, list) and user_groups:
+            # If groups are objects, extract names
+            if hasattr(user_groups[0], "name"):
+                user_groups = [g.name for g in user_groups]
+
+        # Capture audit based on event type
+        if event == HookEvent.ON_MODEL_AFTER_CREATE:
+            await audit_service.capture_create(
+                model=model,
+                user_id=str(user.id),
+                user_email=user.email,
+                user_name=context.user_name or getattr(user, "name", user.email),
+                account_id=str(account_id),
+                user_groups=user_groups,
+                ip_address=context.ip_address,
+                user_agent=context.user_agent,
+                request_id=context.request_id,
+            )
+        elif event == HookEvent.ON_MODEL_AFTER_UPDATE:
+            old_values = data.get("old_values", {})
+            await audit_service.capture_update(
+                model=model,
+                old_values=old_values,
+                user_id=str(user.id),
+                user_email=user.email,
+                user_name=context.user_name or getattr(user, "name", user.email),
+                account_id=str(account_id),
+                user_groups=user_groups,
+                ip_address=context.ip_address,
+                user_agent=context.user_agent,
+                request_id=context.request_id,
+            )
+        elif event == HookEvent.ON_MODEL_AFTER_DELETE:
+            await audit_service.capture_delete(
+                model=model,
+                user_id=str(user.id),
+                user_email=user.email,
+                user_name=context.user_name or getattr(user, "name", user.email),
+                account_id=str(account_id),
+                user_groups=user_groups,
+                ip_address=context.ip_address,
+                user_agent=context.user_agent,
+                request_id=context.request_id,
+            )
+
+    except Exception as e:
+        # Log error but don't fail the main operation
+        logger.error(
+            "Audit capture hook failed",
+            hook_event=event,
+            error=str(e),
+            exc_info=True,
+        )
+
+    return data
+
+
 def register_builtin_hooks(registry: HookRegistry) -> list[str]:
     """Register all built-in hooks.
 
@@ -193,6 +312,33 @@ def register_builtin_hooks(registry: HookRegistry) -> list[str]:
         )
     )
 
+    # Audit capture hooks - run after all other hooks (positive priority)
+    # Use priority 100 to run after user hooks
+    hook_ids.append(
+        registry.register(
+            event=HookEvent.ON_MODEL_AFTER_CREATE,
+            callback=audit_capture_hook,
+            priority=100,
+            is_builtin=True,
+        )
+    )
+    hook_ids.append(
+        registry.register(
+            event=HookEvent.ON_MODEL_AFTER_UPDATE,
+            callback=audit_capture_hook,
+            priority=100,
+            is_builtin=True,
+        )
+    )
+    hook_ids.append(
+        registry.register(
+            event=HookEvent.ON_MODEL_AFTER_DELETE,
+            callback=audit_capture_hook,
+            priority=100,
+            is_builtin=True,
+        )
+    )
+
     logger.info(
         "Built-in hooks registered",
         hook_count=len(hook_ids),
@@ -207,4 +353,5 @@ BUILTIN_HOOKS = {
     "timestamp_hook": timestamp_hook,
     "account_isolation_hook": account_isolation_hook,
     "created_by_hook": created_by_hook,
+    "audit_capture_hook": audit_capture_hook,
 }
