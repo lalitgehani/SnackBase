@@ -28,7 +28,7 @@ def _clean_dynamic_migrations():
     import shutil
     import os
     
-    dynamic_dir = os.path.abspath("alembic/versions/dynamic")
+    dynamic_dir = os.path.abspath("sb_data/migrations")
     if os.path.exists(dynamic_dir):
         # Keep the .gitkeep if it exists, or just clear everything
         for filename in os.listdir(dynamic_dir):
@@ -97,9 +97,10 @@ def _maybe_enable_audit_hooks(request, _audit_hooks_registry):
 async def db_session(_maybe_enable_audit_hooks) -> AsyncGenerator[AsyncSession, None]:
     """Create a test database session.
 
-    Uses an in-memory SQLite database for testing.
+    Uses a unique local SQLite database for each test runner process
+    to prevent interference between parallel test runs.
     """
-    db_file = "test_db.sqlite"
+    db_file = f"test_db_{os.getpid()}.sqlite"
     if os.path.exists(db_file):
         os.remove(db_file)
         

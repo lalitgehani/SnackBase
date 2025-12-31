@@ -254,16 +254,29 @@ async def init_database() -> None:
         logger.error("Database connection failed")
         raise RuntimeError("Failed to connect to database")
 
-    # Create tables in development (use migrations in production)
-    if settings.is_development:
-        logger.info("Development mode: Creating database tables")
-        await db.create_tables()
-        # Seed default roles
+    # Run Alembic migrations to ensure database is up to date
+    # This works for both development and production
+    logger.info("Running Alembic migrations to initialize/update database")
+    try:
+        import asyncio
+        from alembic import command
+        from alembic.config import Config
+        
+        alembic_cfg = Config("alembic.ini")
+        # Ensure we use the correct database URL
+        alembic_cfg.set_main_option("sqlalchemy.url", settings.database_url)
+        
+        # Run migrations to head in executor to avoid blocking
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, command.upgrade, alembic_cfg, "head")
+        logger.info("Alembic migrations applied successfully")
+        
+        # Seed default roles and permissions after migrations
         await _seed_default_roles(db, RoleModel)
-        # Seed default permissions (after roles are created)
         await _seed_default_permissions(db)
-    else:
-        logger.info("Production mode: Skipping auto-create, use migrations")
+    except Exception as e:
+        logger.error("Failed to run Alembic migrations", error=str(e))
+        raise RuntimeError(f"Database initialization failed: {e}")
 
     # Create superadmin from environment variables if configured
     await _create_superadmin_from_env(db)
@@ -377,7 +390,8 @@ async def _create_superadmin_from_env(db: DatabaseManager) -> None:
         return
 
     # Check if superadmin already exists
-    has_existing = await SuperadminService.has_superadmin(db.session_factory)
+    async with db.session() as session:
+        has_existing = await SuperadminService.has_superadmin(session)
     if has_existing:
         logger.info(
             "Superadmin already exists, skipping environment-based creation",

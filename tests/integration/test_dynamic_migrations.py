@@ -79,7 +79,7 @@ async def test_create_collection_with_migration(client: AsyncClient, superadmin_
     assert collection.migration_revision is not None
     
     # Verify migration file exists
-    dynamic_dir = "alembic/versions/dynamic"
+    dynamic_dir = "sb_data/migrations"
     found = False
     for f in os.listdir(dynamic_dir):
         if collection.migration_revision in f:
@@ -149,7 +149,7 @@ async def test_delete_collection_with_migration(client: AsyncClient, superadmin_
     rev_id = data.get("migration_revision")
     assert rev_id is not None
     
-    dynamic_dir = "alembic/versions/dynamic"
+    dynamic_dir = "sb_data/migrations"
     found = False
     for f in os.listdir(dynamic_dir):
         if rev_id in f:

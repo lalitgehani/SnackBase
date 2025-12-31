@@ -6,13 +6,12 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Database, Search, RefreshCw, ExternalLink, AlertCircle } from 'lucide-react';
+import { Database, Search, RefreshCw } from 'lucide-react';
 import MigrationsTable from '@/components/migrations/MigrationsTable';
 import MigrationDetailDialog from '@/components/migrations/MigrationDetailDialog';
 import { listMigrations } from '@/services/migrations.service';
 import type { MigrationRevision, MigrationListResponse } from '@/types/migrations';
 import { handleApiError } from '@/lib/api';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default function MigrationsPage() {
     const [data, setData] = useState<MigrationListResponse | null>(null);

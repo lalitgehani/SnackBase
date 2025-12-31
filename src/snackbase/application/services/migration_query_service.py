@@ -55,7 +55,11 @@ class MigrationQueryService:
         for revision in self.script_dir.walk_revisions():
             # Determine if this is a dynamic migration
             module_path = revision.module.__file__ if revision.module else None
-            is_dynamic = "dynamic" in module_path if module_path else False
+            is_dynamic = (
+                any(path in module_path for path in ["dynamic", "sb_data/migrations"])
+                if module_path
+                else False
+            )
 
             # Check if this revision is applied
             is_applied = False

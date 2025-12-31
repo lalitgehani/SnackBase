@@ -10,6 +10,8 @@ services:
       - SNACKBASE_DATABASE_URL=sqlite+aiosqlite:////app/sb_data/snackbase.db
       - SNACKBASE_SECRET_KEY=${SNACKBASE_SECRET_KEY:-change-this-secret-key-in-production}
       - SNACKBASE_CORS_ORIGINS=["http://localhost:3000","http://frontend","http://localhost:80"]
+      - SNACKBASE_SUPERADMIN_EMAIL=${SNACKBASE_SUPERADMIN_EMAIL:-admin@example.com}
+      - SNACKBASE_SUPERADMIN_PASSWORD=${SNACKBASE_SUPERADMIN_PASSWORD:-ChangeMe123!}
     volumes:
       - ./sb_data:/app/sb_data
     healthcheck:
@@ -32,7 +34,15 @@ services:
     depends_on:
       - backend
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:80",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3

@@ -35,7 +35,7 @@ def mock_script_directory():
     mock_rev3.down_revision = "def456"
     mock_rev3.branch_labels = None
     mock_rev3.module = MagicMock()
-    mock_rev3.module.__file__ = "/path/to/alembic/versions/dynamic/ghi789_create_collection_test.py"
+    mock_rev3.module.__file__ = "/path/to/sb_data/migrations/ghi789_create_collection_test.py"
     mock_rev3.create_date = "2025-01-03 10:00:00"
     
     mock_dir.walk_revisions.return_value = [mock_rev3, mock_rev2, mock_rev1]
