@@ -145,6 +145,7 @@ Comprehensive documentation is available in the [`docs/`](docs/) directory:
 
 - **[Quick Start Tutorial](docs/quick-start.md)** - Get up and running in 5 minutes
 - **[Deployment Guide](docs/deployment.md)** - Development and production deployment
+- **[Frontend Guide](docs/frontend.md)** - React admin UI development
 - **[Hook System](docs/hooks.md)** - Extensibility framework and stable API
 - **[API Examples](docs/api-examples.md)** - Practical usage examples
 - **[API Reference (Swagger)](http://localhost:8000/docs)** - Interactive API documentation

@@ -8,6 +8,7 @@ Welcome to the SnackBase documentation! This directory contains comprehensive gu
 
 - ⚡ [Quick Start Tutorial](quick-start.md) - Get up and running in 5 minutes
 - 📚 [Deployment Guide](deployment.md) - Deploy SnackBase in development and production
+- 🎨 [Frontend Guide](frontend.md) - React admin UI development
 - 🔌 [Hook System](hooks.md) - Extend SnackBase with custom hooks
 - 🚀 [API Examples](api-examples.md) - Practical API usage examples
 - 📖 [API Reference](http://localhost:8000/docs) - Interactive Swagger documentation
@@ -35,7 +36,16 @@ Welcome to the SnackBase documentation! This directory contains comprehensive gu
    - Health checks
    - Troubleshooting
 
-2. **[API Examples](api-examples.md)**
+2. **[Frontend Guide](frontend.md)**
+   - React admin UI architecture
+   - State management (Zustand, TanStack Query)
+   - Component patterns (ShadCN)
+   - Authentication flow
+   - Adding new pages
+   - Styling with TailwindCSS
+   - Development workflow
+
+3. **[API Examples](api-examples.md)**
    - Authentication (register, login, refresh)
    - Collections (create dynamic schemas)
    - Records (CRUD operations)
@@ -45,7 +55,7 @@ Welcome to the SnackBase documentation! This directory contains comprehensive gu
 
 ### Advanced Topics
 
-3. **[Hook System](hooks.md)**
+4. **[Hook System](hooks.md)**
    - Stable API contract
    - Architecture overview
    - Hook categories and events
@@ -56,14 +66,14 @@ Welcome to the SnackBase documentation! This directory contains comprehensive gu
 
 ### Reference
 
-4. **[API Reference (Swagger)](http://localhost:8000/docs)**
+5. **[API Reference (Swagger)](http://localhost:8000/docs)**
 
    - Interactive API documentation
    - Try endpoints directly from browser
    - Request/response schemas
    - Authentication testing
 
-5. **[PRD & Requirements](../PRD_PHASES.md)**
+6. **[PRD & Requirements](../PRD_PHASES.md)**
    - Phase-by-phase development plan
    - Feature specifications
    - Acceptance criteria
@@ -75,7 +85,8 @@ Welcome to the SnackBase documentation! This directory contains comprehensive gu
 
 ### For Developers
 
-- **Getting Started**: [Deployment Guide](deployment.md) → Development Deployment
+- **Getting Started**: [Quick Start Tutorial](quick-start.md)
+- **Frontend Development**: [Frontend Guide](frontend.md)
 - **API Usage**: [API Examples](api-examples.md)
 - **Extending SnackBase**: [Hook System](hooks.md)
 - **Testing**: [API Reference](http://localhost:8000/docs)
