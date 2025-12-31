@@ -34,7 +34,7 @@ logger = get_logger(__name__)
 
 
 @router.post(
-    "/",
+    "",
     response_model=MacroResponse,
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_superadmin)],
@@ -75,7 +75,7 @@ async def create_macro(
 
 
 @router.get(
-    "/",
+    "",
     response_model=List[MacroResponse],
     dependencies=[Depends(get_current_user)],
 )

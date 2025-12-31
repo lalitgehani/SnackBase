@@ -8,6 +8,7 @@ import {
     Shield,
     FileText,
     GitBranch,
+    CodeXml,
     LogOut,
 } from "lucide-react"
 import { useLocation, Link, useNavigate } from "react-router"
@@ -76,6 +77,11 @@ const items = [
         title: "Migrations",
         url: "/admin/migrations",
         icon: GitBranch,
+    },
+    {
+        title: "Macros",
+        url: "/admin/macros",
+        icon: CodeXml,
     },
 ]
 

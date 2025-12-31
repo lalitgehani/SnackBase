@@ -19,6 +19,7 @@ export default function AdminLayout() {
         if (location.pathname.startsWith('/admin/roles')) return 'Roles';
         if (location.pathname.startsWith('/admin/audit-logs')) return 'Audit Logs';
         if (location.pathname.startsWith('/admin/migrations')) return 'Migrations';
+        if (location.pathname.startsWith('/admin/macros')) return 'Macros';
         return 'Admin';
     };
 

@@ -44,7 +44,7 @@ async def test_macro_lifecycle(client, db_session: AsyncSession):
     }
     
     response = await client.post(
-        "/api/v1/macros/",
+        "/api/v1/macros",
         json=create_payload,
         headers={"Authorization": "Bearer dummy"},
     )
@@ -166,7 +166,7 @@ async def test_duplicate_macro_name(client, db_session: AsyncSession):
     }
     
     response = await client.post(
-        "/api/v1/macros/",
+        "/api/v1/macros",
         json=create_payload,
         headers={"Authorization": "Bearer dummy"},
     )

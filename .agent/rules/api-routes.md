@@ -25,6 +25,7 @@ description: FastAPI route conventions - apply when editing API route files
 2. **Account context** - Most routes require account_id in JWT
 3. **Superadmin routes** - Explicitly marked and protected
 4. **Dynamic routes** - `/{collection}/` handles user-created collections
+5. **No trailing slashes** - Always define routes without trailing slashes (e.g., `@router.get("")`) and make requests in tests without trailing slashes to avoid automatic 307 redirects from FastAPI/Starlette.
 
 ## Response Format
 

@@ -69,7 +69,7 @@ async def test_create_macro_superadmin(async_client, mock_repo):
 
     # Add dummy header to satisfy get_current_user checks if override fails
     response = await async_client.post(
-        "/api/v1/macros/",
+        "/api/v1/macros",
         json=payload,
         headers={"Authorization": "Bearer dummy"},
     )
@@ -95,7 +95,7 @@ async def test_create_macro_invalid_query(async_client):
     }
 
     response = await async_client.post(
-        "/api/v1/macros/",
+        "/api/v1/macros",
         json=payload,
         headers={"Authorization": "Bearer dummy"},
     )
@@ -118,7 +118,7 @@ async def test_list_macros(async_client, mock_repo):
         MacroModel(id=2, name="m2", sql_query="SELECT 2", parameters="[]", created_at=datetime.now(), updated_at=datetime.now()),
     ]
 
-    response = await async_client.get("/api/v1/macros/", headers={"Authorization": "Bearer dummy"})
+    response = await async_client.get("/api/v1/macros", headers={"Authorization": "Bearer dummy"})
 
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
