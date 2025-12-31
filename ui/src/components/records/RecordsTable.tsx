@@ -10,6 +10,8 @@ import type { FieldDefinition } from '@/services/collections.service';
 import type { RecordListItem } from '@/types/records.types';
 import { shouldMaskField, maskPiiValue } from '@/lib/form-helpers';
 import { DataTable, type Column, type DispatchPagination, type DispatchSorting } from '@/components/common/DataTable';
+import { useAuthStore } from '@/stores/auth.store';
+
 
 interface RecordsTableProps {
 	records: RecordListItem[];
@@ -138,6 +140,18 @@ export default function RecordsTable({
 			render: (record: RecordListItem) => renderCellValue(record, field),
 		})),
 	];
+
+	const { account } = useAuthStore();
+	const isSuperadmin = account?.id === '00000000-0000-0000-0000-000000000000';
+
+	if (isSuperadmin) {
+		columns.unshift({
+			header: 'Account',
+			accessorKey: 'account_name',
+			render: (record) => <span className="text-sm font-medium">{record.account_name || 'System'}</span>,
+		});
+	}
+
 
 	if (remainingFieldsCount > 0) {
 		columns.push({

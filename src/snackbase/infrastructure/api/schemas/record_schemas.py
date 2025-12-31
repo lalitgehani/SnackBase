@@ -18,6 +18,7 @@ class RecordResponse(BaseModel):
     created_by: str = Field(..., description="User ID who created the record")
     updated_at: str = Field(..., description="ISO 8601 timestamp when record was last updated")
     updated_by: str = Field(..., description="User ID who last updated the record")
+    account_name: str | None = Field(None, description="Display name for the account (optional)")
 
     # Additional fields are dynamically added based on collection schema
     # We use model_extra to allow arbitrary fields

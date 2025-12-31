@@ -106,7 +106,7 @@ async def create_record(
 
     Args:
         collection: The collection name (from URL path).
-        data: The record data (request body).
+        data: The record data (request body). May include 'account_id' for superadmins.
         current_user: The authenticated user.
         auth_context: Authorization context for permission checking.
         session: Database session.
@@ -114,7 +114,14 @@ async def create_record(
     Returns:
         The created record with all fields including system fields.
     """
-    # 0. Check create permission
+    # 0. Determine target account_id: use provided account_id if superadmin, otherwise use current user's account
+    from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID
+    
+    target_account_id = current_user.account_id
+    if current_user.account_id == SYSTEM_ACCOUNT_ID and "account_id" in data:
+        target_account_id = data.pop("account_id")
+    
+    # 1. Check create permission
     allowed, allowed_fields = await check_collection_permission(
         auth_context=auth_context,
         collection=collection,
@@ -129,7 +136,7 @@ async def create_record(
     if allowed_fields != "*":
         data = apply_field_filter(data, allowed_fields, is_request=True)
     
-    # 1. Look up collection by name
+    # 2. Look up collection by name
     collection_repo = CollectionRepository(session)
     collection_model = await collection_repo.get_by_name(collection)
 
@@ -147,7 +154,7 @@ async def create_record(
             },
         )
 
-    # 2. Parse collection schema
+    # 3. Parse collection schema
     try:
         schema = json.loads(collection_model.schema)
     except json.JSONDecodeError as e:
@@ -164,7 +171,7 @@ async def create_record(
             },
         )
 
-    # 3. Validate reference fields (check if referenced records exist)
+    # 4. Validate reference fields (check if referenced records exist)
     record_repo = RecordRepository(session)
     reference_errors = []
     for field in schema:
@@ -178,7 +185,7 @@ async def create_record(
                 exists = await record_repo.check_reference_exists(
                     target_collection,
                     ref_value,
-                    current_user.account_id,
+                    target_account_id,
                 )
                 if not exists:
                     reference_errors.append({
@@ -187,7 +194,7 @@ async def create_record(
                         "code": "invalid_reference",
                     })
 
-    # 4. Validate record data against schema
+    # 5. Validate record data against schema
     processed_data, validation_errors = RecordValidator.validate_and_apply_defaults(
         data, schema
     )
@@ -219,15 +226,15 @@ async def create_record(
             ).model_dump(),
         )
 
-    # 5. Generate record ID
+    # 6. Generate record ID
     record_id = str(uuid.uuid4())
 
-    # 6. Insert record
+    # 7. Insert record
     try:
         created_record = await record_repo.insert_record(
             collection_name=collection,
             record_id=record_id,
-            account_id=current_user.account_id,
+            account_id=target_account_id,
             created_by=current_user.user_id,
             data=processed_data,
             schema=schema,
@@ -266,11 +273,11 @@ async def create_record(
         created_by=current_user.user_id,
     )
 
-    # 7. Apply field filter to response
+    # 8. Apply field filter to response
     if allowed_fields != "*":
         created_record = apply_field_filter(created_record, allowed_fields)
     
-    # 8. Apply PII masking to response
+    # 9. Apply PII masking to response
     created_record = _mask_record_pii(created_record, schema, current_user.groups, current_user.account_id)
     
     return RecordResponse.from_record(created_record)

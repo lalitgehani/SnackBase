@@ -13,12 +13,22 @@ import {
 	DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from '@/components/ui/select';
 import { RefreshCw } from 'lucide-react';
 import DynamicFieldInput from './DynamicFieldInput';
 import type { FieldDefinition } from '@/services/collections.service';
 import type { RecordData } from '@/types/records.types';
 import { initializeFormState, validateFormState } from '@/lib/form-helpers';
 import { handleApiError } from '@/lib/api';
+import { useAuthStore } from '@/stores/auth.store';
+import { getAccounts, type AccountListItem } from '@/services/accounts.service';
 
 interface CreateRecordDialogProps {
 	open: boolean;
@@ -40,14 +50,41 @@ export default function CreateRecordDialog({
 	referenceRecords = {},
 	onFetchReferenceRecords,
 }: CreateRecordDialogProps) {
+	const { account } = useAuthStore();
 	const [formState, setFormState] = useState(() => initializeFormState(schema));
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [fetchingReferences, setFetchingReferences] = useState<Set<string>>(new Set());
 
-	// Fetch reference records when dialog opens
+	// Account selection state (for superadmins only)
+	const [accounts, setAccounts] = useState<AccountListItem[]>([]);
+	const [selectedAccountId, setSelectedAccountId] = useState<string>('');
+	const [loadingAccounts, setLoadingAccounts] = useState(false);
+	const isSuperadmin = account?.id === '00000000-0000-0000-0000-000000000000';
+
+	// Fetch accounts and reference records when dialog opens
 	useEffect(() => {
 		if (open) {
+			// Fetch accounts for superadmins
+			if (isSuperadmin) {
+				const fetchAccountsList = async () => {
+					setLoadingAccounts(true);
+					try {
+						const response = await getAccounts({ page_size: 100 });
+						setAccounts(response.items);
+						// Pre-select first account if available
+						if (response.items.length > 0 && !selectedAccountId) {
+							setSelectedAccountId(response.items[0].id);
+						}
+					} catch (err) {
+						console.error('Failed to fetch accounts:', err);
+					} finally {
+						setLoadingAccounts(false);
+					}
+				};
+				fetchAccountsList();
+			}
+
 			// Fetch records for all reference fields
 			schema.forEach(async (field) => {
 				if (field.type === 'reference' && field.collection && onFetchReferenceRecords) {
@@ -67,8 +104,9 @@ export default function CreateRecordDialog({
 			// Reset form when dialog closes
 			setFormState(initializeFormState(schema));
 			setError(null);
+			setSelectedAccountId('');
 		}
-	}, [open, schema, onFetchReferenceRecords]);
+	}, [open, schema, onFetchReferenceRecords, isSuperadmin, selectedAccountId]);
 
 	const handleFieldChange = (fieldName: string, value: any) => {
 		setFormState((prev) => ({
@@ -102,6 +140,15 @@ export default function CreateRecordDialog({
 		const recordData: RecordData = {};
 		for (const field of schema) {
 			recordData[field.name] = formState.fields[field.name]?.value;
+		}
+
+		// Add account_id for superadmins
+		if (isSuperadmin) {
+			if (!selectedAccountId) {
+				setError('Please select an account');
+				return;
+			}
+			recordData.account_id = selectedAccountId;
 		}
 
 		setIsSubmitting(true);
@@ -138,6 +185,34 @@ export default function CreateRecordDialog({
 					</div>
 				) : (
 					<form onSubmit={handleSubmit} className="space-y-6">
+						{/* Account selector for superadmins */}
+						{isSuperadmin && (
+							<div className="space-y-2 pb-4 border-b">
+								<Label htmlFor="account-select">Account *</Label>
+								<Select
+									value={selectedAccountId}
+									onValueChange={setSelectedAccountId}
+									disabled={loadingAccounts || isSubmitting}
+								>
+									<SelectTrigger id="account-select">
+										<SelectValue placeholder="Select an account" />
+									</SelectTrigger>
+									<SelectContent>
+										{accounts.map((account) => (
+											<SelectItem key={account.id} value={account.id}>
+												{account.name} ({account.account_code})
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+								{loadingAccounts && (
+									<p className="text-sm text-muted-foreground">
+										Loading accounts...
+									</p>
+								)}
+							</div>
+						)}
+
 						<div className="max-h-[60vh] overflow-y-auto pr-4 space-y-4">
 							{schema.map((field) => (
 								<DynamicFieldInput

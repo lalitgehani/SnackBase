@@ -398,7 +398,7 @@ class RecordRepository:
         
         # Superadmin bypass check (account_id=None)
         if account_id:
-            where_clauses.append('"account_id" = :account_id')
+            where_clauses.append('r."account_id" = :account_id')
             params["account_id"] = account_id
 
         # Validate sort field to prevent SQL injection
@@ -414,7 +414,7 @@ class RecordRepository:
         for field, value in filters.items():
             if field in schema_field_names or field in system_fields:
                 param_name = f"filter_{field}"
-                where_clauses.append(f'"{field}" = :{param_name}')
+                where_clauses.append(f'r."{field}" = :{param_name}')
                 
                 # specific handling for boolean or json
                  # Check schema type if it's a schema field
@@ -435,7 +435,7 @@ class RecordRepository:
         where_sql = f" WHERE {where_clause}" if where_clause else ""
 
         # 2. Get total count
-        count_sql = f'SELECT COUNT(*) FROM "{table_name}"{where_sql}'
+        count_sql = f'SELECT COUNT(*) FROM "{table_name}" r {where_sql}'
         count_result = await self.session.execute(text(count_sql), params)
         total_count = count_result.scalar_one()
 
@@ -443,9 +443,10 @@ class RecordRepository:
         sort_order = "DESC" if descending else "ASC"
         
         select_sql = f'''
-            SELECT * FROM "{table_name}"
+            SELECT r.*, a.name as account_name FROM "{table_name}" r
+            LEFT JOIN accounts a ON r.account_id = a.id
             {where_sql}
-            ORDER BY "{sort_by}" {sort_order}
+            ORDER BY r."{sort_by}" {sort_order}
             LIMIT :limit OFFSET :skip
         '''
         

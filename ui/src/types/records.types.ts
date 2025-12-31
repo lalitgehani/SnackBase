@@ -19,6 +19,7 @@ export interface RecordListItem {
 	id: string;
 	created_at: string;
 	updated_at: string;
+	account_name?: string;
 	[key: string]: any; // Dynamic fields from schema
 }
 
