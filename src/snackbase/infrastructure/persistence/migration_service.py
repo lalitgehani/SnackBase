@@ -210,7 +210,7 @@ class MigrationService:
         # and translate to op.create_table syntax.
         
         lines.append("        sa.Column('id', sa.String(36), primary_key=True),")
-        lines.append("        sa.Column('account_id', sa.String(36), nullable=False),")
+        lines.append("        sa.Column('account_id', sa.String(36), sa.ForeignKey('accounts.id', ondelete='CASCADE'), nullable=False),")
         lines.append("        sa.Column('created_at', sa.DateTime(), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),")
         lines.append("        sa.Column('created_by', sa.Text(), nullable=False),")
         lines.append("        sa.Column('updated_at', sa.DateTime(), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),")

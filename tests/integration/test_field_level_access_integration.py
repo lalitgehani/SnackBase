@@ -31,6 +31,16 @@ async def test_account_and_users(db_session: AsyncSession):
         name="Test Account",
     )
     await account_repo.create(account)
+
+    # Create system account (required for superadmin)
+    system_account = AccountModel(
+        id=SYSTEM_ACCOUNT_ID,
+        account_code="SY0000",
+        slug="system",
+        name="System Account",
+    )
+    await account_repo.create(system_account)
+
     
     # Get roles (seeded in conftest)
     from sqlalchemy import select

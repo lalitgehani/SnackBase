@@ -91,8 +91,9 @@ class DatabaseManager:
                     cursor.execute(f"PRAGMA cache_size={self.settings.db_sqlite_cache_size}")
                     cursor.execute(f"PRAGMA temp_store={self.settings.db_sqlite_temp_store}")
                     cursor.execute(f"PRAGMA mmap_size={self.settings.db_sqlite_mmap_size}")
+                    cursor.execute("PRAGMA foreign_keys=ON")
                     cursor.close()
-                    logger.debug("Applied SQLite performance pragmas")
+                    logger.debug("Applied SQLite performance pragmas and enabled foreign keys")
 
         return self._engine
 
