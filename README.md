@@ -144,6 +144,7 @@ cp .env.example .env
 Comprehensive documentation is available in the [`docs/`](docs/) directory:
 
 - **[Quick Start Tutorial](docs/quick-start.md)** - Get up and running in 5 minutes
+- **[Conceptual Guides](docs/concepts/)** - Deep dives into multi-tenancy, collections, authentication, and security
 - **[Deployment Guide](docs/deployment.md)** - Development and production deployment
 - **[Frontend Guide](docs/frontend.md)** - React admin UI development
 - **[Hook System](docs/hooks.md)** - Extensibility framework and stable API

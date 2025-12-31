@@ -9,6 +9,7 @@ Welcome to the SnackBase documentation! This directory contains comprehensive gu
 - ⚡ [Quick Start Tutorial](quick-start.md) - Get up and running in 5 minutes
 - 📚 [Deployment Guide](deployment.md) - Deploy SnackBase in development and production
 - 🎨 [Frontend Guide](frontend.md) - React admin UI development
+- 🧠 [Conceptual Guides](concepts/) - Deep dives into core concepts
 - 🔌 [Hook System](hooks.md) - Extend SnackBase with custom hooks
 - 🚀 [API Examples](api-examples.md) - Practical API usage examples
 - 📖 [API Reference](http://localhost:8000/docs) - Interactive Swagger documentation
@@ -26,7 +27,13 @@ Welcome to the SnackBase documentation! This directory contains comprehensive gu
    - Set up roles and permissions
    - Common gotchas for new users
 
-2. **[Deployment Guide](deployment.md)**
+2. **[Conceptual Guides](concepts/)** - NEW!
+   - **[Multi-Tenancy Model](concepts/multi-tenancy.md)** - Account isolation, two-tier architecture
+   - **[Collections Model](concepts/collections.md)** - Dynamic schemas and table generation
+   - **[Authentication Model](concepts/authentication.md)** - Auth flows and token management
+   - **[Security Model](concepts/security.md)** - RBAC, permissions, and rule engine
+
+3. **[Deployment Guide](deployment.md)**
 
    - Development setup
    - Production deployment with systemd
@@ -45,7 +52,7 @@ Welcome to the SnackBase documentation! This directory contains comprehensive gu
    - Styling with TailwindCSS
    - Development workflow
 
-3. **[API Examples](api-examples.md)**
+4. **[API Examples](api-examples.md)**
    - Authentication (register, login, refresh)
    - Collections (create dynamic schemas)
    - Records (CRUD operations)
@@ -55,7 +62,7 @@ Welcome to the SnackBase documentation! This directory contains comprehensive gu
 
 ### Advanced Topics
 
-4. **[Hook System](hooks.md)**
+5. **[Hook System](hooks.md)**
    - Stable API contract
    - Architecture overview
    - Hook categories and events
@@ -66,14 +73,14 @@ Welcome to the SnackBase documentation! This directory contains comprehensive gu
 
 ### Reference
 
-5. **[API Reference (Swagger)](http://localhost:8000/docs)**
+6. **[API Reference (Swagger)](http://localhost:8000/docs)**
 
    - Interactive API documentation
    - Try endpoints directly from browser
    - Request/response schemas
    - Authentication testing
 
-6. **[PRD & Requirements](../PRD_PHASES.md)**
+7. **[PRD & Requirements](../PRD_PHASES.md)**
    - Phase-by-phase development plan
    - Feature specifications
    - Acceptance criteria
@@ -86,6 +93,7 @@ Welcome to the SnackBase documentation! This directory contains comprehensive gu
 ### For Developers
 
 - **Getting Started**: [Quick Start Tutorial](quick-start.md)
+- **Core Concepts**: [Conceptual Guides](concepts/)
 - **Frontend Development**: [Frontend Guide](frontend.md)
 - **API Usage**: [API Examples](api-examples.md)
 - **Extending SnackBase**: [Hook System](hooks.md)
