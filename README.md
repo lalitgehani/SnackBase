@@ -34,6 +34,8 @@ SnackBase is a Python/FastAPI-based BaaS providing auto-generated REST APIs, mul
 
 ## Quick Start
 
+**New to SnackBase?** Start with the [5-minute Quick Start Tutorial](docs/quick-start.md) with screenshots and step-by-step instructions.
+
 ```bash
 # Clone and install
 git clone https://github.com/yourusername/snackbase.git
@@ -141,6 +143,7 @@ cp .env.example .env
 
 Comprehensive documentation is available in the [`docs/`](docs/) directory:
 
+- **[Quick Start Tutorial](docs/quick-start.md)** - Get up and running in 5 minutes
 - **[Deployment Guide](docs/deployment.md)** - Development and production deployment
 - **[Hook System](docs/hooks.md)** - Extensibility framework and stable API
 - **[API Examples](docs/api-examples.md)** - Practical usage examples

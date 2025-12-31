@@ -6,6 +6,7 @@ Welcome to the SnackBase documentation! This directory contains comprehensive gu
 
 ## Quick Links
 
+- ⚡ [Quick Start Tutorial](quick-start.md) - Get up and running in 5 minutes
 - 📚 [Deployment Guide](deployment.md) - Deploy SnackBase in development and production
 - 🔌 [Hook System](hooks.md) - Extend SnackBase with custom hooks
 - 🚀 [API Examples](api-examples.md) - Practical API usage examples
@@ -17,7 +18,14 @@ Welcome to the SnackBase documentation! This directory contains comprehensive gu
 
 ### Getting Started
 
-1. **[Deployment Guide](deployment.md)**
+1. **[Quick Start Tutorial](quick-start.md)**
+   - 5-minute hands-on setup walkthrough
+   - Create your first collection via UI
+   - Add records and test the API
+   - Set up roles and permissions
+   - Common gotchas for new users
+
+2. **[Deployment Guide](deployment.md)**
 
    - Development setup
    - Production deployment with systemd
