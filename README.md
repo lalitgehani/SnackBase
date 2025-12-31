@@ -13,7 +13,7 @@ SnackBase is a Python/FastAPI-based BaaS providing auto-generated REST APIs, mul
 
 ## Status
 
-**Phase 1: Foundation & MVP** (Complete except for audit logging)
+**Phase 1: Foundation & MVP** (92% Complete - 12/13 features)
 
 - [x] F1.1: Project Scaffolding & Architecture Setup
 - [x] F1.2: Database Schema & Core System Tables
@@ -23,14 +23,39 @@ SnackBase is a Python/FastAPI-based BaaS providing auto-generated REST APIs, mul
 - [x] F1.6: Dynamic Collection Creation
 - [x] F1.7-F1.10: Dynamic Record CRUD
 - [x] F1.11: User Invitation System
-- [x] F1.12: Hook System Infrastructure
+- [x] F1.12: Hook System Infrastructure (STABLE API v1.0)
 - [x] F1.13: Account ID Generator
 - [x] Full React Admin UI with Dashboard
 - [x] Rule Engine & Permission System
 - [x] Group Management
 - [x] User Management UI
-- [ ] GxP-compliant audit logging
+- [x] GxP-compliant audit logging
 - [ ] Real-time subscriptions (WebSocket/SSE)
+
+**Phase 2: Security & Authorization** (90% Complete)
+
+- [x] F2.1-F2.5: Permission Data Model & Rule Engine
+- [x] F2.6-F2.7: SQL Macros & Group-Based Permissions
+- [x] F2.8: Permission Caching (5-minute TTL)
+- [x] F2.9: Authorization Middleware
+- [x] F2.10: User-Specific Rules
+- [x] F2.11-F2.13: PII Field Tagging, Masking & Field-Level Access Control
+- [x] F2.14: Group-Based Permission Macros
+
+**Phase 3: Operations** (70% Complete)
+
+- [x] F3.1-F3.5: Dashboard & Management UIs (Dashboard, Accounts, Collections, Roles, Permissions)
+- [x] F3.6-F3.8: Audit Log Storage, Capture & Query API
+- [x] F3.9-F3.12: Alembic Infrastructure & Migration Management UI
+
+**Phase 4: Advanced Features** (0% Complete)
+
+- [ ] F4.1-F4.4: Real-time Subscriptions (WebSocket/SSE) & PostgreSQL Support
+- [ ] F4.5-F4.7: File Storage Engine & Advanced Query Filters
+
+**Phase 5: Enterprise Features** (Not Started)
+
+- [ ] OAuth/SAML, Rate Limiting, Advanced Monitoring
 
 ## Quick Start
 
@@ -88,33 +113,39 @@ open http://localhost:8000
 - **Wildcard Collection Support** - `*` for all collections
 - **Field-Level Access Control** - Show/hide specific fields
 - **Permission Caching** - 5-minute TTL with invalidation
+- **PII Masking** - 6 mask types (email, ssn, phone, name, full, custom) with group-based access control
 
 ### Extensibility
 
 - **Hook System (Stable API v1.0)** - Event-driven extensibility
   - App Lifecycle, Model Operations, Record Operations, Collection Operations
-  - Built-in hooks: timestamp, account_isolation, created_by
+  - Built-in hooks: timestamp, account_isolation, created_by, audit_capture
   - Custom hooks with priority-based execution
-- **SQL Macros** - Reusable SQL snippets shared across accounts
+- **SQL Macros** - Reusable SQL snippets with safe execution
+  - Built-in permission macros: `@has_role()`, `@has_group()`, `@owns_record()`, `@in_time_range()`
+  - Timeout protection (5 seconds) and test mode with rollback
 - **Group Management** - User groups for easier permission assignment
 
 ### Admin UI
 
 - **React + TypeScript** - Modern admin interface
-- **Dashboard** - Platform statistics and metrics
+- **Dashboard** - Platform statistics and metrics with auto-refresh
 - **Account Management** - Create and manage accounts (superadmin)
-- **User Management** - Full CRUD for users
+- **User Management** - Full CRUD for users across accounts (superadmin)
 - **Role Management** - Create roles and assign permissions
 - **Permission Management** - Matrix view and bulk operations
 - **Collection Builder** - Visual schema designer
 - **Records Browser** - Data grid with filtering and editing
 - **Group Management** - Organize users into groups
+- **Macros Management** - SQL macro editor with test execution
+- **Migrations Viewer** - Alembic revision history and status
+- **Audit Logs** - Filterable, exportable audit trail with PII masking
 
 ### API & Testing
 
-- **11 API Routers** - Comprehensive REST API coverage
+- **13 API Routers** - Comprehensive REST API coverage
 - **Interactive Docs** - Swagger/OpenAPI at `/docs`
-- **Comprehensive Tests** - Unit and integration tests with pytest
+- **Comprehensive Tests** - Unit, integration, and security tests with pytest (680+ tests)
 - **Test Coverage** - High coverage across core functionality
 
 ## Installation
@@ -206,13 +237,16 @@ SNACKBASE_LOG_FORMAT=json
 ├── /auth/                      # Register, login, refresh, me
 ├── /collections/               # Collection CRUD (superadmin)
 ├── /accounts/                  # Account management (superadmin)
+├── /users/                     # User management (superadmin)
 ├── /roles/                     # Role management
 ├── /permissions/               # Permission management
 ├── /macros/                    # SQL macro management
 ├── /groups/                    # Group management
 ├── /invitations/               # User invitations
 ├── /dashboard/                 # Dashboard statistics
-└── /{collection}/              # Dynamic collection CRUD
+├── /audit-logs/                # Audit log retrieval and export
+├── /migrations/                # Alembic migration status
+└── /records/{collection}/      # Dynamic collection CRUD
 ```
 
 ## Project Structure
@@ -223,42 +257,44 @@ SnackBase/
 │   ├── core/                         # Cross-cutting concerns
 │   │   ├── config.py                 # Pydantic Settings
 │   │   ├── logging.py                # Structured logging
-│   │   ├── hooks/                    # Hook registry (STABLE API)
-│   │   ├── macros/                   # SQL macro engine
+│   │   ├── hooks/                    # Hook registry (STABLE API v1.0)
+│   │   ├── macros/                   # SQL macro execution engine
 │   │   └── rules/                    # Rule engine (lexer, parser, AST)
 │   ├── domain/                       # Core business logic
-│   │   ├── entities/                 # Business entities
-│   │   └── services/                 # Business logic interfaces
+│   │   ├── entities/                 # Business entities (Account, User, Role, etc.)
+│   │   └── services/                 # Business logic (validators, resolvers)
 │   ├── application/                  # Use cases
-│   │   ├── commands/                 # Write operations
-│   │   └── queries/                  # Read operations
+│   │   ├── commands/                 # Write operations (placeholder)
+│   │   ├── queries/                  # Read operations (placeholder)
+│   │   └── services/                 # Migration query service
 │   └── infrastructure/               # External dependencies
 │       ├── api/
 │       │   ├── app.py                # FastAPI app factory
 │       │   ├── dependencies.py       # FastAPI dependencies
-│       │   ├── routes/               # 11 API routers
+│       │   ├── routes/               # 13 API routers
 │       │   ├── schemas/              # Pydantic models
-│       │   └── middleware/           # Authorization middleware
+│       │   └── middleware/           # Authorization, context, logging
 │       ├── persistence/
 │       │   ├── database.py           # SQLAlchemy 2.0 async
-│       │   ├── models/               # ORM models
-│       │   ├── repositories/         # Repository pattern
+│       │   ├── models/               # ORM models (11 models)
+│       │   ├── repositories/         # Repository pattern (11 repositories)
 │       │   └── table_builder.py      # Dynamic table creation
 │       ├── auth/                     # JWT, password hasher
-│       ├── hooks/                    # Built-in hooks
+│       ├── hooks/                    # Built-in hooks implementation
 │       ├── services/                 # Token, email services
 │       ├── realtime/                 # WebSocket/SSE (TODO)
 │       └── storage/                  # File storage (TODO)
 ├── ui/                               # React Admin UI
 │   ├── src/
-│   │   ├── pages/                    # Dashboard, Accounts, Collections, etc.
+│   │   ├── pages/                    # Dashboard, Accounts, Collections, etc. (11 pages)
 │   │   ├── components/               # React components (Radix + Tailwind)
-│   │   ├── services/                 # API clients
+│   │   ├── services/                 # API clients (11 services)
 │   │   ├── stores/                   # Zustand state
 │   │   └── lib/                      # Utilities
-├── tests/                            # Unit and integration tests
-│   ├── unit/
-│   ├── integration/
+├── tests/                            # Unit, integration, security tests
+│   ├── unit/                         # 40+ test files
+│   ├── integration/                  # 29+ test files
+│   ├── security/                     # 8+ test files with HTML reporter
 │   └── conftest.py                   # Pytest fixtures
 ├── sb_data/                          # Data directory (gitignored)
 ├── CLAUDE.md                         # AI assistant instructions
@@ -335,7 +371,8 @@ async def send_post_notification(record, context):
 Built-in hooks (cannot be unregistered):
 - `timestamp_hook` - Auto-sets created_at/updated_at
 - `account_isolation_hook` - Enforces account_id filtering
-- `created_by_hook` - Sets created_by user
+- `created_by_hook` - Sets created_by/updated_by user
+- `audit_capture_hook` - Captures GxP-compliant audit entries for CREATE/UPDATE/DELETE
 
 ### Rule Engine
 
@@ -351,10 +388,10 @@ status in ["draft", "published"]
 
 See [PRD_PHASES.md](PRD_PHASES.md) for detailed specifications.
 
-- [x] **Phase 1**: Foundation & MVP - Multi-tenancy, auth, dynamic collections, UI
-- [x] **Phase 2**: Security & Authorization - RBAC, permissions, rule engine, groups
-- [ ] **Phase 3**: Operations - GxP audit logging, migrations
-- [ ] **Phase 4**: Advanced Features - Real-time (WebSocket/SSE), file storage
+- [x] **Phase 1**: Foundation & MVP - Multi-tenancy, auth, dynamic collections, UI (92% complete)
+- [x] **Phase 2**: Security & Authorization - RBAC, permissions, rule engine, groups, PII masking (90% complete)
+- [ ] **Phase 3**: Operations - GxP audit logging (done), migrations (done), dashboard UI (done)
+- [ ] **Phase 4**: Advanced Features - Real-time (WebSocket/SSE), file storage, PostgreSQL support
 - [ ] **Phase 5**: Enterprise - OAuth/SAML, rate limiting, monitoring
 
 ## Contributing
