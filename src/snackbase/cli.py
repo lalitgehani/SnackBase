@@ -180,44 +180,85 @@ Example:
     help="Skip confirmation prompt",
 )
 def init_db(force: bool) -> None:
-    """Initialize the database.
+    """Initialize the database using Alembic migrations.
 
-    Creates all database tables and seeds default data. Use this only in development.
-    In production, use migrations instead.
+    This is a thin wrapper around 'migrate upgrade' that also:
+    - Creates the database directory (if using SQLite)
+    - Seeds default roles and permissions
+    - Creates superadmin from environment variables (if configured)
+
+    For production, use 'migrate upgrade' directly instead.
     """
     import asyncio
 
-    from snackbase.infrastructure.persistence.database import (
-        get_db_manager,
-        init_database,
-    )
+    from alembic import command
+    from alembic.config import Config
+    from snackbase.infrastructure.persistence.database import get_db_manager
+    from snackbase.infrastructure.persistence.models import RoleModel
 
     settings = get_settings()
     configure_logging(settings)
 
     if settings.is_production and not force:
         click.echo(
-            "ERROR: Running in production mode. Use migrations instead of init_db.",
+            "ERROR: Running in production mode. Use 'migrate upgrade' instead of init_db.",
             err=True,
         )
         raise SystemExit(1)
 
     if not force:
         click.confirm(
-            "This will create all database tables. Continue?",
+            "This will initialize the database using Alembic migrations and seed default data. Continue?",
             abort=True,
             default=False,
         )
 
-    async def initialize():
-        try:
-            await init_database()
-            click.echo("Database initialized successfully.")
-        finally:
-            db = get_db_manager()
-            await db.disconnect()
+    # Step 1: Create database directory if using SQLite
+    if settings.database_url.startswith("sqlite"):
+        from pathlib import Path
 
-    asyncio.run(initialize())
+        db_path = settings.database_url.split(":///")[-1]
+        db_file = Path(db_path)
+        db_dir = db_file.parent
+        db_dir.mkdir(parents=True, exist_ok=True)
+        click.echo(f"Created database directory: {db_dir}")
+
+    # Step 2: Run Alembic migrations
+    click.echo("Running Alembic migrations...")
+    alembic_cfg = Config("alembic.ini")
+    # Note: env.py will set the URL from settings if not provided
+    command.upgrade(alembic_cfg, "head")
+    click.echo("Migrations applied successfully.")
+
+    # Step 3: Seed default roles and permissions
+    async def seed_data():
+        db = get_db_manager()
+
+        # Seed default roles
+        click.echo("Seeding default roles...")
+        from snackbase.infrastructure.persistence.database import _seed_default_roles
+        await _seed_default_roles(db, RoleModel)
+        click.echo("Default roles seeded.")
+
+        # Seed default permissions
+        click.echo("Seeding default permissions...")
+        from snackbase.infrastructure.persistence.database import _seed_default_permissions
+        await _seed_default_permissions(db)
+        click.echo("Default permissions seeded.")
+
+        # Create superadmin from environment variables if configured
+        from snackbase.infrastructure.persistence.database import _create_superadmin_from_env
+        await _create_superadmin_from_env(db)
+
+        await db.disconnect()
+
+    asyncio.run(seed_data())
+
+    click.echo("\nDatabase initialized successfully!")
+    click.echo(f"Database: {settings.database_url}")
+    click.echo("\nNext steps:")
+    click.echo("  1. Create a superadmin: uv run python -m snackbase create-superadmin")
+    click.echo("  2. Start the server:      uv run python -m snackbase serve")
 
 
 @cli.command()
@@ -366,6 +407,93 @@ Logging:
   Level:        {settings.log_level}
   Format:       {settings.log_format}
 """)
+
+
+@cli.group()
+def migrate() -> None:
+    """Database migration management using Alembic."""
+    pass
+
+
+@migrate.command()
+@click.option(
+    "--revision",
+    type=str,
+    default="head",
+    help="Target revision (default: head)",
+)
+def upgrade(revision: str) -> None:
+    """Apply pending migrations."""
+    from alembic import command
+    from alembic.config import Config
+
+    alembic_cfg = Config("alembic.ini")
+    # env.py will set the database URL from settings
+    command.upgrade(alembic_cfg, revision)
+    click.echo(f"Database upgraded to {revision}")
+
+
+@migrate.command()
+@click.option(
+    "--revision",
+    type=str,
+    default="-1",
+    help="Target revision (default: -1)",
+)
+def downgrade(revision: str) -> None:
+    """Roll back migrations."""
+    from alembic import command
+    from alembic.config import Config
+
+    alembic_cfg = Config("alembic.ini")
+    # env.py will set the database URL from settings
+    command.downgrade(alembic_cfg, revision)
+    click.echo(f"Database downgraded to {revision}")
+
+
+@migrate.command()
+@click.option(
+    "--message",
+    "-m",
+    type=str,
+    required=True,
+    help="Migration description",
+)
+@click.option(
+    "--autogenerate",
+    is_flag=True,
+    default=True,
+    help="Automatically detect schema changes",
+)
+def revision(message: str, autogenerate: bool) -> None:
+    """Create a new migration revision."""
+    from alembic import command
+    from alembic.config import Config
+
+    alembic_cfg = Config("alembic.ini")
+    # env.py will set the database URL from settings
+    command.revision(alembic_cfg, message=message, autogenerate=autogenerate)
+    click.echo(f"Created new migration: {message}")
+
+
+@migrate.command()
+def history() -> None:
+    """Show migration history."""
+    from alembic import command
+    from alembic.config import Config
+
+    alembic_cfg = Config("alembic.ini")
+    command.history(alembic_cfg)
+
+
+@migrate.command()
+def current() -> None:
+    """Show current revision."""
+    from alembic import command
+    from alembic.config import Config
+
+    alembic_cfg = Config("alembic.ini")
+    command.current(alembic_cfg)
 
 
 def main() -> NoReturn:
