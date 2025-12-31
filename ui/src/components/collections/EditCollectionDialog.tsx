@@ -28,14 +28,17 @@ export default function EditCollectionDialog({
     const [fields, setFields] = useState<FieldDefinition[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [originalFieldCount, setOriginalFieldCount] = useState(0);
 
     useEffect(() => {
         if (open && collection) {
             // Initialize with existing schema
             setFields([...collection.schema]);
+            setOriginalFieldCount(collection.schema.length);
             setError(null);
         } else if (!open) {
             setFields([]);
+            setOriginalFieldCount(0);
             setError(null);
         }
     }, [open, collection]);
@@ -53,11 +56,21 @@ export default function EditCollectionDialog({
         }
 
         // Validate all fields have names and types
+        const fieldNames = new Set<string>();
         for (const field of fields) {
             if (!field.name.trim()) {
                 setError('All fields must have a name');
                 return;
             }
+
+            // Check for duplicate field names (case-insensitive)
+            const normalizedName = field.name.toLowerCase();
+            if (fieldNames.has(normalizedName)) {
+                setError(`Duplicate field name: "${field.name}"`);
+                return;
+            }
+            fieldNames.add(normalizedName);
+
             if (!field.type) {
                 setError('All fields must have a type');
                 return;
@@ -85,8 +98,6 @@ export default function EditCollectionDialog({
 
     if (!collection) return null;
 
-    const existingFieldNames = new Set(collection.schema.map(f => f.name));
-
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -108,7 +119,7 @@ export default function EditCollectionDialog({
                     <SchemaBuilder
                         fields={fields}
                         onChange={setFields}
-                        existingFieldNames={existingFieldNames}
+                        originalFieldCount={originalFieldCount}
                         collections={collections}
                     />
 

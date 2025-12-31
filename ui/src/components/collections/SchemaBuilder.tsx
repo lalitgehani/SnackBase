@@ -15,14 +15,14 @@ import { FIELD_TYPES, ON_DELETE_OPTIONS, MASK_TYPE_OPTIONS } from '@/services/co
 interface SchemaBuilderProps {
     fields: FieldDefinition[];
     onChange: (fields: FieldDefinition[]) => void;
-    existingFieldNames?: Set<string>;
+    originalFieldCount?: number;
     collections?: string[];
 }
 
 export default function SchemaBuilder({
     fields,
     onChange,
-    existingFieldNames = new Set(),
+    originalFieldCount = 0,
     collections = [],
 }: SchemaBuilderProps) {
     const addField = () => {
@@ -84,7 +84,8 @@ export default function SchemaBuilder({
             ) : (
                 <div className="space-y-4">
                     {fields.map((field, index) => {
-                        const isExisting = existingFieldNames.has(field.name);
+                        // A field is "existing" if it was part of the original schema (index < originalFieldCount)
+                        const isExisting = index < originalFieldCount;
                         const isFirst = index === 0;
                         const isLast = index === fields.length - 1;
 
@@ -135,7 +136,13 @@ export default function SchemaBuilder({
                                             onChange={(e) => updateField(index, { name: e.target.value })}
                                             placeholder="field_name"
                                             disabled={isExisting}
+                                            className={isExisting ? "bg-muted" : ""}
                                         />
+                                        {isExisting && (
+                                            <p className="text-xs text-muted-foreground">
+                                                Field name cannot be changed for existing fields
+                                            </p>
+                                        )}
                                     </div>
 
                                     <div className="space-y-2">

@@ -131,12 +131,10 @@ class CollectionService:
                         )
                     )
 
-        # Validate new fields
-        new_field_names = set(new_fields.keys()) - set(existing_fields.keys())
-        if new_field_names:
-            new_field_list = [new_fields[name] for name in new_field_names]
-            validation_errors = CollectionValidator.validate_schema(new_field_list)
-            errors.extend(validation_errors)
+        # Validate the entire new schema (not just new fields)
+        # This catches duplicate field names and other schema-wide validation issues
+        validation_errors = CollectionValidator.validate_schema(new_schema)
+        errors.extend(validation_errors)
 
         return errors
 

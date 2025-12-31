@@ -55,11 +55,21 @@ export default function CreateCollectionDialog({
         }
 
         // Validate all fields have names and types
+        const fieldNames = new Set<string>();
         for (const field of fields) {
             if (!field.name.trim()) {
                 setError('All fields must have a name');
                 return;
             }
+
+            // Check for duplicate field names (case-insensitive)
+            const normalizedName = field.name.toLowerCase();
+            if (fieldNames.has(normalizedName)) {
+                setError(`Duplicate field name: "${field.name}"`);
+                return;
+            }
+            fieldNames.add(normalizedName);
+
             if (!field.type) {
                 setError('All fields must have a type');
                 return;
