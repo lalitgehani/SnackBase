@@ -65,8 +65,12 @@ def do_run_migrations(connection: Connection) -> None:
         render_as_batch=True if url and url.startswith("sqlite") else False,
     )
 
-    with context.begin_transaction():
+    # Use existing transaction if connection is provided, otherwise start a new one
+    if config.attributes.get("connection"):
         context.run_migrations()
+    else:
+        with context.begin_transaction():
+            context.run_migrations()
 
 
 async def run_async_migrations() -> None:
@@ -90,6 +94,14 @@ async def run_async_migrations() -> None:
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode."""
 
+    # Check if a connection was passed in the configuration attributes
+    # This is used by the application and tests to share a connection
+    connection = config.attributes.get("connection")
+
+    if connection is not None:
+        do_run_migrations(connection)
+        return
+
     # For async support, we need to handle the event loop differently
     # if it's already running (e.g. when called from application code)
     try:
@@ -98,9 +110,9 @@ def run_migrations_online() -> None:
         loop = None
 
     if loop and loop.is_running():
-        # This is a bit tricky; Alembic usually runs as a standalone script.
-        # If integrated into the app, we might need to await run_async_migrations.
-        # But for CLI use, asyncio.run is fine.
+        # This is used for CLI use when an event loop is already running
+        # (e.g. when calling from pytest-asyncio or a long-running app)
+        # Note: In production, it's better to run migrations before the loop starts
         asyncio.ensure_future(run_async_migrations())
     else:
         asyncio.run(run_async_migrations())

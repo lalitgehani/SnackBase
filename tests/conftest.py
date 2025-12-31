@@ -1,12 +1,13 @@
 """Pytest configuration for all tests."""
 
+import os
 import asyncio
 from typing import AsyncGenerator
 from datetime import datetime, timezone
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -21,12 +22,30 @@ logger = get_logger(__name__)
 
 
 
-@pytest.fixture(scope="session")
-def event_loop():
-    """Create an event loop for the test session."""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
+@pytest.fixture(autouse=True)
+def _clean_dynamic_migrations():
+    """Clear the dynamic migrations directory before running tests."""
+    import shutil
+    import os
+    
+    dynamic_dir = os.path.abspath("alembic/versions/dynamic")
+    if os.path.exists(dynamic_dir):
+        # Keep the .gitkeep if it exists, or just clear everything
+        for filename in os.listdir(dynamic_dir):
+            if filename == ".gitkeep":
+                continue
+            file_path = os.path.join(dynamic_dir, filename)
+            try:
+                if os.path.isfile(file_path) or os.path.islink(file_path):
+                    os.unlink(file_path)
+                elif os.path.isdir(file_path):
+                    shutil.rmtree(file_path)
+            except Exception as e:
+                print(f"Failed to delete {file_path}. Reason: {e}")
+    else:
+        os.makedirs(dynamic_dir, exist_ok=True)
+    
+    yield
 
 
 @pytest.fixture(scope="session")
@@ -80,19 +99,30 @@ async def db_session(_maybe_enable_audit_hooks) -> AsyncGenerator[AsyncSession, 
 
     Uses an in-memory SQLite database for testing.
     """
-    # Create in-memory SQLite database
+    db_file = "test_db.sqlite"
+    if os.path.exists(db_file):
+        os.remove(db_file)
+        
+    from sqlalchemy.pool import NullPool
     engine = create_async_engine(
-        "sqlite+aiosqlite:///:memory:",
+        f"sqlite+aiosqlite:///{db_file}",
+        poolclass=NullPool,
         connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
         echo=False,
     )
+    
+    # Enable WAL mode and set busy timeout for better concurrency
+    async with engine.connect() as conn:
+        await conn.execute(text("PRAGMA journal_mode=WAL"))
+        await conn.execute(text("PRAGMA busy_timeout=5000"))
+        await conn.commit()
 
-    # Create all tables
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # Apply all migrations to set up the schema
+    from snackbase.infrastructure.persistence.migration_service import MigrationService
+    migration_service = MigrationService(engine=engine)
+    await migration_service.apply_migrations()
         
-    # Audit hooks are conditionally registered in _init_hooks_conditionally
+    # Audit hooks are conditionally registered
     # based on the @pytest.mark.enable_audit_hooks marker
 
     # Create session
@@ -119,6 +149,12 @@ async def db_session(_maybe_enable_audit_hooks) -> AsyncGenerator[AsyncSession, 
         await conn.run_sync(Base.metadata.drop_all)
 
     await engine.dispose()
+    
+    if os.path.exists(db_file):
+        try:
+            os.remove(db_file)
+        except:
+            pass
 
 
 @pytest_asyncio.fixture

@@ -39,7 +39,7 @@ class CollectionService:
         self.engine = engine
         self.repository = CollectionRepository(session)
         self.migration_service = migration_service or MigrationService(
-            database_url=str(engine.url)
+            engine=engine
         )
 
     async def create_collection(

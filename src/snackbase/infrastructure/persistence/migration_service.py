@@ -8,6 +8,8 @@ from typing import Any
 
 from alembic import command
 from alembic.config import Config
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from snackbase.core.logging import get_logger
 from snackbase.infrastructure.persistence.table_builder import TableBuilder
 
@@ -20,15 +22,19 @@ class MigrationService:
     def __init__(
         self, 
         alembic_ini_path: str = "alembic.ini",
-        database_url: str | None = None
+        database_url: str | None = None,
+        engine: AsyncEngine | None = None
     ) -> None:
         """Initialize the migration service.
 
         Args:
             alembic_ini_path: Path to the alembic.ini file.
             database_url: Optional database URL to override the one in alembic.ini.
+            engine: Optional database engine to use for migrations.
         """
         self.config = Config(alembic_ini_path)
+        self.engine = engine
+        
         # Ensure we use an absolute path for script_location
         script_location = self.config.get_main_option("script_location")
         if script_location and not os.path.isabs(script_location):
@@ -38,6 +44,8 @@ class MigrationService:
         
         if database_url:
             self.config.set_main_option("sqlalchemy.url", database_url)
+        elif engine:
+            self.config.set_main_option("sqlalchemy.url", str(engine.url))
 
     def generate_create_collection_migration(
         self, collection_name: str, schema: list[dict[str, Any]]
@@ -153,13 +161,38 @@ class MigrationService:
         
         return rev_id
 
-    async def apply_migrations(self) -> None:
-        """Apply all pending migrations to the database."""
-        import asyncio
-        loop = asyncio.get_running_loop()
-        # Run Alembic command in a separate thread to allow it to run its own
-        # event loop via asyncio.run() in env.py, ensuring it blocks until complete.
-        await loop.run_in_executor(None, command.upgrade, self.config, "head")
+    async def apply_migrations(self, connection: Any = None) -> None:
+        """Apply all pending migrations to the database.
+
+        Args:
+            connection: Optional existing AsyncConnection to use.
+        """
+        if connection:
+            def run_upgrade(sync_conn):
+                self.config.attributes["connection"] = sync_conn
+                command.upgrade(self.config, "head")
+            await connection.run_sync(run_upgrade)
+        else:
+            import asyncio
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, command.upgrade, self.config, "head")
+
+    async def stamp(self, revision: str, connection: Any = None) -> None:
+        """Stamp the database with a specific Alembic revision.
+        
+        Args:
+            revision: The revision ID to stamp to (e.g., 'head', 'base', or a specific ID).
+            connection: Optional existing AsyncConnection to use.
+        """
+        if connection:
+            def run_stamp(sync_conn):
+                self.config.attributes["connection"] = sync_conn
+                command.stamp(self.config, revision)
+            await connection.run_sync(run_stamp)
+        else:
+            import asyncio
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, command.stamp, self.config, revision)
 
     def _generate_create_table_op_lines(self, collection_name: str, schema: list[dict[str, Any]]) -> list[str]:
         table_name = TableBuilder.generate_table_name(collection_name)

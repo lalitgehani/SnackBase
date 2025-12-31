@@ -3,6 +3,7 @@ import json
 
 import pytest
 from fastapi import status
+from typing import cast
 
 from snackbase.infrastructure.persistence.models import CollectionModel
 
@@ -24,33 +25,22 @@ async def test_list_collections_empty(client, superadmin_token):
 
 
 @pytest.mark.asyncio
-async def test_list_collections_with_data(client, superadmin_token, db_session):
-    """Test listing collections with pagination."""
-    from snackbase.infrastructure.persistence.table_builder import TableBuilder
-    
-    # Create test collections
-    collections = []
-    for i in range(3):
-        schema = [{"name": "field1", "type": "text"}]
-        collection = CollectionModel(
-            id=f"col-{i}",
-            name=f"Collection{i}",
-            schema=json.dumps(schema),
+async def test_list_collections_with_data(client, superadmin_token):
+    """Test collection listing with data."""
+    # Create test collections via API
+    headers = {"Authorization": f"Bearer {superadmin_token}"}
+    for name in ["Users", "Products", "Posts"]:
+        await client.post(
+            "/api/v1/collections",
+            json={
+                "name": name,
+                "schema": [{"name": "field1", "type": "text"}]
+            },
+            headers=headers
         )
-        db_session.add(collection)
-        collections.append(collection)
-        
-        # Create physical tables
-        engine = db_session.bind
-        await TableBuilder.create_table(engine, f"Collection{i}", schema)
     
-    await db_session.commit()
-    
-    # Test listing
-    response = await client.get(
-        "/api/v1/collections",
-        headers={"Authorization": f"Bearer {superadmin_token}"},
-    )
+    # List collections
+    response = await client.get("/api/v1/collections", headers=headers)
     
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
@@ -62,20 +52,17 @@ async def test_list_collections_with_data(client, superadmin_token, db_session):
 @pytest.mark.asyncio
 async def test_list_collections_pagination(client, superadmin_token, db_session):
     """Test collection listing with pagination."""
-    from snackbase.infrastructure.persistence.table_builder import TableBuilder
+    from snackbase.domain.services import CollectionService
+    from sqlalchemy.ext.asyncio import AsyncEngine
+    
+    engine = cast(AsyncEngine, db_session.bind)
+    service = CollectionService(db_session, engine)
     
     # Create 5 test collections
     for i in range(5):
         schema = [{"name": "field1", "type": "text"}]
-        collection = CollectionModel(
-            id=f"col-{i}",
-            name=f"Collection{i}",
-            schema=json.dumps(schema),
-        )
-        db_session.add(collection)
-        
-        engine = db_session.bind
-        await TableBuilder.create_table(engine, f"Collection{i}", schema)
+        await service.create_collection(f"Collection{i}", schema, "superadmin")
+        await db_session.commit()
     
     await db_session.commit()
     
@@ -96,23 +83,19 @@ async def test_list_collections_pagination(client, superadmin_token, db_session)
 @pytest.mark.asyncio
 async def test_list_collections_search(client, superadmin_token, db_session):
     """Test collection listing with search."""
-    from snackbase.infrastructure.persistence.table_builder import TableBuilder
+    from snackbase.domain.services import CollectionService
+    from sqlalchemy.ext.asyncio import AsyncEngine
+    
+    engine = cast(AsyncEngine, db_session.bind)
+    service = CollectionService(db_session, engine)
     
     # Create test collections
     names = ["Users", "Products", "Orders"]
-    for name in names:
+    for name in ["Users", "Products", "Posts"]:
         schema = [{"name": "field1", "type": "text"}]
-        collection = CollectionModel(
-            id=f"col-{name}",
-            name=name,
-            schema=json.dumps(schema),
-        )
-        db_session.add(collection)
-        
-        engine = db_session.bind
-        await TableBuilder.create_table(engine, name, schema)
+        await service.create_collection(name, schema, "superadmin")
+        await db_session.commit()
     
-    await db_session.commit()
     
     # Search for "User"
     response = await client.get(
@@ -129,33 +112,31 @@ async def test_list_collections_search(client, superadmin_token, db_session):
 @pytest.mark.asyncio
 async def test_get_collection_by_id(client, superadmin_token, db_session):
     """Test getting a collection by ID."""
-    from snackbase.infrastructure.persistence.table_builder import TableBuilder
+    from snackbase.domain.services import CollectionService
+    from sqlalchemy.ext.asyncio import AsyncEngine
+    
+    engine = cast(AsyncEngine, db_session.bind)
+    service = CollectionService(db_session, engine)
     
     # Create a test collection
     schema = [
         {"name": "title", "type": "text", "required": True},
         {"name": "count", "type": "number", "default": 0},
     ]
-    collection = CollectionModel(
-        id="col-123",
-        name="TestCollection",
-        schema=json.dumps(schema),
-    )
-    db_session.add(collection)
-    
-    engine = db_session.bind
-    await TableBuilder.create_table(engine, "TestCollection", schema)
+    collection = await service.create_collection("TestCollection", schema, "superadmin")
     await db_session.commit()
+    
+    collection_id = collection.id
     
     # Get collection
     response = await client.get(
-        "/api/v1/collections/col-123",
+        f"/api/v1/collections/{collection_id}",
         headers={"Authorization": f"Bearer {superadmin_token}"},
     )
     
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
-    assert data["id"] == "col-123"
+    assert data["id"] == collection_id
     assert data["name"] == "TestCollection"
     assert data["table_name"] == "col_testcollection"
     assert len(data["schema"]) == 2
@@ -175,20 +156,20 @@ async def test_get_collection_not_found(client, superadmin_token):
 @pytest.mark.asyncio
 async def test_update_collection_add_fields(client, superadmin_token, db_session):
     """Test updating a collection by adding new fields."""
-    from snackbase.infrastructure.persistence.table_builder import TableBuilder
+    from snackbase.domain.services import CollectionService
+    from sqlalchemy.ext.asyncio import AsyncEngine
+    from typing import cast
+    import json
+    
+    engine = cast(AsyncEngine, db_session.bind)
+    service = CollectionService(db_session, engine)
     
     # Create initial collection
     initial_schema = [{"name": "title", "type": "text"}]
-    collection = CollectionModel(
-        id="col-123",
-        name="TestCollection",
-        schema=json.dumps(initial_schema),
-    )
-    db_session.add(collection)
-    
-    engine = db_session.bind
-    await TableBuilder.create_table(engine, "TestCollection", initial_schema)
+    collection = await service.create_collection("TestCollection", initial_schema, "superadmin")
     await db_session.commit()
+    
+    collection_id = collection.id
     
     # Update with new field
     updated_schema = [
@@ -197,7 +178,7 @@ async def test_update_collection_add_fields(client, superadmin_token, db_session
     ]
     
     response = await client.put(
-        "/api/v1/collections/col-123",
+        f"/api/v1/collections/{collection_id}",
         headers={"Authorization": f"Bearer {superadmin_token}"},
         json={"schema": updated_schema},
     )
@@ -213,26 +194,26 @@ async def test_update_collection_type_change_rejected(
     client, superadmin_token, db_session
 ):
     """Test that type changes are rejected."""
-    from snackbase.infrastructure.persistence.table_builder import TableBuilder
+    from snackbase.domain.services import CollectionService
+    from sqlalchemy.ext.asyncio import AsyncEngine
+    from typing import cast
+    import json
+    
+    engine = cast(AsyncEngine, db_session.bind)
+    service = CollectionService(db_session, engine)
     
     # Create initial collection
     initial_schema = [{"name": "title", "type": "text"}]
-    collection = CollectionModel(
-        id="col-123",
-        name="TestCollection",
-        schema=json.dumps(initial_schema),
-    )
-    db_session.add(collection)
-    
-    engine = db_session.bind
-    await TableBuilder.create_table(engine, "TestCollection", initial_schema)
+    collection = await service.create_collection("TestCollection", initial_schema, "superadmin")
     await db_session.commit()
+    
+    collection_id = collection.id
     
     # Try to change field type
     invalid_schema = [{"name": "title", "type": "number"}]
     
     response = await client.put(
-        "/api/v1/collections/col-123",
+        f"/api/v1/collections/{collection_id}",
         headers={"Authorization": f"Bearer {superadmin_token}"},
         json={"schema": invalid_schema},
     )
@@ -246,29 +227,27 @@ async def test_update_collection_field_deletion_rejected(
     client, superadmin_token, db_session
 ):
     """Test that field deletion is rejected."""
-    from snackbase.infrastructure.persistence.table_builder import TableBuilder
+    from snackbase.domain.services import CollectionService
+    from sqlalchemy.ext.asyncio import AsyncEngine
+    
+    engine = cast(AsyncEngine, db_session.bind)
+    service = CollectionService(db_session, engine)
     
     # Create initial collection with 2 fields
     initial_schema = [
         {"name": "title", "type": "text"},
         {"name": "count", "type": "number"},
     ]
-    collection = CollectionModel(
-        id="col-123",
-        name="TestCollection",
-        schema=json.dumps(initial_schema),
-    )
-    db_session.add(collection)
-    
-    engine = db_session.bind
-    await TableBuilder.create_table(engine, "TestCollection", initial_schema)
+    collection = await service.create_collection("TestCollection", initial_schema, "superadmin")
     await db_session.commit()
+    
+    collection_id = collection.id
     
     # Try to delete a field
     invalid_schema = [{"name": "title", "type": "text"}]
     
     response = await client.put(
-        "/api/v1/collections/col-123",
+        f"/api/v1/collections/{collection_id}",
         headers={"Authorization": f"Bearer {superadmin_token}"},
         json={"schema": invalid_schema},
     )
@@ -280,38 +259,35 @@ async def test_update_collection_field_deletion_rejected(
 @pytest.mark.asyncio
 async def test_delete_collection(client, superadmin_token, db_session):
     """Test deleting a collection."""
-    from snackbase.infrastructure.persistence.table_builder import TableBuilder
+    from snackbase.domain.services import CollectionService
+    from sqlalchemy.ext.asyncio import AsyncEngine
+    
+    engine = cast(AsyncEngine, db_session.bind)
+    service = CollectionService(db_session, engine)
     
     # Create a test collection
     schema = [{"name": "field1", "type": "text"}]
-    collection = CollectionModel(
-        id="col-123",
-        name="TestCollection",
-        schema=json.dumps(schema),
-    )
-    db_session.add(collection)
-    
-    engine = db_session.bind
-    await TableBuilder.create_table(engine, "TestCollection", schema)
+    collection = await service.create_collection("TestCollection", schema, "superadmin")
     await db_session.commit()
+    
+    collection_id = collection.id
     
     # Delete collection
     response = await client.delete(
-        "/api/v1/collections/col-123",
+        f"/api/v1/collections/{collection_id}",
         headers={"Authorization": f"Bearer {superadmin_token}"},
     )
     
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
-    assert data["collection_id"] == "col-123"
+    assert data["collection_id"] == collection_id
     assert data["collection_name"] == "TestCollection"
     assert "records_deleted" in data
     
     # Verify collection is deleted
     from snackbase.infrastructure.persistence.repositories import CollectionRepository
-    
     repo = CollectionRepository(db_session)
-    deleted_collection = await repo.get_by_id("col-123")
+    deleted_collection = await repo.get_by_id(collection_id)
     assert deleted_collection is None
 
 
@@ -327,8 +303,21 @@ async def test_delete_collection_not_found(client, superadmin_token):
 
 
 @pytest.mark.asyncio
-async def test_collections_require_superadmin(client, regular_user_token):
+async def test_collections_require_superadmin(client, regular_user_token, db_session):
     """Test that collection endpoints require superadmin access."""
+    from snackbase.domain.services import CollectionService
+    from sqlalchemy.ext.asyncio import AsyncEngine
+    
+    engine = cast(AsyncEngine, db_session.bind)
+    service = CollectionService(db_session, engine)
+    
+    # Create a test collection
+    schema = [{"name": "field1", "type": "text"}]
+    collection = await service.create_collection("TestCollection", schema, "superadmin")
+    await db_session.commit()
+    
+    collection_id = collection.id
+
     # List collections
     response = await client.get(
         "/api/v1/collections",
@@ -338,14 +327,14 @@ async def test_collections_require_superadmin(client, regular_user_token):
     
     # Get collection
     response = await client.get(
-        "/api/v1/collections/col-123",
+        f"/api/v1/collections/{collection_id}",
         headers={"Authorization": f"Bearer {regular_user_token}"},
     )
     assert response.status_code == status.HTTP_403_FORBIDDEN
     
     # Update collection
     response = await client.put(
-        "/api/v1/collections/col-123",
+        f"/api/v1/collections/{collection_id}",
         headers={"Authorization": f"Bearer {regular_user_token}"},
         json={"schema": []},
     )
@@ -353,7 +342,7 @@ async def test_collections_require_superadmin(client, regular_user_token):
     
     # Delete collection
     response = await client.delete(
-        "/api/v1/collections/col-123",
+        f"/api/v1/collections/{collection_id}",
         headers={"Authorization": f"Bearer {regular_user_token}"},
     )
     assert response.status_code == status.HTTP_403_FORBIDDEN

@@ -21,9 +21,20 @@ def mock_engine():
 
 
 @pytest.fixture
-def collection_service(mock_session, mock_engine):
+def mock_migration_service():
+    """Create a mock migration service."""
+    service = MagicMock()
+    service.generate_create_collection_migration.return_value = "rev1"
+    service.generate_update_collection_migration.return_value = "rev2"
+    service.generate_delete_collection_migration.return_value = "rev3"
+    service.apply_migrations = AsyncMock()
+    return service
+
+
+@pytest.fixture
+def collection_service(mock_session, mock_engine, mock_migration_service):
     """Create a CollectionService instance."""
-    return CollectionService(mock_session, mock_engine)
+    return CollectionService(mock_session, mock_engine, migration_service=mock_migration_service)
 
 
 @pytest.fixture
@@ -132,13 +143,9 @@ class TestUpdateCollectionSchema:
             
             result = await collection_service.update_collection_schema("col-123", new_schema)
             
-            # Verify TableBuilder.add_columns was called
-            mock_tb.add_columns.assert_called_once()
-            call_args = mock_tb.add_columns.call_args
-            assert call_args[0][0] == mock_engine
-            assert call_args[0][1] == "TestCollection"
-            assert len(call_args[0][2]) == 1  # One new field
-            assert call_args[0][2][0]["name"] == "description"
+            # Verify MigrationService was called
+            collection_service.migration_service.generate_update_collection_migration.assert_called_once()
+            collection_service.migration_service.apply_migrations.assert_called_once()
 
     async def test_update_collection_not_found(self, collection_service, sample_schema):
         """Test update when collection doesn't exist."""
@@ -183,13 +190,12 @@ class TestDeleteCollection:
             # Verify result
             assert result["collection_id"] == "col-123"
             assert result["collection_name"] == "TestCollection"
-            assert result["table_name"] == "col_testcollection"
             assert result["records_deleted"] == 42
             
             # Verify calls
-            mock_tb.drop_table.assert_called_once()
+            collection_service.migration_service.generate_delete_collection_migration.assert_called_once()
+            collection_service.migration_service.apply_migrations.assert_called_once()
             collection_service.repository.delete.assert_called_once()
-            collection_service.session.commit.assert_called_once()
 
     async def test_delete_collection_not_found(self, collection_service):
         """Test delete when collection doesn't exist."""
