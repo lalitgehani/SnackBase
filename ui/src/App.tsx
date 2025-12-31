@@ -9,6 +9,7 @@ import CollectionsPage from '@/pages/CollectionsPage';
 import RecordsPage from '@/pages/RecordsPage';
 import RolesPage from '@/pages/RolesPage';
 import AuditLogsPage from '@/pages/AuditLogsPage';
+import MigrationsPage from '@/pages/MigrationsPage';
 import AdminLayout from '@/layouts/AdminLayout';
 import ProtectedRoute from '@/components/ProtectedRoute';
 
@@ -39,6 +40,7 @@ function App() {
         <Route path="collections/:collectionName/records" element={<RecordsPage />} />
         <Route path="roles" element={<RolesPage />} />
         <Route path="audit-logs" element={<AuditLogsPage />} />
+        <Route path="migrations" element={<MigrationsPage />} />
       </Route>
 
       {/* Catch all - redirect to dashboard */}

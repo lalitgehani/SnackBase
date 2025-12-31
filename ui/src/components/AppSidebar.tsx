@@ -7,6 +7,7 @@ import {
     Database,
     Shield,
     FileText,
+    GitBranch,
     LogOut,
 } from "lucide-react"
 import { useLocation, Link, useNavigate } from "react-router"
@@ -70,6 +71,11 @@ const items = [
         title: "Audit Logs",
         url: "/admin/audit-logs",
         icon: FileText,
+    },
+    {
+        title: "Migrations",
+        url: "/admin/migrations",
+        icon: GitBranch,
     },
 ]
 
