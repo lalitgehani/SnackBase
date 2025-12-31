@@ -7,6 +7,7 @@ import MacrosTable from '@/components/macros/MacrosTable';
 import MacroEditorDialog from '@/components/macros/MacroEditorDialog';
 import MacroTestDialog from '@/components/macros/MacroTestDialog';
 import MacroDetailDialog from '@/components/macros/MacroDetailDialog';
+import DeleteMacroDialog from '@/components/macros/DeleteMacroDialog';
 import { listMacros, deleteMacro, createMacro, updateMacro } from '@/services/macros.service';
 import type { Macro, MacroCreate, MacroUpdate } from '@/types/macro';
 import { handleApiError } from '@/lib/api';
@@ -21,6 +22,7 @@ export default function MacrosPage() {
     const [editorOpen, setEditorOpen] = useState(false);
     const [testOpen, setTestOpen] = useState(false);
     const [detailOpen, setDetailOpen] = useState(false);
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [selectedMacro, setSelectedMacro] = useState<Macro | null>(null);
 
     const fetchMacros = async () => {
@@ -40,17 +42,14 @@ export default function MacrosPage() {
         fetchMacros();
     }, []);
 
-    const handleDelete = async (macro: Macro) => {
-        if (!confirm(`Are you sure you want to delete the @${macro.name} macro?`)) {
-            return;
-        }
+    const handleDelete = (macro: Macro) => {
+        setSelectedMacro(macro);
+        setDeleteDialogOpen(true);
+    };
 
-        try {
-            await deleteMacro(macro.id);
-            fetchMacros();
-        } catch (err) {
-            alert(`Delete failed: ${handleApiError(err)}`);
-        }
+    const handleDeleteConfirm = async (macroId: number) => {
+        await deleteMacro(macroId);
+        fetchMacros();
     };
 
     const handleView = (macro: Macro) => {
@@ -182,6 +181,13 @@ export default function MacrosPage() {
                 macro={selectedMacro}
                 onTest={handleTest}
                 onEdit={handleEdit}
+            />
+
+            <DeleteMacroDialog
+                open={deleteDialogOpen}
+                onOpenChange={setDeleteDialogOpen}
+                macro={selectedMacro}
+                onConfirm={handleDeleteConfirm}
             />
         </div>
     );
