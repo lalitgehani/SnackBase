@@ -62,8 +62,8 @@ class MigrationService:
         message = f"create_collection_{collection_name}"
         
         # We use revision() to generate the skeleton
-        # Note: We specify the version path to ensure it goes into dynamic/
-        dynamic_dir = os.path.abspath("alembic/versions/dynamic")
+        # Note: We specify the version path to ensure it goes into sb_data/migrations/
+        dynamic_dir = os.path.abspath("sb_data/migrations")
         
         # Generate the revision
         rev = command.revision(
@@ -103,7 +103,7 @@ class MigrationService:
             The revision ID of the generated migration.
         """
         message = f"update_collection_{collection_name}"
-        dynamic_dir = os.path.abspath("alembic/versions/dynamic")
+        dynamic_dir = os.path.abspath("sb_data/migrations")
         
         rev = command.revision(
             self.config,
@@ -136,7 +136,7 @@ class MigrationService:
             The revision ID of the generated migration.
         """
         message = f"delete_collection_{collection_name}"
-        dynamic_dir = os.path.abspath("alembic/versions/dynamic")
+        dynamic_dir = os.path.abspath("sb_data/migrations")
         
         rev = command.revision(
             self.config,

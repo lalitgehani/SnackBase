@@ -77,9 +77,6 @@ sb_data/
 *.sqlite
 *.sqlite3
 
-# Custom Collection Migrations
-alembic/versions/dynamic/
-
 # Logs
 logs/
 *.log
