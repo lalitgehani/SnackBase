@@ -55,6 +55,11 @@ class CollectionModel(Base):
         server_default=func.now(),
         onupdate=func.now(),
     )
+    migration_revision: Mapped[str | None] = mapped_column(
+        String(32),
+        nullable=True,
+        comment="Alembic migration revision ID that created/last modified this collection",
+    )
 
     def __repr__(self) -> str:
         return f"<Collection(id={self.id}, name={self.name})>"

@@ -241,109 +241,44 @@ async def create_collection(
 ) -> CollectionResponse | JSONResponse:
     """Create a new collection with custom schema.
 
-    Creates a physical database table and stores the collection definition.
-    Only superadmins (users in the system account) can create collections.
-
-    Flow:
-    1. Validate collection name
-    2. Validate schema fields
-    3. Check collection name uniqueness
-    4. Generate unique table name
-    5. Create physical table with auto-added system columns
-    6. Store collection definition in collections table
-    7. Return created collection
-
-    Auto-added columns:
-    - id (TEXT PRIMARY KEY)
-    - account_id (TEXT NOT NULL)
-    - created_at (DATETIME)
-    - created_by (TEXT)
-    - updated_at (DATETIME)
-    - updated_by (TEXT)
+    Creates an Alembic migration and applies it to create the physical table.
+    Only superadmins can create collections.
     """
-    # Convert schema to dict list for validation
+    # Convert schema to dict list
     schema_dicts = [field.model_dump() for field in request.fields]
 
-    # 1 & 2. Validate collection name and schema
-    validation_errors = CollectionValidator.validate(request.name, schema_dicts)
-    if validation_errors:
-        logger.info(
-            "Collection creation failed: validation errors",
-            collection_name=request.name,
-            error_count=len(validation_errors),
-        )
-        return JSONResponse(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            content={
-                "error": "Validation error",
-                "details": [
-                    {"field": e.field, "message": e.message, "code": e.code}
-                    for e in validation_errors
-                ],
-            },
-        )
+    # Use CollectionService for business logic
+    engine = cast(AsyncEngine, session.bind)
+    collection_service = CollectionService(session, engine)
 
-    # 3. Check collection name uniqueness
-    collection_repo = CollectionRepository(session)
-    if await collection_repo.name_exists(request.name):
-        logger.info(
-            "Collection creation failed: name already exists",
-            collection_name=request.name,
-        )
-        return JSONResponse(
-            status_code=status.HTTP_409_CONFLICT,
-            content={
-                "error": "Conflict",
-                "message": f"Collection '{request.name}' already exists",
-                "field": "name",
-            },
-        )
-
-    # 4. Generate unique table name
-    table_name = TableBuilder.generate_table_name(request.name)
-
-    # 5. Create physical table
     try:
-        # Use session's engine to ensure we're using the correct database (especially for tests)
-        engine = cast(AsyncEngine, session.bind)
-        logger.debug(f"Session bind type: {type(session.bind)}, engine: {engine}")
-        await TableBuilder.create_table(engine, request.name, schema_dicts)
-        logger.info(f"Table created successfully: {table_name}")
-    except Exception as e:
-        logger.error(
-            "Collection creation failed: table creation error",
-            collection_name=request.name,
-            table_name=table_name,
-            error=str(e),
+        collection = await collection_service.create_collection(
+            request.name, schema_dicts, current_user.user_id
         )
-        return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={
-                "error": "Internal error",
-                "message": "Failed to create collection table",
-            },
-        )
+        await session.commit()
+        await session.refresh(collection)
+    except ValueError as e:
+        error_message = str(e)
+        if "already exists" in error_message.lower():
+            return JSONResponse(
+                status_code=status.HTTP_409_CONFLICT,
+                content={
+                    "error": "Conflict",
+                    "message": error_message,
+                    "field": "name",
+                },
+            )
+        else:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={
+                    "error": "Validation error",
+                    "message": error_message,
+                },
+            )
 
-    # 6. Store collection definition
-    collection_id = str(uuid.uuid4())
-    collection = CollectionModel(
-        id=collection_id,
-        name=request.name,
-        schema=json.dumps(schema_dicts),
-    )
-    await collection_repo.create(collection)
-    await session.commit()
-    await session.refresh(collection)
+    table_name = TableBuilder.generate_table_name(collection.name)
 
-    logger.info(
-        "Collection created successfully",
-        collection_id=collection_id,
-        collection_name=request.name,
-        table_name=table_name,
-        created_by=current_user.user_id,
-    )
-
-    # 7. Return response
     return CollectionResponse(
         id=collection.id,
         name=collection.name,
@@ -488,6 +423,7 @@ async def delete_collection(
 
     try:
         result = await collection_service.delete_collection(collection_id)
+        await session.commit()
     except ValueError as e:
         logger.info(
             "Collection deletion failed: not found",
