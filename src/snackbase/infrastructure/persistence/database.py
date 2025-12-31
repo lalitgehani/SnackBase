@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy import event
 
 from snackbase.core.config import get_settings
 from snackbase.core.logging import get_logger
@@ -79,6 +80,20 @@ class DatabaseManager:
                 database_url=self._engine.url.render_as_string(hide_password=True),
                 pool_size=self.settings.db_pool_size,
             )
+
+            # Apply SQLite pragmas on connection
+            if self.settings.database_url.startswith("sqlite"):
+                @event.listens_for(self._engine.sync_engine, "connect")
+                def set_sqlite_pragma(dbapi_connection, connection_record):
+                    cursor = dbapi_connection.cursor()
+                    cursor.execute(f"PRAGMA journal_mode={self.settings.db_sqlite_journal_mode}")
+                    cursor.execute(f"PRAGMA synchronous={self.settings.db_sqlite_synchronous}")
+                    cursor.execute(f"PRAGMA cache_size={self.settings.db_sqlite_cache_size}")
+                    cursor.execute(f"PRAGMA temp_store={self.settings.db_sqlite_temp_store}")
+                    cursor.execute(f"PRAGMA mmap_size={self.settings.db_sqlite_mmap_size}")
+                    cursor.close()
+                    logger.debug("Applied SQLite performance pragmas")
+
         return self._engine
 
     @property

@@ -47,6 +47,13 @@ class Settings(BaseSettings):
     db_pool_recycle: int = 3600
     db_echo: bool = False
 
+    # SQLite Performance Pragmas
+    db_sqlite_journal_mode: str = "WAL"
+    db_sqlite_synchronous: str = "NORMAL"
+    db_sqlite_cache_size: int = -64000  # 64MB
+    db_sqlite_temp_store: str = "MEMORY"
+    db_sqlite_mmap_size: int = 268435456  # 256MB
+
     # Security Settings
     secret_key: str = Field(
         default="change-me-in-production-use-openssl-rand-hex-32",
