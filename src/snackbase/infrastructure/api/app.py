@@ -261,6 +261,7 @@ def register_routes(app: FastAPI) -> None:
         groups_router,
         invitations_router,
         macros_router,
+        migrations_router,
         permissions_router,
         records_router,
         roles_router,
@@ -316,6 +317,11 @@ def register_routes(app: FastAPI) -> None:
     # Register audit logs routes
     app.include_router(
         audit_log_router, prefix=f"{settings.api_prefix}/audit-logs", tags=["audit-logs"]
+    )
+
+    # Register migrations routes
+    app.include_router(
+        migrations_router, prefix=f"{settings.api_prefix}/migrations", tags=["migrations"]
     )
 
     # Register users routes (must be before dynamic record routes)

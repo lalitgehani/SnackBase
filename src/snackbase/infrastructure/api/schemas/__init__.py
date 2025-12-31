@@ -76,6 +76,13 @@ from snackbase.infrastructure.api.schemas.bulk_permissions_schema import (
     BulkPermissionUpdateRequest,
     BulkPermissionUpdateResponse,
 )
+from snackbase.infrastructure.api.schemas.migration_query_schemas import (
+    CurrentRevisionResponse,
+    MigrationHistoryItemResponse,
+    MigrationHistoryResponse,
+    MigrationListResponse,
+    MigrationRevisionResponse,
+)
 
 __all__ = [
     "AccountDetailResponse",
@@ -98,6 +105,7 @@ __all__ = [
     "CreateCollectionRequest",
     "CreatePermissionRequest",
     "CreateRoleRequest",
+    "CurrentRevisionResponse",
     "DashboardStats",
     "FieldDefinition",
     "GetCollectionsParams",
@@ -107,6 +115,10 @@ __all__ = [
     "InvitationResponse",
     "InvitationStatus",
     "LoginRequest",
+    "MigrationHistoryItemResponse",
+    "MigrationHistoryResponse",
+    "MigrationListResponse",
+    "MigrationRevisionResponse",
     "OperationRuleSchema",
     "PermissionListResponse",
     "PermissionResponse",
