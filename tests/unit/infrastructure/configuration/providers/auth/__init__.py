@@ -1,0 +1,1 @@
+"""Authentication provider tests."""

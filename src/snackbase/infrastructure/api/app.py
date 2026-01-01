@@ -65,6 +65,44 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.error("Failed to initialize database", error=str(e))
         raise
 
+    # Register built-in authentication providers
+    from snackbase.core.configuration.config_registry import ConfigurationRegistry
+    from snackbase.infrastructure.configuration.providers import EmailPasswordProvider
+    from snackbase.infrastructure.persistence.database import get_db_session
+    from snackbase.infrastructure.persistence.repositories import ConfigurationRepository
+    from snackbase.infrastructure.security.encryption import EncryptionService
+    
+    # Create configuration registry (we'll store it on app.state for later use)
+    async for session in get_db_session():
+        try:
+            config_repo = ConfigurationRepository(session)
+            encryption_service = EncryptionService(settings.encryption_key)
+            config_registry = ConfigurationRegistry(config_repo, encryption_service)
+            
+            # Register email/password provider
+            email_password_provider = EmailPasswordProvider()
+            config_registry.register_provider_definition(
+                category=email_password_provider.category,
+                name=email_password_provider.provider_name,
+                display_name=email_password_provider.display_name,
+                logo_url=email_password_provider.logo_url,
+                config_schema=email_password_provider.config_schema,
+                is_builtin=email_password_provider.is_builtin,
+            )
+            
+            # Store registry on app state for later use
+            app.state.config_registry = config_registry
+            
+            logger.info(
+                "Built-in authentication provider registered",
+                provider=email_password_provider.provider_name,
+            )
+            break
+        finally:
+            await session.close()
+
+
+
     # Register built-in hooks
     if hasattr(app.state, "hook_registry"):
         register_builtin_hooks(app.state.hook_registry)
