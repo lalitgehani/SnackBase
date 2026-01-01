@@ -68,6 +68,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Register built-in authentication providers
     from snackbase.core.configuration.config_registry import ConfigurationRegistry
     from snackbase.infrastructure.configuration.providers import EmailPasswordProvider
+    from snackbase.infrastructure.configuration.providers.oauth import GoogleOAuthHandler
     from snackbase.infrastructure.persistence.database import get_db_session
     from snackbase.infrastructure.persistence.repositories import ConfigurationRepository
     from snackbase.infrastructure.security.encryption import EncryptionService
@@ -89,13 +90,27 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 config_schema=email_password_provider.config_schema,
                 is_builtin=email_password_provider.is_builtin,
             )
+
+            # Register Google OAuth provider
+            google_oauth_handler = GoogleOAuthHandler()
+            config_registry.register_provider_definition(
+                category="auth_providers",
+                name=google_oauth_handler.provider_name,
+                display_name=google_oauth_handler.display_name,
+                logo_url=google_oauth_handler.logo_url,
+                config_schema=google_oauth_handler.config_schema,
+                is_builtin=True,
+            )
             
             # Store registry on app state for later use
             app.state.config_registry = config_registry
-            
+
             logger.info(
-                "Built-in authentication provider registered",
-                provider=email_password_provider.provider_name,
+                "Built-in authentication providers registered",
+                providers=[
+                    email_password_provider.provider_name,
+                    google_oauth_handler.provider_name,
+                ],
             )
             break
         finally:
