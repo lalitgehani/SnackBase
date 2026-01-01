@@ -41,6 +41,7 @@ async def test_database_tables_exist(db_session: AsyncSession):
         "collections",
         "invitations",
         "configurations",
+        "oauth_states",
     }
     
     for table in expected_tables:
@@ -359,3 +360,72 @@ async def test_system_account_exists(db_session: AsyncSession):
     assert system_account.account_code == "SY0000"
     assert system_account.slug == "system"
     assert system_account.id == "00000000-0000-0000-0000-000000000000"
+
+
+@pytest.mark.asyncio
+async def test_oauth_states_table_exists(db_session: AsyncSession):
+    """Test that oauth_states table exists in the database."""
+
+    def get_table_names(conn):
+        inspector = inspect(conn)
+        return inspector.get_table_names()
+
+    async with db_session.bind.connect() as conn:
+        table_names = await conn.run_sync(get_table_names)
+
+    assert "oauth_states" in table_names, "Table oauth_states not found in database"
+
+
+@pytest.mark.asyncio
+async def test_oauth_states_table_schema(db_session: AsyncSession):
+    """Test oauth_states table schema has all required columns."""
+
+    def get_columns(conn):
+        inspector = inspect(conn)
+        return {col["name"]: col for col in inspector.get_columns("oauth_states")}
+
+    async with db_session.bind.connect() as conn:
+        columns = await conn.run_sync(get_columns)
+
+    # Check all required columns exist
+    required_columns = [
+        "id",
+        "provider_name",
+        "state_token",
+        "redirect_uri",
+        "code_verifier",
+        "metadata",
+        "expires_at",
+        "created_at",
+    ]
+    for col in required_columns:
+        assert col in columns, f"Column {col} not found in oauth_states table"
+
+    # Check nullability
+    assert not columns["id"]["nullable"]
+    assert not columns["provider_name"]["nullable"]
+    assert not columns["state_token"]["nullable"]
+    assert not columns["redirect_uri"]["nullable"]
+    assert columns["code_verifier"]["nullable"]
+    assert columns["metadata"]["nullable"]
+    assert not columns["expires_at"]["nullable"]
+
+
+@pytest.mark.asyncio
+async def test_oauth_states_indexes(db_session: AsyncSession):
+    """Test that required indexes exist on oauth_states table."""
+
+    def get_indexes(conn):
+        inspector = inspect(conn)
+        return {idx["name"]: idx for idx in inspector.get_indexes("oauth_states")}
+
+    async with db_session.bind.connect() as conn:
+        indexes = await conn.run_sync(get_indexes)
+
+    # Check required indexes exist
+    expected_indexes = [
+        "ix_oauth_states_state_token",
+        "ix_oauth_states_expires_at",
+    ]
+    for idx_name in expected_indexes:
+        assert idx_name in indexes, f"Index {idx_name} not found on oauth_states table"
