@@ -1,12 +1,16 @@
 """Unit tests for ConfigurationModel."""
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from snackbase.infrastructure.persistence.models import AccountModel, ConfigurationModel
+from snackbase.infrastructure.persistence.models import (
+    AccountModel,
+    ConfigurationModel,
+    OAuthStateModel,
+)
 
 
 @pytest.mark.asyncio
@@ -132,3 +136,75 @@ async def test_configuration_model_repr():
     assert "storage_providers" in repr_str
     assert "s3" in repr_str
     assert account_id in repr_str
+
+
+@pytest.mark.asyncio
+async def test_oauth_state_model_instantiation():
+    """Test that OAuthStateModel can be instantiated with all fields."""
+    state_id = str(uuid.uuid4())
+    token = "secure_token_abc123"
+    expires = datetime.now(timezone.utc) + timedelta(minutes=10)
+
+    state = OAuthStateModel(
+        id=state_id,
+        provider_name="github",
+        state_token=token,
+        redirect_uri="https://app.snackbase.com/callback",
+        code_verifier="pkce_verifier_xyz",
+        metadata_={"step": "authorize", "source": "mobile"},
+        expires_at=expires,
+    )
+
+    assert state.id == state_id
+    assert state.provider_name == "github"
+    assert state.state_token == token
+    assert state.redirect_uri == "https://app.snackbase.com/callback"
+    assert state.code_verifier == "pkce_verifier_xyz"
+    assert state.metadata_ == {"step": "authorize", "source": "mobile"}
+    assert state.expires_at == expires
+
+
+@pytest.mark.asyncio
+async def test_oauth_state_model_expiration():
+    """Test the is_expired property of OAuthStateModel."""
+    # Not expired
+    future = datetime.now(timezone.utc) + timedelta(minutes=5)
+    state = OAuthStateModel(
+        id=str(uuid.uuid4()),
+        provider_name="google",
+        state_token="token1",
+        redirect_uri="uri",
+        expires_at=future,
+    )
+    assert state.is_expired is False
+
+    # Expired
+    past = datetime.now(timezone.utc) - timedelta(minutes=1)
+    state_expired = OAuthStateModel(
+        id=str(uuid.uuid4()),
+        provider_name="google",
+        state_token="token2",
+        redirect_uri="uri",
+        expires_at=past,
+    )
+    assert state_expired.is_expired is True
+
+
+@pytest.mark.asyncio
+async def test_oauth_state_model_repr():
+    """Test that __repr__ returns expected format for OAuthStateModel."""
+    state_id = str(uuid.uuid4())
+    token = "very_long_secure_token_value"
+    state = OAuthStateModel(
+        id=state_id,
+        provider_name="apple",
+        state_token=token,
+        redirect_uri="uri",
+        expires_at=datetime.now(timezone.utc),
+    )
+
+    repr_str = repr(state)
+    assert "OAuthState" in repr_str
+    assert state_id in repr_str
+    assert "apple" in repr_str
+    assert token[:8] in repr_str

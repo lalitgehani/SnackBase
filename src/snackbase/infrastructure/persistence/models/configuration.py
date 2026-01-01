@@ -20,6 +20,7 @@ from sqlalchemy.dialects.sqlite import JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from snackbase.infrastructure.persistence.database import Base
+from datetime import datetime, timezone
 
 
 class ConfigurationModel(Base):
@@ -216,6 +217,11 @@ class OAuthStateModel(Base):
         Index("ix_oauth_states_state_token", "state_token"),
         Index("ix_oauth_states_expires_at", "expires_at"),
     )
+
+    @property
+    def is_expired(self) -> bool:
+        """Check if the state token has expired."""
+        return datetime.now(timezone.utc) > self.expires_at.replace(tzinfo=timezone.utc)
 
     def __repr__(self) -> str:
         return (
