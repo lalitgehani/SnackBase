@@ -120,3 +120,18 @@ class OAuthAuthorizeResponse(BaseModel):
     state: str = Field(..., description="The state token used for this flow")
     provider: str = Field(..., description="The provider name")
 
+
+class OAuthCallbackRequest(BaseModel):
+    """Request body for OAuth callback completion."""
+
+    code: str = Field(..., description="Authorization code from provider")
+    state: str = Field(..., description="State token for CSRF protection")
+    redirect_uri: str = Field(..., description="Original redirect URI used in authorize request")
+
+
+class OAuthCallbackResponse(AuthResponse):
+    """Response for successful OAuth callback authentication."""
+
+    is_new_user: bool = Field(..., description="Whether a new user was created")
+    is_new_account: bool = Field(..., description="Whether a new account was created")
+

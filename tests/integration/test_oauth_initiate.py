@@ -20,22 +20,22 @@ class TestOAuthInitiate:
         from snackbase.infrastructure.security.encryption import EncryptionService
         from snackbase.infrastructure.configuration.providers.oauth import GoogleOAuthHandler
         
-        if not hasattr(app.state, "config_registry"):
-            settings = get_settings()
-            config_repo = ConfigurationRepository(db_session)
-            encryption_service = EncryptionService(settings.encryption_key)
-            app.state.config_registry = ConfigurationRegistry(config_repo, encryption_service)
-            
-            # Register Google provider definition for tests
-            google_handler = GoogleOAuthHandler()
-            app.state.config_registry.register_provider_definition(
-                category="auth_providers",
-                name="google",
-                display_name="Google",
-                logo_url=google_handler.logo_url,
-                config_schema=google_handler.config_schema,
-                is_builtin=True
-            )
+        # Always create a new registry with the current session
+        settings = get_settings()
+        config_repo = ConfigurationRepository(db_session)
+        encryption_service = EncryptionService(settings.encryption_key)
+        app.state.config_registry = ConfigurationRegistry(config_repo, encryption_service)
+        
+        # Register Google provider definition for tests
+        google_handler = GoogleOAuthHandler()
+        app.state.config_registry.register_provider_definition(
+            category="auth_providers",
+            name="google",
+            display_name="Google",
+            logo_url=google_handler.logo_url,
+            config_schema=google_handler.config_schema,
+            is_builtin=True
+        )
 
     async def test_authorize_google_success(self, client: AsyncClient, db_session: AsyncSession):
         """Test successful initiation of Google OAuth flow at system level."""

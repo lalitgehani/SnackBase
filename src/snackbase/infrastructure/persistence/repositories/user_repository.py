@@ -86,6 +86,28 @@ class UserRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_by_external_id(
+        self, auth_provider_name: str, external_id: str
+    ) -> UserModel | None:
+        """Get a user by their external provider ID.
+
+        Args:
+            auth_provider_name: Name of the OAuth/SAML provider (e.g., 'google').
+            external_id: Unique identifier from the provider.
+
+        Returns:
+            User model if found, None otherwise.
+        """
+        result = await self.session.execute(
+            select(UserModel).where(
+                and_(
+                    UserModel.auth_provider_name == auth_provider_name,
+                    UserModel.external_id == external_id,
+                )
+            )
+        )
+        return result.scalar_one_or_none()
+
     async def email_exists_in_account(self, email: str, account_id: str) -> bool:
         """Check if an email already exists within an account.
 

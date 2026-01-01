@@ -365,3 +365,26 @@ async def test_list_paginated_with_search(repository, mock_session, sample_user)
     assert total == 1
     assert len(users) == 1
     assert "example" in users[0].email
+
+
+@pytest.mark.asyncio
+async def test_get_by_external_id(repository, mock_session, sample_user):
+    """Test getting a user by external provider ID."""
+    provider_name = "google"
+    external_id = "ext_12345"
+
+    sample_user.auth_provider = "oauth"
+    sample_user.auth_provider_name = provider_name
+    sample_user.external_id = external_id
+
+    # Mock execute result
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = sample_user
+    mock_session.execute.return_value = mock_result
+
+    result = await repository.get_by_external_id(provider_name, external_id)
+
+    mock_session.execute.assert_called_once()
+    assert result == sample_user
+    assert result.external_id == external_id
+    assert result.auth_provider_name == provider_name
