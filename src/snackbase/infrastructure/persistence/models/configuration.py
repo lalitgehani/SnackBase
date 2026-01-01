@@ -148,3 +148,77 @@ class ConfigurationModel(Base):
             f"<Configuration(id={self.id}, category={self.category}, "
             f"provider={self.provider_name}, account_id={self.account_id})>"
         )
+
+
+class OAuthStateModel(Base):
+    """SQLAlchemy model for the oauth_states table.
+
+    Used to store temporary OAuth state tokens for flow validation and CSRF protection.
+
+    Attributes:
+        id: Primary key (UUID).
+        provider_name: Target OAuth provider name.
+        state_token: Secure random state token.
+        redirect_uri: Redirect URI to return to after flow completion.
+        code_verifier: Optional PKCE code verifier.
+        metadata: Optional additional metadata for the flow.
+        expires_at: Token expiration timestamp.
+        created_at: Token creation timestamp.
+    """
+
+    __tablename__ = "oauth_states"
+
+    id: Mapped[str] = mapped_column(
+        String(36),
+        primary_key=True,
+        comment="OAuth state ID (UUID)",
+    )
+    provider_name: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        comment="Target OAuth provider name",
+    )
+    state_token: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        unique=True,
+        comment="Secure random state token",
+    )
+    redirect_uri: Mapped[str] = mapped_column(
+        String(500),
+        nullable=False,
+        comment="Redirect URI to return to after flow completion",
+    )
+    code_verifier: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        comment="Optional PKCE code verifier",
+    )
+    metadata_: Mapped[dict | None] = mapped_column(
+        "metadata",
+        JSON,
+        nullable=True,
+        comment="Optional additional metadata for the flow",
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        comment="Token expiration timestamp",
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
+        comment="Token creation timestamp",
+    )
+
+    __table_args__ = (
+        Index("ix_oauth_states_state_token", "state_token"),
+        Index("ix_oauth_states_expires_at", "expires_at"),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<OAuthState(id={self.id}, provider={self.provider_name}, "
+            f"token={self.state_token[:8]}...)>"
+        )
