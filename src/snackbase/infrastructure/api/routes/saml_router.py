@@ -495,3 +495,120 @@ async def acs(
         is_new_user=is_new_user,
         is_new_account=is_new_account,
     )
+
+
+@router.get(
+    "/metadata",
+    status_code=status.HTTP_200_OK,
+    responses={
+        200: {"description": "SAML Metadata XML", "content": {"application/xml": {}}},
+        404: {"description": "Account or provider not found"},
+    },
+)
+async def metadata(
+    request: Request,
+    account: str = Query(..., description="Account slug or ID"),
+    provider: Optional[str] = Query(None, description="Specific provider name to force use of"),
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Download SAML Service Provider Metadata XML.
+
+    Used to configure the Identity Provider to recognize this SP.
+    Returns:
+        XML content with Content-Disposition attachment.
+    """
+    config_registry = getattr(request.app.state, "config_registry", None)
+    if not config_registry:
+        logger.error("Configuration registry not found in app state")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="System configuration error",
+        )
+
+    # 1. Resolve account
+    account_repo = AccountRepository(session)
+    account_model = await account_repo.get_by_slug_or_code(account)
+    if not account_model:
+        logger.info("SAML Metadata failed: account not found", account=account)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Account '{account}' not found",
+        )
+    account_id = account_model.id
+
+    # 2. Determine provider and get configuration
+    selected_provider_name = provider
+    config_dict = None
+
+    if selected_provider_name:
+        # User specified a provider
+        config_dict = await config_registry.get_effective_config(
+            category="saml_providers",
+            provider_name=selected_provider_name,
+            account_id=account_id,
+        )
+        if not config_dict:
+            logger.info(
+                "SAML Metadata failed: requested provider not configured",
+                provider=selected_provider_name,
+                account_id=account_id,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"SAML provider '{selected_provider_name}' not configured for this account",
+            )
+    else:
+        # Determine provider automatically (first enabled one)
+        found_config = None
+        for name in SAML_HANDLERS.keys():
+             conf = await config_registry.get_effective_config(
+                category="saml_providers",
+                provider_name=name,
+                account_id=account_id,
+            )
+             if conf:
+                 found_config = conf
+                 selected_provider_name = name
+                 break
+        
+        if found_config:
+            config_dict = found_config
+        else:
+            logger.info("SAML Metadata failed: no active SAML provider found", account_id=account_id)
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No active SAML provider configured for this account",
+            )
+
+    # 3. Get provider handler
+    handler = SAML_HANDLERS.get(selected_provider_name)
+    if not handler:
+        # Should not happen if logic above is correct
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Handler for provider '{selected_provider_name}' not found",
+        )
+
+    # 4. Generate metadata
+    try:
+        metadata_xml = await handler.get_metadata(config=config_dict)
+    except Exception as e:
+        logger.error(
+            "SAML Metadata failed: error generating XML",
+            provider=selected_provider_name,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error generating SAML metadata: {str(e)}",
+        )
+    
+    # 5. Return response
+    from fastapi.responses import Response
+    return Response(
+        content=metadata_xml,
+        media_type="application/xml",
+        headers={
+            "Content-Disposition": 'attachment; filename="saml-metadata.xml"'
+        }
+    )
