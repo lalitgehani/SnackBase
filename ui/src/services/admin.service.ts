@@ -17,8 +17,11 @@ export interface Configuration {
   category: string;
   updated_at: string;
   is_system: boolean;
+  is_builtin?: boolean;
   account_id: string;
   logo_url: string;
+  enabled: boolean;
+  priority?: number;
 }
 
 export const adminService = {
@@ -29,6 +32,25 @@ export const adminService = {
 
   getRecentConfigs: async (limit: number = 5): Promise<Configuration[]> => {
     const response = await api.get(`/admin/configuration/recent?limit=${limit}`);
+    return response.data;
+  },
+
+  getSystemConfigs: async (category?: string): Promise<Configuration[]> => {
+    const params = new URLSearchParams();
+    if (category && category !== 'all') {
+      params.append('category', category);
+    }
+    const response = await api.get(`/admin/configuration/system?${params.toString()}`);
+    return response.data;
+  },
+
+  updateConfig: async (configId: string, enabled: boolean): Promise<any> => {
+    const response = await api.patch(`/admin/configuration/${configId}`, { enabled });
+    return response.data;
+  },
+
+  deleteConfig: async (configId: string): Promise<any> => {
+    const response = await api.delete(`/admin/configuration/${configId}`);
     return response.data;
   },
 };

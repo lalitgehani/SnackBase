@@ -1,5 +1,5 @@
-from typing import Dict, List, Any
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Dict, List, Any, Optional
+from fastapi import APIRouter, Depends, HTTPException, status, Body
 from sqlalchemy import select, func, desc, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -108,4 +108,130 @@ async def get_recent_configurations(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to fetch recent configurations"
+        )
+
+@router.get("/configuration/system")
+async def get_system_configurations(
+    category: Optional[str] = None,
+    db: AsyncSession = Depends(get_db_session),
+    # TODO: Add superadmin dependency check here
+):
+    """List all system configurations.
+    
+    Args:
+        category: Optional category filter.
+    """
+    try:
+        query = select(ConfigurationModel).where(
+            ConfigurationModel.is_system == True
+        )
+        
+        if category:
+            query = query.where(ConfigurationModel.category == category)
+            
+        query = query.order_by(
+            ConfigurationModel.priority.asc(),
+            ConfigurationModel.created_at.desc()
+        )
+        
+        result = await db.execute(query)
+        configs = result.scalars().all()
+        
+        return [
+            {
+                "id": config.id,
+                "display_name": config.display_name,
+                "provider_name": config.provider_name,
+                "category": config.category,
+                "enabled": config.enabled,
+                "is_builtin": config.is_builtin,
+                "priority": config.priority,
+                "updated_at": config.updated_at,
+                "logo_url": config.logo_url
+            }
+            for config in configs
+        ]
+    except Exception as e:
+        logger.error("Failed to fetch system configurations", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch system configurations"
+        )
+
+@router.patch("/configuration/{config_id}")
+async def update_configuration_status(
+    config_id: str,
+    enabled: bool = Body(..., embed=True),
+    db: AsyncSession = Depends(get_db_session),
+    # TODO: Add superadmin dependency check here
+):
+    """Update configuration status (enable/disable).
+    
+    Args:
+        config_id: Configuration ID.
+        enabled: New enabled status.
+    """
+    try:
+        repo = ConfigurationRepository(db)
+        config = await repo.get_by_id(config_id)
+        
+        if not config:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Configuration not found"
+            )
+            
+        config.enabled = enabled
+        await repo.update(config)
+        await db.commit()
+        
+        return {"status": "success", "enabled": config.enabled}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to update configuration", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update configuration"
+        )
+
+@router.delete("/configuration/{config_id}")
+async def delete_configuration(
+    config_id: str,
+    db: AsyncSession = Depends(get_db_session),
+    # TODO: Add superadmin dependency check here
+):
+    """Delete a configuration.
+    
+    Cannot delete built-in providers.
+    """
+    try:
+        repo = ConfigurationRepository(db)
+        config = await repo.get_by_id(config_id)
+        
+        if not config:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Configuration not found"
+            )
+            
+        if config.is_builtin:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot delete built-in provider"
+            )
+            
+        await repo.delete(config_id)
+        await db.commit()
+        
+        return {"status": "success"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to delete configuration", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete configuration"
         )
