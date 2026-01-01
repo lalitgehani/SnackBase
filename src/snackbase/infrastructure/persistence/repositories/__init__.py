@@ -6,6 +6,9 @@ from snackbase.infrastructure.persistence.repositories.account_repository import
 from snackbase.infrastructure.persistence.repositories.collection_repository import (
     CollectionRepository,
 )
+from snackbase.infrastructure.persistence.repositories.configuration_repository import (
+    ConfigurationRepository,
+)
 from snackbase.infrastructure.persistence.repositories.invitation_repository import (
     InvitationRepository,
 )
@@ -30,13 +33,22 @@ from snackbase.infrastructure.persistence.repositories.audit_log_repository impo
 from snackbase.infrastructure.persistence.repositories.group_repository import (
     GroupRepository,
 )
+from snackbase.infrastructure.persistence.repositories.macro_repository import (
+    MacroRepository,
+)
+from snackbase.infrastructure.persistence.repositories.oauth_state_repository import (
+    OAuthStateRepository,
+)
 
 __all__ = [
     "AccountRepository",
     "AuditLogRepository",
     "CollectionRepository",
+    "ConfigurationRepository",
     "GroupRepository",
     "InvitationRepository",
+    "MacroRepository",
+    "OAuthStateRepository",
     "PermissionRepository",
     "RecordRepository",
     "RefreshTokenRepository",

@@ -54,6 +54,27 @@ async def test_get_config(repository, mock_session):
     mock_session.execute.assert_called()
 
 @pytest.mark.asyncio
+async def test_list_configs(repository, mock_session):
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = [MagicMock(spec=ConfigurationModel)]
+    mock_session.execute.return_value = mock_result
+    
+    result = await repository.list_configs(category="auth", enabled_only=True)
+    
+    assert len(result) == 1
+    mock_session.execute.assert_called()
+
+@pytest.mark.asyncio
+async def test_update_config(repository, mock_session):
+    config = MagicMock(spec=ConfigurationModel)
+    
+    result = await repository.update(config)
+    
+    assert result == config
+    mock_session.flush.assert_called()
+    mock_session.refresh.assert_called_with(config)
+
+@pytest.mark.asyncio
 async def test_delete_config(repository, mock_session):
     mock_model = MagicMock(spec=ConfigurationModel)
     mock_result = MagicMock()
