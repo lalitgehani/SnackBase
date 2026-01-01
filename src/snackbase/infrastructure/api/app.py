@@ -69,6 +69,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     from snackbase.core.configuration.config_registry import ConfigurationRegistry
     from snackbase.infrastructure.configuration.providers import EmailPasswordProvider
     from snackbase.infrastructure.configuration.providers.oauth import (
+        AppleOAuthHandler,
         GitHubOAuthHandler,
         GoogleOAuthHandler,
         MicrosoftOAuthHandler,
@@ -127,6 +128,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 config_schema=microsoft_oauth_handler.config_schema,
                 is_builtin=True,
             )
+
+            # Register Apple OAuth provider
+            apple_oauth_handler = AppleOAuthHandler()
+            config_registry.register_provider_definition(
+                category="auth_providers",
+                name=apple_oauth_handler.provider_name,
+                display_name=apple_oauth_handler.display_name,
+                logo_url=apple_oauth_handler.logo_url,
+                config_schema=apple_oauth_handler.config_schema,
+                is_builtin=True,
+            )
             
             # Store registry on app state for later use
             app.state.config_registry = config_registry
@@ -138,6 +150,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                     google_oauth_handler.provider_name,
                     github_oauth_handler.provider_name,
                     microsoft_oauth_handler.provider_name,
+                    apple_oauth_handler.provider_name,
                 ],
             )
             break

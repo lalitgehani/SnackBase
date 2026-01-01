@@ -1,3 +1,6 @@
+from snackbase.infrastructure.configuration.providers.oauth.apple import (
+    AppleOAuthHandler,
+)
 from snackbase.infrastructure.configuration.providers.oauth.github import (
     GitHubOAuthHandler,
 )
@@ -16,5 +19,6 @@ __all__ = [
     "GoogleOAuthHandler",
     "GitHubOAuthHandler",
     "MicrosoftOAuthHandler",
+    "AppleOAuthHandler",
 ]
 
