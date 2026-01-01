@@ -116,3 +116,111 @@ async def test_login_wrong_account(client: AsyncClient):
     res = await client.post("/api/v1/auth/login", json=payload)
     assert res.status_code == 401
     assert res.json()["message"] == "Invalid credentials"
+
+
+@pytest.mark.asyncio
+async def test_oauth_user_cannot_login_with_password(client: AsyncClient, db_session: AsyncSession):
+    """Test that OAuth users receive 400 error when attempting password login."""
+    import uuid
+    from snackbase.infrastructure.auth import hash_password
+    from snackbase.infrastructure.persistence.models import AccountModel, RoleModel
+    from snackbase.infrastructure.persistence.repositories import AccountRepository, RoleRepository
+    
+    # Create account
+    account_repo = AccountRepository(db_session)
+    account = AccountModel(
+        id=str(uuid.uuid4()),
+        account_code="OA0001",
+        slug="oauth-test",
+        name="OAuth Test Account",
+    )
+    await account_repo.create(account)
+    
+    # Get admin role
+    role_repo = RoleRepository(db_session)
+    admin_role = await role_repo.get_by_name("admin")
+    
+    # Create OAuth user
+    user = UserModel(
+        id=str(uuid.uuid4()),
+        account_id=account.id,
+        email="oauth@example.com",
+        password_hash=hash_password("random_unknowable_password_12345"),
+        role_id=admin_role.id,
+        is_active=True,
+        auth_provider="oauth",
+        auth_provider_name="google",
+        external_id="google_12345",
+    )
+    db_session.add(user)
+    await db_session.commit()
+    
+    # Attempt login with password
+    payload = {
+        "email": "oauth@example.com",
+        "password": "AnyPassword123!",
+        "account": "oauth-test"
+    }
+    
+    res = await client.post("/api/v1/auth/login", json=payload)
+    assert res.status_code == 400
+    data = res.json()
+    assert data["error"] == "Wrong authentication method"
+    assert "OAuth" in data["message"]
+    assert data["auth_provider"] == "oauth"
+    assert data["provider_name"] == "google"
+    assert "/api/v1/auth/oauth/google/authorize" in data["redirect_url"]
+
+
+@pytest.mark.asyncio
+async def test_saml_user_cannot_login_with_password(client: AsyncClient, db_session: AsyncSession):
+    """Test that SAML users receive 400 error when attempting password login."""
+    import uuid
+    from snackbase.infrastructure.auth import hash_password
+    from snackbase.infrastructure.persistence.models import AccountModel, RoleModel
+    from snackbase.infrastructure.persistence.repositories import AccountRepository, RoleRepository
+    
+    # Create account
+    account_repo = AccountRepository(db_session)
+    account = AccountModel(
+        id=str(uuid.uuid4()),
+        account_code="SA0001",
+        slug="saml-test",
+        name="SAML Test Account",
+    )
+    await account_repo.create(account)
+    
+    # Get admin role
+    role_repo = RoleRepository(db_session)
+    admin_role = await role_repo.get_by_name("admin")
+    
+    # Create SAML user
+    user = UserModel(
+        id=str(uuid.uuid4()),
+        account_id=account.id,
+        email="saml@example.com",
+        password_hash=hash_password("random_unknowable_password_saml"),
+        role_id=admin_role.id,
+        is_active=True,
+        auth_provider="saml",
+        auth_provider_name="okta",
+        external_id="okta_user_123",
+    )
+    db_session.add(user)
+    await db_session.commit()
+    
+    # Attempt login with password
+    payload = {
+        "email": "saml@example.com",
+        "password": "AnyPassword123!",
+        "account": "saml-test"
+    }
+    
+    res = await client.post("/api/v1/auth/login", json=payload)
+    assert res.status_code == 400
+    data = res.json()
+    assert data["error"] == "Wrong authentication method"
+    assert "SAML" in data["message"]
+    assert data["auth_provider"] == "saml"
+    assert data["provider_name"] == "okta"
+    assert "/api/v1/auth/saml/okta/login" in data["redirect_url"]

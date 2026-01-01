@@ -283,11 +283,12 @@ async def login(
     Flow:
     1. Resolve account by slug or ID
     2. Look up user by email in account
-    3. Verify password using timing-safe comparison
-    4. Check if user is active
-    5. Update last_login timestamp
-    6. Generate JWT tokens
-    7. Return response
+    3. Check authentication provider (OAuth/SAML users must use their respective flows)
+    4. Verify password using timing-safe comparison
+    5. Check if user is active
+    6. Update last_login timestamp
+    7. Generate JWT tokens
+    8. Return response
 
     Security:
     - All authentication failures return the same generic 401 message
@@ -333,7 +334,46 @@ async def login(
         verify_password(request.password, DUMMY_PASSWORD_HASH)
         return auth_error
 
-    # 3. Verify password using timing-safe comparison
+    # 3. Check authentication provider
+    # Users with OAuth or SAML must use their respective authentication flows
+    if user.auth_provider != "password":
+        # Still verify password to maintain constant-time behavior (prevent timing attacks)
+        verify_password(request.password, DUMMY_PASSWORD_HASH)
+        
+        logger.info(
+            "Login failed: wrong authentication method",
+            account_id=account.id,
+            user_id=user.id,
+            auth_provider=user.auth_provider,
+            provider_name=user.auth_provider_name,
+        )
+        
+        # Determine the correct authentication URL based on provider type
+        if user.auth_provider == "oauth":
+            provider_name = user.auth_provider_name or "oauth"
+            redirect_url = f"/api/v1/auth/oauth/{provider_name}/authorize"
+            message = f"This account uses OAuth authentication. Please use the OAuth login flow."
+        elif user.auth_provider == "saml":
+            provider_name = user.auth_provider_name or "saml"
+            redirect_url = f"/api/v1/auth/saml/{provider_name}/login"
+            message = f"This account uses SAML authentication. Please use the SAML SSO flow."
+        else:
+            # Unknown provider type - return generic error
+            redirect_url = None
+            message = f"This account uses {user.auth_provider} authentication. Please use the correct login method."
+        
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "error": "Wrong authentication method",
+                "message": message,
+                "auth_provider": user.auth_provider,
+                "provider_name": user.auth_provider_name,
+                "redirect_url": redirect_url,
+            },
+        )
+
+    # 4. Verify password using timing-safe comparison
     if not verify_password(request.password, user.password_hash):
         logger.info(
             "Login failed: invalid password",
@@ -342,7 +382,7 @@ async def login(
         )
         return auth_error
 
-    # 4. Check if user is active
+    # 5. Check if user is active
     if not user.is_active:
         logger.info(
             "Login failed: user inactive",
@@ -365,7 +405,7 @@ async def login(
             content={"error": "Internal error", "message": "Role configuration error"},
         )
 
-    # 5. Update last_login timestamp
+    # 6. Update last_login timestamp
     await user_repo.update_last_login(user.id)
     await session.commit()
 
@@ -379,7 +419,7 @@ async def login(
         email=user.email,
     )
 
-    # 6. Generate JWT tokens
+    # 7. Generate JWT tokens
     access_token = jwt_service.create_access_token(
         user_id=user.id,
         account_id=account.id,
@@ -405,7 +445,7 @@ async def login(
     await refresh_token_repo.create(refresh_token_model)
     await session.commit()
 
-    # 7. Return response
+    # 8. Return response
     return AuthResponse(
         token=access_token,
         refresh_token=refresh_token,
