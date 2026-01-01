@@ -21,6 +21,7 @@ dependencies = [
     "pyjwt>=2.8.0",
     "email-validator>=2.1.0",
     "alembic>=1.17.2",
+    "cryptography>=46.0.3",
 ]
 
 [project.scripts]

@@ -59,6 +59,10 @@ class Settings(BaseSettings):
         default="change-me-in-production-use-openssl-rand-hex-32",
         description="Secret key for JWT token signing",
     )
+    encryption_key: str = Field(
+        default="change-me-in-production-use-openssl-rand-hex-32",
+        description="Secret key for sensitive data encryption at rest",
+    )
     access_token_expire_minutes: int = 60
     refresh_token_expire_days: int = 7
 
