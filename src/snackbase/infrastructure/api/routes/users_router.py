@@ -109,6 +109,11 @@ async def create_user(
         password_hash=hash_password(password),
         role_id=user_data.role_id,
         is_active=user_data.is_active,
+        auth_provider=user_data.auth_provider,
+        auth_provider_name=user_data.auth_provider_name,
+        external_id=user_data.external_id,
+        external_email=user_data.external_email,
+        profile_data=user_data.profile_data,
     )
 
     created_user = await user_repo.create(new_user)
@@ -123,6 +128,11 @@ async def create_user(
         role_id=created_user.role_id,
         role_name=role.name,
         is_active=created_user.is_active,
+        auth_provider=created_user.auth_provider,
+        auth_provider_name=created_user.auth_provider_name,
+        external_id=created_user.external_id,
+        external_email=created_user.external_email,
+        profile_data=created_user.profile_data,
         created_at=created_user.created_at,
         last_login=created_user.last_login,
     )
@@ -176,6 +186,11 @@ async def list_users(
                 role_id=user.role_id,
                 role_name=user.role.name,
                 is_active=user.is_active,
+                auth_provider=user.auth_provider,
+                auth_provider_name=user.auth_provider_name,
+                external_id=user.external_id,
+                external_email=user.external_email,
+                profile_data=user.profile_data,
                 created_at=user.created_at,
                 last_login=user.last_login,
             )
@@ -220,6 +235,11 @@ async def get_user(
         role_id=user.role_id,
         role_name=user.role.name,
         is_active=user.is_active,
+        auth_provider=user.auth_provider,
+        auth_provider_name=user.auth_provider_name,
+        external_id=user.external_id,
+        external_email=user.external_email,
+        profile_data=user.profile_data,
         created_at=user.created_at,
         last_login=user.last_login,
     )
@@ -290,6 +310,18 @@ async def update_user(
     if user_data.is_active is not None:
         user.is_active = user_data.is_active
 
+    # Update auth provider fields if provided
+    if user_data.auth_provider is not None:
+        user.auth_provider = user_data.auth_provider
+    if user_data.auth_provider_name is not None:
+        user.auth_provider_name = user_data.auth_provider_name
+    if user_data.external_id is not None:
+        user.external_id = user_data.external_id
+    if user_data.external_email is not None:
+        user.external_email = user_data.external_email
+    if user_data.profile_data is not None:
+        user.profile_data = user_data.profile_data
+
     updated_user = await user_repo.update(user)
     await session.commit()
 
@@ -305,6 +337,11 @@ async def update_user(
         role_id=updated_user.role_id,
         role_name=updated_user.role.name,
         is_active=updated_user.is_active,
+        auth_provider=updated_user.auth_provider,
+        auth_provider_name=updated_user.auth_provider_name,
+        external_id=updated_user.external_id,
+        external_email=updated_user.external_email,
+        profile_data=updated_user.profile_data,
         created_at=updated_user.created_at,
         last_login=updated_user.last_login,
     )

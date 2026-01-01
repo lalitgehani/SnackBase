@@ -42,6 +42,41 @@ async def test_create_user(client: AsyncClient, superadmin_token: str, db_sessio
 
 
 @pytest.mark.asyncio
+async def test_create_oauth_user(client: AsyncClient, superadmin_token: str, db_session: AsyncSession):
+    """Test creating a new OAuth user."""
+    headers = {"Authorization": f"Bearer {superadmin_token}"}
+
+    # Create an account
+    account_id = str(uuid.uuid4())
+    account = AccountModel(id=account_id, account_code="OA1234", name="OAuth Account", slug="oauth-account")
+    db_session.add(account)
+    await db_session.commit()
+
+    role = (await db_session.execute(select(RoleModel).where(RoleModel.name == "user"))).scalar_one()
+
+    # Create OAuth user
+    payload = {
+        "email": "oauth@example.com",
+        "password": "RandomUnknowablePassword123!",
+        "account_id": account_id,
+        "role_id": role.id,
+        "auth_provider": "oauth",
+        "auth_provider_name": "google",
+        "external_id": "google-123",
+        "external_email": "oauth@gmail.com",
+        "profile_data": {"name": "OAuth User"},
+    }
+    response = await client.post("/api/v1/users", json=payload, headers=headers)
+    assert response.status_code == 201
+    data = response.json()
+    assert data["auth_provider"] == "oauth"
+    assert data["auth_provider_name"] == "google"
+    assert data["external_id"] == "google-123"
+    assert data["external_email"] == "oauth@gmail.com"
+    assert data["profile_data"] == {"name": "OAuth User"}
+
+
+@pytest.mark.asyncio
 async def test_create_user_weak_password(client: AsyncClient, superadmin_token: str, db_session: AsyncSession):
     """Test creating a user with weak password fails."""
     headers = {"Authorization": f"Bearer {superadmin_token}"}

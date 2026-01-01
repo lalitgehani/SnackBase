@@ -12,6 +12,7 @@ SnackBase provides a comprehensive authentication system designed for multi-tena
 - [User Registration](#user-registration)
 - [Login Flow](#login-flow)
 - [Token Management](#token-management)
+- [Multi-Provider Authentication](#multi-provider-authentication)
 - [Multi-Account Users](#multi-account-users)
 - [Security Features](#security-features)
 - [Best Practices](#best-practices)
@@ -22,14 +23,16 @@ SnackBase provides a comprehensive authentication system designed for multi-tena
 
 SnackBase authentication is built for **enterprise multi-account scenarios**:
 
-| Feature | Description |
-|---------|-------------|
-| **Account-Scoped Users** | Users belong to specific accounts |
-| **Multi-Account Support** | Same email can exist in multiple accounts |
-| **Per-Account Passwords** | Different passwords per (email, account) tuple |
-| **JWT Tokens** | Access tokens (1 hour) + Refresh tokens (7 days) |
-| **Token Rotation** | Refresh token rotation on each use |
-| **Timing-Safe Comparison** | Password verification resistant to timing attacks |
+| Feature                    | Description                                           |
+| -------------------------- | ----------------------------------------------------- |
+| **Account-Scoped Users**   | Users belong to specific accounts                     |
+| **Multi-Account Support**  | Same email can exist in multiple accounts             |
+| **Per-Account Passwords**  | Different passwords per (email, account) tuple        |
+| **JWT Tokens**             | Access tokens (1 hour) + Refresh tokens (7 days)      |
+| **Token Rotation**         | Refresh token rotation on each use                    |
+| **Multi-Provider**         | Support for Password, OAuth, and SAML providers       |
+| **Identity Linking**       | Link local accounts with external provider identities |
+| **Timing-Safe Comparison** | Password verification resistant to timing attacks     |
 
 > **Screenshot Placeholder 1**
 >
@@ -93,6 +96,7 @@ In SnackBase, a user's identity is defined by a **tuple**:
 ```
 
 This means:
+
 - `alice@acme.com` in account `AB1001` = User Identity #1
 - `alice@acme.com` in account `XY2048` = User Identity #2
 - These are **different users** with different passwords
@@ -157,6 +161,7 @@ ZZ9999  # Another account
 ```
 
 **Properties:**
+
 - **Format**: 2 letters + 4 digits
 - **Immutable**: Once assigned, never changes
 - **Globally unique**: No two accounts share the same ID
@@ -337,10 +342,10 @@ SnackBase uses **JWT (JSON Web Tokens)** with access and refresh tokens.
 
 ### Token Types
 
-| Token Type | Lifetime | Purpose | Storage |
-|------------|----------|---------|---------|
-| **Access Token** | 1 hour | API requests | localStorage/memory |
-| **Refresh Token** | 7 days | Get new access token | HttpOnly cookie or localStorage |
+| Token Type        | Lifetime | Purpose              | Storage                         |
+| ----------------- | -------- | -------------------- | ------------------------------- |
+| **Access Token**  | 1 hour   | API requests         | localStorage/memory             |
+| **Refresh Token** | 7 days   | Get new access token | HttpOnly cookie or localStorage |
 
 > **Screenshot Placeholder 10**
 >
@@ -350,12 +355,12 @@ SnackBase uses **JWT (JSON Web Tokens)** with access and refresh tokens.
 
 ```json
 {
-  "sub": "user_abc123",           // Subject (user ID)
-  "account_id": "AB1001",         // Account context
-  "email": "alice@acme.com",      // User email
-  "role": "admin",                // User role
-  "exp": 1704067200,              // Expiration timestamp
-  "iat": 1704063600               // Issued at timestamp
+  "sub": "user_abc123", // Subject (user ID)
+  "account_id": "AB1001", // Account context
+  "email": "alice@acme.com", // User email
+  "role": "admin", // User role
+  "exp": 1704067200, // Expiration timestamp
+  "iat": 1704063600 // Issued at timestamp
 }
 ```
 
@@ -433,6 +438,37 @@ Content-Type: application/json
 
 ---
 
+## Multi-Provider Authentication
+
+SnackBase supports multiple authentication providers, allowing users to log in using traditional passwords or external identity providers like Google, GitHub, or Enterprise SAML.
+
+### Supported Providers
+
+| Provider Type | Description                                         |
+| ------------- | --------------------------------------------------- |
+| **password**  | Traditional email/password authentication (Default) |
+| **oauth**     | Social login via OAuth 2.0 / OpenID Connect         |
+| **saml**      | Enterprise Single Sign-On (SSO)                     |
+
+### Tracking Provider Data
+
+For every user, SnackBase tracks the following provider-specific information:
+
+- `auth_provider`: The type of provider used (`password`, `oauth`, `saml`).
+- `auth_provider_name`: Specific name (e.g., 'google', 'github', 'okta').
+- `external_id`: Unique user ID provided by the external identity provider.
+- `external_email`: User's email from the external provider (may differ from registration email).
+- `profile_data`: Arbitrary JSON data from the provider (name, avatar URL, etc.).
+
+### Password Policy with External Providers
+
+When a user registers via an external provider (OAuth/SAML), a random, unknowable password hash is still generated. This ensures that:
+
+1.  The `password_hash` column remains `NOT NULL` for database consistency.
+2.  The user can only authenticate via the external provider unless a manual password reset is performed by a superadmin.
+
+---
+
 ## Multi-Account Users
 
 SnackBase supports **enterprise multi-account scenarios** where users can belong to multiple accounts.
@@ -451,6 +487,7 @@ SnackBase supports **enterprise multi-account scenarios** where users can belong
 ```
 
 **Key Points:**
+
 - Same email can exist in multiple accounts
 - Each `(email, account_id)` tuple has a unique password
 - Users must specify account when logging in
@@ -464,6 +501,7 @@ SnackBase supports **enterprise multi-account scenarios** where users can belong
 When logging in, users must specify which account they're accessing:
 
 **Option 1: Account in URL (subdomain)**
+
 ```
 POST https://acme-corp.snackbase.com/api/v1/auth/login
 {
@@ -473,6 +511,7 @@ POST https://acme-corp.snackbase.com/api/v1/auth/login
 ```
 
 **Option 2: Account in Request Body**
+
 ```
 POST https://snackbase.com/api/v1/auth/login
 {
@@ -556,13 +595,13 @@ is_valid = hasher.verify(password_hash, "SecurePass123!")
 
 Default password requirements (configurable):
 
-| Requirement | Minimum |
-|-------------|---------|
-| Length | 8 characters |
-| Uppercase | 1 character |
-| Lowercase | 1 character |
-| Number | 1 digit |
-| Special character | 1 character |
+| Requirement       | Minimum      |
+| ----------------- | ------------ |
+| Length            | 8 characters |
+| Uppercase         | 1 character  |
+| Lowercase         | 1 character  |
+| Number            | 1 digit      |
+| Special character | 1 character  |
 
 > **Screenshot Placeholder 18**
 >
@@ -570,10 +609,10 @@ Default password requirements (configurable):
 
 ### Token Expiration
 
-| Token Type | Default Lifetime | Configurable Via |
-|------------|------------------|------------------|
-| Access Token | 1 hour | `SNACKBASE_ACCESS_TOKEN_EXPIRE_MINUTES` |
-| Refresh Token | 7 days | `SNACKBASE_REFRESH_TOKEN_EXPIRE_DAYS` |
+| Token Type    | Default Lifetime | Configurable Via                        |
+| ------------- | ---------------- | --------------------------------------- |
+| Access Token  | 1 hour           | `SNACKBASE_ACCESS_TOKEN_EXPIRE_MINUTES` |
+| Refresh Token | 7 days           | `SNACKBASE_REFRESH_TOKEN_EXPIRE_DAYS`   |
 
 > **Screenshot Placeholder 19**
 >
@@ -605,15 +644,16 @@ SnackBase tracks failed login attempts and can implement rate limiting (future f
 ### 1. Token Storage
 
 **For Web Applications:**
+
 ```javascript
 // ✅ Recommended: HttpOnly cookies
 // Set-Cookie: refresh_token=<token>; HttpOnly; Secure; SameSite=Strict
 
 // ⚠️ Acceptable: localStorage for access token only
-localStorage.setItem('access_token', token);
+localStorage.setItem("access_token", token);
 
 // ❌ Avoid: localStorage for refresh tokens
-localStorage.setItem('refresh_token', token);  // Vulnerable to XSS
+localStorage.setItem("refresh_token", token); // Vulnerable to XSS
 ```
 
 > **Screenshot Placeholder 21**
@@ -645,8 +685,8 @@ if (expiresAt - now < refreshBefore) {
 ```javascript
 // Axios interceptor for automatic token refresh
 axios.interceptors.response.use(
-  response => response,
-  async error => {
+  (response) => response,
+  async (error) => {
     if (error.response?.status === 401) {
       // Access token expired
       try {
@@ -655,7 +695,7 @@ axios.interceptors.response.use(
         return axios.request(error.config);
       } catch {
         // Refresh token expired - redirect to login
-        window.location.href = '/login';
+        window.location.href = "/login";
       }
     }
     return Promise.reject(error);
@@ -672,14 +712,14 @@ axios.interceptors.response.use(
 ```javascript
 async function logout() {
   // Clear tokens from storage
-  localStorage.removeItem('access_token');
-  localStorage.removeItem('refresh_token');
+  localStorage.removeItem("access_token");
+  localStorage.removeItem("refresh_token");
 
   // Optional: Call backend logout endpoint
-  await axios.post('/api/v1/auth/logout');
+  await axios.post("/api/v1/auth/logout");
 
   // Redirect to login
-  window.location.href = '/login';
+  window.location.href = "/login";
 }
 ```
 
@@ -707,15 +747,15 @@ https://yourdomain.com
 
 ## Summary
 
-| Concept | Key Takeaway |
-|---------|--------------|
-| **User Identity** | Defined by `(email, account_id)` tuple |
-| **Account Registration** | Creates new tenant with auto-generated `XX####` ID |
-| **User Registration** | Creates user within specific account, email unique per account |
-| **Login Flow** | Resolve account → Find user → Verify password → Issue JWT tokens |
-| **Token Management** | Access token (1 hour) + Refresh token (7 days) with rotation |
-| **Multi-Account Users** | Same email can exist in multiple accounts with different passwords |
-| **Security** | Argon2id hashing, timing-safe comparison, HTTPS required in production |
+| Concept                  | Key Takeaway                                                           |
+| ------------------------ | ---------------------------------------------------------------------- |
+| **User Identity**        | Defined by `(email, account_id)` tuple                                 |
+| **Account Registration** | Creates new tenant with auto-generated `XX####` ID                     |
+| **User Registration**    | Creates user within specific account, email unique per account         |
+| **Login Flow**           | Resolve account → Find user → Verify password → Issue JWT tokens       |
+| **Token Management**     | Access token (1 hour) + Refresh token (7 days) with rotation           |
+| **Multi-Account Users**  | Same email can exist in multiple accounts with different passwords     |
+| **Security**             | Argon2id hashing, timing-safe comparison, HTTPS required in production |
 
 ---
 

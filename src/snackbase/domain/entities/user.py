@@ -5,7 +5,7 @@ Each user has a role that defines their permissions within the account.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 @dataclass
@@ -22,6 +22,11 @@ class User:
         password_hash: Hashed password (never store plaintext).
         role_id: Foreign key to the user's role.
         is_active: Whether the user can log in.
+        auth_provider: Authentication provider type ('password', 'oauth', 'saml').
+        auth_provider_name: Specific provider name (e.g., 'google', 'github').
+        external_id: External provider's user ID for identity linking.
+        external_email: Email from external provider (may differ from local email).
+        profile_data: Additional profile data from external provider.
         created_at: Timestamp when the user was created.
         updated_at: Timestamp when the user was last updated.
         last_login: Timestamp of last successful login (nullable).
@@ -33,8 +38,13 @@ class User:
     password_hash: str
     role_id: int
     is_active: bool = True
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    auth_provider: str = "password"
+    auth_provider_name: str | None = None
+    external_id: str | None = None
+    external_email: str | None = None
+    profile_data: dict | None = None
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     last_login: datetime | None = None
 
     def __post_init__(self) -> None:
@@ -47,3 +57,7 @@ class User:
             raise ValueError("Email is required")
         if not self.password_hash:
             raise ValueError("Password hash is required")
+        
+        valid_providers = {"password", "oauth", "saml"}
+        if self.auth_provider not in valid_providers:
+            raise ValueError(f"Invalid auth_provider. Must be one of {valid_providers}")

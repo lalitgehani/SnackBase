@@ -102,7 +102,7 @@ async def test_audit_capture_create(db_session: AsyncSession):
     for log in audit_logs:
         assert log.operation == "CREATE"
         assert log.old_value is None  # CREATE should have NULL old_value
-        assert log.new_value is not None or log.column_name in ["last_login"]  # Some fields may be NULL
+        assert log.new_value is not None or log.column_name in ["last_login", "auth_provider_name", "external_id", "external_email", "profile_data"]  # Some fields may be NULL
         assert log.user_id == "admin-123"
         assert log.user_email == "admin@example.com"
         assert log.user_name == "Admin User"
@@ -287,7 +287,7 @@ async def test_audit_capture_delete(db_session: AsyncSession):
     # Check that all audit logs have correct operation
     for log in audit_logs:
         assert log.operation == "DELETE"
-        assert log.old_value is not None or log.column_name in ["last_login"]  # Some fields may be NULL
+        assert log.old_value is not None or log.column_name in ["last_login", "auth_provider_name", "external_id", "external_email", "profile_data"]  # Some fields may be NULL
         assert log.new_value is None  # DELETE should have NULL new_value
         assert log.user_id == "admin-789"
 

@@ -25,6 +25,11 @@ class UserCreateRequest(BaseModel):
     )
     role_id: int = Field(..., ge=1, description="Role ID (must exist)")
     is_active: bool = Field(True, description="Whether the user can log in")
+    auth_provider: str = Field("password", description="Authentication provider type ('password', 'oauth', 'saml')")
+    auth_provider_name: str | None = Field(None, description="Specific provider name (e.g., 'google', 'github')")
+    external_id: str | None = Field(None, description="External provider's user ID")
+    external_email: str | None = Field(None, description="Email from external provider")
+    profile_data: dict | None = Field(None, description="Additional profile data from external provider")
 
     @field_validator("password")
     @classmethod
@@ -50,6 +55,11 @@ class UserUpdateRequest(BaseModel):
     email: EmailStr | None = Field(None, description="User's email address")
     role_id: int | None = Field(None, ge=1, description="Role ID (must exist)")
     is_active: bool | None = Field(None, description="Whether the user can log in")
+    auth_provider: str | None = Field(None, description="Authentication provider type ('password', 'oauth', 'saml')")
+    auth_provider_name: str | None = Field(None, description="Specific provider name (e.g., 'google', 'github')")
+    external_id: str | None = Field(None, description="External provider's user ID")
+    external_email: str | None = Field(None, description="Email from external provider")
+    profile_data: dict | None = Field(None, description="Additional profile data from external provider")
 
 
 class PasswordResetRequest(BaseModel):
@@ -88,6 +98,11 @@ class UserResponse(BaseModel):
     role_id: int = Field(..., description="Role ID")
     role_name: str = Field(..., description="Role name")
     is_active: bool = Field(..., description="Whether the user can log in")
+    auth_provider: str = Field(..., description="Authentication provider type ('password', 'oauth', 'saml')")
+    auth_provider_name: str | None = Field(None, description="Specific provider name (e.g., 'google', 'github')")
+    external_id: str | None = Field(None, description="External provider's user ID")
+    external_email: str | None = Field(None, description="Email from external provider")
+    profile_data: dict | None = Field(None, description="Additional profile data from external provider")
     created_at: datetime = Field(..., description="When the user was created")
     last_login: datetime | None = Field(None, description="Last successful login")
 
@@ -108,6 +123,11 @@ class UserListItem(BaseModel):
     role_id: int = Field(..., description="Role ID")
     role_name: str = Field(..., description="Role name")
     is_active: bool = Field(..., description="Whether the user can log in")
+    auth_provider: str = Field(..., description="Authentication provider type ('password', 'oauth', 'saml')")
+    auth_provider_name: str | None = Field(None, description="Specific provider name (e.g., 'google', 'github')")
+    external_id: str | None = Field(None, description="External provider's user ID")
+    external_email: str | None = Field(None, description="Email from external provider")
+    profile_data: dict | None = Field(None, description="Additional profile data from external provider")
     created_at: datetime = Field(..., description="When the user was created")
     last_login: datetime | None = Field(None, description="Last successful login")
 

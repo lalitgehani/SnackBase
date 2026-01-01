@@ -6,6 +6,7 @@ Users belong to accounts and are uniquely identified by (account_id, email).
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, UniqueConstraint, func
+from sqlalchemy.dialects.sqlite import JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from snackbase.infrastructure.persistence.database import Base
@@ -24,6 +25,11 @@ class UserModel(Base):
         password_hash: Hashed password.
         role_id: Foreign key to roles table.
         is_active: Whether the user can log in.
+        auth_provider: Authentication provider type ('password', 'oauth', 'saml').
+        auth_provider_name: Specific provider name (e.g., 'google', 'github').
+        external_id: External provider's user ID for identity linking.
+        external_email: Email from external provider (may differ from local email).
+        profile_data: Additional profile data from external provider (JSON).
         created_at: Timestamp when the user was created.
         updated_at: Timestamp when the user was last updated.
         last_login: Timestamp of last successful login.
@@ -81,6 +87,32 @@ class UserModel(Base):
         DateTime,
         nullable=True,
         comment="Timestamp of last successful login",
+    )
+    auth_provider: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        server_default="password",
+        comment="Authentication provider type ('password', 'oauth', 'saml')",
+    )
+    auth_provider_name: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+        comment="Specific provider name (e.g., 'google', 'github', 'microsoft')",
+    )
+    external_id: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
+        comment="External provider's user ID for identity linking",
+    )
+    external_email: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        comment="Email address from external provider (may differ from local email)",
+    )
+    profile_data: Mapped[dict | None] = mapped_column(
+        JSON,
+        nullable=True,
+        comment="Additional profile data from external provider",
     )
 
     # Relationships
@@ -141,6 +173,9 @@ class UserModel(Base):
         # Unique constraint on (account_id, email)
         UniqueConstraint("account_id", "email", name="uq_users_account_email"),
         Index("ix_users_account_email", "account_id", "email"),
+        # Indexes for authentication provider tracking
+        Index("ix_users_auth_provider", "auth_provider"),
+        Index("ix_users_auth_provider_name_external_id", "auth_provider_name", "external_id"),
     )
 
     def __repr__(self) -> str:
