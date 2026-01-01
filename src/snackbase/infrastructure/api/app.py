@@ -74,6 +74,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         GoogleOAuthHandler,
         MicrosoftOAuthHandler,
     )
+    from snackbase.infrastructure.configuration.providers.saml import (
+        AzureADSAMLProvider,
+        OktaSAMLProvider,
+    )
     from snackbase.infrastructure.persistence.database import get_db_session
     from snackbase.infrastructure.persistence.repositories import ConfigurationRepository
     from snackbase.infrastructure.security.encryption import EncryptionService
@@ -139,6 +143,28 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 config_schema=apple_oauth_handler.config_schema,
                 is_builtin=True,
             )
+
+            # Register Okta SAML provider
+            okta_saml_provider = OktaSAMLProvider()
+            config_registry.register_provider_definition(
+                category="saml_providers",
+                name=okta_saml_provider.provider_name,
+                display_name=okta_saml_provider.display_name,
+                logo_url=okta_saml_provider.logo_url,
+                config_schema=okta_saml_provider.config_schema,
+                is_builtin=True,
+            )
+
+            # Register Azure AD SAML provider
+            azure_ad_provider = AzureADSAMLProvider()
+            config_registry.register_provider_definition(
+                category="saml_providers",
+                name=azure_ad_provider.provider_name,
+                display_name=azure_ad_provider.display_name,
+                logo_url=azure_ad_provider.logo_url,
+                config_schema=azure_ad_provider.config_schema,
+                is_builtin=True,
+            )
             
             # Store registry on app state for later use
             app.state.config_registry = config_registry
@@ -151,6 +177,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                     github_oauth_handler.provider_name,
                     microsoft_oauth_handler.provider_name,
                     apple_oauth_handler.provider_name,
+                    okta_saml_provider.provider_name,
+                    azure_ad_provider.provider_name,
                 ],
             )
             break
