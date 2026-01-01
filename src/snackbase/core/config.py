@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     environment: Literal["development", "production", "testing"] = "development"
     debug: bool = False
     api_prefix: str = "/api/v1"
+    external_url: str = "http://localhost:8000"
 
     # Server Settings
     host: str = "0.0.0.0"

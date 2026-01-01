@@ -102,3 +102,21 @@ class TokenRefreshResponse(BaseModel):
     refresh_token: str = Field(..., description="New JWT refresh token")
     expires_in: int = Field(..., description="Access token expiration time in seconds")
 
+
+class OAuthAuthorizeRequest(BaseModel):
+    """Request body for starting an OAuth flow."""
+
+    account: str | None = Field(None, description="Account identifier (slug or ID)")
+    redirect_uri: str = Field(..., description="URI to redirect to after OAuth completion")
+    state: str | None = Field(
+        None, description="Optional state for CSRF (auto-generated if missing)"
+    )
+
+
+class OAuthAuthorizeResponse(BaseModel):
+    """Response for OAuth authorization initiation."""
+
+    authorization_url: str = Field(..., description="URL to redirect the user to")
+    state: str = Field(..., description="The state token used for this flow")
+    provider: str = Field(..., description="The provider name")
+

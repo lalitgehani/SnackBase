@@ -362,6 +362,7 @@ def register_routes(app: FastAPI) -> None:
         roles_router,
         users_router,
         audit_log_router,
+        oauth_router,
     )
 
     settings = get_settings()
@@ -369,6 +370,9 @@ def register_routes(app: FastAPI) -> None:
     # API v1 routes
     # Register auth routes
     app.include_router(auth_router, prefix=f"{settings.api_prefix}/auth", tags=["auth"])
+
+    # Register OAuth routes
+    app.include_router(oauth_router, prefix=f"{settings.api_prefix}/auth/oauth", tags=["auth"])
 
     # Register collections routes
     app.include_router(

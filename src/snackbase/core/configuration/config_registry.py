@@ -39,7 +39,7 @@ class ConfigurationRegistry:
     (account-level override -> system-level fallback) with caching.
     """
 
-    SYSTEM_ACCOUNT_ID = "SY0000"
+    SYSTEM_ACCOUNT_ID = "00000000-0000-0000-0000-000000000000"
     CACHE_TTL = 300  # 5 minutes in seconds
 
     def __init__(
