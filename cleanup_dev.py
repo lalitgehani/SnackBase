@@ -31,9 +31,10 @@ def confirm_cleanup(skip_confirm: bool = False) -> bool:
     print("\nThe following will be removed:")
     print("  - All uploaded files (sb_data/files/)")
     print("  - All dynamic migrations (sb_data/migrations/)")
-    print("  - Database file (snackbase.db)")
+    print("  - Database files (sb_data/snackbase.db + WAL/SHM)")
     print("  - Security test reports (tests/security-reports/)")
     print("\nThis action cannot be undone!")
+
     
     response = input("\nAre you sure you want to continue? (yes/no): ").strip().lower()
     return response in ['yes', 'y']
@@ -90,7 +91,9 @@ Examples:
     # Define paths to clean
     files_dir = project_root / "sb_data" / "files"
     migrations_dir = project_root / "sb_data" / "migrations"
-    db_file = project_root / "snackbase.db"
+    db_file = project_root / "sb_data" / "snackbase.db"
+    db_wal_file = project_root / "sb_data" / "snackbase.db-wal"
+    db_shm_file = project_root / "sb_data" / "snackbase.db-shm"
     security_reports_dir = project_root / "tests" / "security-reports"
     
     print("=" * 60)
@@ -114,8 +117,10 @@ Examples:
     # Clean dynamic migrations
     cleanup_directory(migrations_dir, "Dynamic migrations directory")
     
-    # Clean database file
+    # Clean database files (main DB + WAL + SHM)
     cleanup_file(db_file, "Database file")
+    cleanup_file(db_wal_file, "Database WAL file")
+    cleanup_file(db_shm_file, "Database SHM file")
     
     # Clean security reports
     cleanup_directory(security_reports_dir, "Security test reports directory")

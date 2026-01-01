@@ -49,11 +49,12 @@ class TestAccountCodeGeneratorIntegration:
         await repo.create(account2)
         await db_session.commit()
 
-        # Verify both accounts exist
+        # Verify both accounts exist (plus system account SY0000 from migration)
         existing_codes = await repo.get_all_account_codes()
-        assert len(existing_codes) == 2
+        assert len(existing_codes) == 3  # AA0001, AA0002, SY0000
         assert "AA0001" in existing_codes
         assert "AA0002" in existing_codes
+        assert "SY0000" in existing_codes
 
     async def test_concurrent_account_creation(self, db_session: AsyncSession):
         """Test that concurrent account creation doesn't produce duplicates.
@@ -118,7 +119,7 @@ class TestAccountCodeGeneratorIntegration:
 
         # Simulate application restart - fetch all account codes from database
         existing_codes = await repo.get_all_account_codes()
-        assert len(existing_codes) == 3
+        assert len(existing_codes) == 4  # 3 test accounts + SY0000 from migration
 
         # Generate new code (should continue from highest: AB0001 -> AB0002)
         new_code = AccountCodeGenerator.generate(existing_codes)
@@ -136,7 +137,7 @@ class TestAccountCodeGeneratorIntegration:
 
         # Verify total accounts
         all_codes = await repo.get_all_account_codes()
-        assert len(all_codes) == 4
+        assert len(all_codes) == 5  # 4 test accounts + SY0000 from migration
         assert new_code in all_codes
 
     async def test_collision_handling_with_database(self, db_session: AsyncSession):

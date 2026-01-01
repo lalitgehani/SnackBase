@@ -185,14 +185,23 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
 @pytest_asyncio.fixture
 async def superadmin_token(db_session: AsyncSession) -> str:
     """Create a superadmin user and return their access token."""
-    # Create valid account
-    account = AccountModel(
-        id="00000000-0000-0000-0000-000000000000",
-        account_code="SY0000",
-        name="System Admin",
-        slug="system-admin"
+    # Get or create system account (SY0000)
+    # The migration creates this account, but we handle the case where it doesn't exist
+    result = await db_session.execute(
+        select(AccountModel).where(AccountModel.account_code == "SY0000")
     )
-    db_session.add(account)
+    account = result.scalar_one_or_none()
+    
+    if account is None:
+        # Create system account if it doesn't exist (e.g., if migration hasn't run)
+        account = AccountModel(
+            id="00000000-0000-0000-0000-000000000000",
+            account_code="SY0000",
+            name="System Account",
+            slug="system"
+        )
+        db_session.add(account)
+        await db_session.flush()
     
     # Get admin role
     admin_role = (await db_session.execute(select(RoleModel).where(RoleModel.name == "admin"))).scalar_one()
@@ -201,7 +210,7 @@ async def superadmin_token(db_session: AsyncSession) -> str:
     user = UserModel(
         id="superadmin",
         email="superadmin@snackbase.com",
-        account_id="00000000-0000-0000-0000-000000000000",
+        account_id=account.id,
         password_hash="hashed_secret",
         role=admin_role,
         is_active=True,

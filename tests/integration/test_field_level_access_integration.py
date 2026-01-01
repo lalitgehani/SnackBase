@@ -32,18 +32,25 @@ async def test_account_and_users(db_session: AsyncSession):
     )
     await account_repo.create(account)
 
-    # Create system account (required for superadmin)
-    system_account = AccountModel(
-        id=SYSTEM_ACCOUNT_ID,
-        account_code="SY0000",
-        slug="system",
-        name="System Account",
+    # Get or create system account (migration may have already created it)
+    from sqlalchemy import select
+    result = await db_session.execute(
+        select(AccountModel).where(AccountModel.account_code == "SY0000")
     )
-    await account_repo.create(system_account)
+    system_account = result.scalar_one_or_none()
+    
+    if system_account is None:
+        # Create system account if it doesn't exist
+        system_account = AccountModel(
+            id=SYSTEM_ACCOUNT_ID,
+            account_code="SY0000",
+            slug="system",
+            name="System Account",
+        )
+        await account_repo.create(system_account)
 
     
     # Get roles (seeded in conftest)
-    from sqlalchemy import select
     from snackbase.infrastructure.persistence.models import RoleModel
     result = await db_session.execute(select(RoleModel).where(RoleModel.name == "admin"))
     admin_role = result.scalar_one()

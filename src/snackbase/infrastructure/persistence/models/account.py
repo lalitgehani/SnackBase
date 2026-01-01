@@ -82,6 +82,13 @@ class AccountModel(Base):
         back_populates="account",
         cascade="all, delete-orphan",
     )
+    configurations: Mapped[list["ConfigurationModel"]] = relationship(  # noqa: F821
+        "ConfigurationModel",
+        back_populates="account",
+        cascade="all, delete-orphan",
+    )
+
+
 
     __table_args__ = (
         # Validate account_code format: 2 uppercase letters + 4 digits
