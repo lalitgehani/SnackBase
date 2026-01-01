@@ -131,6 +131,7 @@ export const FIELD_TYPES = [
   { value: 'url', label: 'URL' },
   { value: 'json', label: 'JSON' },
   { value: 'reference', label: 'Reference' },
+  { value: 'file', label: 'File' },
 ] as const;
 
 /**

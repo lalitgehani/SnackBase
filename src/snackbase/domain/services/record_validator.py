@@ -1,7 +1,7 @@
 """Record validation service for validating record data against collection schemas.
 
-Provides validation for record data against collection field definitions.
-Supports field types: text, number, boolean, datetime, email, url, json, reference.
+Provides validation for record data, ensuring it conforms to the collection schema.
+Supports field types: text, number, boolean, datetime, email, url, json, reference, file.
 """
 
 import json
@@ -177,6 +177,71 @@ class RecordValidator:
         return None
 
     @classmethod
+    def validate_file(cls, value: Any, field_name: str) -> RecordValidationError | None:
+        """Validate a file field value.
+
+        File fields should contain JSON metadata with: filename, size, mime_type, path.
+        """
+        if not isinstance(value, (dict, str)):
+            return RecordValidationError(
+                field=field_name,
+                message=f"Expected file metadata (dict or JSON string), got {type(value).__name__}",
+                code="invalid_type",
+            )
+
+        # If string, try to parse as JSON
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except json.JSONDecodeError:
+                return RecordValidationError(
+                    field=field_name,
+                    message="Invalid file metadata: must be valid JSON",
+                    code="invalid_json",
+                )
+
+        # Validate required fields in file metadata
+        required_fields = {"filename", "size", "mime_type", "path"}
+        missing_fields = required_fields - set(value.keys())
+        if missing_fields:
+            return RecordValidationError(
+                field=field_name,
+                message=f"File metadata missing required fields: {', '.join(missing_fields)}",
+                code="missing_file_metadata",
+            )
+
+        # Validate field types
+        if not isinstance(value.get("filename"), str):
+            return RecordValidationError(
+                field=field_name,
+                message="File metadata 'filename' must be a string",
+                code="invalid_file_metadata",
+            )
+
+        if not isinstance(value.get("size"), int):
+            return RecordValidationError(
+                field=field_name,
+                message="File metadata 'size' must be an integer",
+                code="invalid_file_metadata",
+            )
+
+        if not isinstance(value.get("mime_type"), str):
+            return RecordValidationError(
+                field=field_name,
+                message="File metadata 'mime_type' must be a string",
+                code="invalid_file_metadata",
+            )
+
+        if not isinstance(value.get("path"), str):
+            return RecordValidationError(
+                field=field_name,
+                message="File metadata 'path' must be a string",
+                code="invalid_file_metadata",
+            )
+
+        return None
+
+    @classmethod
     def validate_field_value(
         cls, value: Any, field_type: str, field_name: str
     ) -> RecordValidationError | None:
@@ -199,6 +264,7 @@ class RecordValidator:
             FieldType.URL.value: cls.validate_url,
             FieldType.JSON.value: cls.validate_json,
             FieldType.REFERENCE.value: cls.validate_reference,
+            FieldType.FILE.value: cls.validate_file,
         }
 
         validator = validators.get(field_type.lower())
@@ -273,7 +339,11 @@ class RecordValidator:
                     if error:
                         errors.append(error)
                     else:
-                        processed_data[field_name] = value
+                        # For file fields, convert dict to JSON string for storage
+                        if field_type == FieldType.FILE.value and isinstance(value, dict):
+                            processed_data[field_name] = json.dumps(value)
+                        else:
+                            processed_data[field_name] = value
             elif not partial:
                 # Field missing - apply defaults or check required ONLY if not partial update
                 if is_required:

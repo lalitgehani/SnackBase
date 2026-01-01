@@ -83,6 +83,10 @@ from snackbase.infrastructure.api.schemas.migration_query_schemas import (
     MigrationListResponse,
     MigrationRevisionResponse,
 )
+from snackbase.infrastructure.api.schemas.file_schemas import (
+    FileMetadataResponse,
+    FileUploadResponse,
+)
 
 __all__ = [
     "AccountDetailResponse",
@@ -108,6 +112,8 @@ __all__ = [
     "CurrentRevisionResponse",
     "DashboardStats",
     "FieldDefinition",
+    "FileMetadataResponse",
+    "FileUploadResponse",
     "GetCollectionsParams",
     "InvitationAcceptRequest",
     "InvitationCreateRequest",

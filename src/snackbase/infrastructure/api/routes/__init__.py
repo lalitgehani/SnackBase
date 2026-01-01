@@ -4,6 +4,7 @@ from snackbase.infrastructure.api.routes.auth_router import router as auth_route
 from .accounts_router import router as accounts_router
 from .collections_router import router as collections_router
 from .dashboard_router import router as dashboard_router
+from .files_router import router as files_router
 from .groups_router import router as groups_router
 from .invitations_router import router as invitations_router
 from .macros_router import router as macros_router
@@ -19,6 +20,7 @@ __all__ = [
     "auth_router",
     "collections_router",
     "dashboard_router",
+    "files_router",
     "groups_router",
     "invitations_router",
     "macros_router",

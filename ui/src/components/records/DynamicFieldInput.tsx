@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import type { FieldDefinition } from '@/services/collections.service';
 import type { RecordData } from '@/types/records.types';
 import { isoToDatetimeLocal, datetimeLocalToIso } from '@/lib/form-helpers';
+import FileUploadInput from './FileUploadInput';
 
 interface DynamicFieldInputProps {
 	field: FieldDefinition;
@@ -170,6 +171,17 @@ export default function DynamicFieldInput({
 					</Select>
 				);
 
+			case 'file':
+				// File upload with drag-and-drop support
+				return (
+					<FileUploadInput
+						value={value}
+						onChange={onChange}
+						disabled={disabled}
+						fieldName={field.name}
+					/>
+				);
+
 			default:
 				return (
 					<Input
@@ -196,6 +208,7 @@ export default function DynamicFieldInput({
 			url: 'URL',
 			json: 'JSON',
 			reference: `Reference to ${field.collection}`,
+			file: 'File',
 		};
 		return typeLabels[field.type] || field.type;
 	};
