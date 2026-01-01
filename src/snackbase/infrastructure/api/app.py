@@ -404,6 +404,7 @@ def register_routes(app: FastAPI) -> None:
         users_router,
         audit_log_router,
         oauth_router,
+        saml_router,
     )
 
     settings = get_settings()
@@ -414,6 +415,9 @@ def register_routes(app: FastAPI) -> None:
 
     # Register OAuth routes
     app.include_router(oauth_router, prefix=f"{settings.api_prefix}/auth/oauth", tags=["auth"])
+
+    # Register SAML routes
+    app.include_router(saml_router, prefix=f"{settings.api_prefix}/auth/saml", tags=["auth"])
 
     # Register collections routes
     app.include_router(

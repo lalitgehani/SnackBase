@@ -15,6 +15,7 @@ from .roles_router import router as roles_router
 from .users_router import router as users_router
 from .audit_log_router import router as audit_log_router
 from .oauth_router import router as oauth_router
+from .saml_router import router as saml_router
 
 __all__ = [
     "accounts_router",
@@ -32,5 +33,6 @@ __all__ = [
     "users_router",
     "audit_log_router",
     "oauth_router",
+    "saml_router",
 ]
 
