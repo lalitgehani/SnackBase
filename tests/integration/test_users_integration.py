@@ -43,7 +43,7 @@ async def test_create_user(client: AsyncClient, superadmin_token: str, db_sessio
 
 @pytest.mark.asyncio
 async def test_create_oauth_user(client: AsyncClient, superadmin_token: str, db_session: AsyncSession):
-    """Test creating a new OAuth user."""
+    """Test creating a new OAuth user without providing a password."""
     headers = {"Authorization": f"Bearer {superadmin_token}"}
 
     # Create an account
@@ -54,10 +54,9 @@ async def test_create_oauth_user(client: AsyncClient, superadmin_token: str, db_
 
     role = (await db_session.execute(select(RoleModel).where(RoleModel.name == "user"))).scalar_one()
 
-    # Create OAuth user
+    # Create OAuth user without password (will be auto-generated)
     payload = {
         "email": "oauth@example.com",
-        "password": "RandomUnknowablePassword123!",
         "account_id": account_id,
         "role_id": role.id,
         "auth_provider": "oauth",
@@ -74,6 +73,61 @@ async def test_create_oauth_user(client: AsyncClient, superadmin_token: str, db_
     assert data["external_id"] == "google-123"
     assert data["external_email"] == "oauth@gmail.com"
     assert data["profile_data"] == {"name": "OAuth User"}
+
+    # Verify password_hash is populated in database
+    user = await db_session.get(UserModel, data["id"])
+    assert user is not None
+    assert user.password_hash is not None
+    assert user.password_hash.startswith("$argon2id$")
+
+
+@pytest.mark.asyncio
+async def test_create_oauth_user_with_random_password(
+    client: AsyncClient, superadmin_token: str, db_session: AsyncSession
+):
+    """Test that OAuth user creation auto-generates a random password."""
+    headers = {"Authorization": f"Bearer {superadmin_token}"}
+
+    # Create an account
+    account_id = str(uuid.uuid4())
+    account = AccountModel(id=account_id, account_code="OA1235", name="OAuth Account 2", slug="oauth-account-2")
+    db_session.add(account)
+    await db_session.commit()
+
+    role = (await db_session.execute(select(RoleModel).where(RoleModel.name == "user"))).scalar_one()
+
+    # Create OAuth user without password
+    payload = {
+        "email": "oauth2@example.com",
+        "account_id": account_id,
+        "role_id": role.id,
+        "auth_provider": "oauth",
+        "auth_provider_name": "github",
+        "external_id": "github-456",
+    }
+    response = await client.post("/api/v1/users", json=payload, headers=headers)
+    assert response.status_code == 201
+    user_id = response.json()["id"]
+
+    # Retrieve user from database
+    user = await db_session.get(UserModel, user_id)
+    assert user is not None
+    
+    # Verify password_hash is not NULL
+    assert user.password_hash is not None
+    
+    # Verify password_hash is a valid Argon2 hash
+    assert user.password_hash.startswith("$argon2id$")
+    assert len(user.password_hash) > 50
+    
+    # Verify user cannot authenticate with a guessed password
+    from snackbase.infrastructure.auth import verify_password
+    assert verify_password("password123", user.password_hash) is False
+    assert verify_password("random_password", user.password_hash) is False
+    
+    # Verify auth provider is set correctly
+    assert user.auth_provider == "oauth"
+    assert user.auth_provider_name == "github"
 
 
 @pytest.mark.asyncio

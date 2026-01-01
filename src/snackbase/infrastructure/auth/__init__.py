@@ -13,6 +13,7 @@ from snackbase.infrastructure.auth.jwt_service import (
 )
 from snackbase.infrastructure.auth.password_hasher import (
     DUMMY_PASSWORD_HASH,
+    generate_random_password,
     hash_password,
     needs_rehash,
     verify_password,
@@ -24,6 +25,7 @@ __all__ = [
     "JWTError",
     "JWTService",
     "TokenExpiredError",
+    "generate_random_password",
     "hash_password",
     "jwt_service",
     "needs_rehash",

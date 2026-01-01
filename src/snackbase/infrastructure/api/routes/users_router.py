@@ -25,7 +25,7 @@ from snackbase.infrastructure.api.schemas.users_schemas import (
     UserResponse,
     UserUpdateRequest,
 )
-from snackbase.infrastructure.auth import hash_password
+from snackbase.infrastructure.auth import generate_random_password, hash_password
 from snackbase.infrastructure.persistence.models import AccountModel, RoleModel, UserModel
 from snackbase.infrastructure.persistence.repositories.user_repository import UserRepository
 
@@ -57,26 +57,44 @@ async def create_user(
     """Create a new user in any account (superadmin only).
 
     Creates a user with the specified email, password, account, and role.
-    The password must meet security requirements.
+    For password-based users, the password must meet security requirements.
+    For OAuth/SAML users, a random unknowable password is auto-generated.
     """
-    # Validate password strength
-    password = user_data.password.get_secret_value()
-    password_errors = default_password_validator.validate(password)
-    if password_errors:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "error": "Validation error",
-                "details": [
-                    {
-                        "field": error.field,
-                        "message": error.message,
-                        "code": error.code,
-                    }
-                    for error in password_errors
-                ],
-            },
+    # Determine password based on auth provider
+    if user_data.auth_provider != "password":
+        # OAuth/SAML users get a random unknowable password
+        password = generate_random_password()
+        logger.info(
+            "oauth_user_creation",
+            email=user_data.email,
+            auth_provider=user_data.auth_provider,
+            auth_provider_name=user_data.auth_provider_name,
+            message="Generated random password for OAuth/SAML user",
         )
+    else:
+        # Password-based users: require password and validate strength
+        if user_data.password is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Password is required for password-based authentication",
+            )
+        password = user_data.password.get_secret_value()
+        password_errors = default_password_validator.validate(password)
+        if password_errors:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "error": "Validation error",
+                    "details": [
+                        {
+                            "field": error.field,
+                            "message": error.message,
+                            "code": error.code,
+                        }
+                        for error in password_errors
+                    ],
+                },
+            )
 
     # Verify account exists
     account = await session.get(AccountModel, user_data.account_id)

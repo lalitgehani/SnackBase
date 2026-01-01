@@ -13,10 +13,11 @@ class UserCreateRequest(BaseModel):
     """Request schema for creating a new user.
 
     This is used by superadmins to create users in any account.
+    For OAuth/SAML users, password is optional and will be auto-generated.
     """
 
     email: EmailStr = Field(..., description="User's email address")
-    password: SecretStr = Field(..., min_length=1, description="User's password")
+    password: SecretStr | None = Field(None, min_length=1, description="User's password (optional for OAuth/SAML users)")
     account_id: str = Field(
         ...,
         min_length=36,
@@ -33,12 +34,15 @@ class UserCreateRequest(BaseModel):
 
     @field_validator("password")
     @classmethod
-    def validate_password_strength(cls, v: SecretStr) -> SecretStr:
+    def validate_password_strength(cls, v: SecretStr | None) -> SecretStr | None:
         """Validate password strength.
 
         This is a placeholder - actual validation happens in the router
         using the PasswordValidator service to provide detailed error messages.
+        Password can be None for OAuth/SAML users (will be auto-generated).
         """
+        if v is None:
+            return v
         password = v.get_secret_value()
         if not password:
             raise ValueError("Password cannot be empty")
