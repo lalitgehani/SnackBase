@@ -11,6 +11,7 @@ import RolesPage from '@/pages/RolesPage';
 import AuditLogsPage from '@/pages/AuditLogsPage';
 import MigrationsPage from '@/pages/MigrationsPage';
 import MacrosPage from '@/pages/MacrosPage';
+import ConfigurationDashboardPage from '@/pages/ConfigurationDashboardPage';
 import AdminLayout from '@/layouts/AdminLayout';
 import ProtectedRoute from '@/components/ProtectedRoute';
 
@@ -43,6 +44,7 @@ function App() {
         <Route path="audit-logs" element={<AuditLogsPage />} />
         <Route path="migrations" element={<MigrationsPage />} />
         <Route path="macros" element={<MacrosPage />} />
+        <Route path="configuration" element={<ConfigurationDashboardPage />} />
       </Route>
 
       {/* Catch all - redirect to dashboard */}

@@ -10,6 +10,7 @@ import {
     GitBranch,
     CodeXml,
     LogOut,
+    Settings,
 } from "lucide-react"
 import { useLocation, Link, useNavigate } from "react-router"
 import { useAuthStore } from "@/stores/auth.store"
@@ -42,6 +43,11 @@ const items = [
         title: "Dashboard",
         url: "/admin/dashboard",
         icon: LayoutDashboard,
+    },
+    {
+        title: "Configuration",
+        url: "/admin/configuration",
+        icon: Settings,
     },
     {
         title: "Accounts",

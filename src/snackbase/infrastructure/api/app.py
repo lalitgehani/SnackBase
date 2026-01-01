@@ -390,6 +390,7 @@ def register_routes(app: FastAPI) -> None:
     """
     from snackbase.infrastructure.api.routes import (
         accounts_router,
+        admin_router,
         auth_router,
         collections_router,
         dashboard_router,
@@ -476,6 +477,11 @@ def register_routes(app: FastAPI) -> None:
     # Register users routes (must be before dynamic record routes)
     app.include_router(
         users_router, prefix=f"{settings.api_prefix}/users", tags=["users"]
+    )
+
+    # Register admin routes for configuration dashboard
+    app.include_router(
+        admin_router, prefix=f"{settings.api_prefix}/admin", tags=["admin"]
     )
 
     # Register dynamic record routes with /records prefix to avoid conflicts

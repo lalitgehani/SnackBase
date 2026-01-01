@@ -2,6 +2,7 @@
 
 from snackbase.infrastructure.api.routes.auth_router import router as auth_router
 from .accounts_router import router as accounts_router
+from .admin_router import router as admin_router
 from .collections_router import router as collections_router
 from .dashboard_router import router as dashboard_router
 from .files_router import router as files_router
@@ -19,6 +20,7 @@ from .saml_router import router as saml_router
 
 __all__ = [
     "accounts_router",
+    "admin_router",
     "auth_router",
     "collections_router",
     "dashboard_router",
