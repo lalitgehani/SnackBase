@@ -1,5 +1,4 @@
-from snackbase.infrastructure.configuration.providers.saml.saml_handler import (
-    SAMLProviderHandler,
-)
+from .saml_handler import SAMLProviderHandler
+from .okta import OktaSAMLProvider
 
-__all__ = ["SAMLProviderHandler"]
+__all__ = ["SAMLProviderHandler", "OktaSAMLProvider"]

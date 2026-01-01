@@ -23,6 +23,8 @@ dependencies = [
     "alembic>=1.17.2",
     "cryptography>=46.0.3",
     "httpx>=0.28.1",
+    "signxml>=4.2.0",
+    "lxml>=6.0.2",
 ]
 
 [project.scripts]
