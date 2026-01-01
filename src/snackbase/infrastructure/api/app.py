@@ -76,6 +76,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     )
     from snackbase.infrastructure.configuration.providers.saml import (
         AzureADSAMLProvider,
+        GenericSAMLProvider,
         OktaSAMLProvider,
     )
     from snackbase.infrastructure.persistence.database import get_db_session
@@ -165,6 +166,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 config_schema=azure_ad_provider.config_schema,
                 is_builtin=True,
             )
+
+            # Register Generic SAML provider
+            generic_saml_provider = GenericSAMLProvider()
+            config_registry.register_provider_definition(
+                category="saml_providers",
+                name=generic_saml_provider.provider_name,
+                display_name=generic_saml_provider.display_name,
+                logo_url=generic_saml_provider.logo_url,
+                config_schema=generic_saml_provider.config_schema,
+                is_builtin=True,
+            )
             
             # Store registry on app state for later use
             app.state.config_registry = config_registry
@@ -179,6 +191,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                     apple_oauth_handler.provider_name,
                     okta_saml_provider.provider_name,
                     azure_ad_provider.provider_name,
+                    generic_saml_provider.provider_name,
                 ],
             )
             break
