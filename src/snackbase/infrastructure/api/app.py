@@ -68,7 +68,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Register built-in authentication providers
     from snackbase.core.configuration.config_registry import ConfigurationRegistry
     from snackbase.infrastructure.configuration.providers import EmailPasswordProvider
-    from snackbase.infrastructure.configuration.providers.oauth import GoogleOAuthHandler
+    from snackbase.infrastructure.configuration.providers.oauth import (
+        GitHubOAuthHandler,
+        GoogleOAuthHandler,
+    )
     from snackbase.infrastructure.persistence.database import get_db_session
     from snackbase.infrastructure.persistence.repositories import ConfigurationRepository
     from snackbase.infrastructure.security.encryption import EncryptionService
@@ -101,6 +104,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 config_schema=google_oauth_handler.config_schema,
                 is_builtin=True,
             )
+
+            # Register GitHub OAuth provider
+            github_oauth_handler = GitHubOAuthHandler()
+            config_registry.register_provider_definition(
+                category="auth_providers",
+                name=github_oauth_handler.provider_name,
+                display_name=github_oauth_handler.display_name,
+                logo_url=github_oauth_handler.logo_url,
+                config_schema=github_oauth_handler.config_schema,
+                is_builtin=True,
+            )
             
             # Store registry on app state for later use
             app.state.config_registry = config_registry
@@ -110,6 +124,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 providers=[
                     email_password_provider.provider_name,
                     google_oauth_handler.provider_name,
+                    github_oauth_handler.provider_name,
                 ],
             )
             break

@@ -62,6 +62,24 @@ class TestProviderRegistration:
             assert provider_def.is_builtin is True
             assert provider_def.logo_url == "/assets/providers/google.svg"
             assert "client_id" in provider_def.config_schema["properties"]
+    def test_github_oauth_provider_registered(self, app):
+        """Test that GitHub OAuth provider is registered on startup."""
+        with TestClient(app):
+            config_registry = app.state.config_registry
+            
+            # Get the provider definition
+            provider_def = config_registry.get_provider_definition(
+                category="auth_providers",
+                name="github"
+            )
+            
+            assert provider_def is not None
+            assert provider_def.category == "auth_providers"
+            assert provider_def.name == "github"
+            assert provider_def.display_name == "GitHub"
+            assert provider_def.is_builtin is True
+            assert provider_def.logo_url == "/assets/providers/github.svg"
+            assert "client_id" in provider_def.config_schema["properties"]
 
     def test_provider_appears_in_list(self, app):
         """Test that provider appears in list of auth providers."""
