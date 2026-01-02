@@ -16,6 +16,14 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ProviderLogo } from './ProviderLogo';
 import { Badge } from '@/components/ui/badge';
+import { TagInput } from '@/components/ui/tag-input';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 
 interface ConfigurationFormProps {
     category: string;
@@ -209,6 +217,34 @@ export const ConfigurationForm = ({
                                                             {field.value ? 'Enabled' : 'Disabled'}
                                                         </span>
                                                     </div>
+                                                );
+                                            }
+                                            if (prop.enum) {
+                                                return (
+                                                    <Select
+                                                        onValueChange={field.onChange}
+                                                        value={field.value || prop.default || ""}
+                                                    >
+                                                        <SelectTrigger className="w-full">
+                                                            <SelectValue placeholder={`Select ${prop.title || key}`} />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {prop.enum.map((option: string) => (
+                                                                <SelectItem key={option} value={option}>
+                                                                    {option}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                );
+                                            }
+                                            if (prop.type === 'array') {
+                                                return (
+                                                    <TagInput
+                                                        value={field.value || prop.default || []}
+                                                        onValueChange={field.onChange}
+                                                        placeholder={prop.description || "Enter values..."}
+                                                    />
                                                 );
                                             }
                                             if (prop.type === 'number' || prop.type === 'integer') {
