@@ -24,10 +24,20 @@ import {
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
+import { AddProviderModal } from '@/components/common/AddProviderModal';
+import { ConfigurationForm } from '@/components/common/ConfigurationForm';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 
 const SystemProvidersTab = () => {
     const [categoryFilter, setCategoryFilter] = useState<string>('all');
     const [configToDelete, setConfigToDelete] = useState<Configuration | null>(null);
+    const [configToEdit, setConfigToEdit] = useState<Configuration | null>(null);
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
 
@@ -154,7 +164,11 @@ const SystemProvidersTab = () => {
             className: 'text-right',
             render: (config) => (
                 <div className="flex justify-end space-x-2">
-                    <Button variant="ghost" size="icon">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setConfigToEdit(config)}
+                    >
                         <Edit className="h-4 w-4" />
                     </Button>
                     <Button
@@ -190,12 +204,7 @@ const SystemProvidersTab = () => {
                         </SelectContent>
                     </Select>
                 </div>
-                <Button onClick={() => {
-                    toast({
-                        title: "Coming Soon",
-                        description: "Feature F5.4: Configuration Form will implement this functionality.",
-                    });
-                }}>
+                <Button onClick={() => setIsAddModalOpen(true)}>
                     <Plus className="mr-2 h-4 w-4" /> Add Provider
                 </Button>
             </div>
@@ -241,6 +250,37 @@ const SystemProvidersTab = () => {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            <AddProviderModal
+                open={isAddModalOpen}
+                onOpenChange={setIsAddModalOpen}
+                category={categoryFilter === 'all' ? undefined : categoryFilter}
+                onConfigCreated={() => queryClient.invalidateQueries({ queryKey: ['admin', 'config'] })}
+                existingConfigs={allConfigs || []}
+            />
+
+            <Dialog open={!!configToEdit} onOpenChange={() => setConfigToEdit(null)}>
+                <DialogContent className="sm:max-w-xl flex flex-col max-h-[90vh]">
+                    <DialogHeader>
+                        <DialogTitle>Configure {configToEdit?.display_name}</DialogTitle>
+                    </DialogHeader>
+                    <div className="flex-1 overflow-hidden">
+                        {configToEdit && (
+                            <ConfigurationForm
+                                category={configToEdit.category}
+                                providerName={configToEdit.provider_name}
+                                displayName={configToEdit.display_name}
+                                configId={configToEdit.id}
+                                onSuccess={() => {
+                                    setConfigToEdit(null);
+                                    queryClient.invalidateQueries({ queryKey: ['admin', 'config'] });
+                                }}
+                                onCancel={() => setConfigToEdit(null)}
+                            />
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 };

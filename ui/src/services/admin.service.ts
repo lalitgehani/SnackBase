@@ -74,4 +74,51 @@ export const adminService = {
     const response = await api.delete(`/admin/configuration/${configId}`);
     return response.data;
   },
+
+  getAvailableProviders: async (category?: string): Promise<any[]> => {
+    const params = new URLSearchParams();
+    if (category && category !== 'all') {
+      params.append('category', category);
+    }
+    const response = await api.get(`/admin/configuration/providers?${params.toString()}`);
+    return response.data;
+  },
+
+  getProviderSchema: async (category: string, providerName: string): Promise<any> => {
+    const response = await api.get(`/admin/configuration/schema/${category}/${providerName}`);
+    return response.data;
+  },
+
+  getConfigValues: async (configId: string): Promise<Record<string, any>> => {
+    const response = await api.get(`/admin/configuration/${configId}/values`);
+    return response.data;
+  },
+
+  updateConfigValues: async (configId: string, values: Record<string, any>): Promise<any> => {
+    const response = await api.patch(`/admin/configuration/${configId}/values`, values);
+    return response.data;
+  },
+
+  createConfig: async (data: {
+    category: string;
+    provider_name: string;
+    display_name: string;
+    config: Record<string, any>;
+    account_id?: string;
+    logo_url?: string;
+    enabled?: boolean;
+    priority?: number;
+  }): Promise<any> => {
+    const response = await api.post('/admin/configuration', data);
+    return response.data;
+  },
+
+  testConnection: async (data: {
+    category: string;
+    provider_name: string;
+    config: Record<string, any>;
+  }): Promise<{ success: boolean; message: string }> => {
+    const response = await api.post('/admin/configuration/test-connection', data);
+    return response.data;
+  },
 };

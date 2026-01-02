@@ -281,6 +281,9 @@ async def init_database() -> None:
 
     # Create superadmin from environment variables if configured
     await _create_superadmin_from_env(db)
+    
+    # Seed default configurations
+    await _seed_default_configurations(db)
 
 
 async def _seed_default_roles(db: DatabaseManager, RoleModel: type) -> None:
@@ -422,6 +425,56 @@ async def _create_superadmin_from_env(db: DatabaseManager) -> None:
             email=settings.superadmin_email,
         )
         # Don't raise - allow application to start
+        # Don't raise - allow application to start
+
+
+async def _seed_default_configurations(db: DatabaseManager) -> None:
+    """Seed default configurations if they don't exist.
+
+    Args:
+        db: Database manager instance.
+    """
+    import uuid
+    from sqlalchemy import select
+    from snackbase.infrastructure.persistence.models.configuration import ConfigurationModel
+    from snackbase.infrastructure.configuration.providers.auth.email_password import EmailPasswordProvider
+    
+    # SYSTEM_ACCOUNT_ID constant
+    SYSTEM_ACCOUNT_ID = "00000000-0000-0000-0000-000000000000"
+    
+    ep_provider = EmailPasswordProvider()
+    
+    async with db.session() as session:
+        # Check if email_password system config already exists
+        result = await session.execute(
+            select(ConfigurationModel).where(
+                ConfigurationModel.category == ep_provider.category,
+                ConfigurationModel.account_id == SYSTEM_ACCOUNT_ID,
+                ConfigurationModel.provider_name == ep_provider.provider_name,
+                ConfigurationModel.is_system == True
+            )
+        )
+        existing = result.scalar_one_or_none()
+        
+        if existing is None:
+            # Create default email_password configuration
+            # Note: config is empty dict, which is currently not encrypted in this direct seed
+            # but that's fine for an empty dict. For other providers, we'd need EncryptionService.
+            new_config = ConfigurationModel(
+                id=str(uuid.uuid4()),
+                account_id=SYSTEM_ACCOUNT_ID,
+                category=ep_provider.category,
+                provider_name=ep_provider.provider_name,
+                display_name=ep_provider.display_name,
+                config={}, # Empty config
+                enabled=True,
+                is_builtin=True,
+                is_system=True,
+                priority=0
+            )
+            session.add(new_config)
+            await session.commit()
+            logger.info("Seeded default Email/Password configuration")
 
 
 async def close_database() -> None:

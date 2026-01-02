@@ -1,0 +1,154 @@
+import { useState, useEffect } from 'react';
+import { adminService } from '@/services/admin.service';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { ConfigurationForm } from './ConfigurationForm';
+import { Loader2, ArrowLeft, Settings } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { useToast } from '@/hooks/use-toast';
+
+interface ProviderDefinition {
+    name: string;
+    display_name: string;
+    category: string;
+    logo_url?: string;
+}
+
+interface AddProviderModalProps {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    onConfigCreated: () => void;
+    category?: string;
+    accountId?: string;
+    existingConfigs?: any[];
+}
+
+export const AddProviderModal = ({
+    open,
+    onOpenChange,
+    onConfigCreated,
+    category,
+    accountId,
+    existingConfigs = [],
+}: AddProviderModalProps) => {
+    const [selectedProvider, setSelectedProvider] = useState<ProviderDefinition | null>(null);
+    const [availableProviders, setAvailableProviders] = useState<ProviderDefinition[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const { toast } = useToast();
+
+    useEffect(() => {
+        if (open) {
+            const loadProviders = async () => {
+                setIsLoading(true);
+                try {
+                    const data = await adminService.getAvailableProviders(category);
+                    // Filter out already configured providers and explicitly exclude email_password
+                    const filtered = data.filter(
+                        (p: ProviderDefinition) =>
+                            p.name !== "email_password" &&
+                            !existingConfigs.some((ec) => ec.provider_name === p.name)
+                    );
+                    setAvailableProviders(filtered);
+                } catch (error) {
+                    console.error("Failed to load providers", error);
+                    toast({
+                        title: "Error",
+                        description: "Failed to load available providers.",
+                        variant: "destructive",
+                    });
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+            loadProviders();
+            setSelectedProvider(null);
+        }
+    }, [open, category, existingConfigs, toast]);
+
+    const handleSuccess = () => {
+        onConfigCreated();
+        onOpenChange(false);
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-xl p-0 overflow-hidden flex flex-col h-162.5 max-h-[90vh]">
+                <DialogHeader className="p-6 pb-0">
+                    <div className="flex items-center gap-2">
+                        {selectedProvider && (
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => setSelectedProvider(null)}
+                            >
+                                <ArrowLeft className="h-4 w-4" />
+                            </Button>
+                        )}
+                        <DialogTitle>
+                            {selectedProvider
+                                ? `Configure ${selectedProvider.display_name}`
+                                : 'Add Provider'}
+                        </DialogTitle>
+                    </div>
+                    <DialogDescription>
+                        {selectedProvider
+                            ? `Fill in the details to set up ${selectedProvider.display_name}.`
+                            : 'Select a provider to add to your configuration.'}
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div className="flex-1 overflow-hidden h-full flex flex-col">
+                    {isLoading ? (
+                        <div className="flex items-center justify-center p-8">
+                            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                        </div>
+                    ) : selectedProvider ? (
+                        <ConfigurationForm
+                            category={selectedProvider.category}
+                            providerName={selectedProvider.name}
+                            displayName={selectedProvider.display_name}
+                            accountId={accountId}
+                            onSuccess={handleSuccess}
+                            onCancel={() => setSelectedProvider(null)}
+                        />
+                    ) : (
+                        <ScrollArea className="flex-1 px-6">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4">
+                                {availableProviders.map((p) => (
+                                    <Button
+                                        key={`${p.category}:${p.name}`}
+                                        variant="outline"
+                                        className="h-24 flex flex-col items-center justify-center gap-2 hover:border-primary hover:bg-primary/5 transition-all text-center p-4"
+                                        onClick={() => setSelectedProvider(p)}
+                                    >
+                                        {p.logo_url ? (
+                                            <img src={p.logo_url} alt={p.display_name} className="h-8 w-8 object-contain" />
+                                        ) : (
+                                            <Settings className="h-8 w-8 text-muted-foreground" />
+                                        )}
+                                        <div className="flex flex-col">
+                                            <span className="font-medium text-sm line-clamp-1">{p.display_name}</span>
+                                            <span className="text-[10px] text-muted-foreground uppercase">{p.category.replace('_', ' ')}</span>
+                                        </div>
+                                    </Button>
+                                ))}
+                                {availableProviders.length === 0 && (
+                                    <div className="col-span-full py-12 text-center text-muted-foreground">
+                                        No providers available for this category.
+                                    </div>
+                                )}
+                            </div>
+                        </ScrollArea>
+                    )}
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+};

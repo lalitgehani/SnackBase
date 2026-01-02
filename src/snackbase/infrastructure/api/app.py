@@ -148,7 +148,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             # Register Okta SAML provider
             okta_saml_provider = OktaSAMLProvider()
             config_registry.register_provider_definition(
-                category="saml_providers",
+                category="auth_providers",
                 name=okta_saml_provider.provider_name,
                 display_name=okta_saml_provider.display_name,
                 logo_url=okta_saml_provider.logo_url,
@@ -159,7 +159,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             # Register Azure AD SAML provider
             azure_ad_provider = AzureADSAMLProvider()
             config_registry.register_provider_definition(
-                category="saml_providers",
+                category="auth_providers",
                 name=azure_ad_provider.provider_name,
                 display_name=azure_ad_provider.display_name,
                 logo_url=azure_ad_provider.logo_url,
@@ -170,7 +170,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             # Register Generic SAML provider
             generic_saml_provider = GenericSAMLProvider()
             config_registry.register_provider_definition(
-                category="saml_providers",
+                category="auth_providers",
                 name=generic_saml_provider.provider_name,
                 display_name=generic_saml_provider.display_name,
                 logo_url=generic_saml_provider.logo_url,
