@@ -144,7 +144,7 @@ class SAMLProviderHandler(abc.ABC):
         """
         pass
 
-    async def test_connection(self, config: dict[str, Any]) -> bool:
+    async def test_connection(self, config: dict[str, Any]) -> tuple[bool, str]:
         """Test if provider configuration is valid.
 
         Default implementation attempts to generate metadata.
@@ -154,14 +154,13 @@ class SAMLProviderHandler(abc.ABC):
             config: Provider configuration to validate.
 
         Returns:
-            True if configuration is valid.
-
-        Raises:
-            ValueError: If configuration is invalid.
+            A tuple of (success, message).
+            success (bool): True if configuration is valid.
+            message (str): Success details or error message.
         """
         try:
             # Try to generate metadata - this validates most required config fields
             await self.get_metadata(config)
-            return True
+            return True, "SAML configuration is valid. Metadata generated successfully."
         except Exception as e:
-            raise ValueError(f"Invalid configuration: {str(e)}") from e
+            return False, f"Invalid SAML configuration: {str(e)}"

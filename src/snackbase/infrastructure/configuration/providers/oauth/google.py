@@ -148,7 +148,7 @@ class GoogleOAuthHandler(OAuthProviderHandler):
                 "verified_email": data.get("verified_email", False),
             }
 
-    async def test_connection(self, config: Dict[str, Any]) -> bool:
+    async def test_connection(self, config: Dict[str, Any]) -> tuple[bool, str]:
         """Validate Google OAuth configuration."""
         discovery_url = "https://accounts.google.com/.well-known/openid-configuration"
         
@@ -157,16 +157,16 @@ class GoogleOAuthHandler(OAuthProviderHandler):
                 # 1. Test discovery endpoint reachability
                 response = await client.get(discovery_url)
                 if response.status_code != 200:
-                    raise ValueError(f"Failed to fetch Google discovery document: {response.status_code}")
+                    return False, f"Failed to fetch Google discovery document: {response.status_code}"
                 
                 # 2. Basic configuration validation (check required fields)
                 required = ["client_id", "client_secret", "redirect_uri"]
                 for field in required:
                     if not config.get(field):
-                        raise ValueError(f"Missing required configuration field: {field}")
+                        return False, f"Missing required configuration field: {field}"
                 
-                return True
+                return True, "Google connection successful. Discovery endpoint reached."
             except httpx.HTTPError as e:
-                raise ValueError(f"Connectivity error to Google: {str(e)}") from e
+                return False, f"Connectivity error to Google: {str(e)}"
             except Exception as e:
-                raise ValueError(f"Configuration validation failed: {str(e)}") from e
+                return False, f"Configuration validation failed: {str(e)}"

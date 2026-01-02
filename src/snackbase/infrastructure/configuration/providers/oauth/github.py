@@ -169,7 +169,7 @@ class GitHubOAuthHandler(OAuthProviderHandler):
                 "picture": user_data.get("avatar_url"),
             }
 
-    async def test_connection(self, config: Dict[str, Any]) -> bool:
+    async def test_connection(self, config: Dict[str, Any]) -> tuple[bool, str]:
         """Validate GitHub OAuth configuration by checking required fields and API reachability."""
         api_url = "https://api.github.com"
         
@@ -178,16 +178,16 @@ class GitHubOAuthHandler(OAuthProviderHandler):
                 # 1. Test API reachability
                 response = await client.get(api_url)
                 if response.status_code != 200:
-                    raise ValueError(f"Failed to reach GitHub API: {response.status_code}")
+                    return False, f"Failed to reach GitHub API: {response.status_code}"
                 
                 # 2. Basic configuration validation (check required fields)
                 required = ["client_id", "client_secret", "redirect_uri"]
                 for field in required:
                     if not config.get(field):
-                        raise ValueError(f"Missing required configuration field: {field}")
+                        return False, f"Missing required configuration field: {field}"
                 
-                return True
+                return True, "GitHub connection successful. API reached."
             except httpx.HTTPError as e:
-                raise ValueError(f"Connectivity error to GitHub: {str(e)}") from e
+                return False, f"Connectivity error to GitHub: {str(e)}"
             except Exception as e:
-                raise ValueError(f"Configuration validation failed: {str(e)}") from e
+                return False, f"Configuration validation failed: {str(e)}"

@@ -477,6 +477,7 @@ async def test_provider_connection(
 ):
     """Test connection for a provider configuration."""
     try:
+        import asyncio
         category = data.get("category")
         provider_name = data.get("provider_name")
         config_values = data.get("config")
@@ -485,12 +486,7 @@ async def test_provider_connection(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing required fields")
 
         # Resolve provider handler
-        # We need a way to get the handler instance. 
-        # For now, let's look at how providers are handled in auth_router or similar.
-        # Most handlers are registered in the registry but the registry only stores definitions.
-        # We might need a ProviderFactory or similar.
-        
-        # For OAuth/SAML, we have handlers.
+        # Note: In a larger system, this could be moved to a ProviderFactory
         from snackbase.infrastructure.configuration.providers.oauth import (
             GoogleOAuthHandler, GitHubOAuthHandler, MicrosoftOAuthHandler, AppleOAuthHandler
         )
@@ -510,17 +506,28 @@ async def test_provider_connection(
         
         handler_class = handlers.get(provider_name)
         if not handler_class:
-            return {"success": False, "message": f"Provider {provider_name} does not support connection testing yet."}
+            return {
+                "success": False, 
+                "message": f"Provider {provider_name} does not support connection testing yet."
+            }
             
         handler = handler_class()
         
-        # Check if test_connection exists and call it
-        if hasattr(handler, "test_connection"):
-            success, message = await handler.test_connection(config_values)
+        # Execute test with 10-second timeout
+        try:
+            success, message = await asyncio.wait_for(
+                handler.test_connection(config_values), 
+                timeout=10.0
+            )
             return {"success": success, "message": message}
-        else:
-            return {"success": False, "message": f"Provider {provider_name} does not implement test_connection."}
+        except asyncio.TimeoutError:
+            return {
+                "success": False, 
+                "message": "Connection test timed out after 10 seconds. Check your network or provider settings."
+            }
+        except Exception as e:
+            return {"success": False, "message": f"Test execution failed: {str(e)}"}
 
     except Exception as e:
-        logger.error("Connection test failed", error=str(e))
-        return {"success": False, "message": f"Internal error during test: {str(e)}"}
+        logger.error("Connection test endpoint failed", error=str(e))
+        return {"success": False, "message": f"Internal server error: {str(e)}"}

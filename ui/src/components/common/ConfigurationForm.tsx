@@ -45,8 +45,10 @@ export const ConfigurationForm = ({
         handleSubmit,
         reset,
         watch,
-        formState: { isSubmitting, errors }
-    } = useForm();
+        formState: { isSubmitting, errors, isValid }
+    } = useForm({
+        mode: 'onChange'
+    });
 
     const formValues = watch();
 
@@ -111,6 +113,15 @@ export const ConfigurationForm = ({
         setIsTesting(true);
         setTestResult(null);
         try {
+            // Filter out masked secrets that weren't changed if needed? 
+            // The handleTestConnection should probably pass the actual values.
+            // If the user hasn't changed a secret, it will be "••••••••".
+            // The backend updateConfigValues handles this, but test-connection might need it too.
+            // However, the test-connection endpoint in backend DOES NOT have access to current DB config.
+            // So if it sees "••••••••", it will fail.
+            // THIS IS A KNOWN LIMITATION for testing EXISTING configs with secrets.
+            // We should warn the user or handle it.
+
             const result = await adminService.testConnection({
                 category,
                 provider_name: providerName,
@@ -137,6 +148,11 @@ export const ConfigurationForm = ({
 
     const properties = schema?.properties || {};
     const requiredFields = schema?.required || [];
+
+    // Check if any required field is still masked or empty
+    const hasMaskedSecret = Object.entries(formValues).some(
+        ([key, val]) => requiredFields.includes(key) && val === "••••••••"
+    );
 
     return (
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col h-full overflow-hidden">
@@ -211,12 +227,18 @@ export const ConfigurationForm = ({
                     </Alert>
                 )}
 
+                {hasMaskedSecret && (
+                    <p className="text-xs text-muted-foreground mb-4 italic">
+                        Note: Connection testing may fail if secrets are masked. Please re-enter secrets to test.
+                    </p>
+                )}
+
                 <div className="flex flex-col-reverse sm:flex-row sm:justify-between gap-3">
                     <Button
                         type="button"
                         variant="outline"
                         onClick={handleTestConnection}
-                        disabled={isTesting || isSubmitting}
+                        disabled={isTesting || isSubmitting || !isValid}
                     >
                         {isTesting ? (
                             <>

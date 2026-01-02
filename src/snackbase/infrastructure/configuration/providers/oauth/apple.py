@@ -197,7 +197,7 @@ class AppleOAuthHandler(OAuthProviderHandler):
         except Exception as e:
             raise ValueError(f"Failed to decode Apple id_token: {str(e)}")
 
-    async def test_connection(self, config: Dict[str, Any]) -> bool:
+    async def test_connection(self, config: Dict[str, Any]) -> tuple[bool, str]:
         """Validate Apple OAuth configuration."""
         discovery_url = "https://appleid.apple.com/.well-known/openid-configuration"
 
@@ -206,16 +206,16 @@ class AppleOAuthHandler(OAuthProviderHandler):
                 # 1. Test discovery endpoint reachability
                 response = await client.get(discovery_url)
                 if response.status_code != 200:
-                    raise ValueError(f"Failed to fetch Apple discovery document: {response.status_code}")
+                    return False, f"Failed to fetch Apple discovery document: {response.status_code}"
 
                 # 2. Basic configuration validation (check required fields)
                 required = ["client_id", "client_secret", "team_id", "key_id", "redirect_uri"]
                 for field in required:
                     if not config.get(field):
-                        raise ValueError(f"Missing required configuration field: {field}")
+                        return False, f"Missing required configuration field: {field}"
 
-                return True
+                return True, "Apple connection successful. Discovery endpoint reached."
             except httpx.HTTPError as e:
-                raise ValueError(f"Connectivity error to Apple: {str(e)}") from e
+                return False, f"Connectivity error to Apple: {str(e)}"
             except Exception as e:
-                raise ValueError(f"Configuration validation failed: {str(e)}") from e
+                return False, f"Configuration validation failed: {str(e)}"

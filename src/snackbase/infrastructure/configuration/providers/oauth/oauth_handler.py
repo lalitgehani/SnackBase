@@ -170,7 +170,7 @@ class OAuthProviderHandler(abc.ABC):
         """
         pass
 
-    async def test_connection(self, config: dict[str, Any]) -> bool:
+    async def test_connection(self, config: dict[str, Any]) -> tuple[bool, str]:
         """Test if provider configuration is valid.
 
         Default implementation attempts to construct an authorization URL
@@ -181,10 +181,9 @@ class OAuthProviderHandler(abc.ABC):
             config: Provider configuration to validate.
 
         Returns:
-            True if configuration is valid.
-
-        Raises:
-            ValueError: If configuration is invalid.
+            A tuple of (success, message).
+            success (bool): True if configuration is valid.
+            message (str): Success details or error message.
         """
         # Default implementation: try to generate authorization URL
         # This validates that required config fields are present
@@ -194,6 +193,6 @@ class OAuthProviderHandler(abc.ABC):
                 redirect_uri="https://example.com/callback",
                 state="test_state",
             )
-            return True
+            return True, "Configuration is valid."
         except Exception as e:
-            raise ValueError(f"Invalid configuration: {str(e)}") from e
+            return False, f"Invalid configuration: {str(e)}"
