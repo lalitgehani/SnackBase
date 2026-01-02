@@ -11,6 +11,7 @@ import uuid
 async def test_get_configuration_stats(
     client: AsyncClient,
     db_session: AsyncSession,
+    superadmin_token: str,
 ):
     """Test getting configuration statistics."""
     # Setup test data
@@ -66,7 +67,10 @@ async def test_get_configuration_stats(
     db_session.add(config2)
     await db_session.commit()
     
-    response = await client.get("/api/v1/admin/configuration/stats")
+    response = await client.get(
+        "/api/v1/admin/configuration/stats",
+        headers={"Authorization": f"Bearer {superadmin_token}"}
+    )
     assert response.status_code == 200
     data = response.json()
     
@@ -79,6 +83,7 @@ async def test_get_configuration_stats(
 async def test_get_recent_configurations(
     client: AsyncClient,
     db_session: AsyncSession,
+    superadmin_token: str,
 ):
     """Test getting recent configurations."""
     # Setup test data
@@ -110,7 +115,10 @@ async def test_get_recent_configurations(
     db_session.add(config)
     await db_session.commit()
     
-    response = await client.get("/api/v1/admin/configuration/recent?limit=5")
+    response = await client.get(
+        "/api/v1/admin/configuration/recent?limit=5",
+        headers={"Authorization": f"Bearer {superadmin_token}"}
+    )
     assert response.status_code == 200
     data = response.json()
     
@@ -125,6 +133,7 @@ async def test_get_recent_configurations(
 async def test_get_system_configurations(
     client: AsyncClient,
     db_session: AsyncSession,
+    superadmin_token: str,
 ):
     """Test getting system configurations."""
     # Setup test data
@@ -176,7 +185,10 @@ async def test_get_system_configurations(
     await db_session.commit()
     
     # Test listing all
-    response = await client.get("/api/v1/admin/configuration/system")
+    response = await client.get(
+        "/api/v1/admin/configuration/system",
+        headers={"Authorization": f"Bearer {superadmin_token}"}
+    )
     assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)
@@ -187,16 +199,65 @@ async def test_get_system_configurations(
     assert acc_config.id not in sys_ids
     
     # Test filtering
-    response = await client.get("/api/v1/admin/configuration/system?category=auth_providers")
+    response = await client.get(
+        "/api/v1/admin/configuration/system?category=auth_providers",
+        headers={"Authorization": f"Bearer {superadmin_token}"}
+    )
     assert response.status_code == 200
     data = response.json()
     assert len(data) > 0
     assert all(c["category"] == "auth_providers" for c in data)
 
 @pytest.mark.asyncio
+async def test_get_account_configurations(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    superadmin_token: str,
+):
+    """Test getting account configurations."""
+    # Setup test data
+    enc_service = EncryptionService("test-key-must-be-32-bytes-long!!!!")
+    
+    # Create account
+    account = AccountModel(
+        id="acc_specific",
+        account_code="SA0002",
+        name="Specific Account",
+        slug="specific-account"
+    )
+    db_session.add(await db_session.merge(account))
+    await db_session.flush()
+
+    # Create account config
+    config = ConfigurationModel(
+        id=str(uuid.uuid4()),
+        account_id=account.id,
+        category="auth_providers",
+        provider_name="test_acc_spec",
+        display_name="Test Account Specific",
+        config=enc_service.encrypt_dict({"foo": "bar"}),
+        enabled=True,
+        is_system=False
+    )
+    
+    db_session.add(config)
+    await db_session.commit()
+    
+    response = await client.get(
+        f"/api/v1/admin/configuration/account?account_id={account.id}",
+        headers={"Authorization": f"Bearer {superadmin_token}"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 1
+    assert data[0]["provider_name"] == "test_acc_spec"
+
+@pytest.mark.asyncio
 async def test_update_configuration_status(
     client: AsyncClient,
     db_session: AsyncSession,
+    superadmin_token: str,
 ):
     """Test enabling/disabling configuration."""
     # Setup test data
@@ -219,7 +280,8 @@ async def test_update_configuration_status(
     # Disable
     response = await client.patch(
         f"/api/v1/admin/configuration/{config.id}",
-        json={"enabled": False}
+        json={"enabled": False},
+        headers={"Authorization": f"Bearer {superadmin_token}"}
     )
     assert response.status_code == 200
     assert response.json()["enabled"] is False
@@ -231,7 +293,8 @@ async def test_update_configuration_status(
     # Enable
     response = await client.patch(
         f"/api/v1/admin/configuration/{config.id}",
-        json={"enabled": True}
+        json={"enabled": True},
+        headers={"Authorization": f"Bearer {superadmin_token}"}
     )
     assert response.status_code == 200
     assert response.json()["enabled"] is True
@@ -240,6 +303,7 @@ async def test_update_configuration_status(
 async def test_delete_configuration(
     client: AsyncClient,
     db_session: AsyncSession,
+    superadmin_token: str,
 ):
     """Test deleting configuration."""
     # Setup test data
@@ -276,11 +340,17 @@ async def test_delete_configuration(
     await db_session.commit()
     
     # Delete built-in (should fail)
-    response = await client.delete(f"/api/v1/admin/configuration/{builtin_config.id}")
+    response = await client.delete(
+        f"/api/v1/admin/configuration/{builtin_config.id}",
+        headers={"Authorization": f"Bearer {superadmin_token}"}
+    )
     assert response.status_code == 400
     
     # Delete custom (should succeed)
-    response = await client.delete(f"/api/v1/admin/configuration/{custom_config.id}")
+    response = await client.delete(
+        f"/api/v1/admin/configuration/{custom_config.id}",
+        headers={"Authorization": f"Bearer {superadmin_token}"}
+    )
     assert response.status_code == 200
     
     # Verify deletion

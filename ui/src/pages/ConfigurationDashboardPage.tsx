@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { formatDistanceToNow } from 'date-fns';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import SystemProvidersTab from './SystemProvidersTab';
+import AccountProvidersTab from './AccountProvidersTab';
 
 const ConfigurationDashboardPage = () => {
     const { data: stats, isLoading: statsLoading } = useQuery<ConfigurationStats>({
@@ -201,9 +202,7 @@ const ConfigurationDashboardPage = () => {
                 </TabsContent>
 
                 <TabsContent value="accounts" className="space-y-4">
-                    <div className="flex h-[400px] items-center justify-center rounded-md border border-dashed text-muted-foreground">
-                        Account Providers Tab (Coming Soon)
-                    </div>
+                    <AccountProvidersTab />
                 </TabsContent>
             </Tabs>
         </div>

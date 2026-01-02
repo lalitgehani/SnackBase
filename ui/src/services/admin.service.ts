@@ -44,6 +44,27 @@ export const adminService = {
     return response.data;
   },
 
+  getAccountConfigs: async (accountId: string, category?: string): Promise<Configuration[]> => {
+    const params = new URLSearchParams();
+    params.append('account_id', accountId);
+    if (category && category !== 'all') {
+      params.append('category', category);
+    }
+    const response = await api.get(`/admin/configuration/account?${params.toString()}`);
+    return response.data;
+  },
+
+  getAccounts: async (search?: string, page: number = 1, pageSize: number = 100): Promise<any> => {
+    const params = new URLSearchParams();
+    params.append('page', page.toString());
+    params.append('page_size', pageSize.toString());
+    if (search) {
+      params.append('search', search);
+    }
+    const response = await api.get(`/accounts?${params.toString()}`);
+    return response.data;
+  },
+
   updateConfig: async (configId: string, enabled: boolean): Promise<any> => {
     const response = await api.patch(`/admin/configuration/${configId}`, { enabled });
     return response.data;
