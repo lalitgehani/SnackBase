@@ -9,8 +9,9 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { ConfigurationForm } from './ConfigurationForm';
-import { Loader2, ArrowLeft, Settings } from 'lucide-react';
+import { Loader2, ArrowLeft } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { ProviderLogo } from '@/components/common/ProviderLogo';
 import { useToast } from '@/hooks/use-toast';
 
 interface ProviderDefinition {
@@ -114,6 +115,7 @@ export const AddProviderModal = ({
                             category={selectedProvider.category}
                             providerName={selectedProvider.name}
                             displayName={selectedProvider.display_name}
+                            logoUrl={selectedProvider.logo_url}
                             accountId={accountId}
                             onSuccess={handleSuccess}
                             onCancel={() => setSelectedProvider(null)}
@@ -128,11 +130,12 @@ export const AddProviderModal = ({
                                         className="h-24 flex flex-col items-center justify-center gap-2 hover:border-primary hover:bg-primary/5 transition-all text-center p-4"
                                         onClick={() => setSelectedProvider(p)}
                                     >
-                                        {p.logo_url ? (
-                                            <img src={p.logo_url} alt={p.display_name} className="h-8 w-8 object-contain" />
-                                        ) : (
-                                            <Settings className="h-8 w-8 text-muted-foreground" />
-                                        )}
+                                        <ProviderLogo
+                                            logoUrl={p.logo_url}
+                                            providerName={p.name}
+                                            className="h-8 w-8"
+                                            size={32}
+                                        />
                                         <div className="flex flex-col">
                                             <span className="font-medium text-sm line-clamp-1">{p.display_name}</span>
                                             <span className="text-[10px] text-muted-foreground uppercase">{p.category.replace('_', ' ')}</span>

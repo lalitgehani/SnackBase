@@ -35,10 +35,24 @@ class AuditLogService:
     EXCLUDED_TABLES = {
         "audit_log",  # Don't audit the audit log itself
         "alembic_version",  # Don't audit migration tracking
+        "refresh_tokens",  # High-volume tokens
+        "oauth_states",  # Temporary flow state
     }
 
-    # Fields that should always be masked
-    PASSWORD_FIELDS = {"password", "password_hash", "hashed_password"}
+    # Fields that should always be masked (e.g., secrets, tokens)
+    SENSITIVE_FIELDS = {
+        "password",
+        "password_hash",
+        "hashed_password",
+        "refresh_token",
+        "token_hash",
+        "access_token",
+        "client_secret",
+        "secret",
+        "code_verifier",
+        "state_token",
+        "verification_token",
+    }
 
     def __init__(self, session: AsyncSession) -> None:
         """Initialize the audit log service.
@@ -98,8 +112,8 @@ class AuditLogService:
             occurred_at = datetime.now(timezone.utc)
             
             for column_name, new_value in columns.items():
-                # Only mask passwords (security requirement), store everything else as-is
-                masked_value = self._mask_password_only(column_name, new_value)
+                # Only mask sensitive fields (security requirement), store everything else as-is
+                masked_value = self.mask_sensitive_only(column_name, new_value)
 
                 audit_entry = AuditLogModel(
                     account_id=account_id,
@@ -189,9 +203,9 @@ class AuditLogService:
                 
                 # Only create audit entry if value changed
                 if old_value != new_value:
-                    # Only mask passwords (security requirement), store everything else as-is
-                    masked_old = self._mask_password_only(column_name, old_value)
-                    masked_new = self._mask_password_only(column_name, new_value)
+                    # Only mask sensitive fields (security requirement), store everything else as-is
+                    masked_old = self.mask_sensitive_only(column_name, old_value)
+                    masked_new = self.mask_sensitive_only(column_name, new_value)
 
                     audit_entry = AuditLogModel(
                         account_id=account_id,
@@ -275,8 +289,8 @@ class AuditLogService:
             occurred_at = datetime.now(timezone.utc)
             
             for column_name, old_value in columns.items():
-                # Only mask passwords (security requirement), store everything else as-is
-                masked_value = self._mask_password_only(column_name, old_value)
+                # Only mask sensitive fields (security requirement), store everything else as-is
+                masked_value = self.mask_sensitive_only(column_name, old_value)
 
                 audit_entry = AuditLogModel(
                     account_id=account_id,
@@ -402,12 +416,12 @@ class AuditLogService:
         
         return columns
 
-    def _mask_password_only(
+    def mask_sensitive_only(
         self, column_name: str, value: Optional[str]
     ) -> Optional[str]:
-        """Mask only password fields when writing to database.
+        """Mask only sensitive fields (passwords, tokens, secrets) when writing to database.
 
-        Passwords are always masked for security. All other PII is stored
+        These fields are always masked for security. All other PII is stored
         as-is in the database and masked only when retrieving for display.
 
         Args:
@@ -415,13 +429,13 @@ class AuditLogService:
             value: Value to potentially mask.
 
         Returns:
-            Masked value if password field, original value otherwise.
+            Masked value if sensitive field, original value otherwise.
         """
         if value is None:
             return None
 
-        # Always mask password fields (security requirement)
-        if column_name.lower() in self.PASSWORD_FIELDS:
+        # Always mask sensitive fields (security requirement)
+        if column_name.lower() in self.SENSITIVE_FIELDS:
             return "***"
 
         return value

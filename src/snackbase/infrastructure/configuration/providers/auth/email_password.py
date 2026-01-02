@@ -33,7 +33,7 @@ class EmailPasswordProvider:
     @property
     def logo_url(self) -> Optional[str]:
         """Path to provider logo."""
-        return None
+        return "/assets/providers/email.svg"
 
     @property
     def config_schema(self) -> Dict[str, Any]:

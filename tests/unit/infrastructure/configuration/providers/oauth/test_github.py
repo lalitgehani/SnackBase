@@ -138,18 +138,15 @@ class TestGitHubOAuthHandler:
         mock_response.status_code = 200
         mock_get.return_value = mock_response
         
-        result = await handler.test_connection(config)
+        result, message = await handler.test_connection(config)
         assert result is True
+        assert "API reached" in message
         
         # Verify it called the API root
         args, _ = mock_get.call_args
         assert args[0] == "https://api.github.com"
 
-    @pytest.mark.asyncio
-    async def test_test_connection_invalid_config(self, handler):
-        """Test connection validation with invalid config."""
-        # Missing client_secret
         invalid_config = {"client_id": "test", "redirect_uri": "test"}
-        
-        with pytest.raises(ValueError, match="Missing required configuration field"):
-            await handler.test_connection(invalid_config)
+        result, message = await handler.test_connection(invalid_config)
+        assert result is False
+        assert "Missing required configuration field" in message

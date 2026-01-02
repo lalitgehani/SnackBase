@@ -17,8 +17,8 @@ def mock_encryption():
     return service
 
 @pytest.fixture
-def registry(mock_repo, mock_encryption):
-    return ConfigurationRegistry(mock_repo, mock_encryption)
+def registry(mock_encryption):
+    return ConfigurationRegistry(mock_encryption)
 
 @pytest.mark.asyncio
 async def test_get_effective_config_account_override(registry, mock_repo):
@@ -35,7 +35,7 @@ async def test_get_effective_config_account_override(registry, mock_repo):
     mock_repo.get_config.return_value = mock_model
     
     # Execute
-    result = await registry.get_effective_config(category, account_id, provider_name)
+    result = await registry.get_effective_config(category, account_id, provider_name, mock_repo)
     
     # Assert
     assert result == config_data
@@ -62,7 +62,7 @@ async def test_get_effective_config_system_fallback(registry, mock_repo):
     mock_repo.get_config.side_effect = [None, system_model]
     
     # Execute
-    result = await registry.get_effective_config(category, account_id, provider_name)
+    result = await registry.get_effective_config(category, account_id, provider_name, mock_repo)
     
     # Assert
     assert result == system_config_data
@@ -95,8 +95,8 @@ async def test_get_effective_config_caching(registry, mock_repo):
     mock_repo.get_config.return_value = mock_model
     
     # Execute twice
-    result1 = await registry.get_effective_config(category, account_id, provider_name)
-    result2 = await registry.get_effective_config(category, account_id, provider_name)
+    result1 = await registry.get_effective_config(category, account_id, provider_name, mock_repo)
+    result2 = await registry.get_effective_config(category, account_id, provider_name, mock_repo)
     
     # Assert
     assert result1 == config_data
@@ -126,7 +126,7 @@ async def test_cache_invalidation_on_update(registry, mock_repo):
     mock_repo.update.return_value = mock_model1
     
     # Populate cache
-    await registry.get_effective_config(category, account_id, provider_name)
+    await registry.get_effective_config(category, account_id, provider_name, mock_repo)
     assert mock_repo.get_config.call_count == 1
     
     # Update config
@@ -136,10 +136,10 @@ async def test_cache_invalidation_on_update(registry, mock_repo):
     mock_model2.enabled = True
     mock_repo.get_config.return_value = mock_model2
     
-    await registry.update_config(config_id, config=config_data2)
+    await registry.update_config(config_id, config=config_data2, repository=mock_repo)
     
     # Execute again - should hit repo again
-    result = await registry.get_effective_config(category, account_id, provider_name)
+    result = await registry.get_effective_config(category, account_id, provider_name, mock_repo)
     
     assert result == config_data2
     assert mock_repo.get_config.call_count == 2
@@ -154,7 +154,7 @@ async def test_builtin_deletion_failure(registry, mock_repo):
     
     # Execute & Assert
     with pytest.raises(ValueError, match="Built-in configurations cannot be deleted"):
-        await registry.delete_config(config_id)
+        await registry.delete_config(config_id, mock_repo)
 
 def test_register_provider_definition(registry):
     # Execute

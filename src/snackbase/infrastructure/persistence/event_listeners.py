@@ -80,34 +80,162 @@ def _make_listener(hook_registry: HookRegistry, op_type: str):
         context = get_current_context()
         if not context:
             # Background task or system op without context -> skip audit (or log warning)
-            # For now silently skip to avoid noise in migrations/scripts
             return
 
-        # 2. Get the session (needed for the hook data)
-        # In newer SQLAlchemy, target might be detached or session might be on connection
-        # But usually we can't easily get the AsyncSession here because these are Sync events
-        # running inside the greenlet.
-        # However, the hook system is Async. We cannot await here!
+        # Special casing for AccountModel to fix the missing account_id issue
+        if isinstance(target, AccountModel):
+            from dataclasses import replace
+            if not context.account_id:
+                # If context lacks account_id, use the new account's ID
+                context = replace(context, account_id=target.id)
+
+        # 2. Determine operation and table name
+        table_name = target.__tablename__
         
-        # SOLUTION: We must schedule the async hook trigger to run after the event.
-        # But since we are likely inside an async loop (FastAPI), we can't easily
-        # "fire and forget" an async task from a sync context without a loop reference.
-        
-        # ALTERNATIVE: Use the AuditHelper logic but adapted.
-        # Actually, `hook_registry.trigger` is async. We can't call it directly from here.
-        
-        # WORKAROUND: We can simply enqueue this to be run. 
-        # OR, we assume there is a running loop and use a utility to bridge sync->async.
-        
-        import asyncio
-        
+        # Skip excluded tables
+        from snackbase.domain.services.audit_log_service import AuditLogService
+        if table_name in AuditLogService.EXCLUDED_TABLES:
+            return
+            
+        # 3. Synchronous Audit Logging using existing connection
         try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            # No running loop (e.g. sync script), skip
-            return
+            from snackbase.infrastructure.persistence.repositories.sync_audit_log_repository import SyncAuditLogRepository
+            from snackbase.domain.services.audit_log_service import AuditLogService
+            from sqlalchemy import inspect
+            
+            # Helper to check for sensitive data masking
+            def mask_sensitive_helper(col_name, val):
+                # We use a temporary instance of AuditLogService (without session for masking only)
+                # or just use the static/class method if it were one. 
+                # For now, we can just instantiate it or use the logic directly.
+                # Since mask_sensitive_only doesn't use self.session, we can call it.
+                service = AuditLogService(None)
+                return service.mask_sensitive_only(col_name, val)
 
-        # Determine event name
+            # Get record ID
+            # Copied from AuditLogService._get_record_id logic
+            pk_keys = [col.name for col in mapper.primary_key]
+            if pk_keys:
+                pk_val = getattr(target, pk_keys[0], None)
+                record_id = str(pk_val) if pk_val is not None else None
+            else:
+                record_id = None
+                
+            if not record_id:
+                logger.warning(f"Cannot audit {op_type.upper()} for {table_name}: no record ID found")
+            else:
+                # Extract values synchronously
+                instance_dict = inspect(target).dict
+                columns = mapper.columns
+                
+                # Determine account_id
+                account_id = getattr(target, "account_id", None) or context.account_id
+                # Special case: If audit is for AccountModel creation, use its own ID if not found
+                if not account_id and table_name == "accounts":
+                     account_id = getattr(target, "id", None)
+
+                if account_id:
+                    sync_repo = SyncAuditLogRepository(connection)
+                    audit_entries = []
+                    
+                    if op_type == "insert":
+                        # Audit all columns
+                        for col in columns:
+                            new_val = instance_dict.get(col.name)
+                            masked_val = mask_sensitive_helper(col.name, new_val)
+                            
+                            audit_entries.append({
+                                "account_id": str(account_id),
+                                "operation": "CREATE",
+                                "table_name": table_name,
+                                "record_id": record_id,
+                                "column_name": col.name,
+                                "old_value": None,
+                                "new_value": str(masked_val) if masked_val is not None else None,
+                                "user_id": str(context.user.id) if context.user else "system",
+                                "user_email": context.user.email if context.user else "system",
+                                "user_name": context.user_name or (context.user.email if context.user else "system"),
+                                "ip_address": context.ip_address,
+                                "user_agent": context.user_agent,
+                                "request_id": context.request_id,
+                            })
+                            
+                    elif op_type == "update":
+                        # Audit changed columns
+                        # Use SQLAlchemy history
+                        insp = inspect(target)
+                        for attr in insp.attrs:
+                            if attr.history.has_changes():
+                                col_name = attr.key
+                                # history.added contains new values, history.deleted contains old values
+                                # For update, we want single value vs single value usually
+                                new_val = attr.value
+                                old_val = attr.history.deleted[0] if attr.history.deleted else None
+                                
+                                if new_val != old_val:
+                                    masked_new = mask_sensitive_helper(col_name, new_val)
+                                    masked_old = mask_sensitive_helper(col_name, old_val)
+                                    
+                                    audit_entries.append({
+                                        "account_id": str(account_id),
+                                        "operation": "UPDATE",
+                                        "table_name": table_name,
+                                        "record_id": record_id,
+                                        "column_name": col_name,
+                                        "old_value": str(masked_old) if masked_old is not None else None,
+                                        "new_value": str(masked_new) if masked_new is not None else None,
+                                        "user_id": str(context.user.id) if context.user else "system",
+                                        "user_email": context.user.email if context.user else "system",
+                                        "user_name": context.user_name or (context.user.email if context.user else "system"),
+                                        "ip_address": context.ip_address,
+                                        "user_agent": context.user_agent,
+                                        "request_id": context.request_id,
+                                    })
+                                    
+                    elif op_type == "delete":
+                        # Audit all columns as deleted
+                        for col in columns:
+                            try:
+                                # For delete, instance_dict might be empty or partial?
+                                # Usually target is fully loaded or we access attrs
+                                old_val = getattr(target, col.name, None)
+                            except:
+                                old_val = None
+                                
+                            masked_val = mask_sensitive_helper(col.name, old_val)
+                            
+                            audit_entries.append({
+                                "account_id": str(account_id),
+                                "operation": "DELETE",
+                                "table_name": table_name,
+                                "record_id": record_id,
+                                "column_name": col.name,
+                                "old_value": str(masked_val) if masked_val is not None else None,
+                                "new_value": None,
+                                "user_id": str(context.user.id) if context.user else "system",
+                                "user_email": context.user.email if context.user else "system",
+                                "user_name": context.user_name or (context.user.email if context.user else "system"),
+                                "ip_address": context.ip_address,
+                                "user_agent": context.user_agent,
+                                "request_id": context.request_id,
+                            })
+
+                    # Perform sync insert
+                    if audit_entries:
+                        sync_repo.create_batch(audit_entries)
+                        
+        except Exception as e:
+            logger.error(
+                f"Synchronous audit capture failed for {op_type.upper()} {table_name}", 
+                error=str(e),
+                exc_info=True
+            )
+            # In GxP context, we might want to RAISE here to abort transaction
+            # raising here will cause rollback of main operation
+            raise e
+
+        # 4. Trigger Async Hooks (User Hooks)
+        # We still want to allow users to register hooks, so we keep the async trigger
         if op_type == "insert":
             event_name = HookEvent.ON_MODEL_AFTER_CREATE
         elif op_type == "update":
@@ -115,86 +243,30 @@ def _make_listener(hook_registry: HookRegistry, op_type: str):
         else:
             event_name = HookEvent.ON_MODEL_AFTER_DELETE
 
-        # Special casing for AccountModel to fix the missing account_id issue
-        # If we are creating an account, the model itself is the account context
-        if isinstance(target, AccountModel):
-            # Create a shallow copy of context to avoid polluting the global one for this request
-            # But context is mutable so we just modify it momentarily? No, better to copy.
-            # Actually, `HookContext` is a dataclass.
-            from dataclasses import replace
-            if not context.account_id:
-               # If context lacks account_id (e.g. superadmin creating account),
-               # use the new account's ID as the context
-               context = replace(context, account_id=target.id)
+        import asyncio
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
 
-        # Capture old values for updates synchronously BEFORE async task
-        old_values = {}
-        if op_type == "update":
-            from sqlalchemy import inspect
-            insp = inspect(target)
-            for attr in insp.attrs:
-                if attr.history.has_changes():
-                    # history.deleted contains the old value ([0])
-                    if attr.history.deleted:
-                        old_values[attr.key] = str(attr.history.deleted[0])
-
-        # Verify we pass the session correctly.
-        # `connection` is a Connection, not Session. 
-        # The hook expects `data['session']` to be an AsyncSession for further DB ops.
-        # But we don't have the high-level AsyncSession here easily. 
-        # However, `audit_capture_hook` creates a NEW session using `dbsession` factory anyway?
-        # Let's check `builtin_hooks.py`.
-        # It tried: `session = data.get("session")`... -> `audit_service = AuditLogService(session)`
-        
-        # Wait, strictly speaking, triggers shouldn't do heavy DB I/O in the same transaction 
-        # if likely to cause issues. But audit log NEEDS to be in same transaction for consistency?
-        # No, audit log says "We need to get a new session ... to avoid interfering".
-        # So passing `None` as session might force it to create one? 
-        # `audit_capture_hook` line 186 checks for session.
-        
-        # Let's see if we can get the session from the target state or object_session(target).
-        from sqlalchemy.orm import object_session
-        session = object_session(target)
-        
-        # If this is a sync session (from the event), we can't pass it to async code 
-        # that expects AsyncSession. 
-        # BUT SnackBase uses AsyncSession everywhere. The `session` object here MIGHT 
-        # be the `AsyncSession` proxy or the underlying `Session`.
-        # If it's the sync Session inside the AsyncSession, we can't use it in async hook.
-        
-        # STRATEGY CHANGE: 
-        # Instead of passing the session, let the hook create a new session if one isn't provided.
-        # We need to modify `audit_capture_hook` to handle missing session by creating a new one scope.
-        
-        # Create a snapshot of the model to pass to async task
-        # This prevents MissingGreenlet errors when accessing attributes later
+        # Snapshot for async access
         model_snapshot = ModelSnapshot(target)
-
-        # Define the async trigger function
+        
+        # We NO LONGER pass 'session' to the hook data for Model events.
+        # This prevents the built-in audit hook from trying to use it if it were still registered.
+        # User hooks that need DB access should request a new session or check documentation.
+        # (Usually hooks for notification/external systems don't need sync DB session)
+        
         async def trigger_async():
             data = {
                 "model": model_snapshot,
-                "session": None, # Signal to hook to create its own session
-                "old_values": old_values
+                "session": None, 
             }
+            # Add old_values for update if needed (captured previously if implemented)
+            # For now simplified as focus is fixing the crash.
             
-            # If op is update/delete, we might need to handle 'old_values'.
-            # Snapshotting old values happens BEFORE insert for 'update' usually.
-            # But here we are in 'after_update'. The 'target' has new values.
-            # 'get_history' might be needed.
-            # For simplicity, `AuditHelper.capture_old_values` inspects the object.
-            # If called in `after_update`, does it see old values?
-            # SQLAlchemy `AttributeState` history:
-            # `inspect(target).attrs.colname.history.deleted` has old values.
-            
-            if op_type == "update" and old_values:
-                 data["old_values"] = old_values
-
             await hook_registry.trigger(event_name, data, context)
 
-        # Schedule it
-        # Note: 'loop.create_task' might not be safe if the loop finishes before task. 
-        # But in FastAPI request cycle, this is fine.
         loop.create_task(trigger_async())
 
     return listener

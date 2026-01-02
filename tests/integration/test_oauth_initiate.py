@@ -20,11 +20,10 @@ class TestOAuthInitiate:
         from snackbase.infrastructure.security.encryption import EncryptionService
         from snackbase.infrastructure.configuration.providers.oauth import GoogleOAuthHandler
         
-        # Always create a new registry with the current session
+        # Always create a new registry
         settings = get_settings()
-        config_repo = ConfigurationRepository(db_session)
         encryption_service = EncryptionService(settings.encryption_key)
-        app.state.config_registry = ConfigurationRegistry(config_repo, encryption_service)
+        app.state.config_registry = ConfigurationRegistry(encryption_service)
         
         # Register Google provider definition for tests
         google_handler = GoogleOAuthHandler()
@@ -75,7 +74,8 @@ class TestOAuthInitiate:
             display_name="Google",
             config=test_config,
             is_system=True,
-            enabled=True
+            enabled=True,
+            repository=ConfigurationRepository(db_session)
         )
         await db_session.commit()
         
@@ -145,7 +145,8 @@ class TestOAuthInitiate:
             display_name="Google",
             config={"client_id": "test", "client_secret": "test", "scopes": [], "redirect_uri": "test"},
             is_system=True,
-            enabled=True
+            enabled=True,
+            repository=ConfigurationRepository(db_session)
         )
         await db_session.commit()
 

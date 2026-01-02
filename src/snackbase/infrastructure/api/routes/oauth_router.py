@@ -41,6 +41,7 @@ from snackbase.infrastructure.persistence.models import (
 from snackbase.infrastructure.persistence.models.configuration import OAuthStateModel
 from snackbase.infrastructure.persistence.repositories import (
     AccountRepository,
+    ConfigurationRepository,
     OAuthStateRepository,
     RefreshTokenRepository,
     RoleRepository,
@@ -115,6 +116,7 @@ async def authorize(
             category="auth_providers",
             provider_name=provider_name,
             account_id=account_id,
+            repository=ConfigurationRepository(session),
         )
     except Exception as e:
         logger.error(
@@ -288,6 +290,7 @@ async def callback(
             category="auth_providers",
             provider_name=provider_name,
             account_id=account_id,
+            repository=ConfigurationRepository(session),
         )
     except Exception as e:
         logger.error("Error retrieving provider configuration", provider=provider_name, error=str(e))

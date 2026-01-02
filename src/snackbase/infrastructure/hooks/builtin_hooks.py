@@ -339,20 +339,11 @@ def register_builtin_hooks(registry: HookRegistry) -> list[str]:
     # Use priority 100 to run after user hooks
     
     # Model events (ORM)
-    for event in [
-        HookEvent.ON_MODEL_AFTER_CREATE,
-        HookEvent.ON_MODEL_AFTER_UPDATE,
-        HookEvent.ON_MODEL_AFTER_DELETE,
-    ]:
-        hook_ids.append(
-            registry.register(
-                event=event,
-                callback=audit_capture_hook,
-                priority=100,
-                is_builtin=True,
-            )
-        )
-        
+    # Model events (ORM)
+    # NOTE: Model audit logging is now handled synchronously in event_listeners.py
+    # to prevent database lock issues with SQLite. We NO LONGER register the async hook
+    # for model events.
+
     # Record events (Dynamic Collections)
     for event in [
         HookEvent.ON_RECORD_AFTER_CREATE,

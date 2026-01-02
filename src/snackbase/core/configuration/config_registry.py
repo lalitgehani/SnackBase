@@ -44,16 +44,13 @@ class ConfigurationRegistry:
 
     def __init__(
         self,
-        repository: ConfigurationRepository,
         encryption_service: EncryptionService,
     ) -> None:
         """Initialize the registry.
 
         Args:
-            repository: Configuration repository.
             encryption_service: Encryption service for sensitive data.
         """
-        self.repository = repository
         self.encryption_service = encryption_service
         self._provider_definitions: Dict[str, ProviderDefinition] = {}
         self._cache: Dict[str, CachedConfig] = {}
@@ -117,6 +114,7 @@ class ConfigurationRegistry:
         category: str,
         account_id: str,
         provider_name: str,
+        repository: ConfigurationRepository,
     ) -> Optional[Dict[str, Any]]:
         """Resolve effective configuration (account override -> system default).
 
@@ -124,6 +122,7 @@ class ConfigurationRegistry:
             category: Configuration category.
             account_id: Account ID to check for overrides.
             provider_name: Provider identifier.
+            repository: Configuration repository.
 
         Returns:
             Decrypted configuration dictionary if found, None otherwise.
@@ -138,7 +137,7 @@ class ConfigurationRegistry:
                 return cached.config
 
         # Try account-level override first
-        config_model = await self.repository.get_config(
+        config_model = await repository.get_config(
             category=category,
             account_id=account_id,
             provider_name=provider_name,
@@ -147,7 +146,7 @@ class ConfigurationRegistry:
 
         # Fall back to system default if not found or disabled
         if not config_model or not config_model.enabled:
-            config_model = await self.repository.get_config(
+            config_model = await repository.get_config(
                 category=category,
                 account_id=self.SYSTEM_ACCOUNT_ID,
                 provider_name=provider_name,
@@ -167,16 +166,19 @@ class ConfigurationRegistry:
 
         return effective_config
 
-    async def get_system_configs(self, category: str) -> Sequence[ConfigurationModel]:
+    async def get_system_configs(
+        self, category: str, repository: ConfigurationRepository
+    ) -> Sequence[ConfigurationModel]:
         """Get all configurations at the system level.
 
         Args:
             category: Filter by category.
+            repository: Configuration repository.
 
         Returns:
             List of system-level configuration models.
         """
-        return await self.repository.list_configs(
+        return await repository.list_configs(
             category=category,
             account_id=self.SYSTEM_ACCOUNT_ID,
             is_system=True,
@@ -186,17 +188,19 @@ class ConfigurationRegistry:
         self,
         category: str,
         account_id: str,
+        repository: ConfigurationRepository,
     ) -> Sequence[ConfigurationModel]:
         """Get all configurations at the account level.
 
         Args:
             category: Filter by category.
             account_id: Account ID.
+            repository: Configuration repository.
 
         Returns:
             List of account-level configuration models.
         """
-        return await self.repository.list_configs(
+        return await repository.list_configs(
             category=category,
             account_id=account_id,
             is_system=False,
@@ -214,6 +218,7 @@ class ConfigurationRegistry:
         is_builtin: bool = False,
         is_system: bool = False,
         priority: int = 0,
+        repository: Optional[ConfigurationRepository] = None,
     ) -> ConfigurationModel:
         """Create a new configuration record.
 
@@ -228,6 +233,7 @@ class ConfigurationRegistry:
             is_builtin: Whether it's built-in.
             is_system: Whether it's system-level.
             priority: Display priority.
+            repository: Optional repository. Required if persisting.
 
         Returns:
             Created configuration model.
@@ -254,7 +260,10 @@ class ConfigurationRegistry:
             priority=priority,
         )
 
-        created_model = await self.repository.create(new_config)
+        if repository:
+            created_model = await repository.create(new_config)
+        else:
+            created_model = new_config
 
         # Invalidate cache for this configuration
         self._invalidate_cache(category, account_id, provider_name)
@@ -269,6 +278,7 @@ class ConfigurationRegistry:
         logo_url: Optional[str] = None,
         enabled: Optional[bool] = None,
         priority: Optional[int] = None,
+        repository: Optional[ConfigurationRepository] = None,
     ) -> Optional[ConfigurationModel]:
         """Update an existing configuration record.
 
@@ -279,11 +289,15 @@ class ConfigurationRegistry:
             logo_url: New logo URL.
             enabled: New enabled status.
             priority: New priority.
+            repository: Optional repository. Required if persisting.
 
         Returns:
             Updated configuration model if found, None otherwise.
         """
-        config_model = await self.repository.get_by_id(config_id)
+        if not repository:
+            raise ValueError("Repository is required for update_config")
+
+        config_model = await repository.get_by_id(config_id)
         if not config_model:
             return None
 
@@ -298,7 +312,7 @@ class ConfigurationRegistry:
         if priority is not None:
             config_model.priority = priority
 
-        updated_model = await self.repository.update(config_model)
+        updated_model = await repository.update(config_model)
 
         # Invalidate cache for this configuration
         self._invalidate_cache(
@@ -309,11 +323,14 @@ class ConfigurationRegistry:
 
         return updated_model
 
-    async def delete_config(self, config_id: str) -> bool:
+    async def delete_config(
+        self, config_id: str, repository: ConfigurationRepository
+    ) -> bool:
         """Delete a configuration record.
 
         Args:
             config_id: ID of the configuration to delete.
+            repository: Configuration repository.
 
         Returns:
             True if deleted successfully, False if not found.
@@ -321,7 +338,7 @@ class ConfigurationRegistry:
         Raises:
             ValueError: If attempting to delete a built-in configuration.
         """
-        config_model = await self.repository.get_by_id(config_id)
+        config_model = await repository.get_by_id(config_id)
         if not config_model:
             return False
 
@@ -332,7 +349,7 @@ class ConfigurationRegistry:
         account_id = config_model.account_id
         provider_name = config_model.provider_name
 
-        result = await self.repository.delete(config_id)
+        result = await repository.delete(config_id)
         if result:
             self._invalidate_cache(category, account_id, provider_name)
 

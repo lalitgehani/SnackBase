@@ -32,6 +32,7 @@ from snackbase.infrastructure.persistence.models import (
 )
 from snackbase.infrastructure.persistence.repositories import (
     AccountRepository,
+    ConfigurationRepository,
     RefreshTokenRepository,
     RoleRepository,
     UserRepository,
@@ -47,7 +48,6 @@ from snackbase.infrastructure.configuration.providers.saml import (
     OktaSAMLProvider,
 )
 from snackbase.infrastructure.persistence.database import get_db_session
-from snackbase.infrastructure.persistence.repositories import AccountRepository
 
 logger = get_logger(__name__)
 
@@ -120,6 +120,7 @@ async def sso(
             category="saml_providers",
             provider_name=selected_provider_name,
             account_id=account_id,
+            repository=ConfigurationRepository(session),
         )
         if not config_dict:
             logger.info(
@@ -148,6 +149,7 @@ async def sso(
                 category="saml_providers",
                 provider_name=name,
                 account_id=account_id,
+                repository=ConfigurationRepository(session),
             )
              if conf:
                  found_config = conf
@@ -279,6 +281,7 @@ async def acs(
             category="saml_providers",
             provider_name=provider_name,
             account_id=account_id,
+            repository=ConfigurationRepository(session),
         )
     except Exception as e:
         logger.error("Error retrieving provider configuration", provider=provider_name, error=str(e))
@@ -546,6 +549,7 @@ async def metadata(
             category="saml_providers",
             provider_name=selected_provider_name,
             account_id=account_id,
+            repository=ConfigurationRepository(session),
         )
         if not config_dict:
             logger.info(
@@ -565,6 +569,7 @@ async def metadata(
                 category="saml_providers",
                 provider_name=name,
                 account_id=account_id,
+                repository=ConfigurationRepository(session),
             )
              if conf:
                  found_config = conf

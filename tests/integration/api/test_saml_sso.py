@@ -45,7 +45,7 @@ async def setup_registry(client: AsyncClient, db_session: AsyncSession):
     config_repo = ConfigurationRepository(db_session)
     encryption_service = EncryptionService(settings.encryption_key)
     
-    registry = ConfigurationRegistry(config_repo, encryption_service)
+    registry = ConfigurationRegistry(encryption_service)
     app.state.config_registry = registry
     
     # Register provider definitions
@@ -87,6 +87,7 @@ async def test_saml_sso_initiate_success(
     client: AsyncClient,
     test_account,
     setup_registry,
+    db_session: AsyncSession,
 ):
     """Test successful SAML SSO initiation."""
     registry = setup_registry
@@ -107,6 +108,7 @@ async def test_saml_sso_initiate_success(
         display_name="Okta SSO",
         config=okta_config,
         enabled=True,
+        repository=ConfigurationRepository(db_session),
     )
     
     # Execute: Call the SSO endpoint
@@ -127,6 +129,7 @@ async def test_saml_sso_specific_provider(
     client: AsyncClient,
     test_account,
     setup_registry,
+    db_session: AsyncSession,
 ):
     """Test SAML SSO with specific provider requested."""
     registry = setup_registry
@@ -147,6 +150,7 @@ async def test_saml_sso_specific_provider(
         display_name="Azure AD",
         config=azure_config,
         enabled=True,
+        repository=ConfigurationRepository(db_session),
     )
     
     response = await client.get(
@@ -163,6 +167,7 @@ async def test_saml_sso_relay_state(
     client: AsyncClient,
     test_account,
     setup_registry,
+    db_session: AsyncSession,
 ):
     """Test SAML SSO preserves relay state."""
     registry = setup_registry
@@ -184,6 +189,7 @@ async def test_saml_sso_relay_state(
         display_name="Generic",
         config=generic_config,
         enabled=True,
+        repository=ConfigurationRepository(db_session),
     )
     
     relay_state = "return_to=/dashboard"

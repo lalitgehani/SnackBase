@@ -215,6 +215,7 @@ async def get_account_configurations(
 async def update_configuration_status(
     _admin: SuperadminUser,
     config_id: str,
+    request: Request,
     enabled: bool = Body(..., embed=True),
     db: AsyncSession = Depends(get_db_session),
 ):
@@ -237,6 +238,10 @@ async def update_configuration_status(
         await repo.update(config)
         await db.commit()
 
+        # Invalidate cache
+        registry = request.app.state.config_registry
+        registry._invalidate_cache(config.category, config.account_id, config.provider_name)
+
         return {"status": "success", "enabled": config.enabled}
 
     except HTTPException:
@@ -253,6 +258,7 @@ async def update_configuration_status(
 async def delete_configuration(
     _admin: SuperadminUser,
     config_id: str,
+    request: Request,
     db: AsyncSession = Depends(get_db_session),
 ):
     """Delete a configuration.
@@ -275,6 +281,10 @@ async def delete_configuration(
 
         await repo.delete(config_id)
         await db.commit()
+
+        # Invalidate cache
+        registry = request.app.state.config_registry
+        registry._invalidate_cache(config.category, config.account_id, config.provider_name)
 
         return {"status": "success"}
 
@@ -442,6 +452,7 @@ async def create_configuration(
         account_id = data.get("account_id", registry.SYSTEM_ACCOUNT_ID)
         is_system = account_id == registry.SYSTEM_ACCOUNT_ID
 
+        repo = ConfigurationRepository(db)
         new_config = await registry.create_config(
             account_id=account_id,
             category=data["category"],
@@ -453,7 +464,10 @@ async def create_configuration(
             is_builtin=False,  # Custom configs are never built-in
             is_system=is_system,
             priority=data.get("priority", 0),
+            repository=repo,
         )
+
+        await db.commit()
 
         return {
             "id": new_config.id,
@@ -462,6 +476,19 @@ async def create_configuration(
     except HTTPException:
         raise
     except Exception as e:
+        # Handle unique constraint violation (IntegrityError)
+        # Note: We import IntegrityError locally to avoid top-level SQLAlchemy dependency if possible,
+        # or use string matching if the exception type varies.
+        # But importing it is cleaner.
+        from sqlalchemy.exc import IntegrityError
+        
+        if isinstance(e, IntegrityError) or "UNIQUE constraint failed" in str(e):
+            logger.info("Configuration creation failed: duplicate exists", error=str(e))
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Configuration already exists for this provider and category.",
+            )
+            
         logger.error("Failed to create configuration", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

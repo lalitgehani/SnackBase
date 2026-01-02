@@ -155,6 +155,7 @@ class TestOktaSAMLProvider:
                 return "<xml>metadata</xml>"
             mock_meta.side_effect = async_mock
 
-            result = await provider.test_connection(valid_config)
+            result, message = await provider.test_connection(valid_config)
             assert result is True
+            assert "Metadata generated successfully" in message
             mock_meta.assert_called_once_with(valid_config)

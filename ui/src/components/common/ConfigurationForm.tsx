@@ -14,11 +14,14 @@ import { Loader2, Lock, CheckCircle2, XCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { ProviderLogo } from './ProviderLogo';
+import { Badge } from '@/components/ui/badge';
 
 interface ConfigurationFormProps {
     category: string;
     providerName: string;
     displayName: string;
+    logoUrl?: string;
     configId?: string;
     accountId?: string;
     onSuccess: () => void;
@@ -29,6 +32,7 @@ export const ConfigurationForm = ({
     category,
     providerName,
     displayName,
+    logoUrl,
     configId,
     accountId,
     onSuccess,
@@ -156,6 +160,25 @@ export const ConfigurationForm = ({
 
     return (
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col h-full overflow-hidden">
+            <div className="px-6 py-4 border-b bg-muted/30">
+                <div className="flex items-center gap-4">
+                    <ProviderLogo
+                        logoUrl={logoUrl}
+                        providerName={providerName}
+                        className="h-10 w-10 text-primary"
+                        size={40}
+                    />
+                    <div className="flex flex-col">
+                        <h3 className="text-lg font-semibold leading-none">{displayName}</h3>
+                        <div className="flex items-center gap-2 mt-1">
+                            <span className="text-xs text-muted-foreground font-mono">{providerName}</span>
+                            <Badge variant="secondary" className="text-[10px] h-4 px-1.5 uppercase">
+                                {category.replace('_', ' ')}
+                            </Badge>
+                        </div>
+                    </div>
+                </div>
+            </div>
             <ScrollArea className="flex-1 overflow-y-auto px-6 py-4">
                 <div className="space-y-6">
                     {Object.entries(properties).map(([key, prop]: [string, any]) => {

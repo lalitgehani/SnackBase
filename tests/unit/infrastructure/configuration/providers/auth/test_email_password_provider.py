@@ -28,7 +28,7 @@ class TestEmailPasswordProvider:
     def test_logo_url(self):
         """Test logo_url is None (no logo for built-in provider)."""
         provider = EmailPasswordProvider()
-        assert provider.logo_url is None
+        assert provider.logo_url == "/assets/providers/email.svg"
 
     def test_config_schema_is_empty(self):
         """Test config_schema is empty dict (no configuration needed)."""

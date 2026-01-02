@@ -114,17 +114,15 @@ async def test_get_metadata_auto_provider_selection(client, db_session):
     # 2. Mock ConfigRegistry
     mock_registry = MagicMock(spec=ConfigurationRegistry)
     
-    # Mock to return config only for 'azure_ad'
-    async def side_effect(category, provider_name, account_id):
-        if provider_name == "azure_ad":
-             return {
-                "idp_entity_id": "https://sts.windows.net/...",
-                "idp_sso_url": "https://login.microsoftonline.com/...",
-                "idp_x509_cert": "MIID...",
-                "sp_entity_id": "http://sp",
-                "assertion_consumer_url": "http://acs",
-            }
-        return None
+    # Mock to return config for any SAML provider
+    async def side_effect(category, account_id, provider_name, repository):
+        return {
+            "idp_entity_id": "https://sts.windows.net/...",
+            "idp_sso_url": "https://login.microsoftonline.com/...",
+            "idp_x509_cert": "MIID...",
+            "sp_entity_id": "http://sp",
+            "assertion_consumer_url": "http://acs",
+        }
 
     mock_registry.get_effective_config = AsyncMock(side_effect=side_effect)
     client._transport.app.state.config_registry = mock_registry

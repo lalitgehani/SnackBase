@@ -174,7 +174,7 @@ class TestProviderRegistration:
                 
                 config_repo = ConfigurationRepository(session)
                 encryption_service = EncryptionService(settings.encryption_key)
-                config_registry = ConfigurationRegistry(config_repo, encryption_service)
+                config_registry = ConfigurationRegistry(encryption_service)
                 
                 # Create a built-in configuration
                 config = await config_registry.create_config(
@@ -185,11 +185,12 @@ class TestProviderRegistration:
                     config={},
                     is_builtin=True,
                     is_system=True,
+                    repository=config_repo,
                 )
                 
                 # Attempt to delete it - should raise ValueError
                 with pytest.raises(ValueError, match="Built-in configurations cannot be deleted"):
-                    await config_registry.delete_config(config.id)
+                    await config_registry.delete_config(config.id, config_repo)
                 
                 # Clean up - delete directly from repository (bypassing the registry check)
                 await config_repo.delete(config.id)

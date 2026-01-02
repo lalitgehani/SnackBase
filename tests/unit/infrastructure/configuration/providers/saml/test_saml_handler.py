@@ -190,13 +190,15 @@ class TestSAMLProviderHandler:
 
         # Test with valid config
         valid_config = {"idp_entity_id": "http://idp.example.com"}
-        result = await provider.test_connection(valid_config)
+        result, message = await provider.test_connection(valid_config)
         assert result is True
+        assert "Metadata generated successfully" in message
 
         # Test with invalid config (missing idp_entity_id)
         invalid_config = {}
-        with pytest.raises(ValueError, match="Invalid configuration"):
-            await provider.test_connection(invalid_config)
+        result, message = await provider.test_connection(invalid_config)
+        assert result is False
+        assert "Invalid SAML configuration" in message
 
     def test_all_properties_are_abstract(self):
         """Test that required properties are marked as abstract."""

@@ -2,14 +2,39 @@
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
+from snackbase.infrastructure.persistence.models.user import UserModel
+from snackbase.infrastructure.persistence.models.account import AccountModel
 
 from snackbase.infrastructure.auth import jwt_service
 from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID
 
 
 @pytest.fixture
-def superadmin_headers():
+async def superadmin_headers(db_session: AsyncSession):
     """Create headers for a superadmin user."""
+    from snackbase.infrastructure.persistence.models.role import RoleModel
+    
+    # Ensure roles exist
+    admin_role = RoleModel(id=1, name="admin")
+    await db_session.merge(admin_role)
+    
+    # Ensure system account exists
+    account = AccountModel(id=SYSTEM_ACCOUNT_ID, name="System", account_code="SY0000", slug="system")
+    await db_session.merge(account)
+    
+    # Ensure superadmin user exists
+    user = UserModel(
+        id="superadmin-id", 
+        email="admin@system.com", 
+        account_id=SYSTEM_ACCOUNT_ID, 
+        role_id=1, 
+        is_active=True,
+        password_hash="fake-hash"
+    )
+    await db_session.merge(user)
+    await db_session.commit()
+
     token = jwt_service.create_access_token(
         user_id="superadmin-id",
         account_id=SYSTEM_ACCOUNT_ID,
@@ -20,8 +45,30 @@ def superadmin_headers():
 
 
 @pytest.fixture
-def regular_user_headers():
+async def regular_user_headers(db_session: AsyncSession):
     """Create headers for a regular user."""
+    from snackbase.infrastructure.persistence.models.role import RoleModel
+    
+    # Ensure roles exist
+    user_role = RoleModel(id=2, name="user")
+    await db_session.merge(user_role)
+    
+    # Ensure account exists
+    account = AccountModel(id="AB1234", name="User Account", account_code="AB1234", slug="user-account")
+    await db_session.merge(account)
+    
+    # Ensure regular user exists
+    user = UserModel(
+        id="user-id", 
+        email="user@example.com", 
+        account_id="AB1234", 
+        role_id=2, 
+        is_active=True,
+        password_hash="fake-hash"
+    )
+    await db_session.merge(user)
+    await db_session.commit()
+
     token = jwt_service.create_access_token(
         user_id="user-id",
         account_id="AB1234",

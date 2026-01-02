@@ -16,13 +16,9 @@ async def setup_registry(db_session: AsyncSession):
     # Initialize or update the regsitry in app.state
     if not hasattr(app.state, "config_registry"):
         registry = ConfigurationRegistry(
-            ConfigurationRepository(db_session),
             EncryptionService("test-key-must-be-32-bytes-long!!!!")
         )
         app.state.config_registry = registry
-    else:
-        # Crucial to update the repository with the current session for the new test
-        app.state.config_registry.repository = ConfigurationRepository(db_session)
     
     # Clear registry memory state for isolation
     app.state.config_registry._provider_definitions = {}
@@ -40,7 +36,7 @@ async def setup_registry(db_session: AsyncSession):
     )
     
     # Seed email_password config if not exists (usually done in lifespan)
-    repo = app.state.config_registry.repository
+    repo = ConfigurationRepository(db_session)
     if not await repo.get_config(ep.category, app.state.config_registry.SYSTEM_ACCOUNT_ID, ep.provider_name, True):
         await app.state.config_registry.create_config(
             account_id=app.state.config_registry.SYSTEM_ACCOUNT_ID,
@@ -49,7 +45,8 @@ async def setup_registry(db_session: AsyncSession):
             display_name=ep.display_name,
             config={},
             is_builtin=True,
-            is_system=True
+            is_system=True,
+            repository=repo
         )
     
     return app.state.config_registry
@@ -121,6 +118,12 @@ async def test_create_configuration(client: AsyncClient, superadmin_token: str, 
     result = response.json()
     assert result["status"] == "success"
     assert "id" in result
+    
+    # VERIFY DB PERSISTENCE
+    repo = ConfigurationRepository(db_session)
+    config = await repo.get_by_id(result["id"])
+    assert config is not None
+    assert config.provider_name == "test_auth_create"
 
 @pytest.mark.asyncio
 async def test_get_and_update_configuration_values(client: AsyncClient, superadmin_token: str, db_session: AsyncSession):
@@ -133,8 +136,10 @@ async def test_get_and_update_configuration_values(client: AsyncClient, superadm
         provider_name="test_auth_update",
         display_name="Test Config",
         config={"password": "secret_password", "normal": "value"},
-        is_system=True
+        is_system=True,
+        repository=ConfigurationRepository(db_session)
     )
+    await db_session.commit()
 
     # Register schema with secret field
     registry.register_provider_definition(

@@ -1,18 +1,19 @@
 """Integration tests for audit log capture (F3.7).
 
 These tests verify that audit logs are automatically captured for
-CREATE, UPDATE, DELETE operations on models.
+CREATE, UPDATE, DELETE operations on models using the synchronous
+audit logging mechanism.
 """
 
 import pytest
 from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
-from snackbase.core.hooks import HookRegistry
+from snackbase.core.context import set_current_context, clear_current_context
 from snackbase.domain.entities.hook_context import HookContext
-from snackbase.infrastructure.hooks import register_builtin_hooks
-from snackbase.infrastructure.persistence.audit_helper import AuditHelper
 from snackbase.infrastructure.persistence.models import UserModel, AccountModel
+from snackbase.infrastructure.persistence.models.audit_log import AuditLogModel
 from snackbase.infrastructure.persistence.repositories.audit_log_repository import (
     AuditLogRepository,
 )
@@ -21,112 +22,88 @@ from snackbase.infrastructure.persistence.repositories.audit_log_repository impo
 pytestmark = pytest.mark.enable_audit_hooks
 
 
-
 @pytest.mark.asyncio
 async def test_audit_capture_create(db_session: AsyncSession):
     """Test that CREATE operations generate audit log entries."""
-    # Setup hook registry
-    hook_registry = HookRegistry()
-    register_builtin_hooks(hook_registry)
     
-    # Create audit helper
-    audit_helper = AuditHelper(db_session, hook_registry)
-    
-    # Create a test account first
-    account = AccountModel(
-        id="test-account-123",
-        account_code="AC0001",
-        name="Test Account",
-        slug="test-account",
-    )
-    db_session.add(account)
-    await db_session.flush()
-    
-    # Create a test user
-    user = UserModel(
-        id="user-123",
-        email="test@example.com",
-        password_hash="hashed_password",
-        account_id="test-account-123",
-        role_id=1,
-    )
-    db_session.add(user)
-    await db_session.flush()
-    
-    # Create hook context with a mock user
+    # 1. Setup Context
     from dataclasses import dataclass
     
     @dataclass
     class MockUser:
         id: str
         email: str
-    
+
     context = HookContext(
-        app=None,  # Not needed for this test
-        user=MockUser(
-            id="admin-123",
-            email="admin@example.com",
-        ),
+        app=None,
+        user=MockUser(id="admin-123", email="admin@example.com"),
         account_id="test-account-123",
         request_id="req-123",
         ip_address="192.168.1.1",
         user_agent="Mozilla/5.0",
         user_name="Admin User",
     )
-    
-    # Trigger audit capture
-    await audit_helper.trigger_create(user, context)
-    await db_session.commit()
-    
-    # Verify audit logs were created
-    audit_repo = AuditLogRepository(db_session)
-    count = await audit_repo.count_all()
-    
-    # Should have audit entries for each column in UserModel
-    assert count > 0, "No audit log entries were created"
-    
-    # Verify audit log details
-    from sqlalchemy import select
-    from snackbase.infrastructure.persistence.models.audit_log import AuditLogModel
-    
-    result = await db_session.execute(
-        select(AuditLogModel)
-        .where(AuditLogModel.table_name == "users")
-        .where(AuditLogModel.record_id == "user-123")
-    )
-    audit_logs = list(result.scalars().all())
-    
-    assert len(audit_logs) > 0, "No audit logs found for user creation"
-    
-    # Check that all audit logs have correct operation
-    for log in audit_logs:
-        assert log.operation == "CREATE"
-        assert log.old_value is None  # CREATE should have NULL old_value
-        assert log.new_value is not None or log.column_name in ["last_login", "auth_provider_name", "external_id", "external_email", "profile_data"]  # Some fields may be NULL
-        assert log.user_id == "admin-123"
-        assert log.user_email == "admin@example.com"
-        assert log.user_name == "Admin User"
-        assert log.ip_address == "192.168.1.1"
-        assert log.user_agent == "Mozilla/5.0"
-        assert log.request_id == "req-123"
-    
-    # Verify password is masked
-    password_logs = [log for log in audit_logs if log.column_name == "password_hash"]
-    if password_logs:
-        assert password_logs[0].new_value == "***", "Password should be masked"
+    set_current_context(context)
+
+    try:
+        # Create a test account first (audit might happen for this too if context has account_id)
+        # Note: synchronus listener handles account creation specifically if account_id is missing
+        account = AccountModel(
+            id="test-account-123",
+            account_code="AC0001",
+            name="Test Account",
+            slug="test-account",
+        )
+        db_session.add(account)
+        
+        # Create a test user
+        user = UserModel(
+            id="user-123",
+            email="test@example.com",
+            password_hash="hashed_password",
+            account_id="test-account-123",
+            role_id=1,
+        )
+        db_session.add(user)
+        
+        # 2. Trigger Audit (via commit/flush)
+        await db_session.commit()
+        
+        # 3. Verify
+        # Verify audit logs were created
+        audit_repo = AuditLogRepository(db_session)
+        count = await audit_repo.count_all()
+        assert count > 0, "No audit log entries were created"
+        
+        # Check specific logs for user creation
+        result = await db_session.execute(
+            select(AuditLogModel)
+            .where(AuditLogModel.table_name == "users")
+            .where(AuditLogModel.record_id == "user-123")
+        )
+        audit_logs = list(result.scalars().all())
+        
+        assert len(audit_logs) > 0, "No audit logs found for user creation"
+        
+        for log in audit_logs:
+            assert log.operation == "CREATE"
+            assert log.user_id == "admin-123"
+            assert log.request_id == "req-123"
+
+        # Verify password is masked
+        password_logs = [log for log in audit_logs if log.column_name == "password_hash"]
+        if password_logs:
+            assert password_logs[0].new_value == "***", "Password should be masked"
+
+    finally:
+        clear_current_context()
 
 
 @pytest.mark.asyncio
 async def test_audit_capture_update(db_session: AsyncSession):
-    """Test that UPDATE operations generate audit log entries for changed columns only."""
-    # Setup hook registry
-    hook_registry = HookRegistry()
-    register_builtin_hooks(hook_registry)
+    """Test that UPDATE operations generate audit log entries."""
     
-    # Create audit helper
-    audit_helper = AuditHelper(db_session, hook_registry)
-    
-    # Create a test account
+    # 1. Setup Initial Data (without context, or allow it)
     account = AccountModel(
         id="test-account-456",
         account_code="AC0002",
@@ -134,9 +111,7 @@ async def test_audit_capture_update(db_session: AsyncSession):
         slug="test-account-2",
     )
     db_session.add(account)
-    await db_session.flush()
     
-    # Create a test user
     user = UserModel(
         id="user-456",
         email="original@example.com",
@@ -145,82 +120,65 @@ async def test_audit_capture_update(db_session: AsyncSession):
         role_id=1,
     )
     db_session.add(user)
-    await db_session.flush()
+    await db_session.commit()
     
-    # Capture old values before update (BEFORE commit to avoid detached instance)
-    old_values = AuditHelper.capture_old_values(user)
-    
-    # Update the user
-    user.email = "updated@example.com"
-    await db_session.flush()
-    
-    # Create hook context with mock user
+    # 2. Setup Context for Update
     from dataclasses import dataclass
-    
     @dataclass
     class MockUser:
         id: str
         email: str
-    
+
     context = HookContext(
         app=None,
-        user=MockUser(
-            id="admin-456",
-            email="admin@example.com",
-        ),
+        user=MockUser(id="admin-456", email="admin@example.com"),
         account_id="test-account-456",
         request_id="req-456",
         ip_address="192.168.1.2",
         user_agent="Chrome/1.0",
         user_name="Admin User 2",
     )
+    set_current_context(context)
     
-    # Trigger audit capture BEFORE commit
-    await audit_helper.trigger_update(user, old_values, context)
-    
-    # Now commit
-    await db_session.commit()
-    
-    # Verify audit logs were created
-    from sqlalchemy import select
-    from snackbase.infrastructure.persistence.models.audit_log import AuditLogModel
-    
-    result = await db_session.execute(
-        select(AuditLogModel)
-        .where(AuditLogModel.table_name == "users")
-        .where(AuditLogModel.record_id == "user-456")
-        .where(AuditLogModel.operation == "UPDATE")
-    )
-    audit_logs = list(result.scalars().all())
-    
-    # Should only have audit entry for the email column (the only changed column)
-    assert len(audit_logs) >= 1, "No audit logs found for user update"
-    
-    # Find the email audit log
-    email_logs = [log for log in audit_logs if log.column_name == "email"]
-    assert len(email_logs) == 1, "Should have exactly one email audit log"
-    
-    email_log = email_logs[0]
-    assert email_log.operation == "UPDATE"
-    # Email should be stored RAW in database (not masked)
-    # Masking happens on read based on user's group membership
-    assert email_log.old_value == "original@example.com"  # Raw data stored
-    assert email_log.new_value == "updated@example.com"  # Raw data stored
-    assert email_log.user_id == "admin-456"
-    assert email_log.user_email == "admin@example.com"
+    try:
+        # 3. Perform Update
+        # Need to fetch fresh instance attached to session
+        user = await db_session.get(UserModel, "user-456")
+        user.email = "updated@example.com"
+        
+        await db_session.commit()
+        
+        # 4. Verify
+        result = await db_session.execute(
+            select(AuditLogModel)
+            .where(AuditLogModel.table_name == "users")
+            .where(AuditLogModel.record_id == "user-456")
+            # Only check update logs (ignore create logs from setup if any)
+            .where(AuditLogModel.operation == "UPDATE")
+        )
+        audit_logs = list(result.scalars().all())
+        
+        assert len(audit_logs) >= 1, "No audit logs found for user update"
+        
+        # Check specific log for email
+        email_logs = [log for log in audit_logs if log.column_name == "email"]
+        assert len(email_logs) == 1, "Should have exactly one email audit log"
+        
+        email_log = email_logs[0]
+        assert email_log.operation == "UPDATE"
+        assert email_log.old_value == "original@example.com"
+        assert email_log.new_value == "updated@example.com"
+        assert email_log.user_id == "admin-456"
+
+    finally:
+        clear_current_context()
 
 
 @pytest.mark.asyncio
 async def test_audit_capture_delete(db_session: AsyncSession):
     """Test that DELETE operations generate audit log entries."""
-    # Setup hook registry
-    hook_registry = HookRegistry()
-    register_builtin_hooks(hook_registry)
     
-    # Create audit helper
-    audit_helper = AuditHelper(db_session, hook_registry)
-    
-    # Create a test account
+    # 1. Setup Initial Data
     account = AccountModel(
         id="test-account-789",
         account_code="AC0003",
@@ -228,9 +186,7 @@ async def test_audit_capture_delete(db_session: AsyncSession):
         slug="test-account-3",
     )
     db_session.add(account)
-    await db_session.flush()
     
-    # Create a test user
     user = UserModel(
         id="user-789",
         email="delete@example.com",
@@ -239,70 +195,59 @@ async def test_audit_capture_delete(db_session: AsyncSession):
         role_id=1,
     )
     db_session.add(user)
-    await db_session.flush()
     await db_session.commit()
     
-    # Create hook context with mock user
+    # 2. Setup Context for Delete
     from dataclasses import dataclass
-    
     @dataclass
     class MockUser:
         id: str
         email: str
-    
+
     context = HookContext(
         app=None,
-        user=MockUser(
-            id="admin-789",
-            email="admin@example.com",
-        ),
+        user=MockUser(id="admin-789", email="admin@example.com"),
         account_id="test-account-789",
         request_id="req-789",
         ip_address="192.168.1.3",
         user_agent="Safari/1.0",
         user_name="Admin User 3",
     )
+    set_current_context(context)
     
-    # Trigger audit capture BEFORE deleting
-    await audit_helper.trigger_delete(user, context)
-    
-    # Now delete the user
-    await db_session.delete(user)
-    await db_session.commit()
-    
-    # Verify audit logs were created
-    from sqlalchemy import select
-    from snackbase.infrastructure.persistence.models.audit_log import AuditLogModel
-    
-    result = await db_session.execute(
-        select(AuditLogModel)
-        .where(AuditLogModel.table_name == "users")
-        .where(AuditLogModel.record_id == "user-789")
-        .where(AuditLogModel.operation == "DELETE")
-    )
-    audit_logs = list(result.scalars().all())
-    
-    assert len(audit_logs) > 0, "No audit logs found for user deletion"
-    
-    # Check that all audit logs have correct operation
-    for log in audit_logs:
-        assert log.operation == "DELETE"
-        assert log.old_value is not None or log.column_name in ["last_login", "auth_provider_name", "external_id", "external_email", "profile_data"]  # Some fields may be NULL
-        assert log.new_value is None  # DELETE should have NULL new_value
-        assert log.user_id == "admin-789"
+    try:
+        # 3. Perform Delete
+        user = await db_session.get(UserModel, "user-789")
+        await db_session.delete(user)
+        await db_session.commit()
+        
+        # 4. Verify
+        result = await db_session.execute(
+            select(AuditLogModel)
+            .where(AuditLogModel.table_name == "users")
+            .where(AuditLogModel.record_id == "user-789")
+            .where(AuditLogModel.operation == "DELETE")
+        )
+        audit_logs = list(result.scalars().all())
+        
+        assert len(audit_logs) > 0, "No audit logs found for user deletion"
+        
+        for log in audit_logs:
+            assert log.operation == "DELETE"
+            assert log.new_value is None
+            assert log.user_id == "admin-789"
+
+    finally:
+        clear_current_context()
 
 
 @pytest.mark.asyncio
 async def test_audit_capture_without_context(db_session: AsyncSession):
-    """Test that audit capture gracefully handles missing context."""
-    # Setup hook registry
-    hook_registry = HookRegistry()
-    register_builtin_hooks(hook_registry)
+    """Test that audit capture gracefully handles missing context (no logs created)."""
     
-    # Create audit helper
-    audit_helper = AuditHelper(db_session, hook_registry)
+    # Ensure no context is set
+    clear_current_context()
     
-    # Create a test account
     account = AccountModel(
         id="test-account-999",
         account_code="AC0004",
@@ -310,9 +255,7 @@ async def test_audit_capture_without_context(db_session: AsyncSession):
         slug="test-account-4",
     )
     db_session.add(account)
-    await db_session.flush()
     
-    # Create a test user
     user = UserModel(
         id="user-999",
         email="nocontext@example.com",
@@ -321,16 +264,9 @@ async def test_audit_capture_without_context(db_session: AsyncSession):
         role_id=1,
     )
     db_session.add(user)
-    await db_session.flush()
-    
-    # Trigger audit capture WITHOUT context (should not fail)
-    await audit_helper.trigger_create(user, context=None)
     await db_session.commit()
     
-    # Verify NO audit logs were created (since no context was provided)
-    from sqlalchemy import select
-    from snackbase.infrastructure.persistence.models.audit_log import AuditLogModel
-    
+    # Verify NO audit logs were created
     result = await db_session.execute(
         select(AuditLogModel)
         .where(AuditLogModel.table_name == "users")

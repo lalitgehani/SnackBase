@@ -148,17 +148,15 @@ class TestGoogleOAuthHandler:
         mock_response.status_code = 200
         mock_get.return_value = mock_response
         
-        result = await handler.test_connection(config)
+        result, message = await handler.test_connection(config)
         assert result is True
+        assert "Discovery endpoint reached" in message
         
         # Verify it called the discovery endpoint
         args, _ = mock_get.call_args
         assert "openid-configuration" in args[0]
 
-    @pytest.mark.asyncio
-    async def test_test_connection_invalid_config(self, handler):
-        """Test connection validation with invalid config."""
         invalid_config = {"client_id": "missing_other_fields"}
-        
-        with pytest.raises(ValueError, match="Missing required configuration field"):
-            await handler.test_connection(invalid_config)
+        result, message = await handler.test_connection(invalid_config)
+        assert result is False
+        assert "Missing required configuration field" in message

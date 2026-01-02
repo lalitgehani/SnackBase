@@ -28,9 +28,8 @@ class TestSAMLACS:
         from snackbase.infrastructure.configuration.providers.saml import OktaSAMLProvider
         
         settings = get_settings()
-        config_repo = ConfigurationRepository(db_session)
         encryption_service = EncryptionService(settings.encryption_key)
-        app.state.config_registry = ConfigurationRegistry(config_repo, encryption_service)
+        app.state.config_registry = ConfigurationRegistry(encryption_service)
         
         # Register Okta provider definition
         okta_handler = OktaSAMLProvider()
@@ -72,7 +71,8 @@ class TestSAMLACS:
             display_name="Okta",
             config=test_config,
             is_system=True,
-            enabled=True
+            enabled=True,
+            repository=ConfigurationRepository(db_session)
         )
         await db_session.commit()
 

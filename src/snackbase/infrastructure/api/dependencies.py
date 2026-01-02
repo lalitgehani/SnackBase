@@ -90,25 +90,30 @@ async def get_current_user(
         if user_info:
             groups = user_info["groups"]
             db_account_id = user_info["account_id"]
-        else:
-            if session is not None:
-                from snackbase.infrastructure.persistence.repositories import UserRepository
-                
-                user_repo = UserRepository(session)
-                user = await user_repo.get_by_id_with_groups(user_id)
-                
-                if user:
-                    db_account_id = user.account_id
-                    if user.groups:
-                        groups = [group.name for group in user.groups]
-                    
-                    # Cache for next time
-                    permission_cache.set_user_info(user_id, groups, db_account_id)
+        elif session is not None:
+            from snackbase.infrastructure.persistence.repositories import UserRepository
+
+            user_repo = UserRepository(session)
+            user = await user_repo.get_by_id_with_groups(user_id)
+
+            if user:
+                db_account_id = user.account_id
+                if user.groups:
+                    groups = [group.name for group in user.groups]
+
+                # Cache for next time
+                permission_cache.set_user_info(user_id, groups, db_account_id)
             else:
-                # Without session and cache miss, we can't verify relationship 
-                # but we usually have session in normal request flow.
-                # If we don't have user, it's an invalid token user.
-                pass
+                logger.info("Authentication failed: user not found in database", user_id=user_id)
+                raise credentials_exception
+        else:
+            # Without session and cache miss, we can't verify existence.
+            # We should fail to be safe.
+            logger.warning(
+                "Authentication failed: cannot verify user existence (no session/cache hit)",
+                user_id=user_id,
+            )
+            raise credentials_exception
 
         # Verify that the user actually belongs to the account specified in the token
         if db_account_id and db_account_id != payload["account_id"]:

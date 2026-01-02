@@ -126,42 +126,29 @@ class AuditLogRepository:
         Returns:
             SHA-256 checksum as a hexadecimal string.
         """
-        # Helper to normalize datetime - remove timezone info for consistent hashing
-        def normalize_dt(dt):
-            if dt is None:
-                return None
-            if hasattr(dt, 'replace') and dt.tzinfo is not None:
-                dt = dt.replace(tzinfo=None)
-            return dt.isoformat() if dt else None
+        from snackbase.domain.services.audit_checksum import AuditChecksum
 
-        # Build a dictionary of all fields to hash
-        data = {
-            "account_id": audit_log.account_id,
-            "operation": audit_log.operation,
-            "table_name": audit_log.table_name,
-            "record_id": audit_log.record_id,
-            "column_name": audit_log.column_name,
-            "old_value": audit_log.old_value,
-            "new_value": audit_log.new_value,
-            "user_id": audit_log.user_id,
-            "user_email": audit_log.user_email,
-            "user_name": audit_log.user_name,
-            "es_username": audit_log.es_username,
-            "es_reason": audit_log.es_reason,
-            "es_timestamp": normalize_dt(audit_log.es_timestamp),
-            "ip_address": audit_log.ip_address,
-            "user_agent": audit_log.user_agent,
-            "request_id": audit_log.request_id,
-            "occurred_at": normalize_dt(audit_log.occurred_at),
-            "previous_hash": audit_log.previous_hash,
-            "extra_metadata": audit_log.extra_metadata,
-        }
-
-        # Convert to JSON string (sorted keys for consistency)
-        json_str = json.dumps(data, sort_keys=True, default=str)
-
-        # Calculate SHA-256 hash
-        return hashlib.sha256(json_str.encode("utf-8")).hexdigest()
+        return AuditChecksum.calculate(
+            account_id=audit_log.account_id,
+            operation=audit_log.operation,
+            table_name=audit_log.table_name,
+            record_id=audit_log.record_id,
+            column_name=audit_log.column_name,
+            old_value=audit_log.old_value,
+            new_value=audit_log.new_value,
+            user_id=audit_log.user_id,
+            user_email=audit_log.user_email,
+            user_name=audit_log.user_name,
+            es_username=audit_log.es_username,
+            es_reason=audit_log.es_reason,
+            es_timestamp=audit_log.es_timestamp,
+            ip_address=audit_log.ip_address,
+            user_agent=audit_log.user_agent,
+            request_id=audit_log.request_id,
+            occurred_at=audit_log.occurred_at,
+            previous_hash=audit_log.previous_hash,
+            extra_metadata=audit_log.extra_metadata,
+        )
 
     async def list_logs(
         self,

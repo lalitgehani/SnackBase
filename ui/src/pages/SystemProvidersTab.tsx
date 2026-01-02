@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
-import { Trash2, Edit, Plus, Settings } from 'lucide-react';
+import { Trash2, Edit, Plus } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import {
     AlertDialog,
@@ -32,6 +32,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { ProviderLogo } from '@/components/common/ProviderLogo';
 
 const SystemProvidersTab = () => {
     const [categoryFilter, setCategoryFilter] = useState<string>('all');
@@ -111,13 +112,11 @@ const SystemProvidersTab = () => {
             header: 'Provider',
             render: (config) => (
                 <div className="flex items-center space-x-3">
-                    {config.logo_url ? (
-                        <img src={config.logo_url} alt={config.provider_name} className="h-6 w-6 object-contain" />
-                    ) : (
-                        <div className="h-6 w-6 bg-secondary rounded-full flex items-center justify-center">
-                            <Settings className="h-3 w-3" />
-                        </div>
-                    )}
+                    <ProviderLogo
+                        logoUrl={config.logo_url}
+                        providerName={config.provider_name}
+                        className="h-6 w-6"
+                    />
                     <div className="flex flex-col">
                         <span className="font-medium">{config.display_name}</span>
                         <span className="text-xs text-muted-foreground">{config.provider_name}</span>
@@ -270,6 +269,7 @@ const SystemProvidersTab = () => {
                                 category={configToEdit.category}
                                 providerName={configToEdit.provider_name}
                                 displayName={configToEdit.display_name}
+                                logoUrl={configToEdit.logo_url}
                                 configId={configToEdit.id}
                                 onSuccess={() => {
                                     setConfigToEdit(null);

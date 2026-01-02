@@ -83,12 +83,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     from snackbase.infrastructure.persistence.repositories import ConfigurationRepository
     from snackbase.infrastructure.security.encryption import EncryptionService
     
-    # Create configuration registry (we'll store it on app.state for later use)
+    encryption_service = EncryptionService(settings.encryption_key)
+    config_registry = ConfigurationRegistry(encryption_service)
+    
+    # Store registry on app state
+    app.state.config_registry = config_registry
+
     async for session in get_db_session():
         try:
             config_repo = ConfigurationRepository(session)
-            encryption_service = EncryptionService(settings.encryption_key)
-            config_registry = ConfigurationRegistry(config_repo, encryption_service)
             
             # Register email/password provider
             email_password_provider = EmailPasswordProvider()
