@@ -50,8 +50,9 @@ export default function EditAccountDialog({
         try {
             await onSubmit(account.id, { name });
             onOpenChange(false);
-        } catch (err: any) {
-            setError(err.response?.data?.detail || err.message || 'Failed to update account');
+        } catch (err: unknown) {
+            const error = err as { response?: { data?: { detail?: string } }; message?: string };
+            setError(error.response?.data?.detail || error.message || 'Failed to update account');
         } finally {
             setLoading(false);
         }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { adminService } from '@/services/admin.service';
+import { adminService, type Configuration, type AvailableProvider } from '@/services/admin.service';
 import {
     Dialog,
     DialogContent,
@@ -14,12 +14,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { ProviderLogo } from '@/components/common/ProviderLogo';
 import { useToast } from '@/hooks/use-toast';
 
-interface ProviderDefinition {
-    name: string;
-    display_name: string;
-    category: string;
-    logo_url?: string;
-}
+
 
 interface AddProviderModalProps {
     open: boolean;
@@ -27,7 +22,7 @@ interface AddProviderModalProps {
     onConfigCreated: () => void;
     category?: string;
     accountId?: string;
-    existingConfigs?: any[];
+    existingConfigs?: Configuration[];
 }
 
 export const AddProviderModal = ({
@@ -38,8 +33,8 @@ export const AddProviderModal = ({
     accountId,
     existingConfigs = [],
 }: AddProviderModalProps) => {
-    const [selectedProvider, setSelectedProvider] = useState<ProviderDefinition | null>(null);
-    const [availableProviders, setAvailableProviders] = useState<ProviderDefinition[]>([]);
+    const [selectedProvider, setSelectedProvider] = useState<AvailableProvider | null>(null);
+    const [availableProviders, setAvailableProviders] = useState<AvailableProvider[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const { toast } = useToast();
 
@@ -51,9 +46,9 @@ export const AddProviderModal = ({
                     const data = await adminService.getAvailableProviders(category);
                     // Filter out already configured providers and explicitly exclude email_password
                     const filtered = data.filter(
-                        (p: ProviderDefinition) =>
-                            p.name !== "email_password" &&
-                            !existingConfigs.some((ec) => ec.provider_name === p.name)
+                        (p: AvailableProvider) =>
+                            p.provider_name !== "email_password" &&
+                            !existingConfigs.some((ec) => ec.provider_name === p.provider_name)
                     );
                     setAvailableProviders(filtered);
                 } catch (error) {
@@ -113,7 +108,7 @@ export const AddProviderModal = ({
                     ) : selectedProvider ? (
                         <ConfigurationForm
                             category={selectedProvider.category}
-                            providerName={selectedProvider.name}
+                            providerName={selectedProvider.provider_name}
                             displayName={selectedProvider.display_name}
                             logoUrl={selectedProvider.logo_url}
                             accountId={accountId}
@@ -125,14 +120,14 @@ export const AddProviderModal = ({
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4">
                                 {availableProviders.map((p) => (
                                     <Button
-                                        key={`${p.category}:${p.name}`}
+                                        key={`${p.category}:${p.provider_name}`}
                                         variant="outline"
                                         className="h-24 flex flex-col items-center justify-center gap-2 hover:border-primary hover:bg-primary/5 transition-all text-center p-4"
                                         onClick={() => setSelectedProvider(p)}
                                     >
                                         <ProviderLogo
                                             logoUrl={p.logo_url}
-                                            providerName={p.name}
+                                            providerName={p.provider_name}
                                             className="h-8 w-8"
                                             size={32}
                                         />

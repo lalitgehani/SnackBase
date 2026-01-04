@@ -13,8 +13,15 @@ Complete guide to using the SnackBase REST API with practical examples.
 - [Records (CRUD)](#records-crud)
 - [Roles & Permissions](#roles--permissions)
 - [Groups](#groups)
+- [Users](#users)
 - [Invitations](#invitations)
 - [Macros](#macros)
+- [OAuth Authentication](#oauth-authentication)
+- [SAML Authentication](#saml-authentication)
+- [Files](#files)
+- [Admin Configuration](#admin-configuration)
+- [Audit Logs](#audit-logs)
+- [Migrations](#migrations)
 - [Dashboard](#dashboard)
 - [Health Checks](#health-checks)
 - [Error Handling](#error-handling)
@@ -1557,6 +1564,225 @@ curl -X DELETE http://localhost:8000/api/v1/groups/grp_abc123/users/usr_def456 \
 
 ---
 
+## Users
+
+All users endpoints require **Superadmin** access.
+
+### 1. Create User
+
+**Endpoint**: `POST /api/v1/users`
+
+**Authentication**: Superadmin required
+
+**Request**:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/users \
+  -H "Authorization: Bearer <superadmin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "password": "SecurePass123!",
+    "account_id": "AB1234",
+    "role_id": "2"
+  }'
+```
+
+**Response** (201 Created):
+
+```json
+{
+  "id": "usr_xyz789",
+  "email": "user@example.com",
+  "role": {
+    "id": 2,
+    "name": "user"
+  },
+  "is_active": true,
+  "auth_provider": "email",
+  "account_id": "AB1234",
+  "created_at": "2025-12-24T22:00:00Z",
+  "updated_at": "2025-12-24T22:00:00Z"
+}
+```
+
+---
+
+### 2. List Users
+
+**Endpoint**: `GET /api/v1/users`
+
+**Authentication**: Superadmin required
+
+**Query Parameters**:
+
+| Parameter | Type | Default | Constraints |
+|-----------|------|---------|-------------|
+| `skip` | int | 0 | >= 0 |
+| `limit` | int | 25 | >= 1, <= 100 |
+| `account_id` | str | null | Filter by account |
+| `role_id` | int | null | Filter by role |
+| `is_active` | bool | null | Filter by active status |
+| `search` | str | null | Search in email |
+| `sort` | str | "created_at" | Field name (prefix with `-` for desc) |
+
+**Request**:
+
+```bash
+curl -X GET "http://localhost:8000/api/v1/users?skip=0&limit=25" \
+  -H "Authorization: Bearer <superadmin_token>"
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "items": [
+    {
+      "id": "usr_abc123",
+      "email": "admin@acme.com",
+      "role": {
+        "id": 1,
+        "name": "admin"
+      },
+      "is_active": true,
+      "auth_provider": "email",
+      "account_id": "AB1234",
+      "account_code": "AB1234",
+      "account_name": "Acme Corporation",
+      "created_at": "2025-12-24T22:00:00Z",
+      "updated_at": "2025-12-24T22:00:00Z",
+      "last_login": null
+    }
+  ],
+  "total": 1,
+  "skip": 0,
+  "limit": 25
+}
+```
+
+---
+
+### 3. Get Single User
+
+**Endpoint**: `GET /api/v1/users/{user_id}`
+
+**Authentication**: Superadmin required
+
+**Request**:
+
+```bash
+curl -X GET http://localhost:8000/api/v1/users/usr_abc123 \
+  -H "Authorization: Bearer <superadmin_token>"
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "id": "usr_abc123",
+  "email": "admin@acme.com",
+  "role": {
+    "id": 1,
+    "name": "admin",
+    "description": "Administrator with full access"
+  },
+  "is_active": true,
+  "auth_provider": "email",
+  "account_id": "AB1234",
+  "account_code": "AB1234",
+  "account_name": "Acme Corporation",
+  "created_at": "2025-12-24T22:00:00Z",
+  "updated_at": "2025-12-24T22:00:00Z",
+  "last_login": "2025-12-24T23:00:00Z",
+  "groups": []
+}
+```
+
+---
+
+### 4. Update User
+
+**Endpoint**: `PATCH /api/v1/users/{user_id}`
+
+**Authentication**: Superadmin required
+
+**Note**: Users cannot modify their own role or deactivate themselves.
+
+**Request**:
+
+```bash
+curl -X PATCH http://localhost:8000/api/v1/users/usr_abc123 \
+  -H "Authorization: Bearer <superadmin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "role_id": 2
+  }'
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "id": "usr_abc123",
+  "email": "admin@acme.com",
+  "role": {
+    "id": 2,
+    "name": "user"
+  },
+  "is_active": true,
+  "updated_at": "2025-12-24T22:30:00Z"
+}
+```
+
+---
+
+### 5. Reset User Password
+
+**Endpoint**: `PUT /api/v1/users/{user_id}/password`
+
+**Authentication**: Superadmin required
+
+**Request**:
+
+```bash
+curl -X PUT http://localhost:8000/api/v1/users/usr_abc123/password \
+  -H "Authorization: Bearer <superadmin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "new_password": "NewSecurePass456!"
+  }'
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "message": "Password reset successfully"
+}
+```
+
+---
+
+### 6. Deactivate User
+
+**Endpoint**: `DELETE /api/v1/users/{user_id}`
+
+**Authentication**: Superadmin required
+
+**Note**: This is a soft delete. The user is marked as inactive but not removed from the database.
+
+**Request**:
+
+```bash
+curl -X DELETE http://localhost:8000/api/v1/users/usr_abc123 \
+  -H "Authorization: Bearer <superadmin_token>"
+```
+
+**Response**: `204 No Content`
+
+---
+
 ## Invitations
 
 ### 1. Create Invitation
@@ -1821,6 +2047,730 @@ These macros are executed directly by the macro engine:
 | `@owns_record()` / `@is_creator()` | Check if user owns the record |
 | `@in_time_range(start_hour, end_hour)` | Check if current time is in range |
 | `@has_permission(action, collection)` | Check specific permission |
+
+---
+
+## OAuth Authentication
+
+SnackBase supports OAuth 2.0 authentication for popular providers.
+
+### Supported Providers
+
+- `google` - Google OAuth 2.0
+- `github` - GitHub OAuth App
+- `microsoft` - Microsoft Azure AD
+- `apple` - Sign in with Apple
+
+### 1. Initiate OAuth Flow
+
+**Endpoint**: `POST /api/v1/auth/oauth/{provider_name}/authorize`
+
+**Authentication**: None (public)
+
+**Request**:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/auth/oauth/google/authorize \
+  -H "Content-Type: application/json" \
+  -d '{
+    "account": "acme",
+    "redirect_uri": "http://localhost:3000/auth/callback",
+    "state": "random_state_string"
+  }'
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "authorization_url": "https://accounts.google.com/o/oauth2/v2/auth?client_id=...&redirect_uri=...",
+  "state": "random_state_string",
+  "provider": "google"
+}
+```
+
+**Query Parameters**:
+- `account` (required): Account slug or ID
+- `redirect_uri` (required): URL to redirect after authentication
+- `state` (optional): CSRF protection token
+
+---
+
+### 2. OAuth Callback
+
+**Endpoint**: `POST /api/v1/auth/oauth/{provider_name}/callback`
+
+**Authentication**: None (public)
+
+**Request**:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/auth/oauth/google/callback \
+  -H "Content-Type: application/json" \
+  -d '{
+    "code": "4/0AX4XfWh...",
+    "state": "random_state_string",
+    "redirect_uri": "http://localhost:3000/auth/callback"
+  }'
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "expires_in": 3600,
+  "account": {
+    "id": "AB1234",
+    "slug": "acme",
+    "name": "Acme Corporation",
+    "created_at": "2025-12-24T22:00:00Z"
+  },
+  "user": {
+    "id": "usr_oauth123",
+    "email": "user@gmail.com",
+    "role": "user",
+    "is_active": true,
+    "created_at": "2025-12-24T22:00:00Z"
+  },
+  "is_new_user": false,
+  "is_new_account": false
+}
+```
+
+**Note**: If `is_new_user` is true, a new user account is created. If `is_new_account` is true, both account and user are created.
+
+---
+
+## SAML Authentication
+
+SnackBase supports SAML 2.0 for enterprise single sign-on (SSO).
+
+### Supported Providers
+
+- `azure` - Microsoft Azure AD
+- `okta` - Okta Identity Cloud
+- `generic` - Any SAML 2.0 compliant IdP
+
+### 1. Initiate SAML SSO
+
+**Endpoint**: `GET /api/v1/auth/saml/sso`
+
+**Authentication**: None (public)
+
+**Request**:
+
+```bash
+curl -X GET "http://localhost:8000/api/v1/auth/saml/sso?account=acme&provider=azure" \
+  -L
+```
+
+**Response**: Redirects to the Identity Provider's login page
+
+**Query Parameters**:
+- `account` (required): Account slug or ID
+- `provider` (optional): SAML provider name (default: first configured)
+- `relay_state` (optional): State to return after authentication
+
+---
+
+### 2. SAML Assertion Consumer Service (ACS)
+
+**Endpoint**: `POST /api/v1/auth/saml/acs`
+
+**Authentication**: None (public)
+
+**Request**:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/auth/saml/acs \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "SAMLResponse=PHNhbWxwOlJlc3BvbnNlIHdpZGhOg...&RelayState=optional_state"
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "expires_in": 3600,
+  "account": {
+    "id": "AB1234",
+    "slug": "acme",
+    "name": "Acme Corporation",
+    "created_at": "2025-12-24T22:00:00Z"
+  },
+  "user": {
+    "id": "usr_saml123",
+    "email": "user@company.com",
+    "role": "user",
+    "is_active": true,
+    "created_at": "2025-12-24T22:00:00Z"
+  }
+}
+```
+
+---
+
+### 3. Download SAML Metadata
+
+**Endpoint**: `GET /api/v1/auth/saml/metadata`
+
+**Authentication**: None (public)
+
+**Request**:
+
+```bash
+curl -X GET "http://localhost:8000/api/v1/auth/saml/metadata?account=acme&provider=azure" \
+  -o saml-metadata.xml
+```
+
+**Response**: XML metadata file for importing into your Identity Provider
+
+**Query Parameters**:
+- `account` (required): Account slug or ID
+- `provider` (optional): SAML provider name (default: first configured)
+
+---
+
+## Files
+
+File upload and download endpoints.
+
+### 1. Upload File
+
+**Endpoint**: `POST /api/v1/files/upload`
+
+**Authentication**: Required
+
+**Request**:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/files/upload \
+  -H "Authorization: Bearer <token>" \
+  -F "file=@/path/to/document.pdf"
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "success": true,
+  "file": {
+    "filename": "document.pdf",
+    "path": "uploads/AB1234/document_20250124_abc123.pdf",
+    "size": 102400,
+    "content_type": "application/pdf",
+    "uploaded_at": "2025-12-24T22:00:00Z"
+  },
+  "message": "File uploaded successfully"
+}
+```
+
+---
+
+### 2. Download File
+
+**Endpoint**: `GET /api/v1/files/{file_path:path}`
+
+**Authentication**: Required
+
+**Request**:
+
+```bash
+curl -X GET http://localhost:8000/api/v1/files/uploads/AB1234/document_20250124_abc123.pdf \
+  -H "Authorization: Bearer <token>" \
+  -o downloaded_document.pdf
+```
+
+**Response**: File content (appropriate Content-Type header)
+
+---
+
+## Admin Configuration
+
+Admin API for managing system and account provider configurations.
+
+### Configuration Management
+
+All provider configurations (auth, email, storage) are managed through these endpoints.
+
+#### 1. Get Configuration Statistics
+
+**Endpoint**: `GET /api/v1/admin/configuration/stats`
+
+**Authentication**: Superadmin required
+
+**Response** (200 OK):
+
+```json
+{
+  "system_configs": {
+    "auth": 5,
+    "oauth": 4,
+    "email": 2,
+    "total": 11
+  },
+  "account_configs": {
+    "auth": 3,
+    "oauth": 2,
+    "total": 5
+  }
+}
+```
+
+---
+
+#### 2. List System Configurations
+
+**Endpoint**: `GET /api/v1/admin/configuration/system`
+
+**Authentication**: Superadmin required
+
+**Query Parameters**:
+- `category`: Filter by category (auth, oauth, saml, email)
+
+**Request**:
+
+```bash
+curl -X GET "http://localhost:8000/api/v1/admin/configuration/system?category=oauth" \
+  -H "Authorization: Bearer <superadmin_token>"
+```
+
+**Response** (200 OK):
+
+```json
+[
+  {
+    "id": "config_abc123",
+    "category": "oauth",
+    "provider_name": "google",
+    "display_name": "Google OAuth",
+    "logo_url": null,
+    "enabled": true,
+    "priority": 1,
+    "is_builtin": false,
+    "created_at": "2025-12-24T22:00:00Z",
+    "updated_at": "2025-12-24T22:00:00Z"
+  }
+]
+```
+
+---
+
+#### 3. List Account Configurations
+
+**Endpoint**: `GET /api/v1/admin/configuration/account`
+
+**Authentication**: Superadmin required
+
+**Query Parameters**:
+- `account_id` (required): Account ID
+- `category`: Filter by category
+
+**Request**:
+
+```bash
+curl -X GET "http://localhost:8000/api/v1/admin/configuration/account?account_id=AB1234" \
+  -H "Authorization: Bearer <superadmin_token>"
+```
+
+---
+
+#### 4. Create Configuration
+
+**Endpoint**: `POST /api/v1/admin/configuration`
+
+**Authentication**: Superadmin required
+
+**Request**:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/admin/configuration \
+  -H "Authorization: Bearer <superadmin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "category": "oauth",
+    "provider_name": "google",
+    "display_name": "Google OAuth",
+    "config": {
+      "client_id": "your-client-id.apps.googleusercontent.com",
+      "client_secret": "your-client-secret",
+      "scope": "openid email profile"
+    },
+    "logo_url": "https://example.com/logo.png",
+    "enabled": true,
+    "priority": 1
+  }'
+```
+
+**Response** (201 Created):
+
+```json
+{
+  "id": "config_xyz789",
+  "message": "Configuration created successfully"
+}
+```
+
+---
+
+#### 5. Update Configuration Values
+
+**Endpoint**: `PATCH /api/v1/admin/configuration/{config_id}/values`
+
+**Authentication**: Superadmin required
+
+**Request**:
+
+```bash
+curl -X PATCH http://localhost:8000/api/v1/admin/configuration/config_xyz789/values \
+  -H "Authorization: Bearer <superadmin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "client_id": "new-client-id.apps.googleusercontent.com",
+    "client_secret": "new-client-secret"
+  }'
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "success": true,
+  "message": "Configuration updated successfully"
+}
+```
+
+---
+
+#### 6. Get Configuration Values
+
+**Endpoint**: `GET /api/v1/admin/configuration/{config_id}/values`
+
+**Authentication**: Superadmin required
+
+**Response** (200 OK):
+
+```json
+{
+  "client_id": "your-client-id.apps.googleusercontent.com",
+  "client_secret": "********",  // Masked for security
+  "scope": "openid email profile"
+}
+```
+
+**Note**: Sensitive values (secrets) are masked in the response.
+
+---
+
+#### 7. Enable/Disable Configuration
+
+**Endpoint**: `PATCH /api/v1/admin/configuration/{config_id}`
+
+**Authentication**: Superadmin required
+
+**Request**:
+
+```bash
+curl -X PATCH http://localhost:8000/api/v1/admin/configuration/config_xyz789 \
+  -H "Authorization: Bearer <superadmin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "enabled": false
+  }'
+```
+
+---
+
+#### 8. Delete Configuration
+
+**Endpoint**: `DELETE /api/v1/admin/configuration/{config_id}`
+
+**Authentication**: Superadmin required
+
+**Note**: Built-in configurations cannot be deleted, only disabled.
+
+---
+
+#### 9. List Provider Definitions
+
+**Endpoint**: `GET /api/v1/admin/configuration/providers`
+
+**Authentication**: Superadmin required
+
+**Query Parameters**:
+- `category`: Filter by category
+
+**Response** (200 OK):
+
+```json
+[
+  {
+    "category": "oauth",
+    "name": "google",
+    "display_name": "Google OAuth 2.0",
+    "description": "Authenticate users with Google",
+    "logo_url": null
+  }
+]
+```
+
+---
+
+#### 10. Get Provider Schema
+
+**Endpoint**: `GET /api/v1/admin/configuration/schema/{category}/{provider_name}`
+
+**Authentication**: Superadmin required
+
+**Request**:
+
+```bash
+curl -X GET http://localhost:8000/api/v1/admin/configuration/schema/oauth/google \
+  -H "Authorization: Bearer <superadmin_token>"
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "client_id": {
+      "type": "string",
+      "title": "Client ID",
+      "description": "OAuth client ID from Google Cloud Console"
+    },
+    "client_secret": {
+      "type": "string",
+      "title": "Client Secret",
+      "format": "password",
+      "secret": true
+    },
+    "scope": {
+      "type": "string",
+      "title": "OAuth Scope",
+      "default": "openid email profile"
+    }
+  },
+  "required": ["client_id", "client_secret"]
+}
+```
+
+---
+
+#### 11. Test Provider Connection
+
+**Endpoint**: `POST /api/v1/admin/configuration/test-connection`
+
+**Authentication**: Superadmin required
+
+**Request**:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/admin/configuration/test-connection \
+  -H "Authorization: Bearer <superadmin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "category": "oauth",
+    "provider_name": "google",
+    "config": {
+      "client_id": "test-client-id",
+      "client_secret": "test-client-secret"
+    }
+  }'
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "success": true,
+  "message": "Connection test successful"
+}
+```
+
+---
+
+#### 12. Get Recent Configurations
+
+**Endpoint**: `GET /api/v1/admin/configuration/recent`
+
+**Authentication**: Superadmin required
+
+**Query Parameters**:
+- `limit`: Number of results (default: 10)
+
+---
+
+## Audit Logs
+
+Audit logging for GxP compliance. Logs are immutable and PII is masked based on group membership.
+
+### 1. List Audit Logs
+
+**Endpoint**: `GET /api/v1/audit-logs`
+
+**Authentication**: Superadmin required
+
+**Query Parameters**:
+
+| Parameter | Type | Default | Constraints |
+|-----------|------|---------|-------------|
+| `skip` | int | 0 | >= 0 |
+| `limit` | int | 50 | >= 1, <= 100 |
+| `account_id` | str | null | Filter by account |
+| `table_name` | str | null | Filter by table/collection |
+| `record_id` | str | null | Filter by record ID |
+| `user_id` | str | null | Filter by user |
+| `operation` | str | null | Filter by operation |
+| `from_date` | datetime | null | ISO 8601 format |
+| `to_date` | datetime | null | ISO 8601 format |
+| `sort_by` | str | "timestamp" | Field name |
+| `sort_order` | str | "desc" | asc, desc |
+
+**Request**:
+
+```bash
+curl -X GET "http://localhost:8000/api/v1/audit-logs?skip=0&limit=50&sort_order=desc" \
+  -H "Authorization: Bearer <superadmin_token>"
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "account_id": "AB1234",
+      "table_name": "col_posts",
+      "record_id": "rec_abc123",
+      "operation": "UPDATE",
+      "user_id": "usr_abc123",
+      "user_email": "admin@acme.com",
+      "old_values": {"title": "Old Title"},
+      "new_values": {"title": "New Title"},
+      "changed_fields": ["title"],
+      "ip_address": "192.168.1.100",
+      "user_agent": "Mozilla/5.0...",
+      "timestamp": "2025-12-24T22:00:00Z"
+    }
+  ],
+  "total": 1,
+  "skip": 0,
+  "limit": 50
+}
+```
+
+**Note**: PII fields are masked for users without `pii_access` group.
+
+---
+
+### 2. Get Single Audit Log
+
+**Endpoint**: `GET /api/v1/audit-logs/{log_id}`
+
+**Authentication**: Superadmin required
+
+---
+
+### 3. Export Audit Logs
+
+**Endpoint**: `GET /api/v1/audit-logs/export`
+
+**Authentication**: Superadmin required
+
+**Query Parameters**:
+- `format`: `csv` or `json` (default: `csv`)
+- Same filters as list endpoint
+
+**Request**:
+
+```bash
+curl -X GET "http://localhost:8000/api/v1/audit-logs/export?format=csv&from_date=2025-12-01T00:00:00Z" \
+  -H "Authorization: Bearer <superadmin_token>" \
+  -o audit_logs_export.csv
+```
+
+**Response**: File download (CSV or JSON)
+
+---
+
+## Migrations
+
+Database migration management using Alembic.
+
+### 1. List Migrations
+
+**Endpoint**: `GET /api/v1/migrations`
+
+**Authentication**: Superadmin required
+
+**Response** (200 OK):
+
+```json
+{
+  "items": [
+    {
+      "revision": "abc123def456",
+      "down_revision": null,
+      "branch_labels": null,
+      "depends_on": null,
+      "message": "Initial migration",
+      "is_head": true,
+      "is_baseline": true,
+      "is_branch_point": false,
+      "migration_type": "upgrade"
+    }
+  ],
+  "total": 1
+}
+```
+
+---
+
+### 2. Get Current Revision
+
+**Endpoint**: `GET /api/v1/migrations/current`
+
+**Authentication**: Superadmin required
+
+**Response** (200 OK):
+
+```json
+{
+  "current_revision": "abc123def456",
+  "current_version": "1.0.0",
+  "is_head": true
+}
+```
+
+---
+
+### 3. Get Migration History
+
+**Endpoint**: `GET /api/v1/migrations/history`
+
+**Authentication**: Superadmin required
+
+**Response** (200 OK):
+
+```json
+{
+  "history": [
+    {
+      "revision": "abc123def456",
+      "message": "Initial migration",
+      "applied_at": "2025-12-24T22:00:00Z",
+      "duration_seconds": 0.5
+    }
+  ]
+}
+```
 
 ---
 

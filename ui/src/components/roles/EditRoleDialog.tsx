@@ -51,8 +51,8 @@ export default function EditRoleDialog({ open, onOpenChange, role, onSubmit }: E
                 description: description || undefined,
             });
             onOpenChange(false);
-        } catch (err: any) {
-            setError(err.response?.data?.detail || err.message || 'Failed to update role');
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Failed to update role');
         } finally {
             setLoading(false);
         }

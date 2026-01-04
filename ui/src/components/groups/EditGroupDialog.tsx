@@ -52,8 +52,9 @@ export default function EditGroupDialog({ open, onOpenChange, group, onSubmit }:
                 description: description || null,
             });
             onOpenChange(false);
-        } catch (err: any) {
-            const errorMsg = err.response?.data?.detail || err.message || 'Failed to update group';
+        } catch (err: unknown) {
+            const error = err as { response?: { data?: { detail?: string | unknown } }; message?: string };
+            const errorMsg = error.response?.data?.detail || error.message || 'Failed to update group';
             setError(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
         } finally {
             setLoading(false);

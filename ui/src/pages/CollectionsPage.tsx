@@ -3,7 +3,7 @@
  * Full implementation with CRUD operations, search, and pagination
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -51,7 +51,7 @@ export default function CollectionsPage() {
     const [selectedCollection, setSelectedCollection] = useState<CollectionListItem | null>(null);
     const [selectedCollectionFull, setSelectedCollectionFull] = useState<Collection | null>(null);
 
-    const fetchCollections = async () => {
+    const fetchCollections = useCallback(async () => {
         setLoading(true);
         setError(null);
 
@@ -69,11 +69,11 @@ export default function CollectionsPage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [page, pageSize, sortBy, sortOrder, search]);
 
     useEffect(() => {
         fetchCollections();
-    }, [page, pageSize, sortBy, sortOrder, search]);
+    }, [fetchCollections]);
 
     const handleSort = (column: string) => {
         if (sortBy === column) {

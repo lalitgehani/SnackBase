@@ -13,11 +13,12 @@ import type { FieldDefinition } from '@/services/collections.service';
 import type { RecordData } from '@/types/records.types';
 import { isoToDatetimeLocal, datetimeLocalToIso } from '@/lib/form-helpers';
 import FileUploadInput from './FileUploadInput';
+import { type FileMetadata } from '@/services/files.service';
 
 interface DynamicFieldInputProps {
 	field: FieldDefinition;
-	value: any;
-	onChange: (value: any) => void;
+	value: unknown;
+	onChange: (value: unknown) => void;
 	error?: string;
 	disabled?: boolean;
 	referenceRecords?: RecordData[];
@@ -60,7 +61,7 @@ export default function DynamicFieldInput({
 					<Input
 						id={`field-${field.name}`}
 						type={field.type === 'email' ? 'email' : field.type === 'url' ? 'url' : 'text'}
-						value={value || ''}
+						value={(value as string | number) || ''}
 						onChange={(e) => onChange(e.target.value)}
 						disabled={disabled}
 						placeholder={`Enter ${field.name}`}
@@ -73,7 +74,7 @@ export default function DynamicFieldInput({
 					<Input
 						id={`field-${field.name}`}
 						type="number"
-						value={value ?? ''}
+						value={(value as string | number) ?? ''}
 						onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
 						disabled={disabled}
 						placeholder={`Enter ${field.name}`}
@@ -88,7 +89,7 @@ export default function DynamicFieldInput({
 						<input
 							id={`field-${field.name}`}
 							type="checkbox"
-							checked={value || false}
+							checked={Boolean(value) || false}
 							onChange={(e) => onChange(e.target.checked)}
 							disabled={disabled}
 							className="h-4 w-4 rounded border-gray-300"
@@ -104,7 +105,7 @@ export default function DynamicFieldInput({
 					<Input
 						id={`field-${field.name}`}
 						type="datetime-local"
-						value={value ? isoToDatetimeLocal(value) : ''}
+						value={typeof value === 'string' ? isoToDatetimeLocal(value) : ''}
 						onChange={(e) =>
 							onChange(e.target.value ? datetimeLocalToIso(e.target.value) : null)
 						}
@@ -118,7 +119,7 @@ export default function DynamicFieldInput({
 					<div className="space-y-2">
 						<Textarea
 							id={`field-${field.name}`}
-							value={value || ''}
+							value={(value as string) || ''}
 							onChange={(e) => handleJsonChange(e.target.value)}
 							disabled={disabled}
 							placeholder={`Enter JSON for ${field.name}`}
@@ -132,7 +133,7 @@ export default function DynamicFieldInput({
 			case 'reference':
 				return (
 					<Select
-						value={value || ''}
+						value={(value as string) || ''}
 						onValueChange={onChange}
 						disabled={disabled}
 					>
@@ -150,15 +151,15 @@ export default function DynamicFieldInput({
 										key !== 'updated_at' &&
 										typeof record[key] === 'string',
 								);
-								const displayValue = displayField ? record[displayField] : record.id;
+								const displayValue = displayField ? record[displayField] : (record.id as string);
 								const truncatedValue =
 									String(displayValue).length > 30
 										? String(displayValue).substring(0, 30) + '...'
 										: displayValue;
 
 								return (
-									<SelectItem key={record.id} value={record.id}>
-										{record.id.slice(0, 8)}... ({truncatedValue})
+									<SelectItem key={record.id as string} value={record.id as string}>
+										{((record.id as string).slice(0, 8) + '...') as React.ReactNode} ({truncatedValue as React.ReactNode})
 									</SelectItem>
 								);
 							})}
@@ -175,7 +176,7 @@ export default function DynamicFieldInput({
 				// File upload with drag-and-drop support
 				return (
 					<FileUploadInput
-						value={value}
+						value={value as FileMetadata | null}
 						onChange={onChange}
 						disabled={disabled}
 						fieldName={field.name}
@@ -187,7 +188,7 @@ export default function DynamicFieldInput({
 					<Input
 						id={`field-${field.name}`}
 						type="text"
-						value={value || ''}
+						value={(value as string | number) || ''}
 						onChange={(e) => onChange(e.target.value)}
 						disabled={disabled}
 						placeholder={`Enter ${field.name}`}

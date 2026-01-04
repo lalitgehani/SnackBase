@@ -30,7 +30,7 @@ export default function MacroTestDialog({
     onOpenChange,
     macro,
 }: MacroTestDialogProps) {
-    const [paramValues, setParamValues] = useState<any[]>([]);
+    const [paramValues, setParamValues] = useState<unknown[]>([]);
     const [paramNames, setParamNames] = useState<string[]>([]);
     const [testResult, setTestResult] = useState<MacroTestResponse | null>(null);
     const [isTesting, setIsTesting] = useState(false);
@@ -109,7 +109,7 @@ export default function MacroTestDialog({
                                         </Label>
                                         <Input
                                             id={`param-${index}`}
-                                            value={paramValues[index]}
+                                            value={paramValues[index] as string}
                                             onChange={(e) => handleParamChange(index, e.target.value)}
                                             placeholder={`Value for ${name}`}
                                             disabled={isTesting}

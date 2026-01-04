@@ -24,6 +24,7 @@ interface RuleContext {
     id: string;
   };
   record: Record<string, unknown>;
+  [key: string]: unknown;
 }
 
 interface RuleTesterProps {
@@ -108,7 +109,7 @@ export default function RuleTester({ initialRule = '', onRuleChange }: RuleTeste
     setResult(null);
 
     try {
-      const response = await testRule(rule, context as any);
+      const response = await testRule(rule, context);
       setResult(response);
     } catch (error: unknown) {
       const err = error as { response?: { data?: { detail?: string } }; message?: string };
@@ -308,10 +309,10 @@ export default function RuleTester({ initialRule = '', onRuleChange }: RuleTeste
                 {/* Result Status */}
                 <div
                   className={`flex items-center gap-3 p-4 rounded-lg border ${result.error
-                      ? 'bg-destructive/10 border-destructive/20'
-                      : result.allowed
-                        ? 'bg-green-500/10 border-green-500/20'
-                        : 'bg-orange-500/10 border-orange-500/20'
+                    ? 'bg-destructive/10 border-destructive/20'
+                    : result.allowed
+                      ? 'bg-green-500/10 border-green-500/20'
+                      : 'bg-orange-500/10 border-orange-500/20'
                     }`}
                 >
                   {result.error ? (

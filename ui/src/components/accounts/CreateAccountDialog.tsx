@@ -46,8 +46,9 @@ export default function CreateAccountDialog({
             setName('');
             setSlug('');
             onOpenChange(false);
-        } catch (err: any) {
-            setError(err.response?.data?.detail || err.message || 'Failed to create account');
+        } catch (err: unknown) {
+            const error = err as { response?: { data?: { detail?: string } }; message?: string };
+            setError(error.response?.data?.detail || error.message || 'Failed to create account');
         } finally {
             setLoading(false);
         }

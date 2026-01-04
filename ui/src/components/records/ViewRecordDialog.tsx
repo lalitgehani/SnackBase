@@ -45,7 +45,7 @@ export default function ViewRecordDialog({
 		});
 	};
 
-	const renderFieldValue = (field: FieldDefinition, value: any) => {
+	const renderFieldValue = (field: FieldDefinition, value: unknown) => {
 		if (value === null || value === undefined || value === '') {
 			return <span className="text-muted-foreground italic">null</span>;
 		}
@@ -90,12 +90,12 @@ export default function ViewRecordDialog({
 
 		// Handle datetime
 		if (field.type === 'datetime') {
-			return <span className="text-sm">{formatDate(value)}</span>;
+			return <span className="text-sm">{typeof value === 'string' ? formatDate(value) : String(value)}</span>;
 		}
 
 		// Handle number
 		if (field.type === 'number') {
-			return <span className="font-mono">{value}</span>;
+			return <span className="font-mono">{String(value)}</span>;
 		}
 
 		// Default text rendering
@@ -111,7 +111,7 @@ export default function ViewRecordDialog({
 						Viewing record from <strong>{collectionName}</strong> collection
 						{record && (
 							<span className="ml-2 font-mono text-xs text-muted-foreground">
-								(ID: {record.id?.slice(0, 8)}...)
+								(ID: {(record.id as string)?.slice(0, 8)}...)
 							</span>
 						)}
 					</DialogDescription>
@@ -159,27 +159,27 @@ export default function ViewRecordDialog({
 							<div className="grid grid-cols-2 gap-4 text-sm">
 								<div>
 									<span className="text-muted-foreground">ID:</span>{' '}
-									<span className="font-mono text-xs">{record.id}</span>
+									<span className="font-mono text-xs">{record.id as React.ReactNode}</span>
 								</div>
 								<div>
 									<span className="text-muted-foreground">Account ID:</span>{' '}
-									<span className="font-mono text-xs">{record.account_id}</span>
+									<span className="font-mono text-xs">{record.account_id as React.ReactNode}</span>
 								</div>
 								<div>
 									<span className="text-muted-foreground">Created:</span>{' '}
-									<span>{formatDate(record.created_at)}</span>
+									<span>{formatDate(record.created_at as string)}</span>
 								</div>
 								<div>
 									<span className="text-muted-foreground">Updated:</span>{' '}
-									<span>{formatDate(record.updated_at)}</span>
+									<span>{formatDate(record.updated_at as string)}</span>
 								</div>
 								<div>
 									<span className="text-muted-foreground">Created By:</span>{' '}
-									<span className="font-mono text-xs">{record.created_by}</span>
+									<span className="font-mono text-xs">{record.created_by as React.ReactNode}</span>
 								</div>
 								<div>
 									<span className="text-muted-foreground">Updated By:</span>{' '}
-									<span className="font-mono text-xs">{record.updated_by}</span>
+									<span className="font-mono text-xs">{record.updated_by as React.ReactNode}</span>
 								</div>
 							</div>
 						</div>

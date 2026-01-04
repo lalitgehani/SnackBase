@@ -2,7 +2,7 @@
  * Audit logs viewer page
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,7 +40,7 @@ export default function AuditLogsPage() {
     const [detailDialogOpen, setDetailDialogOpen] = useState(false);
     const [selectedLog, setSelectedLog] = useState<AuditLogItem | null>(null);
 
-    const fetchLogs = async () => {
+    const fetchLogs = useCallback(async () => {
         setLoading(true);
         setError(null);
 
@@ -53,8 +53,6 @@ export default function AuditLogsPage() {
                 table_name: tableName || undefined,
                 operation: operation !== 'all' ? operation : undefined,
                 record_id: recordId || undefined,
-                // user_id is backend, but we might filter by user_email if we add it to router
-                // for now we stick to what the router supports
             };
 
             const response = await getAuditLogs(filters);
@@ -64,11 +62,11 @@ export default function AuditLogsPage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [page, pageSize, sortBy, sortOrder, tableName, operation, recordId]);
 
     useEffect(() => {
         fetchLogs();
-    }, [page, pageSize, sortBy, sortOrder]); // Only refetch on page/sort/size change automatically
+    }, [fetchLogs]);
 
     const handleSearch = (e?: React.FormEvent) => {
         e?.preventDefault();

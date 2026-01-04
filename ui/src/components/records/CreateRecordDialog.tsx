@@ -108,7 +108,7 @@ export default function CreateRecordDialog({
 		}
 	}, [open, schema, onFetchReferenceRecords, isSuperadmin, selectedAccountId]);
 
-	const handleFieldChange = (fieldName: string, value: any) => {
+	const handleFieldChange = (fieldName: string, value: unknown) => {
 		setFormState((prev) => ({
 			...prev,
 			fields: {
@@ -137,7 +137,7 @@ export default function CreateRecordDialog({
 		}
 
 		// Build record data from form state
-		const recordData: RecordData = {};
+		const recordData: Record<string, unknown> = {};
 		for (const field of schema) {
 			recordData[field.name] = formState.fields[field.name]?.value;
 		}

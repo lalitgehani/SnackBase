@@ -1,6 +1,7 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminService, type Configuration } from '@/services/admin.service';
+import type { Account } from '@/services/accounts.service';
 import { DataTable, type Column } from '@/components/common/DataTable';
 import {
     Select,
@@ -135,11 +136,6 @@ const AccountProvidersTab = () => {
         }
     };
 
-    // Reset page when account or filter changes
-    useEffect(() => {
-        setPage(1);
-    }, [selectedAccountId, categoryFilter]);
-
     const columns: Column<Configuration>[] = [
         {
             header: 'Provider',
@@ -211,7 +207,7 @@ const AccountProvidersTab = () => {
         }
     ];
 
-    const selectedAccount = accounts.find((acc: any) => acc.id === selectedAccountId);
+    const selectedAccount = accounts.find((acc: Account) => acc.id === selectedAccountId);
 
     return (
         <div className="space-y-4">
@@ -246,12 +242,13 @@ const AccountProvidersTab = () => {
                                 <CommandList>
                                     <CommandEmpty>No account found.</CommandEmpty>
                                     <CommandGroup>
-                                        {accounts.map((account: any) => (
+                                        {accounts.map((account: Account) => (
                                             <CommandItem
                                                 key={account.id}
                                                 value={account.id}
                                                 onSelect={(currentValue: string) => {
                                                     setSelectedAccountId(currentValue === selectedAccountId ? '' : currentValue);
+                                                    setPage(1);
                                                     setOpen(false);
                                                 }}
                                             >

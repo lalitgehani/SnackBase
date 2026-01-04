@@ -2,6 +2,7 @@
  * Migrations service for querying Alembic migration status
  */
 
+import axios from 'axios';
 import { apiClient } from '@/lib/api';
 import type {
     MigrationListResponse,
@@ -24,9 +25,9 @@ export const getCurrentMigration = async (): Promise<CurrentRevisionResponse | n
     try {
         const response = await apiClient.get<CurrentRevisionResponse>('/migrations/current');
         return response.data;
-    } catch (error: any) {
+    } catch (error: unknown) {
         // Return null if no current revision (404)
-        if (error.response?.status === 404) {
+        if (axios.isAxiosError(error) && error.response?.status === 404) {
             return null;
         }
         throw error;

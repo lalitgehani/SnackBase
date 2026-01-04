@@ -24,7 +24,7 @@ export interface MacroUpdate {
 }
 
 export interface MacroTestRequest {
-  parameters: any[];
+  parameters: unknown[];
 }
 
 export interface MacroTestResponse {

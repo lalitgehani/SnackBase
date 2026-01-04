@@ -3,7 +3,7 @@
  * Full implementation with CRUD operations, search, and pagination
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -45,7 +45,7 @@ export default function AccountsPage() {
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [selectedAccount, setSelectedAccount] = useState<AccountListItem | null>(null);
 
-    const fetchAccounts = async () => {
+    const fetchAccounts = useCallback(async () => {
         setLoading(true);
         setError(null);
 
@@ -63,11 +63,11 @@ export default function AccountsPage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [page, pageSize, sortBy, sortOrder, search]);
 
     useEffect(() => {
         fetchAccounts();
-    }, [page, pageSize, sortBy, sortOrder, search]);
+    }, [fetchAccounts]);
 
     const handleSort = (column: string) => {
         if (sortBy === column) {

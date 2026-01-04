@@ -45,8 +45,9 @@ export default function DeleteAccountDialog({
             await onConfirm(account.id);
             setConfirmName('');
             onOpenChange(false);
-        } catch (err: any) {
-            setError(err.response?.data?.detail || err.message || 'Failed to delete account');
+        } catch (err: unknown) {
+            const error = err as { response?: { data?: { detail?: string } }; message?: string };
+            setError(error.response?.data?.detail || error.message || 'Failed to delete account');
         } finally {
             setLoading(false);
         }

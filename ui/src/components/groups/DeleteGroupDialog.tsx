@@ -35,8 +35,9 @@ export default function DeleteGroupDialog({ open, onOpenChange, group, onSubmit 
         try {
             await onSubmit(group.id);
             onOpenChange(false);
-        } catch (err: any) {
-            const errorMsg = err.response?.data?.detail || err.message || 'Failed to delete group';
+        } catch (err: unknown) {
+            const error = err as { response?: { data?: { detail?: string | unknown } }; message?: string };
+            const errorMsg = error.response?.data?.detail || error.message || 'Failed to delete group';
             setError(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
         } finally {
             setLoading(false);

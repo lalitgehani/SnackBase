@@ -3,7 +3,7 @@
  * Full implementation with CRUD operations, search, and pagination
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -63,7 +63,7 @@ export default function RecordsPage() {
     // Check if user has PII access (admin or superadmin role)
     const hasPiiAccess = user?.role === 'admin' || user?.role === 'superadmin';
 
-    const fetchCollection = async () => {
+    const fetchCollection = useCallback(async () => {
         if (!collectionName) return;
         setLoading(true);
         setError(null);
@@ -76,9 +76,9 @@ export default function RecordsPage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [collectionName]);
 
-    const fetchRecords = async () => {
+    const fetchRecords = useCallback(async () => {
         if (!collectionName) return;
         setLoading(true);
         setError(null);
@@ -98,17 +98,17 @@ export default function RecordsPage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [collectionName, page, pageSize, sortBy, sortOrder]);
 
     useEffect(() => {
         fetchCollection();
-    }, [collectionName]);
+    }, [fetchCollection]);
 
     useEffect(() => {
         if (collection) {
             fetchRecords();
         }
-    }, [page, pageSize, sortBy, sortOrder, search, collection]);
+    }, [collection, fetchRecords]);
 
     const handleSort = (column: string) => {
         if (sortBy === column) {
@@ -365,7 +365,7 @@ export default function RecordsPage() {
                         schema={collection.schema}
                         collectionName={collection.name}
                         record={selectedRecordFull}
-                        recordId={selectedRecordFull?.id || ''}
+                        recordId={(selectedRecordFull?.id as string) || ''}
                         referenceRecords={referenceRecords}
                         onFetchReferenceRecords={handleFetchReferenceRecords}
                     />

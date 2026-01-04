@@ -9,9 +9,9 @@ export interface FieldDefinition {
   name: string;
   type: string;
   required?: boolean;
-  default?: any;
+  default?: unknown;
   unique?: boolean;
-  options?: Record<string, any>;
+  options?: Record<string, unknown>;
   collection?: string;
   on_delete?: string;
   pii?: boolean;

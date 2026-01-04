@@ -40,8 +40,9 @@ export default function DeleteMacroDialog({
         try {
             await onConfirm(macro.id);
             onOpenChange(false);
-        } catch (err: any) {
-            setError(err.response?.data?.detail || err.message || 'Failed to delete macro');
+        } catch (err: unknown) {
+            const error = err as { response?: { data?: { detail?: string } }; message?: string };
+            setError(error.response?.data?.detail || error.message || 'Failed to delete macro');
         } finally {
             setLoading(false);
         }

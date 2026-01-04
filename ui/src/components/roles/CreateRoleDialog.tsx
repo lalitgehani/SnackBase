@@ -43,8 +43,8 @@ export default function CreateRoleDialog({ open, onOpenChange, onSubmit }: Creat
             setName('');
             setDescription('');
             onOpenChange(false);
-        } catch (err: any) {
-            setError(err.response?.data?.detail || err.message || 'Failed to create role');
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Failed to create role');
         } finally {
             setLoading(false);
         }

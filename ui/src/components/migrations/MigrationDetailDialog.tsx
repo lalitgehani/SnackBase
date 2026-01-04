@@ -26,6 +26,28 @@ interface MigrationDetailDialogProps {
     currentRevision: string | null;
 }
 
+const DetailItem = ({
+    label,
+    value,
+    icon: Icon,
+    mono = false,
+}: {
+    label: string;
+    value: string | number | null | undefined;
+    icon?: React.ElementType;
+    mono?: boolean;
+}) => (
+    <div className="flex flex-col space-y-1 py-2">
+        <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+            {Icon && <Icon className="h-4 w-4" />}
+            {label}
+        </div>
+        <div className={`text-sm break-all font-medium ${mono ? 'font-mono' : ''}`}>
+            {value || <span className="text-muted-foreground italic">None</span>}
+        </div>
+    </div>
+);
+
 export default function MigrationDetailDialog({
     open,
     onOpenChange,
@@ -41,28 +63,6 @@ export default function MigrationDetailDialog({
         setCopiedRevision(true);
         setTimeout(() => setCopiedRevision(false), 2000);
     };
-
-    const DetailItem = ({
-        label,
-        value,
-        icon: Icon,
-        mono = false,
-    }: {
-        label: string;
-        value: any;
-        icon?: any;
-        mono?: boolean;
-    }) => (
-        <div className="flex flex-col space-y-1 py-2">
-            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                {Icon && <Icon className="h-4 w-4" />}
-                {label}
-            </div>
-            <div className={`text-sm break-all font-medium ${mono ? 'font-mono' : ''}`}>
-                {value || <span className="text-muted-foreground italic">None</span>}
-            </div>
-        </div>
-    );
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>

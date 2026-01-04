@@ -3,7 +3,7 @@
  * Allows adding and removing users from a group
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
     Dialog,
     DialogContent,
@@ -49,14 +49,7 @@ export default function ManageGroupUsersDialog({
     const [loadingUsers, setLoadingUsers] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // Load users when dialog opens
-    useEffect(() => {
-        if (open && group) {
-            loadUsers();
-        }
-    }, [open, group]);
-
-    const loadUsers = async () => {
+    const loadUsers = useCallback(async () => {
         setLoadingUsers(true);
         try {
             // Fetch all users in account (for adding new members)
@@ -87,7 +80,15 @@ export default function ManageGroupUsersDialog({
         } finally {
             setLoadingUsers(false);
         }
-    };
+    }, [group]);
+
+    // Load users when dialog opens
+    useEffect(() => {
+        if (open && group) {
+            loadUsers();
+        }
+    }, [open, group, loadUsers]);
+
 
     const handleAddUser = async () => {
         if (!group || !selectedUserId) return;
@@ -103,8 +104,9 @@ export default function ManageGroupUsersDialog({
                 setGroupUsers([...groupUsers, user]);
             }
             setSelectedUserId('');
-        } catch (err: any) {
-            const errorMsg = err.response?.data?.detail || err.message || 'Failed to add user';
+        } catch (err: unknown) {
+            const error = err as { response?: { data?: { detail?: string | unknown } }; message?: string };
+            const errorMsg = error.response?.data?.detail || error.message || 'Failed to add user';
             setError(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
         } finally {
             setLoading(false);
@@ -121,8 +123,9 @@ export default function ManageGroupUsersDialog({
             await onRemoveUser(group.id, userId);
             // Remove user from local state
             setGroupUsers(groupUsers.filter((u) => u.id !== userId));
-        } catch (err: any) {
-            const errorMsg = err.response?.data?.detail || err.message || 'Failed to remove user';
+        } catch (err: unknown) {
+            const error = err as { response?: { data?: { detail?: string | unknown } }; message?: string };
+            const errorMsg = error.response?.data?.detail || error.message || 'Failed to remove user';
             setError(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
         } finally {
             setLoading(false);

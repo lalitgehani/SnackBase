@@ -44,8 +44,8 @@ export default function DeleteRoleDialog({
         try {
             await onConfirm(role.id);
             onOpenChange(false);
-        } catch (err: any) {
-            setError(err.response?.data?.detail || err.message || 'Failed to delete role');
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Failed to delete role');
         } finally {
             setLoading(false);
         }
@@ -69,7 +69,7 @@ export default function DeleteRoleDialog({
                     {!isDefaultRole && (
                         <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
                             <div className="flex gap-3">
-                                <AlertTriangle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
+                                <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
                                 <div className="space-y-2">
                                     <p className="font-medium text-destructive">Warning</p>
                                     <p className="text-sm text-muted-foreground">

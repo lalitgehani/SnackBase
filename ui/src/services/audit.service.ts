@@ -25,7 +25,7 @@ export interface AuditLogItem {
     occurred_at: string;
     checksum: string | null;
     previous_hash: string | null;
-    extra_metadata: Record<string, any> | null;
+    extra_metadata: Record<string, unknown> | null;
 }
 
 export interface AuditLogListResponse {

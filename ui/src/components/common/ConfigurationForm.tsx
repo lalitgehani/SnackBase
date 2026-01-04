@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
-import { adminService } from '@/services/admin.service';
+import { adminService, type ProviderSchema } from '@/services/admin.service';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
@@ -25,6 +25,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 
+
 interface ConfigurationFormProps {
     category: string;
     providerName: string;
@@ -46,7 +47,7 @@ export const ConfigurationForm = ({
     onSuccess,
     onCancel
 }: ConfigurationFormProps) => {
-    const [schema, setSchema] = useState<any>(null);
+    const [schema, setSchema] = useState<ProviderSchema | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isTesting, setIsTesting] = useState(false);
     const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -72,10 +73,10 @@ export const ConfigurationForm = ({
                     adminService.getProviderSchema(category, providerName),
                     configId ? adminService.getConfigValues(configId) : Promise.resolve({})
                 ]);
-                setSchema(schemaData);
+                setSchema(schemaData as ProviderSchema);
                 reset(initialValues);
-            } catch (error) {
-                console.error("Failed to load configuration data", error);
+            } catch {
+                console.error("Failed to load configuration data");
                 toast({
                     title: "Error",
                     description: "Failed to load provider configuration schema.",
@@ -89,7 +90,7 @@ export const ConfigurationForm = ({
         loadData();
     }, [category, providerName, configId, reset, toast]);
 
-    const onSubmit = async (values: any) => {
+    const onSubmit = async (values: Record<string, unknown>) => {
         try {
             if (configId) {
                 await adminService.updateConfigValues(configId, values);
@@ -112,7 +113,7 @@ export const ConfigurationForm = ({
                 });
             }
             onSuccess();
-        } catch (error) {
+        } catch {
             toast({
                 title: "Error",
                 description: "Failed to save configuration.",
@@ -140,10 +141,11 @@ export const ConfigurationForm = ({
                 config: formValues
             });
             setTestResult(result);
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const err = error as { response?: { data?: { detail?: string } } };
             setTestResult({
                 success: false,
-                message: error.response?.data?.detail || "Connection test failed."
+                message: err.response?.data?.detail || "Connection test failed."
             });
         } finally {
             setIsTesting(false);
@@ -189,7 +191,7 @@ export const ConfigurationForm = ({
             </div>
             <ScrollArea className="flex-1 overflow-y-auto px-6 py-4">
                 <div className="space-y-6">
-                    {Object.entries(properties).map(([key, prop]: [string, any]) => {
+                    {Object.entries(properties).map(([key, prop]) => {
                         const isRequired = requiredFields.includes(key);
                         const isSecret = prop.writeOnly || prop.format === 'password' || key.toLowerCase().includes('secret') || key.toLowerCase().includes('key');
 

@@ -21,24 +21,24 @@ interface AuditLogDetailDialogProps {
     log: AuditLogItem | null;
 }
 
+const DetailItem = ({ label, value, icon: Icon, mono = false }: { label: string; value: unknown; icon?: React.ElementType; mono?: boolean }) => (
+    <div className="flex flex-col space-y-1 py-2">
+        <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+            {Icon && <Icon className="h-4 w-4" />}
+            {label}
+        </div>
+        <div className={`text-sm break-all font-medium ${mono ? 'font-mono' : ''}`}>
+            {value !== null && value !== undefined ? String(value) : <span className="text-muted-foreground italic">NULL</span>}
+        </div>
+    </div>
+);
+
 export default function AuditLogDetailDialog({
     open,
     onOpenChange,
     log,
 }: AuditLogDetailDialogProps) {
     if (!log) return null;
-
-    const DetailItem = ({ label, value, icon: Icon, mono = false }: { label: string; value: any; icon?: any; mono?: boolean }) => (
-        <div className="flex flex-col space-y-1 py-2">
-            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                {Icon && <Icon className="h-4 w-4" />}
-                {label}
-            </div>
-            <div className={`text-sm break-all font-medium ${mono ? 'font-mono' : ''}`}>
-                {value || <span className="text-muted-foreground italic">NULL</span>}
-            </div>
-        </div>
-    );
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>

@@ -79,7 +79,7 @@ export default function EditRecordDialog({
 		}
 	}, [open, schema, onFetchReferenceRecords]);
 
-	const handleFieldChange = (fieldName: string, value: any) => {
+	const handleFieldChange = (fieldName: string, value: unknown) => {
 		setFormState((prev) => ({
 			...prev,
 			fields: {
@@ -108,7 +108,7 @@ export default function EditRecordDialog({
 		}
 
 		// Build record data from form state
-		const recordData: RecordData = {};
+		const recordData: Record<string, unknown> = {};
 		for (const field of schema) {
 			recordData[field.name] = formState.fields[field.name]?.value;
 		}

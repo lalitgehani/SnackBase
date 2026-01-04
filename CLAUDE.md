@@ -71,6 +71,7 @@ src/snackbase/
 ├── core/                         # Cross-cutting concerns (no external deps)
 │   ├── config.py                 # Pydantic Settings for env-based config
 │   ├── logging.py                # Structured logging with structlog
+│   ├── configuration/            # Configuration registry (provider system)
 │   ├── hooks/                    # Hook registry, decorator, events (STABLE API)
 │   ├── macros/                   # SQL macro execution engine
 │   └── rules/                    # Rule engine (lexer, parser, AST, evaluator)
@@ -84,16 +85,19 @@ src/snackbase/
     ├── api/
     │   ├── app.py                # FastAPI app factory, lifespan, middleware
     │   ├── dependencies.py       # FastAPI dependencies (auth, session)
-    │   ├── routes/               # 11 API routers
+    │   ├── routes/               # 13+ API routers
     │   ├── schemas/              # Pydantic request/response models
     │   └── middleware/           # Authorization middleware
     ├── persistence/
     │   ├── database.py           # SQLAlchemy 2.0 async engine
-    │   ├── models/               # ORM models (Account, User, Role, etc.)
-    │   ├── repositories/         # Repository pattern (10+ repositories)
+    │   ├── models/               # ORM models (Account, User, Role, Configuration, etc.)
+    │   ├── repositories/         # Repository pattern (11+ repositories)
     │   └── table_builder.py      # Dynamic table creation
     ├── auth/                     # JWT service, password hasher (Argon2)
+    ├── configuration/            # Provider handlers (OAuth, SAML, email)
+    │   └── providers/            # Provider implementations
     ├── hooks/                    # Built-in hooks implementation
+    ├── security/                 # Encryption service
     ├── services/                 # Token service, email service
     ├── realtime/                 # Empty (WebSocket/SSE TODO)
     └── storage/                  # Empty (file storage TODO)
@@ -194,6 +198,27 @@ status in ["draft", "published"]
 - Field-level access control
 - 5-minute TTL cache (invalidated on permission changes)
 
+### Configuration/Provider System
+
+**Hierarchical Configuration Model**: External service provider settings (auth, email, storage) with two levels:
+
+1. **System-level** (account_id: `00000000-0000-0000-0000-000000000000`) - Default configs for all accounts
+2. **Account-level** - Per-account overrides that take precedence over system defaults
+
+**Key Components**:
+- `ConfigurationRegistry` (src/snackbase/core/configuration/config_registry.py) - Central registry for provider definitions and hierarchical resolution with 5-minute cache
+- `ConfigurationModel` - ORM model with encrypted `config` JSON field
+- Provider handlers in `src/snackbase/infrastructure/configuration/providers/`:
+  - `auth/` - Email/password authentication
+  - `oauth/` - OAuth providers (Google, GitHub, Microsoft, Apple)
+  - `saml/` - SAML providers (Azure AD, Okta, generic)
+
+**Architecture Pattern**:
+- Provider definitions registered via `config_registry.register_provider_definition()`
+- Config resolution: account-level config → system-level fallback
+- All sensitive config values encrypted at rest
+- Built-in providers marked with `is_builtin` flag (cannot be deleted)
+
 ## API Structure
 
 ```
@@ -202,12 +227,18 @@ status in ["draft", "published"]
 ├── /auth/                      # Register, login, refresh, me
 ├── /collections/               # Collection CRUD (superadmin)
 ├── /accounts/                  # Account management (superadmin)
+├── /users/                     # User management (superadmin)
 ├── /roles/                     # Role management
 ├── /permissions/               # Permission management
 ├── /macros/                    # SQL macro management
 ├── /groups/                    # Group management
 ├── /invitations/               # User invitations
 ├── /dashboard/                 # Dashboard statistics
+├── /audit-logs/                # Audit log retrieval and export
+├── /migrations/                # Alembic migration status
+├── /admin/                     # Admin API (system/config management)
+├── /oauth/                     # OAuth flow endpoints
+├── /saml/                      # SAML flow endpoints
 └── /{collection}/              # Dynamic collection CRUD (records_router)
 ```
 
@@ -224,12 +255,18 @@ status in ["draft", "published"]
 - `superadmin_token` - Pre-authenticated superadmin JWT
 - `regular_user_token` - Pre-authenticated regular user JWT
 
+**Test Markers**:
+
+- `@pytest.mark.enable_audit_hooks` - Enable audit logging hooks for tests (adds overhead, use only when needed)
+
 ## Important Constraints
 
 - **Hook system is stable API** - Cannot change registration mechanism once implemented
 - **Macros are global** - Defined once, shared by all accounts
 - **Migrations are global** - Affect ALL accounts (collections are global tables)
-- **Audit logs are immutable** - Once written, cannot be modified (when implemented)
+- **Audit logs are immutable** - Once written, cannot be modified
+- **Configuration hierarchy** - System-level configs use `00000000-0000-0000-0000-000000000000` as account_id, not `SY0000`
+- **Built-in providers** - Cannot be deleted (is_builtin flag), only disabled
 
 ## Environment Variables
 

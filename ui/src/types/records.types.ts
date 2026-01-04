@@ -3,7 +3,7 @@
  * Type definitions for record CRUD operations
  */
 
-export type RecordData = Record<string, any>;
+export type RecordData = Record<string, unknown>;
 
 export interface RecordDetail {
 	id: string;
@@ -12,7 +12,7 @@ export interface RecordDetail {
 	updated_at: string;
 	created_by: string;
 	updated_by: string;
-	[key: string]: any; // Dynamic fields from schema
+	[key: string]: unknown; // Dynamic fields from schema
 }
 
 export interface RecordListItem {
@@ -20,7 +20,7 @@ export interface RecordListItem {
 	created_at: string;
 	updated_at: string;
 	account_name?: string;
-	[key: string]: any; // Dynamic fields from schema
+	[key: string]: unknown; // Dynamic fields from schema
 }
 
 export interface RecordListResponse {
@@ -31,7 +31,7 @@ export interface RecordListResponse {
 }
 
 export interface FormFieldState {
-	value: any;
+	value: unknown;
 	error: string | null;
 	touched: boolean;
 }
@@ -47,7 +47,7 @@ export interface GetRecordsParams {
 	limit?: number;
 	sort?: string;
 	fields?: string;
-	[key: string]: any; // For filter params
+	[key: string]: unknown; // For filter params
 }
 
 // Backend validation error format
