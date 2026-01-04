@@ -1,0 +1,206 @@
+/**
+ * Register page component
+ */
+
+import { useState, type FormEvent } from 'react';
+import { Link, useNavigate } from 'react-router';
+import { useAuthStore } from '@/stores/auth.store';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Loader2, Check, X } from 'lucide-react';
+
+export default function RegisterPage() {
+  const navigate = useNavigate();
+  const { register, isLoading, error, clearError } = useAuthStore();
+
+  const [accountName, setAccountName] = useState('');
+  const [accountSlug, setAccountSlug] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+
+  // Password validation
+  const passwordRequirements = {
+    minLength: password.length >= 12,
+    hasUppercase: /[A-Z]/.test(password),
+    hasLowercase: /[a-z]/.test(password),
+    hasNumber: /[0-9]/.test(password),
+    hasSpecial: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~]/.test(password),
+  };
+
+  const isPasswordValid = Object.values(passwordRequirements).every(Boolean);
+
+  const generateAccountSlug = (name: string) => {
+    return name
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .substring(0, 32);
+  };
+
+  const handleAccountNameChange = (value: string) => {
+    setAccountName(value);
+    if (value && !accountSlug) {
+      setAccountSlug(generateAccountSlug(value));
+    }
+  };
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    clearError();
+
+    if (password !== confirmPassword) {
+      return;
+    }
+
+    if (!isPasswordValid) {
+      return;
+    }
+
+    try {
+      await register(accountName, accountSlug || undefined, email, password);
+      navigate('/todos');
+    } catch (err) {
+      console.error('Registration failed:', err);
+    }
+  };
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8">
+      <Card className="w-full max-w-md">
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-2xl font-bold">Create an Account</CardTitle>
+          <CardDescription>
+            Sign up to start managing your todos with SnackBase
+          </CardDescription>
+        </CardHeader>
+        <form onSubmit={handleSubmit}>
+          <CardContent className="space-y-4">
+            {error && (
+              <div className="rounded-md bg-red-50 p-3 text-sm text-red-800">
+                {error}
+              </div>
+            )}
+            {password && confirmPassword && password !== confirmPassword && (
+              <div className="rounded-md bg-red-50 p-3 text-sm text-red-800">
+                Passwords do not match
+              </div>
+            )}
+            <div className="space-y-2">
+              <Label htmlFor="accountName">Account Name</Label>
+              <Input
+                id="accountName"
+                type="text"
+                placeholder="My Company"
+                value={accountName}
+                onChange={(e) => handleAccountNameChange(e.target.value)}
+                required
+                disabled={isLoading}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="accountSlug">Account Slug (optional)</Label>
+              <Input
+                id="accountSlug"
+                type="text"
+                placeholder="my-company"
+                value={accountSlug}
+                onChange={(e) => setAccountSlug(e.target.value)}
+                disabled={isLoading}
+              />
+              <p className="text-xs text-gray-500">
+                Leave empty to auto-generate from account name
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                disabled={isLoading}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="Enter your password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                disabled={isLoading}
+              />
+              {password && (
+                <div className="space-y-1 rounded-md border border-gray-200 bg-gray-50 p-3">
+                  <p className="text-xs font-medium text-gray-700">Password requirements:</p>
+                  <div className="space-y-1">
+                    <Requirement met={passwordRequirements.minLength} text="At least 12 characters" />
+                    <Requirement met={passwordRequirements.hasUppercase} text="Contains uppercase letter" />
+                    <Requirement met={passwordRequirements.hasLowercase} text="Contains lowercase letter" />
+                    <Requirement met={passwordRequirements.hasNumber} text="Contains number" />
+                    <Requirement met={passwordRequirements.hasSpecial} text="Contains special character" />
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Confirm Password</Label>
+              <Input
+                id="confirmPassword"
+                type="password"
+                placeholder="Confirm your password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                disabled={isLoading}
+              />
+            </div>
+          </CardContent>
+          <CardFooter className="flex flex-col space-y-4">
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={isLoading || !isPasswordValid || password !== confirmPassword}
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating account...
+                </>
+              ) : (
+                'Create Account'
+              )}
+            </Button>
+            <p className="text-sm text-gray-600">
+              Already have an account?{' '}
+              <Link to="/login" className="text-blue-600 hover:underline">
+                Login here
+              </Link>
+            </p>
+          </CardFooter>
+        </form>
+      </Card>
+    </div>
+  );
+}
+
+function Requirement({ met, text }: { met: boolean; text: string }) {
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      {met ? (
+        <Check className="h-3.5 w-3.5 text-green-600" />
+      ) : (
+        <X className="h-3.5 w-3.5 text-gray-400" />
+      )}
+      <span className={met ? 'text-green-700' : 'text-gray-500'}>{text}</span>
+    </div>
+  );
+}
