@@ -104,8 +104,11 @@ export function AppSidebar() {
     return (
         <Sidebar>
             <SidebarHeader>
-                <div className="flex h-12 items-center px-4">
+                <div className="flex h-12 items-center px-4 gap-2">
                     <h1 className="text-xl font-bold">SnackBase</h1>
+                    <span className="text-[10px] items-center bg-muted px-1.5 py-0.5 rounded-md font-medium text-muted-foreground mt-1">
+                        v0.1.0
+                    </span>
                 </div>
             </SidebarHeader>
             <SidebarContent>
