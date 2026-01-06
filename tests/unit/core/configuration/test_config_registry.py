@@ -160,7 +160,7 @@ def test_register_provider_definition(registry):
     # Execute
     registry.register_provider_definition(
         category="auth_providers",
-        name="google",
+        provider_name="google",
         display_name="Google Auth",
         is_builtin=True
     )
@@ -173,4 +173,4 @@ def test_register_provider_definition(registry):
     
     providers = registry.list_provider_definitions(category="auth_providers")
     assert len(providers) == 1
-    assert providers[0].name == "google"
+    assert providers[0].provider_name == "google"

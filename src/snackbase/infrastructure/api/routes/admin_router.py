@@ -311,7 +311,7 @@ async def get_available_providers(
         return [
             {
                 "category": p.category,
-                "name": p.name,
+                "provider_name": p.provider_name,
                 "display_name": p.display_name,
                 "logo_url": p.logo_url,
                 "is_builtin": p.is_builtin,

@@ -23,6 +23,25 @@ logger = get_logger(__name__)
 
 
 @pytest.fixture(autouse=True)
+def _setup_config_registry():
+    """Ensure config_registry is initialized on app state for tests."""
+    from snackbase.infrastructure.api.app import app
+    from snackbase.core.configuration.config_registry import ConfigurationRegistry
+    from snackbase.infrastructure.security.encryption import EncryptionService
+    
+    if not hasattr(app.state, "config_registry"):
+        # Use a consistent test key
+        encryption_service = EncryptionService("test-key-must-be-32-bytes-long!!!!")
+        app.state.config_registry = ConfigurationRegistry(encryption_service)
+    
+    # Clear registry memory state for isolation between tests
+    app.state.config_registry._provider_definitions = {}
+    app.state.config_registry._cache = {}
+    
+    yield app.state.config_registry
+
+
+@pytest.fixture(autouse=True)
 def _clean_dynamic_migrations():
     """Clear the dynamic migrations directory before running tests."""
     import shutil

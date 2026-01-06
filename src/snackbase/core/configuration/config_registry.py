@@ -17,7 +17,7 @@ class ProviderDefinition:
     """Definition of a configuration provider."""
 
     category: str
-    name: str
+    provider_name: str
     display_name: str
     logo_url: Optional[str] = None
     config_schema: Optional[Dict[str, Any]] = None
@@ -58,7 +58,7 @@ class ConfigurationRegistry:
     def register_provider_definition(
         self,
         category: str,
-        name: str,
+        provider_name: str,
         display_name: str,
         logo_url: Optional[str] = None,
         config_schema: Optional[Dict[str, Any]] = None,
@@ -68,33 +68,33 @@ class ConfigurationRegistry:
 
         Args:
             category: Provider category.
-            name: Provider identifier.
+            provider_name: Provider identifier.
             display_name: Human-readable name.
             logo_url: Optional path to logo.
             config_schema: Optional JSON Schema for validation.
             is_builtin: Whether this is a built-in provider.
         """
-        key = f"{category}:{name}"
+        key = f"{category}:{provider_name}"
         self._provider_definitions[key] = ProviderDefinition(
             category=category,
-            name=name,
+            provider_name=provider_name,
             display_name=display_name,
             logo_url=logo_url,
             config_schema=config_schema,
             is_builtin=is_builtin,
         )
 
-    def get_provider_definition(self, category: str, name: str) -> Optional[ProviderDefinition]:
+    def get_provider_definition(self, category: str, provider_name: str) -> Optional[ProviderDefinition]:
         """Retrieve a provider definition.
 
         Args:
             category: Provider category.
-            name: Provider identifier.
+            provider_name: Provider identifier.
 
         Returns:
             Provider definition if found, None otherwise.
         """
-        return self._provider_definitions.get(f"{category}:{name}")
+        return self._provider_definitions.get(f"{category}:{provider_name}")
 
     def list_provider_definitions(self, category: Optional[str] = None) -> List[ProviderDefinition]:
         """List all registered provider definitions.

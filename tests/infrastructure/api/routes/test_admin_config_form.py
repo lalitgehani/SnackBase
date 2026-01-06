@@ -29,7 +29,7 @@ async def setup_registry(db_session: AsyncSession):
     ep = EmailPasswordProvider()
     app.state.config_registry.register_provider_definition(
         category=ep.category,
-        name=ep.provider_name,
+        provider_name=ep.provider_name,
         display_name=ep.display_name,
         config_schema=ep.config_schema,
         is_builtin=True
@@ -68,7 +68,7 @@ async def test_get_available_providers(client: AsyncClient, superadmin_token: st
     registry: ConfigurationRegistry = app.state.config_registry
     registry.register_provider_definition(
         category="auth_providers",
-        name="test_auth_list",
+        provider_name="test_auth_list",
         display_name="Test Auth",
         config_schema={"type": "object", "properties": {"foo": {"type": "string"}}}
     )
@@ -79,7 +79,7 @@ async def test_get_available_providers(client: AsyncClient, superadmin_token: st
     )
     assert response.status_code == 200
     providers = response.json()
-    assert any(p["name"] == "test_auth_list" for p in providers)
+    assert any(p["provider_name"] == "test_auth_list" for p in providers)
 
 @pytest.mark.asyncio
 async def test_get_provider_schema(client: AsyncClient, superadmin_token: str):
@@ -87,7 +87,7 @@ async def test_get_provider_schema(client: AsyncClient, superadmin_token: str):
     registry: ConfigurationRegistry = app.state.config_registry
     registry.register_provider_definition(
         category="auth_providers",
-        name="test_auth_schema",
+        provider_name="test_auth_schema",
         display_name="Test Auth Schema",
         config_schema={"type": "object", "properties": {"foo": {"type": "string"}}}
     )
@@ -144,7 +144,7 @@ async def test_get_and_update_configuration_values(client: AsyncClient, superadm
     # Register schema with secret field
     registry.register_provider_definition(
         category="auth_providers",
-        name="test_auth_update",
+        provider_name="test_auth_update",
         display_name="Test Auth Update",
         config_schema={
             "type": "object", 

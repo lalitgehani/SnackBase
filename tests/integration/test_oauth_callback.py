@@ -35,7 +35,7 @@ class TestOAuthCallback:
         google_handler = GoogleOAuthHandler()
         app.state.config_registry.register_provider_definition(
             category="auth_providers",
-            name="google",
+            provider_name="google",
             display_name="Google",
             logo_url=google_handler.logo_url,
             config_schema=google_handler.config_schema,

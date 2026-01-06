@@ -29,7 +29,7 @@ class TestOAuthInitiate:
         google_handler = GoogleOAuthHandler()
         app.state.config_registry.register_provider_definition(
             category="auth_providers",
-            name="google",
+            provider_name="google",
             display_name="Google",
             logo_url=google_handler.logo_url,
             config_schema=google_handler.config_schema,
@@ -64,7 +64,7 @@ class TestOAuthInitiate:
             "client_id": "test-client-id",
             "client_secret": "test-client-secret",
             "scopes": ["openid", "email"],
-            "redirect_uri": "http://localhost:8000/callback"
+            "redirect_uri": "http://myapp.com/callback"
         }
         
         await config_registry.create_config(

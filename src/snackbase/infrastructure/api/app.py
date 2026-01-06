@@ -97,7 +97,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             email_password_provider = EmailPasswordProvider()
             config_registry.register_provider_definition(
                 category=email_password_provider.category,
-                name=email_password_provider.provider_name,
+                provider_name=email_password_provider.provider_name,
                 display_name=email_password_provider.display_name,
                 logo_url=email_password_provider.logo_url,
                 config_schema=email_password_provider.config_schema,
@@ -108,7 +108,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             google_oauth_handler = GoogleOAuthHandler()
             config_registry.register_provider_definition(
                 category="auth_providers",
-                name=google_oauth_handler.provider_name,
+                provider_name=google_oauth_handler.provider_name,
                 display_name=google_oauth_handler.display_name,
                 logo_url=google_oauth_handler.logo_url,
                 config_schema=google_oauth_handler.config_schema,
@@ -119,7 +119,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             github_oauth_handler = GitHubOAuthHandler()
             config_registry.register_provider_definition(
                 category="auth_providers",
-                name=github_oauth_handler.provider_name,
+                provider_name=github_oauth_handler.provider_name,
                 display_name=github_oauth_handler.display_name,
                 logo_url=github_oauth_handler.logo_url,
                 config_schema=github_oauth_handler.config_schema,
@@ -130,7 +130,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             microsoft_oauth_handler = MicrosoftOAuthHandler()
             config_registry.register_provider_definition(
                 category="auth_providers",
-                name=microsoft_oauth_handler.provider_name,
+                provider_name=microsoft_oauth_handler.provider_name,
                 display_name=microsoft_oauth_handler.display_name,
                 logo_url=microsoft_oauth_handler.logo_url,
                 config_schema=microsoft_oauth_handler.config_schema,
@@ -141,7 +141,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             apple_oauth_handler = AppleOAuthHandler()
             config_registry.register_provider_definition(
                 category="auth_providers",
-                name=apple_oauth_handler.provider_name,
+                provider_name=apple_oauth_handler.provider_name,
                 display_name=apple_oauth_handler.display_name,
                 logo_url=apple_oauth_handler.logo_url,
                 config_schema=apple_oauth_handler.config_schema,
@@ -152,7 +152,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             okta_saml_provider = OktaSAMLProvider()
             config_registry.register_provider_definition(
                 category="auth_providers",
-                name=okta_saml_provider.provider_name,
+                provider_name=okta_saml_provider.provider_name,
                 display_name=okta_saml_provider.display_name,
                 logo_url=okta_saml_provider.logo_url,
                 config_schema=okta_saml_provider.config_schema,
@@ -163,7 +163,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             azure_ad_provider = AzureADSAMLProvider()
             config_registry.register_provider_definition(
                 category="auth_providers",
-                name=azure_ad_provider.provider_name,
+                provider_name=azure_ad_provider.provider_name,
                 display_name=azure_ad_provider.display_name,
                 logo_url=azure_ad_provider.logo_url,
                 config_schema=azure_ad_provider.config_schema,
@@ -174,7 +174,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             generic_saml_provider = GenericSAMLProvider()
             config_registry.register_provider_definition(
                 category="auth_providers",
-                name=generic_saml_provider.provider_name,
+                provider_name=generic_saml_provider.provider_name,
                 display_name=generic_saml_provider.display_name,
                 logo_url=generic_saml_provider.logo_url,
                 config_schema=generic_saml_provider.config_schema,

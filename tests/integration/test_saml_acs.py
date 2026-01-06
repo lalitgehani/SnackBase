@@ -35,7 +35,7 @@ class TestSAMLACS:
         okta_handler = OktaSAMLProvider()
         app.state.config_registry.register_provider_definition(
             category="saml_providers",
-            name="okta",
+            provider_name="okta",
             display_name="Okta",
             logo_url=okta_handler.logo_url,
             config_schema=okta_handler.config_schema,

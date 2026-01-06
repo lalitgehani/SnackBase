@@ -107,6 +107,12 @@ class OAuthAuthorizeRequest(BaseModel):
     """Request body for starting an OAuth flow."""
 
     account: str | None = Field(None, description="Account identifier (slug or ID)")
+    account_name: str | None = Field(
+        None,
+        min_length=1,
+        max_length=255,
+        description="Display name for the new account (used when creating a new account)",
+    )
     redirect_uri: str = Field(..., description="URI to redirect to after OAuth completion")
     state: str | None = Field(
         None, description="Optional state for CSRF (auto-generated if missing)"

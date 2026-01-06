@@ -174,21 +174,16 @@ async def authorize(
         state_token=state_token,
         redirect_uri=request_body.redirect_uri,
         expires_at=expires_at,
-        metadata_={"account_id": account_id},
+        metadata_={"account_id": account_id, "account_name": request_body.account_name},
     )
     
     await oauth_state_repo.create(state_model)
     await session.commit()
 
     # 6. Generate authorization URL
-    from snackbase.core.config import get_settings
-    settings = get_settings()
-    
-    callback_url = f"{settings.external_url.rstrip('/')}{settings.api_prefix}/auth/oauth/{provider_name}/callback"
-    
     auth_url = await handler.get_authorization_url(
         config=config_dict,
-        redirect_uri=callback_url,
+        redirect_uri=request_body.redirect_uri,
         state=state_token,
     )
 
@@ -235,9 +230,14 @@ async def callback(
     5. Link to existing user or create new user/account
     6. Generate JWT tokens and return response
     """
+    logger.debug("OAuth callback: Step 1 - Starting state validation")
+    
     # 1. State validation and deletion
     oauth_state_repo = OAuthStateRepository(session)
+    logger.debug("OAuth callback: Step 1.1 - Created OAuthStateRepository")
+    
     state_model = await oauth_state_repo.get_by_token(request_body.state)
+    logger.debug("OAuth callback: Step 1.2 - Retrieved state model", found=state_model is not None)
 
     if not state_model:
         logger.info("OAuth callback failed: invalid state token", state=request_body.state)
@@ -246,7 +246,14 @@ async def callback(
             detail="Invalid state token",
         )
 
-    if state_model.expires_at <= datetime.now(timezone.utc):
+    logger.debug("OAuth callback: Step 1.3 - Getting expires_at attribute")
+    # Check expiration - handle both naive and aware datetimes from DB
+    expires_at = state_model.expires_at
+    logger.debug("OAuth callback: Step 1.4 - Got expires_at", expires_at=str(expires_at))
+    
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at <= datetime.now(timezone.utc):
         logger.info("OAuth callback failed: state token expired", state=request_body.state)
         await oauth_state_repo.delete(state_model.id)
         await session.commit()
@@ -255,6 +262,7 @@ async def callback(
             detail="State token expired",
         )
 
+    logger.debug("OAuth callback: Step 1.5 - Checking provider name")
     # Provider must match
     if state_model.provider_name != provider_name:
         logger.info(
@@ -267,10 +275,13 @@ async def callback(
             detail="Provider mismatch",
         )
 
+    logger.debug("OAuth callback: Step 1.6 - Deleting state (single-use)")
     # Delete state after validation (single-use)
     await oauth_state_repo.delete(state_model.id)
+    logger.debug("OAuth callback: Step 1.7 - State deleted")
 
     # 2. Resolve provider configuration
+    logger.debug("OAuth callback: Step 2 - Getting config registry")
     config_registry = getattr(request.app.state, "config_registry", None)
     if not config_registry:
         logger.error("Configuration registry not found in app state")
@@ -278,6 +289,7 @@ async def callback(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="System configuration error",
         )
+    logger.debug("OAuth callback: Step 2.1 - Got config registry")
 
     account_id = (
         state_model.metadata_.get("account_id")
@@ -394,7 +406,13 @@ async def callback(
 
             from snackbase.domain.services import SlugGenerator
 
-            display_name = user_info.get("name") or email.split("@")[0]
+            # Use user-provided account name, fall back to Google profile name
+            provided_account_name = (
+                state_model.metadata_.get("account_name")
+                if state_model.metadata_
+                else None
+            )
+            display_name = provided_account_name or user_info.get("name") or email.split("@")[0]
             slug = SlugGenerator.generate(display_name)
 
             # Ensure slug uniqueness
@@ -469,20 +487,16 @@ async def callback(
             detail="User account is inactive",
         )
 
-    # Commit all changes
-    await session.commit()
-    await session.refresh(user)
-
     # 7. Generate JWT tokens
-    # Ensure role is loaded for JWT
-    if not user.role:
-        user.role = await role_repo.get_by_id(user.role_id)
+    # Always explicitly load role and account to avoid lazy loading with async driver
+    role = await role_repo.get_by_id(user.role_id)
+    account = await account_repo.get_by_id(user.account_id)
 
     access_token = jwt_service.create_access_token(
         user_id=user.id,
         account_id=user.account_id,
         email=user.email,
-        role=user.role.name,
+        role=role.name,
     )
     refresh_token, token_id = jwt_service.create_refresh_token(
         user_id=user.id,
@@ -501,6 +515,8 @@ async def callback(
         expires_at=datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_expire_days),
     )
     await refresh_token_repo.create(refresh_token_model)
+
+    # Commit all changes in a single transaction
     await session.commit()
 
     logger.info(
@@ -515,15 +531,15 @@ async def callback(
         refresh_token=refresh_token,
         expires_in=expires_in,
         account=AccountResponse(
-            id=user.account.id,
-            slug=user.account.slug,
-            name=user.account.name,
-            created_at=user.account.created_at,
+            id=account.id,
+            slug=account.slug,
+            name=account.name,
+            created_at=account.created_at,
         ),
         user=UserResponse(
             id=user.id,
             email=user.email,
-            role=user.role.name,
+            role=role.name,
             is_active=user.is_active,
             created_at=user.created_at,
         ),

@@ -52,7 +52,7 @@ async def setup_registry(client: AsyncClient, db_session: AsyncSession):
     okta_provider = OktaSAMLProvider()
     registry.register_provider_definition(
         category="saml_providers",
-        name=okta_provider.provider_name,
+        provider_name=okta_provider.provider_name,
         display_name=okta_provider.display_name,
         logo_url=okta_provider.logo_url,
         config_schema=okta_provider.config_schema,
@@ -62,7 +62,7 @@ async def setup_registry(client: AsyncClient, db_session: AsyncSession):
     azure_provider = AzureADSAMLProvider()
     registry.register_provider_definition(
         category="saml_providers",
-        name=azure_provider.provider_name,
+        provider_name=azure_provider.provider_name,
         display_name=azure_provider.display_name,
         logo_url=azure_provider.logo_url,
         config_schema=azure_provider.config_schema,
@@ -72,7 +72,7 @@ async def setup_registry(client: AsyncClient, db_session: AsyncSession):
     generic_provider = GenericSAMLProvider()
     registry.register_provider_definition(
         category="saml_providers",
-        name=generic_provider.provider_name,
+        provider_name=generic_provider.provider_name,
         display_name=generic_provider.display_name,
         logo_url=generic_provider.logo_url,
         config_schema=generic_provider.config_schema,

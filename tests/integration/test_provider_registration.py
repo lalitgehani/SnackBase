@@ -34,12 +34,12 @@ class TestProviderRegistration:
             # Get the provider definition
             provider_def = config_registry.get_provider_definition(
                 category="auth_providers",
-                name="email_password"
+                provider_name="email_password"
             )
             
             assert provider_def is not None
             assert provider_def.category == "auth_providers"
-            assert provider_def.name == "email_password"
+            assert provider_def.provider_name == "email_password"
             assert provider_def.display_name == "Email and Password"
             assert provider_def.is_builtin is True
             assert provider_def.config_schema == {}
@@ -52,12 +52,12 @@ class TestProviderRegistration:
             # Get the provider definition
             provider_def = config_registry.get_provider_definition(
                 category="auth_providers",
-                name="google"
+                provider_name="google"
             )
             
             assert provider_def is not None
             assert provider_def.category == "auth_providers"
-            assert provider_def.name == "google"
+            assert provider_def.provider_name == "google"
             assert provider_def.display_name == "Google"
             assert provider_def.is_builtin is True
             assert provider_def.logo_url == "/assets/providers/google.svg"
@@ -70,12 +70,12 @@ class TestProviderRegistration:
             # Get the provider definition
             provider_def = config_registry.get_provider_definition(
                 category="auth_providers",
-                name="github"
+                provider_name="github"
             )
             
             assert provider_def is not None
             assert provider_def.category == "auth_providers"
-            assert provider_def.name == "github"
+            assert provider_def.provider_name == "github"
             assert provider_def.display_name == "GitHub"
             assert provider_def.is_builtin is True
             assert provider_def.logo_url == "/assets/providers/github.svg"
@@ -89,12 +89,12 @@ class TestProviderRegistration:
             # Get the provider definition
             provider_def = config_registry.get_provider_definition(
                 category="auth_providers",
-                name="microsoft"
+                provider_name="microsoft"
             )
             
             assert provider_def is not None
             assert provider_def.category == "auth_providers"
-            assert provider_def.name == "microsoft"
+            assert provider_def.provider_name == "microsoft"
             assert provider_def.display_name == "Microsoft"
             assert provider_def.is_builtin is True
             assert provider_def.logo_url == "/assets/providers/microsoft.svg"
@@ -109,12 +109,12 @@ class TestProviderRegistration:
             # Get the provider definition
             provider_def = config_registry.get_provider_definition(
                 category="auth_providers",
-                name="apple"
+                provider_name="apple"
             )
             
             assert provider_def is not None
             assert provider_def.category == "auth_providers"
-            assert provider_def.name == "apple"
+            assert provider_def.provider_name == "apple"
             assert provider_def.display_name == "Apple"
             assert provider_def.is_builtin is True
             assert provider_def.logo_url == "/assets/providers/apple.svg"
@@ -134,7 +134,7 @@ class TestProviderRegistration:
             
             # Find email_password provider
             email_password = next(
-                (p for p in auth_providers if p.name == "email_password"),
+                (p for p in auth_providers if p.provider_name == "email_password"),
                 None
             )
             
