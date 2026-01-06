@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, Check, X } from 'lucide-react';
+import OAuthButton from '@/components/ui/oauthButton';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
@@ -179,6 +180,24 @@ export default function RegisterPage() {
                 'Create Account'
               )}
             </Button>
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-gray-300" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-white px-2 text-gray-500">Or continue with</span>
+              </div>
+            </div>
+
+            <OAuthButton
+              provider="google"
+              account={accountSlug || undefined}
+              accountName={accountName || undefined}
+              onSuccess={() => navigate('/todos')}
+              onError={(error) => console.error('OAuth error:', error)}
+            />
+
             <p className="text-sm text-gray-600">
               Already have an account?{' '}
               <Link to="/login" className="text-blue-600 hover:underline">

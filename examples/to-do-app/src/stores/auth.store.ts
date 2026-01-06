@@ -6,7 +6,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import * as authService from '@/services/auth.service';
-import type { UserInfo, AccountInfo } from '@/types';
+import * as oauthService from '@/services/oauth.service';
+import type { UserInfo, AccountInfo, OAuthCallbackResponse } from '@/types';
 
 interface AuthState {
   // State
@@ -21,6 +22,7 @@ interface AuthState {
   // Actions
   login: (account: string, email: string, password: string) => Promise<void>;
   register: (accountName: string, accountSlug: string | undefined, email: string, password: string) => Promise<void>;
+  oauthLogin: (provider?: 'google' | 'github' | 'microsoft' | 'apple', account?: string, accountName?: string) => Promise<void>;
   logout: () => void;
   clearError: () => void;
   restoreSession: () => Promise<void>;
@@ -89,6 +91,39 @@ export const useAuthStore = create<AuthState>()(
           });
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Registration failed';
+
+          set({
+            user: null,
+            account: null,
+            token: null,
+            refreshToken: null,
+            isAuthenticated: false,
+            isLoading: false,
+            error: errorMessage,
+          });
+
+          throw error;
+        }
+      },
+
+      // OAuth login action
+      oauthLogin: async (provider = 'google', account?: string, accountName?: string) => {
+        set({ isLoading: true, error: null });
+
+        try {
+          const response: OAuthCallbackResponse = await oauthService.signInWithOAuth(provider, account, accountName);
+
+          set({
+            user: response.user,
+            account: response.account,
+            token: response.token,
+            refreshToken: response.refresh_token,
+            isAuthenticated: true,
+            isLoading: false,
+            error: null,
+          });
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'OAuth login failed';
 
           set({
             user: null,

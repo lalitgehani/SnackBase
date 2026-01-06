@@ -35,6 +35,30 @@ export interface RegisterRequest {
   password: string;
 }
 
+// OAuth Types
+export interface OAuthAuthorizeRequest {
+  account?: string;
+  redirect_uri: string;
+  state?: string;
+}
+
+export interface OAuthAuthorizeResponse {
+  authorization_url: string;
+  state: string;
+  provider: string;
+}
+
+export interface OAuthCallbackRequest {
+  code: string;
+  state: string;
+  redirect_uri: string;
+}
+
+export interface OAuthCallbackResponse extends AuthResponse {
+  is_new_user: boolean;
+  is_new_account: boolean;
+}
+
 // Todo Types
 export type Priority = 'low' | 'medium' | 'high';
 
