@@ -50,7 +50,19 @@ export const AddProviderModal = ({
                             p.provider_name !== "email_password" &&
                             !existingConfigs.some((ec) => ec.provider_name === p.provider_name)
                     );
-                    setAvailableProviders(filtered);
+
+                    // TEMPORARY: Comment out untested providers (only email providers and Google OAuth tested)
+                    const testedProviders = filtered.filter((p: AvailableProvider) => {
+                        // Include all email providers
+                        if (p.category === 'email_providers') return true;
+                        // Include only Google OAuth for auth providers
+                        if (p.category === 'auth_providers' && p.provider_name === 'google') return true;
+                        // Exclude all other auth providers (github, microsoft, apple, saml_*)
+                        return false;
+                        // Uncomment below to enable all providers when tested:
+                        // return true;
+                    });
+                    setAvailableProviders(testedProviders);
                 } catch (error) {
                     console.error("Failed to load providers", error);
                     toast({

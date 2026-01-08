@@ -41,58 +41,57 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     settings = get_settings()
     logger = get_logger(__name__)
 
-    # Startup
-    logger.info(
-        "Starting SnackBase",
-        app_name=settings.app_name,
-        version=settings.app_version,
-        environment=settings.environment,
-    )
-
-    # Configure logging
-    configure_logging(settings)
-
-    # Create storage directory for file uploads
-    storage_path = Path(settings.storage_path)
-    storage_path.mkdir(parents=True, exist_ok=True)
-    logger.info("Storage directory created", path=str(storage_path))
-
-    # Initialize database
     try:
-        await init_database()
-        logger.info("Database initialized successfully")
-    except Exception as e:
-        logger.error("Failed to initialize database", error=str(e))
-        raise
+        # Startup
+        logger.info(
+            "Starting SnackBase",
+            app_name=settings.app_name,
+            version=settings.app_version,
+            environment=settings.environment,
+        )
 
-    # Register built-in authentication providers
-    from snackbase.core.configuration.config_registry import ConfigurationRegistry
-    from snackbase.infrastructure.configuration.providers import EmailPasswordProvider
-    from snackbase.infrastructure.configuration.providers.oauth import (
-        AppleOAuthHandler,
-        GitHubOAuthHandler,
-        GoogleOAuthHandler,
-        MicrosoftOAuthHandler,
-    )
-    from snackbase.infrastructure.configuration.providers.saml import (
-        AzureADSAMLProvider,
-        GenericSAMLProvider,
-        OktaSAMLProvider,
-    )
-    from snackbase.infrastructure.persistence.database import get_db_session
-    from snackbase.infrastructure.persistence.repositories import ConfigurationRepository
-    from snackbase.infrastructure.security.encryption import EncryptionService
-    
-    encryption_service = EncryptionService(settings.encryption_key)
-    config_registry = ConfigurationRegistry(encryption_service)
-    
-    # Store registry on app state
-    app.state.config_registry = config_registry
+        # Configure logging (redundant if already done in CLI, but safe)
+        configure_logging(settings)
 
-    async for session in get_db_session():
+        # Create storage directory for file uploads
+        storage_path = Path(settings.storage_path)
+        storage_path.mkdir(parents=True, exist_ok=True)
+        logger.info("Storage directory created", path=str(storage_path))
+
+        # Initialize database
         try:
-            config_repo = ConfigurationRepository(session)
-            
+            await init_database()
+            logger.info("Database initialized successfully")
+        except Exception as e:
+            logger.error("Failed to initialize database during startup", error=str(e))
+            raise
+
+        # Register built-in authentication providers
+        from snackbase.core.configuration.config_registry import ConfigurationRegistry
+        from snackbase.infrastructure.configuration.providers import EmailPasswordProvider
+        from snackbase.infrastructure.configuration.providers.oauth import (
+            AppleOAuthHandler,
+            GitHubOAuthHandler,
+            GoogleOAuthHandler,
+            MicrosoftOAuthHandler,
+        )
+        from snackbase.infrastructure.configuration.providers.saml import (
+            AzureADSAMLProvider,
+            GenericSAMLProvider,
+            OktaSAMLProvider,
+        )
+        from snackbase.infrastructure.persistence.database import get_db_manager
+        from snackbase.infrastructure.security.encryption import EncryptionService
+        
+        encryption_service = EncryptionService(settings.encryption_key)
+        config_registry = ConfigurationRegistry(encryption_service)
+        
+        # Store registry on app state
+        app.state.config_registry = config_registry
+
+        # Use DatabaseManager directly for initialization session
+        db_manager = get_db_manager()
+        async with db_manager.session() as session:
             # Register email/password provider
             email_password_provider = EmailPasswordProvider()
             config_registry.register_provider_definition(
@@ -197,73 +196,72 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                     generic_saml_provider.provider_name,
                 ],
             )
-            break
-        finally:
-            await session.close()
 
+        # Register built-in hooks
+        if hasattr(app.state, "hook_registry"):
+            register_builtin_hooks(app.state.hook_registry)
+            logger.info("Built-in hooks registered")
 
+            # Register global SQLAlchemy listeners for systemic audit logging
+            from snackbase.infrastructure.persistence.event_listeners import (
+                register_sqlalchemy_listeners,
+            )
+            
+            # engine creation is side-effect of calling .engine
+            register_sqlalchemy_listeners(db_manager.engine, app.state.hook_registry)
 
-    # Register built-in hooks
-    if hasattr(app.state, "hook_registry"):
-        register_builtin_hooks(app.state.hook_registry)
-        logger.info("Built-in hooks registered")
+            # Trigger ON_BOOTSTRAP hook
+            bootstrap_context = HookContext(app=app)
+            await app.state.hook_registry.trigger(
+                event=HookEvent.ON_BOOTSTRAP,
+                context=bootstrap_context,
+            )
+            logger.info("ON_BOOTSTRAP hooks triggered")
 
-        # Register global SQLAlchemy listeners for systemic audit logging
-        from snackbase.infrastructure.persistence.database import get_db_manager
-        from snackbase.infrastructure.persistence.event_listeners import register_sqlalchemy_listeners
-        
-        db = get_db_manager()
-        # We need to ensure engine is created
-        _ = db.engine 
-        register_sqlalchemy_listeners(db.engine, app.state.hook_registry)
+            # Trigger ON_SERVE hook (app is ready to serve)
+            await app.state.hook_registry.trigger(
+                event=HookEvent.ON_SERVE,
+                context=bootstrap_context,
+            )
+            logger.info("ON_SERVE hooks triggered")
 
-
-        # Trigger ON_BOOTSTRAP hook
-        bootstrap_context = HookContext(app=app)
-        await app.state.hook_registry.trigger(
-            event=HookEvent.ON_BOOTSTRAP,
-            context=bootstrap_context,
+        # Initialize permission cache
+        from snackbase.domain.services import PermissionCache
+        app.state.permission_cache = PermissionCache(
+            ttl_seconds=settings.permission_cache_ttl_seconds
         )
-        logger.info("ON_BOOTSTRAP hooks triggered")
-
-        # Trigger ON_SERVE hook (app is ready to serve)
-        await app.state.hook_registry.trigger(
-            event=HookEvent.ON_SERVE,
-            context=bootstrap_context,
+        logger.info(
+            "Permission cache initialized",
+            ttl_seconds=settings.permission_cache_ttl_seconds,
         )
-        logger.info("ON_SERVE hooks triggered")
 
-    # Initialize permission cache
-    from snackbase.domain.services import PermissionCache
-    app.state.permission_cache = PermissionCache(
-        ttl_seconds=settings.permission_cache_ttl_seconds
-    )
-    logger.info(
-        "Permission cache initialized",
-        ttl_seconds=settings.permission_cache_ttl_seconds,
-    )
+        logger.info("SnackBase startup complete and ready to serve")
+        yield
 
-    yield
+    except Exception as e:
+        logger.exception("Lifespan startup or runtime error occurred", error=str(e))
+        raise
+    finally:
+        # Shutdown
+        logger.info("Shutting down SnackBase")
 
-    # Shutdown
-    logger.info("Shutting down SnackBase")
+        # Clear permission cache
+        if hasattr(app.state, "permission_cache"):
+            app.state.permission_cache.invalidate_all()
+            logger.info("Permission cache cleared")
 
-    # Clear permission cache
-    if hasattr(app.state, "permission_cache"):
-        app.state.permission_cache.invalidate_all()
-        logger.info("Permission cache cleared")
+        # Trigger ON_TERMINATE hook
+        if hasattr(app.state, "hook_registry"):
+            terminate_context = HookContext(app=app)
+            await app.state.hook_registry.trigger(
+                event=HookEvent.ON_TERMINATE,
+                context=terminate_context,
+            )
+            logger.info("ON_TERMINATE hooks triggered")
 
-    # Trigger ON_TERMINATE hook
-    if hasattr(app.state, "hook_registry"):
-        terminate_context = HookContext(app=app)
-        await app.state.hook_registry.trigger(
-            event=HookEvent.ON_TERMINATE,
-            context=terminate_context,
-        )
-        logger.info("ON_TERMINATE hooks triggered")
-
-    await close_database()
-    logger.info("Database connection closed")
+        await close_database()
+        logger.info("Database connection closed")
+        logger.info("SnackBase shutdown complete")
 
 
 def create_app() -> FastAPI:
