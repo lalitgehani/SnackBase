@@ -69,6 +69,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # Register built-in authentication providers
         from snackbase.core.configuration.config_registry import ConfigurationRegistry
         from snackbase.infrastructure.configuration.providers import EmailPasswordProvider
+        from snackbase.infrastructure.configuration.providers.email.smtp import SMTPConfiguration
         from snackbase.infrastructure.configuration.providers.oauth import (
             AppleOAuthHandler,
             GitHubOAuthHandler,
@@ -101,6 +102,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 logo_url=email_password_provider.logo_url,
                 config_schema=email_password_provider.config_schema,
                 is_builtin=email_password_provider.is_builtin,
+            )
+
+            # Register SMTP provider
+            smtp_provider = SMTPConfiguration()
+            config_registry.register_provider_definition(
+                category=smtp_provider.category,
+                provider_name=smtp_provider.provider_name,
+                display_name=smtp_provider.display_name,
+                logo_url=smtp_provider.logo_url,
+                config_schema=smtp_provider.config_schema,
+                is_builtin=smtp_provider.is_builtin,
             )
 
             # Register Google OAuth provider
@@ -187,6 +199,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 "Built-in authentication providers registered",
                 providers=[
                     email_password_provider.provider_name,
+                    smtp_provider.provider_name,
                     google_oauth_handler.provider_name,
                     github_oauth_handler.provider_name,
                     microsoft_oauth_handler.provider_name,
