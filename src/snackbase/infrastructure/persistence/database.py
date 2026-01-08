@@ -502,117 +502,335 @@ async def _seed_default_email_templates(db: DatabaseManager) -> None:
         {
             "template_type": "email_verification",
             "locale": "en",
-            "subject": "Verify your email address",
+            "subject": "Verify your email address for {{ app_name }}",
             "html_body": """
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify Your Email</title>
+    <style>
+        @media only screen and (max-width: 600px) {
+            .container { padding: 10px !important; }
+            .button { padding: 10px 20px !important; font-size: 14px !important; }
+            h1 { font-size: 24px !important; }
+        }
+    </style>
 </head>
-<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-    <h2 style="color: #2c3e50;">Verify Your Email Address</h2>
-    <p>Hello,</p>
-    <p>Thank you for signing up! Please verify your email address by clicking the button below:</p>
-    <div style="text-align: center; margin: 30px 0;">
-        <a href="{{ verification_url }}" style="background-color: #3498db; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">Verify Email</a>
-    </div>
-    <p>Or copy and paste this link into your browser:</p>
-    <p style="word-break: break-all; color: #3498db;">{{ verification_url }}</p>
-    <p style="margin-top: 30px; font-size: 0.9em; color: #7f8c8d;">
-        If you didn't create an account, you can safely ignore this email.
-    </p>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f4f7fa;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f7fa; padding: 40px 20px;">
+        <tr>
+            <td align="center">
+                <table role="presentation" class="container" width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); padding: 40px;">
+                    <!-- Header -->
+                    <tr>
+                        <td style="text-align: center; padding-bottom: 30px;">
+                            <h1 style="margin: 0; color: #2c3e50; font-size: 28px; font-weight: 600;">{{ app_name }}</h1>
+                        </td>
+                    </tr>
+                    <!-- Content -->
+                    <tr>
+                        <td>
+                            <h2 style="margin: 0 0 20px 0; color: #2c3e50; font-size: 24px; font-weight: 600;">Verify Your Email Address</h2>
+                            <p style="margin: 0 0 16px 0; color: #4a5568; font-size: 16px; line-height: 1.6;">Hello{% if user_name %} {{ user_name }}{% endif %},</p>
+                            <p style="margin: 0 0 16px 0; color: #4a5568; font-size: 16px; line-height: 1.6;">Thank you for signing up for {{ app_name }}! To complete your registration and start using your account, please verify your email address by clicking the button below:</p>
+                        </td>
+                    </tr>
+                    <!-- Button -->
+                    <tr>
+                        <td style="text-align: center; padding: 30px 0;">
+                            <a href="{{ verification_url }}" class="button" style="display: inline-block; background-color: #3498db; color: #ffffff; text-decoration: none; padding: 14px 40px; border-radius: 6px; font-size: 16px; font-weight: 600; box-shadow: 0 2px 4px rgba(52,152,219,0.3);">Verify Email Address</a>
+                        </td>
+                    </tr>
+                    <!-- Alternative Link -->
+                    <tr>
+                        <td>
+                            <p style="margin: 0 0 8px 0; color: #718096; font-size: 14px;">Or copy and paste this link into your browser:</p>
+                            <p style="margin: 0 0 24px 0; word-break: break-all; color: #3498db; font-size: 14px;">{{ verification_url }}</p>
+                        </td>
+                    </tr>
+                    <!-- Token Info -->
+                    {% if token %}
+                    <tr>
+                        <td style="background-color: #f7fafc; padding: 16px; border-radius: 6px; border-left: 4px solid #3498db;">
+                            <p style="margin: 0 0 8px 0; color: #4a5568; font-size: 14px; font-weight: 600;">Verification Code:</p>
+                            <p style="margin: 0; color: #2d3748; font-size: 16px; font-family: 'Courier New', monospace; letter-spacing: 2px;">{{ token }}</p>
+                        </td>
+                    </tr>
+                    {% endif %}
+                    <!-- Expiration -->
+                    {% if expires_at %}
+                    <tr>
+                        <td style="padding-top: 20px;">
+                            <p style="margin: 0; color: #718096; font-size: 14px;">⏰ This verification link will expire on {{ expires_at }}.</p>
+                        </td>
+                    </tr>
+                    {% endif %}
+                    <!-- Footer -->
+                    <tr>
+                        <td style="padding-top: 30px; border-top: 1px solid #e2e8f0; margin-top: 30px;">
+                            <p style="margin: 0 0 8px 0; color: #a0aec0; font-size: 13px; line-height: 1.5;">If you didn't create an account with {{ app_name }}, you can safely ignore this email.</p>
+                            <p style="margin: 0; color: #a0aec0; font-size: 13px;">Need help? Visit <a href="{{ app_url }}" style="color: #3498db; text-decoration: none;">{{ app_name }}</a></p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
 </body>
 </html>
             """.strip(),
             "text_body": """
-Verify Your Email Address
+{{ app_name }} - Verify Your Email Address
 
-Hello,
+Hello{% if user_name %} {{ user_name }}{% endif %},
 
-Thank you for signing up! Please verify your email address by visiting the following link:
+Thank you for signing up for {{ app_name }}! To complete your registration and start using your account, please verify your email address by visiting the following link:
 
 {{ verification_url }}
 
-If you didn't create an account, you can safely ignore this email.
+{% if token %}Verification Code: {{ token }}{% endif %}
+
+{% if expires_at %}This verification link will expire on {{ expires_at }}.{% endif %}
+
+If you didn't create an account with {{ app_name }}, you can safely ignore this email.
+
+Need help? Visit {{ app_url }}
             """.strip(),
         },
         {
             "template_type": "password_reset",
             "locale": "en",
-            "subject": "Reset your password",
+            "subject": "Reset your password for {{ app_name }}",
             "html_body": """
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reset Your Password</title>
+    <style>
+        @media only screen and (max-width: 600px) {
+            .container { padding: 10px !important; }
+            .button { padding: 10px 20px !important; font-size: 14px !important; }
+            h1 { font-size: 24px !important; }
+        }
+    </style>
 </head>
-<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-    <h2 style="color: #2c3e50;">Reset Your Password</h2>
-    <p>Hello,</p>
-    <p>We received a request to reset your password. Click the button below to create a new password:</p>
-    <div style="text-align: center; margin: 30px 0;">
-        <a href="{{ reset_url }}" style="background-color: #e74c3c; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">Reset Password</a>
-    </div>
-    <p>Or copy and paste this link into your browser:</p>
-    <p style="word-break: break-all; color: #e74c3c;">{{ reset_url }}</p>
-    <p style="margin-top: 30px; font-size: 0.9em; color: #7f8c8d;">
-        If you didn't request a password reset, you can safely ignore this email. Your password will not be changed.
-    </p>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f4f7fa;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f7fa; padding: 40px 20px;">
+        <tr>
+            <td align="center">
+                <table role="presentation" class="container" width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); padding: 40px;">
+                    <!-- Header -->
+                    <tr>
+                        <td style="text-align: center; padding-bottom: 30px;">
+                            <h1 style="margin: 0; color: #2c3e50; font-size: 28px; font-weight: 600;">{{ app_name }}</h1>
+                        </td>
+                    </tr>
+                    <!-- Content -->
+                    <tr>
+                        <td>
+                            <h2 style="margin: 0 0 20px 0; color: #2c3e50; font-size: 24px; font-weight: 600;">Reset Your Password</h2>
+                            <p style="margin: 0 0 16px 0; color: #4a5568; font-size: 16px; line-height: 1.6;">Hello{% if user_name %} {{ user_name }}{% endif %},</p>
+                            <p style="margin: 0 0 16px 0; color: #4a5568; font-size: 16px; line-height: 1.6;">We received a request to reset the password for your {{ app_name }} account{% if user_email %} ({{ user_email }}){% endif %}. Click the button below to create a new password:</p>
+                        </td>
+                    </tr>
+                    <!-- Button -->
+                    <tr>
+                        <td style="text-align: center; padding: 30px 0;">
+                            <a href="{{ reset_url }}" class="button" style="display: inline-block; background-color: #e74c3c; color: #ffffff; text-decoration: none; padding: 14px 40px; border-radius: 6px; font-size: 16px; font-weight: 600; box-shadow: 0 2px 4px rgba(231,76,60,0.3);">Reset Password</a>
+                        </td>
+                    </tr>
+                    <!-- Alternative Link -->
+                    <tr>
+                        <td>
+                            <p style="margin: 0 0 8px 0; color: #718096; font-size: 14px;">Or copy and paste this link into your browser:</p>
+                            <p style="margin: 0 0 24px 0; word-break: break-all; color: #e74c3c; font-size: 14px;">{{ reset_url }}</p>
+                        </td>
+                    </tr>
+                    <!-- Token Info -->
+                    {% if token %}
+                    <tr>
+                        <td style="background-color: #fef5f5; padding: 16px; border-radius: 6px; border-left: 4px solid #e74c3c;">
+                            <p style="margin: 0 0 8px 0; color: #4a5568; font-size: 14px; font-weight: 600;">Reset Code:</p>
+                            <p style="margin: 0; color: #2d3748; font-size: 16px; font-family: 'Courier New', monospace; letter-spacing: 2px;">{{ token }}</p>
+                        </td>
+                    </tr>
+                    {% endif %}
+                    <!-- Expiration -->
+                    {% if expires_at %}
+                    <tr>
+                        <td style="padding-top: 20px;">
+                            <p style="margin: 0; color: #718096; font-size: 14px;">⏰ This password reset link will expire on {{ expires_at }}.</p>
+                        </td>
+                    </tr>
+                    {% endif %}
+                    <!-- Security Warning -->
+                    <tr>
+                        <td style="padding-top: 20px;">
+                            <div style="background-color: #fff5f5; border-left: 4px solid #fc8181; padding: 16px; border-radius: 6px;">
+                                <p style="margin: 0 0 8px 0; color: #c53030; font-size: 14px; font-weight: 600;">🔒 Security Notice</p>
+                                <p style="margin: 0; color: #742a2a; font-size: 13px; line-height: 1.5;">If you didn't request a password reset, please ignore this email. Your password will remain unchanged. For security, we recommend changing your password if you suspect unauthorized access to your account.</p>
+                            </div>
+                        </td>
+                    </tr>
+                    <!-- Footer -->
+                    <tr>
+                        <td style="padding-top: 30px; border-top: 1px solid #e2e8f0; margin-top: 30px;">
+                            <p style="margin: 0 0 8px 0; color: #a0aec0; font-size: 13px; line-height: 1.5;">This password reset was requested from your {{ app_name }} account.</p>
+                            <p style="margin: 0; color: #a0aec0; font-size: 13px;">Need help? Visit <a href="{{ app_url }}" style="color: #3498db; text-decoration: none;">{{ app_name }}</a></p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
 </body>
 </html>
             """.strip(),
             "text_body": """
-Reset Your Password
+{{ app_name }} - Reset Your Password
 
-Hello,
+Hello{% if user_name %} {{ user_name }}{% endif %},
 
-We received a request to reset your password. Visit the following link to create a new password:
+We received a request to reset the password for your {{ app_name }} account{% if user_email %} ({{ user_email }}){% endif %}. To create a new password, visit the following link:
 
 {{ reset_url }}
 
-If you didn't request a password reset, you can safely ignore this email. Your password will not be changed.
+{% if token %}Reset Code: {{ token }}{% endif %}
+
+{% if expires_at %}This password reset link will expire on {{ expires_at }}.{% endif %}
+
+SECURITY NOTICE:
+If you didn't request a password reset, please ignore this email. Your password will remain unchanged. For security, we recommend changing your password if you suspect unauthorized access to your account.
+
+This password reset was requested from your {{ app_name }} account.
+
+Need help? Visit {{ app_url }}
             """.strip(),
         },
         {
             "template_type": "invitation",
             "locale": "en",
-            "subject": "You've been invited to join {{ account_name }}",
+            "subject": "You've been invited to join {{ account_name }} on {{ app_name }}",
             "html_body": """
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>You've Been Invited</title>
+    <style>
+        @media only screen and (max-width: 600px) {
+            .container { padding: 10px !important; }
+            .button { padding: 10px 20px !important; font-size: 14px !important; }
+            h1 { font-size: 24px !important; }
+        }
+    </style>
 </head>
-<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-    <h2 style="color: #2c3e50;">You've Been Invited!</h2>
-    <p>Hello,</p>
-    <p><strong>{{ invited_by }}</strong> has invited you to join <strong>{{ account_name }}</strong>.</p>
-    <div style="text-align: center; margin: 30px 0;">
-        <a href="{{ invitation_url }}" style="background-color: #27ae60; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">Accept Invitation</a>
-    </div>
-    <p>Or copy and paste this link into your browser:</p>
-    <p style="word-break: break-all; color: #27ae60;">{{ invitation_url }}</p>
-    <p style="margin-top: 30px; font-size: 0.9em; color: #7f8c8d;">
-        This invitation will expire in 48 hours. If you didn't expect this invitation, you can safely ignore this email.
-    </p>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f4f7fa;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f7fa; padding: 40px 20px;">
+        <tr>
+            <td align="center">
+                <table role="presentation" class="container" width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); padding: 40px;">
+                    <!-- Header -->
+                    <tr>
+                        <td style="text-align: center; padding-bottom: 30px;">
+                            <h1 style="margin: 0; color: #2c3e50; font-size: 28px; font-weight: 600;">{{ app_name }}</h1>
+                        </td>
+                    </tr>
+                    <!-- Content -->
+                    <tr>
+                        <td>
+                            <div style="text-align: center; padding: 20px 0;">
+                                <div style="font-size: 48px; margin-bottom: 10px;">🎉</div>
+                                <h2 style="margin: 0 0 20px 0; color: #2c3e50; font-size: 24px; font-weight: 600;">You've Been Invited!</h2>
+                            </div>
+                            <p style="margin: 0 0 16px 0; color: #4a5568; font-size: 16px; line-height: 1.6;">Hello{% if user_name %} {{ user_name }}{% endif %},</p>
+                            <p style="margin: 0 0 16px 0; color: #4a5568; font-size: 16px; line-height: 1.6;"><strong style="color: #2c3e50;">{{ invited_by }}</strong> has invited you to join <strong style="color: #2c3e50;">{{ account_name }}</strong> on {{ app_name }}.</p>
+                            <p style="margin: 0 0 16px 0; color: #4a5568; font-size: 16px; line-height: 1.6;">Click the button below to accept this invitation and get started:</p>
+                        </td>
+                    </tr>
+                    <!-- Button -->
+                    <tr>
+                        <td style="text-align: center; padding: 30px 0;">
+                            <a href="{{ invitation_url }}" class="button" style="display: inline-block; background-color: #27ae60; color: #ffffff; text-decoration: none; padding: 14px 40px; border-radius: 6px; font-size: 16px; font-weight: 600; box-shadow: 0 2px 4px rgba(39,174,96,0.3);">Accept Invitation</a>
+                        </td>
+                    </tr>
+                    <!-- Alternative Link -->
+                    <tr>
+                        <td>
+                            <p style="margin: 0 0 8px 0; color: #718096; font-size: 14px;">Or copy and paste this link into your browser:</p>
+                            <p style="margin: 0 0 24px 0; word-break: break-all; color: #27ae60; font-size: 14px;">{{ invitation_url }}</p>
+                        </td>
+                    </tr>
+                    <!-- Token Info -->
+                    {% if token %}
+                    <tr>
+                        <td style="background-color: #f0fdf4; padding: 16px; border-radius: 6px; border-left: 4px solid #27ae60;">
+                            <p style="margin: 0 0 8px 0; color: #4a5568; font-size: 14px; font-weight: 600;">Invitation Code:</p>
+                            <p style="margin: 0; color: #2d3748; font-size: 16px; font-family: 'Courier New', monospace; letter-spacing: 2px;">{{ token }}</p>
+                        </td>
+                    </tr>
+                    {% endif %}
+                    <!-- What's Next -->
+                    <tr>
+                        <td style="padding-top: 30px;">
+                            <div style="background-color: #f7fafc; padding: 20px; border-radius: 6px;">
+                                <p style="margin: 0 0 12px 0; color: #2c3e50; font-size: 15px; font-weight: 600;">What happens next?</p>
+                                <ul style="margin: 0; padding-left: 20px; color: #4a5568; font-size: 14px; line-height: 1.8;">
+                                    <li>Click the button above to accept the invitation</li>
+                                    <li>Create your account or sign in if you already have one</li>
+                                    <li>Start collaborating with {{ account_name }}</li>
+                                </ul>
+                            </div>
+                        </td>
+                    </tr>
+                    <!-- Expiration Notice -->
+                    <tr>
+                        <td style="padding-top: 20px;">
+                            <p style="margin: 0; color: #718096; font-size: 14px;">⏰ This invitation will expire in 48 hours. Don't miss out!</p>
+                        </td>
+                    </tr>
+                    <!-- Footer -->
+                    <tr>
+                        <td style="padding-top: 30px; border-top: 1px solid #e2e8f0; margin-top: 30px;">
+                            <p style="margin: 0 0 8px 0; color: #a0aec0; font-size: 13px; line-height: 1.5;">If you didn't expect this invitation or don't want to join, you can safely ignore this email.</p>
+                            <p style="margin: 0; color: #a0aec0; font-size: 13px;">Questions? Visit <a href="{{ app_url }}" style="color: #3498db; text-decoration: none;">{{ app_name }}</a></p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
 </body>
 </html>
             """.strip(),
             "text_body": """
-You've Been Invited!
+{{ app_name }} - You've Been Invited!
 
-Hello,
+Hello{% if user_name %} {{ user_name }}{% endif %},
 
-{{ invited_by }} has invited you to join {{ account_name }}.
+{{ invited_by }} has invited you to join {{ account_name }} on {{ app_name }}.
 
-To accept this invitation, visit the following link:
+To accept this invitation and get started, visit the following link:
 
 {{ invitation_url }}
 
-This invitation will expire in 48 hours. If you didn't expect this invitation, you can safely ignore this email.
+{% if token %}Invitation Code: {{ token }}{% endif %}
+
+WHAT HAPPENS NEXT?
+1. Click the link above to accept the invitation
+2. Create your account or sign in if you already have one
+3. Start collaborating with {{ account_name }}
+
+This invitation will expire in 48 hours. Don't miss out!
+
+If you didn't expect this invitation or don't want to join, you can safely ignore this email.
+
+Questions? Visit {{ app_url }}
             """.strip(),
         },
     ]

@@ -76,6 +76,8 @@ sb_data/
 *.db-wal
 *.sqlite
 *.sqlite3
+*.sqlite-shm
+*.sqlite-wal
 
 # Logs
 logs/
