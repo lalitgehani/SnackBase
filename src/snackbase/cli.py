@@ -81,6 +81,16 @@ def serve(host: str | None, port: int | None, workers: int | None, reload: bool)
     bind_port = port or settings.port
     bind_workers = workers or settings.workers
 
+    # Validate workers for SQLite
+    if bind_workers > 1 and settings.database_url.startswith("sqlite"):
+        click.echo(
+            f"Error: SQLite does not support multiple worker processes. "
+            f"Requested {bind_workers} workers, but SQLite requires workers=1. "
+            "Either use --workers 1 or switch to PostgreSQL.",
+            err=True,
+        )
+        raise SystemExit(1)
+
     # Enable auto-reload in development
     if reload is None:
         reload = settings.is_development

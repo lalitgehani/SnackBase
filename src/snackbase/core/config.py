@@ -8,7 +8,7 @@ startup and is immutable during runtime.
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -145,6 +145,17 @@ class Settings(BaseSettings):
     def is_testing(self) -> bool:
         """Check if running in testing environment."""
         return self.environment == "testing"
+
+    @model_validator(mode="after")
+    def validate_sqlite_workers(self) -> "Settings":
+        """Validate that SQLite is not used with multiple workers."""
+        if self.workers > 1 and self.database_url.startswith("sqlite"):
+            raise ValueError(
+                "SQLite does not support multiple worker processes. "
+                f"Requested {self.workers} workers, but SQLite requires workers=1. "
+                "Either use --workers 1 or switch to PostgreSQL."
+            )
+        return self
 
     @property
     def database_url_sync(self) -> str:
