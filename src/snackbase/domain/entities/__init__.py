@@ -7,6 +7,8 @@ They have no dependencies on infrastructure or external frameworks.
 from snackbase.domain.entities.account import Account
 from snackbase.domain.entities.audit_log import AuditLog
 from snackbase.domain.entities.collection import Collection
+from snackbase.domain.entities.email_log import EmailLog
+from snackbase.domain.entities.email_template import EmailTemplate
 from snackbase.domain.entities.group import Group
 from snackbase.domain.entities.hook_context import (
     AbortHookException,
@@ -27,6 +29,8 @@ __all__ = [
     "Account",
     "AuditLog",
     "Collection",
+    "EmailLog",
+    "EmailTemplate",
     "Group",
     "HookContext",
     "HookResult",

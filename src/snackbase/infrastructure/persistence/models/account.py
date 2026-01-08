@@ -87,6 +87,16 @@ class AccountModel(Base):
         back_populates="account",
         cascade="all, delete-orphan",
     )
+    email_templates: Mapped[list["EmailTemplateModel"]] = relationship(  # noqa: F821
+        "EmailTemplateModel",
+        back_populates="account",
+        cascade="all, delete-orphan",
+    )
+    email_logs: Mapped[list["EmailLogModel"]] = relationship(  # noqa: F821
+        "EmailLogModel",
+        back_populates="account",
+        cascade="all, delete-orphan",
+    )
 
 
 

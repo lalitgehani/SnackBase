@@ -288,6 +288,9 @@ async def init_database() -> None:
     
     # Seed default configurations
     await _seed_default_configurations(db)
+    
+    # Seed default email templates
+    await _seed_default_email_templates(db)
 
 
 async def _seed_default_roles(db: DatabaseManager, RoleModel: type) -> None:
@@ -479,6 +482,174 @@ async def _seed_default_configurations(db: DatabaseManager) -> None:
             session.add(new_config)
             await session.commit()
             logger.info("Seeded default Email/Password configuration")
+
+
+async def _seed_default_email_templates(db: DatabaseManager) -> None:
+    """Seed default email templates if they don't exist.
+
+    Args:
+        db: Database manager instance.
+    """
+    import uuid
+    from sqlalchemy import select
+    from snackbase.infrastructure.persistence.models.email_template import EmailTemplateModel
+    
+    # SYSTEM_ACCOUNT_ID constant
+    SYSTEM_ACCOUNT_ID = "00000000-0000-0000-0000-000000000000"
+    
+    # Default templates
+    default_templates = [
+        {
+            "template_type": "email_verification",
+            "locale": "en",
+            "subject": "Verify your email address",
+            "html_body": """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+    <h2 style="color: #2c3e50;">Verify Your Email Address</h2>
+    <p>Hello,</p>
+    <p>Thank you for signing up! Please verify your email address by clicking the button below:</p>
+    <div style="text-align: center; margin: 30px 0;">
+        <a href="{{ verification_url }}" style="background-color: #3498db; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">Verify Email</a>
+    </div>
+    <p>Or copy and paste this link into your browser:</p>
+    <p style="word-break: break-all; color: #3498db;">{{ verification_url }}</p>
+    <p style="margin-top: 30px; font-size: 0.9em; color: #7f8c8d;">
+        If you didn't create an account, you can safely ignore this email.
+    </p>
+</body>
+</html>
+            """.strip(),
+            "text_body": """
+Verify Your Email Address
+
+Hello,
+
+Thank you for signing up! Please verify your email address by visiting the following link:
+
+{{ verification_url }}
+
+If you didn't create an account, you can safely ignore this email.
+            """.strip(),
+        },
+        {
+            "template_type": "password_reset",
+            "locale": "en",
+            "subject": "Reset your password",
+            "html_body": """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+    <h2 style="color: #2c3e50;">Reset Your Password</h2>
+    <p>Hello,</p>
+    <p>We received a request to reset your password. Click the button below to create a new password:</p>
+    <div style="text-align: center; margin: 30px 0;">
+        <a href="{{ reset_url }}" style="background-color: #e74c3c; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">Reset Password</a>
+    </div>
+    <p>Or copy and paste this link into your browser:</p>
+    <p style="word-break: break-all; color: #e74c3c;">{{ reset_url }}</p>
+    <p style="margin-top: 30px; font-size: 0.9em; color: #7f8c8d;">
+        If you didn't request a password reset, you can safely ignore this email. Your password will not be changed.
+    </p>
+</body>
+</html>
+            """.strip(),
+            "text_body": """
+Reset Your Password
+
+Hello,
+
+We received a request to reset your password. Visit the following link to create a new password:
+
+{{ reset_url }}
+
+If you didn't request a password reset, you can safely ignore this email. Your password will not be changed.
+            """.strip(),
+        },
+        {
+            "template_type": "invitation",
+            "locale": "en",
+            "subject": "You've been invited to join {{ account_name }}",
+            "html_body": """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+    <h2 style="color: #2c3e50;">You've Been Invited!</h2>
+    <p>Hello,</p>
+    <p><strong>{{ invited_by }}</strong> has invited you to join <strong>{{ account_name }}</strong>.</p>
+    <div style="text-align: center; margin: 30px 0;">
+        <a href="{{ invitation_url }}" style="background-color: #27ae60; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">Accept Invitation</a>
+    </div>
+    <p>Or copy and paste this link into your browser:</p>
+    <p style="word-break: break-all; color: #27ae60;">{{ invitation_url }}</p>
+    <p style="margin-top: 30px; font-size: 0.9em; color: #7f8c8d;">
+        This invitation will expire in 48 hours. If you didn't expect this invitation, you can safely ignore this email.
+    </p>
+</body>
+</html>
+            """.strip(),
+            "text_body": """
+You've Been Invited!
+
+Hello,
+
+{{ invited_by }} has invited you to join {{ account_name }}.
+
+To accept this invitation, visit the following link:
+
+{{ invitation_url }}
+
+This invitation will expire in 48 hours. If you didn't expect this invitation, you can safely ignore this email.
+            """.strip(),
+        },
+    ]
+    
+    async with db.session() as session:
+        for template_data in default_templates:
+            # Check if template already exists
+            result = await session.execute(
+                select(EmailTemplateModel).where(
+                    EmailTemplateModel.account_id == SYSTEM_ACCOUNT_ID,
+                    EmailTemplateModel.template_type == template_data["template_type"],
+                    EmailTemplateModel.locale == template_data["locale"],
+                )
+            )
+            existing = result.scalar_one_or_none()
+            
+            if existing is None:
+                # Create default email template
+                new_template = EmailTemplateModel(
+                    id=str(uuid.uuid4()),
+                    account_id=SYSTEM_ACCOUNT_ID,
+                    template_type=template_data["template_type"],
+                    locale=template_data["locale"],
+                    subject=template_data["subject"],
+                    html_body=template_data["html_body"],
+                    text_body=template_data["text_body"],
+                    enabled=True,
+                    is_builtin=True,
+                )
+                session.add(new_template)
+                logger.info(
+                    "Seeded default email template",
+                    template_type=template_data["template_type"],
+                    locale=template_data["locale"],
+                )
+        
+        await session.commit()
 
 
 async def close_database() -> None:

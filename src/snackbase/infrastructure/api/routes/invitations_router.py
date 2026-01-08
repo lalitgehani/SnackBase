@@ -39,7 +39,8 @@ from snackbase.infrastructure.persistence.repositories import (
     RoleRepository,
     UserRepository,
 )
-from snackbase.infrastructure.services.email_service import email_service
+# TODO: Update to use new EmailService with provider pattern (F1.1 infrastructure complete)
+# from snackbase.infrastructure.services.email_service import email_service
 from snackbase.infrastructure.services.token_service import token_service
 
 logger = get_logger(__name__)
@@ -170,11 +171,14 @@ async def create_invitation(
     inviter = await user_repo.get_by_id(current_user.user_id)
     inviter_name = inviter.email if inviter else current_user.email
 
-    await email_service.send_invitation_email(
-        to_email=request.email,
+    # TODO: Update to use new EmailService with template rendering (F1.1 infrastructure complete)
+    # For now, just log the invitation - email integration will be added in later phase
+    logger.info(
+        "Invitation created - email sending will be implemented in next phase",
+        invitation_id=invitation_id,
+        recipient_email=request.email,
         inviter_name=inviter_name,
         account_name=account_name,
-        token=invitation_token,
     )
 
     # 7. Return invitation details (excluding token)
