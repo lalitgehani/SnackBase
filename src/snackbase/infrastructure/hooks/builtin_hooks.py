@@ -195,30 +195,16 @@ async def audit_capture_hook(
 
     # Import here to avoid circular dependency
     from snackbase.domain.services import AuditLogService
-    from snackbase.infrastructure.persistence.database import get_db_manager
 
     # Get database session
     # We require a session to be passed to ensure audit logs are part of the same transaction
     session = data.get("session")
 
     if session is None:
-        # For model operations triggered from global listeners, model audit logging
-        # is now handled synchronously in event_listeners.py using the DB connection.
-        # This hook should skip processing if no session is provided to avoid
-        # creating a separate transaction.
-        if event.startswith("on_model_after_"):
-            logger.debug(
-                "Audit capture hook: skipping model event (handled in sync listener)",
-                event=event,
-            )
-            return data
-
-        # For record events, we really expect a session from the repository
-        logger.warning(
-            "Audit capture hook: no session provided, skipping audit to avoid split transaction",
-            event=event,
+        raise ValueError(
+            f"Audit capture hook requires a database session for event: {event}. "
+            "Ensure hooks are triggered with proper session context."
         )
-        return data
 
     try:
         audit_service = AuditLogService(session)
