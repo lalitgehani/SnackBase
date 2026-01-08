@@ -5,7 +5,8 @@ trigger audit hooks when records are created, updated, or deleted.
 It bridges the gap between the ORM and the HookRegistry using the global context.
 """
 
-from typing import Any
+import asyncio
+from typing import Any, Set
 
 from sqlalchemy import event
 from sqlalchemy.orm import Session
@@ -18,6 +19,10 @@ from snackbase.infrastructure.persistence.audit_helper import AuditHelper
 from snackbase.infrastructure.persistence.models import AccountModel
 
 logger = get_logger(__name__)
+
+# Track background tasks to prevent them from being garbage collected
+# and to allow for proper cleanup if needed.
+_background_tasks: Set[asyncio.Task] = set()
 
 
 class ModelSnapshot:
@@ -283,15 +288,24 @@ def _make_listener(hook_registry: HookRegistry, op_type: str):
         # (Usually hooks for notification/external systems don't need sync DB session)
         
         async def trigger_async():
-            data = {
-                "model": model_snapshot,
-                "session": None, 
-            }
-            # Add old_values for update if needed (captured previously if implemented)
-            # For now simplified as focus is fixing the crash.
-            
-            await hook_registry.trigger(event_name, data, context)
+            try:
+                data = {
+                    "model": model_snapshot,
+                    "session": None, 
+                }
+                # Add old_values for update if needed (captured previously if implemented)
+                # For now simplified as focus is fixing the crash.
+                
+                await hook_registry.trigger(event_name, data, context)
+            except Exception as e:
+                logger.error(
+                    f"Background hook execution failed for {event_name}",
+                    error=str(e),
+                    exc_info=True
+                )
 
-        loop.create_task(trigger_async())
+        task = asyncio.create_task(trigger_async())
+        _background_tasks.add(task)
+        task.add_done_callback(_background_tasks.discard)
 
     return listener
