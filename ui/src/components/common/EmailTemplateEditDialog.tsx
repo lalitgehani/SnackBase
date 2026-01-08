@@ -141,13 +141,43 @@ export const EmailTemplateEditDialog = ({
         testEmailMutation.mutate(testEmail);
     };
 
+    const [focusedField, setFocusedField] = useState<'subject' | 'html_body' | 'text_body' | null>('subject');
+    const [cursorPosition, setCursorPosition] = useState<number | null>(null);
+
+    // ... (existing code)
+
+    const handleInputFocus = (field: 'subject' | 'html_body' | 'text_body') => {
+        setFocusedField(field);
+    };
+
+    const handleInputSelect = (e: React.SyntheticEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        setCursorPosition(e.currentTarget.selectionStart);
+    };
+
     const insertVariable = (variable: string) => {
         const varText = `{{${variable}}}`;
-        // Insert at cursor position in subject field (simple implementation)
-        setFormData((prev) => ({
-            ...prev,
-            subject: (prev.subject || '') + varText,
-        }));
+
+        setFormData((prev) => {
+            const field = focusedField || 'subject';
+            const currentValue = prev[field] || '';
+
+            // If we have a cursor position and it's for the current field, insert there
+            // Otherwise append to end
+            const insertPos = cursorPosition !== null ? cursorPosition : currentValue.length;
+
+            const newValue =
+                currentValue.slice(0, insertPos) +
+                varText +
+                currentValue.slice(insertPos);
+
+            // Update cursor position to be after inserted text
+            setCursorPosition(insertPos + varText.length);
+
+            return {
+                ...prev,
+                [field]: newValue,
+            };
+        });
     };
 
     if (!template) return null;
@@ -182,7 +212,7 @@ export const EmailTemplateEditDialog = ({
                             <Label>Insert Variable</Label>
                             <Select onValueChange={insertVariable}>
                                 <SelectTrigger>
-                                    <SelectValue placeholder="Select a variable to insert" />
+                                    <SelectValue placeholder={`Insert into ${focusedField || 'subject'}`} />
                                 </SelectTrigger>
                                 <SelectContent>
                                     {availableVariables.map((variable) => (
@@ -204,6 +234,8 @@ export const EmailTemplateEditDialog = ({
                             onChange={(e) =>
                                 setFormData((prev) => ({ ...prev, subject: e.target.value }))
                             }
+                            onFocus={() => handleInputFocus('subject')}
+                            onSelect={handleInputSelect}
                             placeholder="Email subject line"
                         />
                     </div>
@@ -217,6 +249,8 @@ export const EmailTemplateEditDialog = ({
                             onChange={(e) =>
                                 setFormData((prev) => ({ ...prev, html_body: e.target.value }))
                             }
+                            onFocus={() => handleInputFocus('html_body')}
+                            onSelect={handleInputSelect}
                             placeholder="HTML email body"
                             className="font-mono text-sm min-h-[200px]"
                         />
@@ -231,6 +265,8 @@ export const EmailTemplateEditDialog = ({
                             onChange={(e) =>
                                 setFormData((prev) => ({ ...prev, text_body: e.target.value }))
                             }
+                            onFocus={() => handleInputFocus('text_body')}
+                            onSelect={handleInputSelect}
                             placeholder="Plain text email body"
                             className="font-mono text-sm min-h-[150px]"
                         />
