@@ -81,18 +81,19 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             GenericSAMLProvider,
             OktaSAMLProvider,
         )
+        from snackbase.infrastructure.configuration.providers.system import SystemConfiguration
         from snackbase.infrastructure.persistence.database import get_db_manager
         from snackbase.infrastructure.security.encryption import EncryptionService
-        
+
         encryption_service = EncryptionService(settings.encryption_key)
         config_registry = ConfigurationRegistry(encryption_service)
-        
+
         # Store registry on app state
         app.state.config_registry = config_registry
 
         # Use DatabaseManager directly for initialization session
         db_manager = get_db_manager()
-        async with db_manager.session() as session:
+        async with db_manager.session() as _session:
             # Register email/password provider
             email_password_provider = EmailPasswordProvider()
             config_registry.register_provider_definition(
@@ -113,6 +114,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 logo_url=smtp_provider.logo_url,
                 config_schema=smtp_provider.config_schema,
                 is_builtin=smtp_provider.is_builtin,
+            )
+
+            # Register System Configuration
+            system_config = SystemConfiguration()
+            config_registry.register_provider_definition(
+                category=system_config.category,
+                provider_name=system_config.provider_name,
+                display_name=system_config.display_name,
+                logo_url=system_config.logo_url,
+                config_schema=system_config.config_schema,
+                is_builtin=system_config.is_builtin,
             )
 
             # Register Google OAuth provider
@@ -191,15 +203,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 config_schema=generic_saml_provider.config_schema,
                 is_builtin=True,
             )
-            
+
             # Store registry on app state for later use
             app.state.config_registry = config_registry
 
             logger.info(
-                "Built-in authentication providers registered",
+                "Built-in providers registered",
                 providers=[
                     email_password_provider.provider_name,
                     smtp_provider.provider_name,
+                    system_config.provider_name,
                     google_oauth_handler.provider_name,
                     github_oauth_handler.provider_name,
                     microsoft_oauth_handler.provider_name,
@@ -219,7 +232,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             from snackbase.infrastructure.persistence.event_listeners import (
                 register_sqlalchemy_listeners,
             )
-            
+
             # engine creation is side-effect of calling .engine
             register_sqlalchemy_listeners(db_manager.engine, app.state.hook_registry)
 
@@ -405,6 +418,7 @@ def register_routes(app: FastAPI) -> None:
     from snackbase.infrastructure.api.routes import (
         accounts_router,
         admin_router,
+        audit_log_router,
         auth_router,
         collections_router,
         dashboard_router,
@@ -414,13 +428,12 @@ def register_routes(app: FastAPI) -> None:
         invitations_router,
         macros_router,
         migrations_router,
+        oauth_router,
         permissions_router,
         records_router,
         roles_router,
-        users_router,
-        audit_log_router,
-        oauth_router,
         saml_router,
+        users_router,
     )
 
     settings = get_settings()

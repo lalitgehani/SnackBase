@@ -445,14 +445,18 @@ async def _seed_default_configurations(db: DatabaseManager) -> None:
     from sqlalchemy import select
     from snackbase.infrastructure.persistence.models.configuration import ConfigurationModel
     from snackbase.infrastructure.configuration.providers.auth.email_password import EmailPasswordProvider
+    from snackbase.infrastructure.configuration.providers.system import SystemConfiguration
+    from snackbase.core.config import get_settings
     
     # SYSTEM_ACCOUNT_ID constant
     SYSTEM_ACCOUNT_ID = "00000000-0000-0000-0000-000000000000"
     
+    settings = get_settings()
     ep_provider = EmailPasswordProvider()
+    system_config_provider = SystemConfiguration()
     
     async with db.session() as session:
-        # Check if email_password system config already exists
+        # Seed email_password system config
         result = await session.execute(
             select(ConfigurationModel).where(
                 ConfigurationModel.category == ep_provider.category,
@@ -465,8 +469,6 @@ async def _seed_default_configurations(db: DatabaseManager) -> None:
         
         if existing is None:
             # Create default email_password configuration
-            # Note: config is empty dict, which is currently not encrypted in this direct seed
-            # but that's fine for an empty dict. For other providers, we'd need EncryptionService.
             new_config = ConfigurationModel(
                 id=str(uuid.uuid4()),
                 account_id=SYSTEM_ACCOUNT_ID,
@@ -480,8 +482,47 @@ async def _seed_default_configurations(db: DatabaseManager) -> None:
                 priority=0
             )
             session.add(new_config)
-            await session.commit()
             logger.info("Seeded default Email/Password configuration")
+        
+        # Seed system settings configuration
+        result = await session.execute(
+            select(ConfigurationModel).where(
+                ConfigurationModel.category == system_config_provider.category,
+                ConfigurationModel.account_id == SYSTEM_ACCOUNT_ID,
+                ConfigurationModel.provider_name == system_config_provider.provider_name,
+                ConfigurationModel.is_system == True
+            )
+        )
+        existing_system = result.scalar_one_or_none()
+        
+        if existing_system is None:
+            # Create default system configuration with sensible defaults
+            # Use app_url from settings if available, otherwise use placeholder
+            app_url = getattr(settings, 'app_url', 'http://localhost:8000')
+            
+            system_config_data = {
+                "app_name": "SnackBase",
+                "app_url": app_url,
+                "support_email": ""  # Optional field, leave empty by default
+            }
+            
+            new_system_config = ConfigurationModel(
+                id=str(uuid.uuid4()),
+                account_id=SYSTEM_ACCOUNT_ID,
+                category=system_config_provider.category,
+                provider_name=system_config_provider.provider_name,
+                display_name=system_config_provider.display_name,
+                config=system_config_data,  # Pre-populated with defaults
+                enabled=True,
+                is_builtin=True,
+                is_system=True,
+                priority=0
+            )
+            session.add(new_system_config)
+            logger.info("Seeded default System Configuration", app_name="SnackBase", app_url=app_url)
+        
+        await session.commit()
+
 
 
 async def _seed_default_email_templates(db: DatabaseManager) -> None:

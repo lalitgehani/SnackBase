@@ -5,13 +5,15 @@ and comprehensive logging for audit purposes.
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.core.logging import get_logger
 from snackbase.infrastructure.persistence.models.email_log import EmailLogModel
-from snackbase.infrastructure.persistence.models.email_template import EmailTemplateModel
+from snackbase.infrastructure.persistence.repositories.configuration_repository import (
+    ConfigurationRepository,
+)
 from snackbase.infrastructure.persistence.repositories.email_log_repository import (
     EmailLogRepository,
 )
@@ -35,15 +37,18 @@ class EmailService:
         self,
         template_repository: EmailTemplateRepository,
         log_repository: EmailLogRepository,
+        config_repository: ConfigurationRepository,
     ) -> None:
         """Initialize the email service.
 
         Args:
             template_repository: Repository for email templates.
             log_repository: Repository for email logs.
+            config_repository: Repository for configuration settings.
         """
         self.template_repository = template_repository
         self.log_repository = log_repository
+        self.config_repository = config_repository
         self.renderer = get_template_renderer()
 
     async def send_email(
@@ -102,7 +107,7 @@ class EmailService:
                 provider=provider_name,
                 status="sent" if success else "failed",
                 error_message=None if success else "Provider returned failure",
-                sent_at=datetime.now(timezone.utc),
+                sent_at=datetime.now(UTC),
             )
             await self.log_repository.create(session, log)
             await session.commit()
@@ -125,7 +130,7 @@ class EmailService:
                 provider=provider_name,
                 status="failed",
                 error_message=str(e),
-                sent_at=datetime.now(timezone.utc),
+                sent_at=datetime.now(UTC),
             )
             await self.log_repository.create(session, log)
             await session.commit()
@@ -138,6 +143,55 @@ class EmailService:
                 error=str(e),
             )
             return False
+
+    async def _get_system_variables(
+        self,
+        session: AsyncSession,
+        account_id: str,
+    ) -> dict[str, str]:
+        """Fetch system configuration variables.
+
+        Args:
+            session: Database session.
+            account_id: Account ID for configuration lookup.
+
+        Returns:
+            Dictionary of system variables (app_name, app_url, support_email).
+        """
+        # Try to get account-specific system config, fallback to system-level
+        system_config = await self.config_repository.get_config(
+            category="system_settings",
+            account_id=account_id,
+            provider_name="system",
+            is_system=False,
+        )
+
+        # Fallback to system-level config if no account-specific config
+        if system_config is None:
+            # Use the SYSTEM_ACCOUNT_ID constant (00000000-0000-0000-0000-000000000000)
+            SYSTEM_ACCOUNT_ID = "00000000-0000-0000-0000-000000000000"
+            system_config = await self.config_repository.get_config(
+                category="system_settings",
+                account_id=SYSTEM_ACCOUNT_ID,
+                provider_name="system",
+                is_system=True,
+            )
+
+        # Return default values if no config found
+        if system_config is None or system_config.config is None:
+            return {
+                "app_name": "SnackBase",
+                "app_url": "",
+                "support_email": "",
+            }
+
+        # Extract values from config
+        config_data = system_config.config
+        return {
+            "app_name": config_data.get("app_name", "SnackBase"),
+            "app_url": config_data.get("app_url", ""),
+            "support_email": config_data.get("support_email", ""),
+        }
 
     async def send_template_email(
         self,
@@ -185,11 +239,15 @@ class EmailService:
             logger.error(error_msg, account_id=account_id)
             raise ValueError(error_msg)
 
+        # Merge system variables with user-provided variables
+        system_vars = await self._get_system_variables(session, account_id)
+        merged_variables = {**system_vars, **variables}  # User variables override system
+
         # Render template
         try:
-            subject = self.renderer.render(template.subject, variables)
-            html_body = self.renderer.render(template.html_body, variables)
-            text_body = self.renderer.render(template.text_body, variables)
+            subject = self.renderer.render(template.subject, merged_variables)
+            html_body = self.renderer.render(template.html_body, merged_variables)
+            text_body = self.renderer.render(template.text_body, merged_variables)
         except Exception as e:
             error_msg = f"Template rendering failed: {str(e)}"
             logger.error(error_msg, template_type=template_type, error=str(e))

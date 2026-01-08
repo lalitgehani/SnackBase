@@ -325,6 +325,7 @@ async def send_test_email(
         email_service = EmailService(
             template_repository=template_repo,
             log_repository=log_repo,
+            config_repository=config_repo,
         )
 
         # Send test email

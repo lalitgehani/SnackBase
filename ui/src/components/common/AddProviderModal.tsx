@@ -55,6 +55,8 @@ export const AddProviderModal = ({
                     const testedProviders = filtered.filter((p: AvailableProvider) => {
                         // Include all email providers
                         if (p.category === 'email_providers') return true;
+                        // Include all system settings providers ONLY for system-level (no accountId)
+                        if (p.category === 'system_settings' && !accountId) return true;
                         // Include only Google OAuth for auth providers
                         if (p.category === 'auth_providers' && p.provider_name === 'google') return true;
                         // Exclude all other auth providers (github, microsoft, apple, saml_*)
