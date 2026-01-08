@@ -10,6 +10,8 @@ import { formatDistanceToNow } from 'date-fns';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import SystemProvidersTab from './SystemProvidersTab';
 import AccountProvidersTab from './AccountProvidersTab';
+import EmailTemplatesTab from './EmailTemplatesTab';
+
 
 const ConfigurationDashboardPage = () => {
     const { data: stats, isLoading: statsLoading } = useQuery<ConfigurationStats>({
@@ -40,6 +42,7 @@ const ConfigurationDashboardPage = () => {
                     <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
                     <TabsTrigger value="system">System Providers</TabsTrigger>
                     <TabsTrigger value="accounts">Account Providers</TabsTrigger>
+                    <TabsTrigger value="email-templates">Email Templates</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="dashboard" className="space-y-4">
@@ -203,6 +206,10 @@ const ConfigurationDashboardPage = () => {
 
                 <TabsContent value="accounts" className="space-y-4">
                     <AccountProvidersTab />
+                </TabsContent>
+
+                <TabsContent value="email-templates" className="space-y-4">
+                    <EmailTemplatesTab />
                 </TabsContent>
             </Tabs>
         </div>

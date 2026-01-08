@@ -31,7 +31,7 @@ class SMTPConfiguration:
     @property
     def logo_url(self) -> Optional[str]:
         """Path to provider logo."""
-        return "/assets/providers/smtp.png"
+        return "/assets/providers/smtp.svg"
 
     @property
     def config_schema(self) -> Dict[str, Any]:
