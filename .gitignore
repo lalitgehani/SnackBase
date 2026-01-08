@@ -90,8 +90,12 @@ tests/security-reports/
 *.backup
 
 
-PRD_*.md
-REQUIREMENTS.md
+*.md
+!docs/*
+!README.md
+!CLAUDE.md
+
+*.pdf
 
 # Agent workspace rules (do not ignore)
 !.agent/
