@@ -73,10 +73,20 @@ export const ConfigurationForm = ({
                     adminService.getProviderSchema(category, providerName),
                     configId ? adminService.getConfigValues(configId) : Promise.resolve({})
                 ]);
+                const properties = (schemaData as ProviderSchema)?.properties || {};
+
+                // Extract default values from schema
+                const defaultValues: Record<string, unknown> = {};
+                Object.entries(properties).forEach(([key, prop]) => {
+                    if (prop.default !== undefined) {
+                        defaultValues[key] = prop.default;
+                    }
+                });
+
                 setSchema(schemaData as ProviderSchema);
-                reset(initialValues);
-            } catch {
-                console.error("Failed to load configuration data");
+                reset({ ...defaultValues, ...initialValues });
+            } catch (error) {
+                console.error("Failed to load configuration data", error);
                 toast({
                     title: "Error",
                     description: "Failed to load provider configuration schema.",
