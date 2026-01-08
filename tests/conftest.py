@@ -109,6 +109,18 @@ def _maybe_enable_audit_hooks(request, _audit_hooks_registry):
             _audit_hooks_registry["registered"] = True
             logger.info("Audit hooks enabled for tests")
     
+    # Register cleanup after all tests
+    @request.addfinalizer
+    def cleanup_listeners():
+        if _audit_hooks_registry["registered"]:
+            from snackbase.infrastructure.persistence.event_listeners import (
+                unregister_sqlalchemy_listeners,
+            )
+
+            unregister_sqlalchemy_listeners()
+            _audit_hooks_registry["registered"] = False
+            logger.info("Audit hooks unregistered after test")
+
     return _audit_hooks_registry["registry"]
 
 
@@ -190,7 +202,10 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     from snackbase.infrastructure.api.app import app
     from snackbase.infrastructure.persistence.database import get_db_session
 
-    app.dependency_overrides[get_db_session] = lambda: db_session
+    async def _get_db_session_override():
+        yield db_session
+
+    app.dependency_overrides[get_db_session] = _get_db_session_override
 
     async with AsyncClient(
         transport=ASGITransport(app=app),

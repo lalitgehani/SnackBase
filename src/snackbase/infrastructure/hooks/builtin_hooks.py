@@ -198,22 +198,32 @@ async def audit_capture_hook(
     from snackbase.infrastructure.persistence.database import get_db_manager
 
     # Get database session
-    # 1. Try to get logic-session passed in data (from manual triggers)
+    # We require a session to be passed to ensure audit logs are part of the same transaction
     session = data.get("session")
-    
-    # 2. If None (from global listener), create a new dedicated session
-    should_close_session = False
+
     if session is None:
-        db = get_db_manager()
-        session_factory = db.session_factory
-        session = session_factory()
-        should_close_session = True
+        # For model operations triggered from global listeners, model audit logging
+        # is now handled synchronously in event_listeners.py using the DB connection.
+        # This hook should skip processing if no session is provided to avoid
+        # creating a separate transaction.
+        if event.startswith("on_model_after_"):
+            logger.debug(
+                "Audit capture hook: skipping model event (handled in sync listener)",
+                event=event,
+            )
+            return data
+
+        # For record events, we really expect a session from the repository
+        logger.warning(
+            "Audit capture hook: no session provided, skipping audit to avoid split transaction",
+            event=event,
+        )
+        return data
 
     try:
         audit_service = AuditLogService(session)
 
         # Capture audit based on event type
-        # Note: user_groups no longer needed for capture - masking happens on read
         if event in (HookEvent.ON_MODEL_AFTER_CREATE, HookEvent.ON_RECORD_AFTER_CREATE):
             await audit_service.capture_create(
                 model=model,
@@ -250,13 +260,11 @@ async def audit_capture_hook(
                 request_id=context.request_id,
             )
 
-        if should_close_session:
-            await session.commit()
+        # We DO NOT commit here. We use the passed session and let the 
+        # caller (repository or session manager) handle the commit/rollback.
+        # This ensures the audit log is atomic with the main operation.
 
     except Exception as e:
-        if should_close_session and session:
-            await session.rollback()
-
         # Log error but don't fail the main operation
         logger.error(
             "Audit capture hook failed",
@@ -264,9 +272,6 @@ async def audit_capture_hook(
             error=str(e),
             exc_info=True,
         )
-    finally:
-        if should_close_session and session:
-            await session.close()
 
     return data
 

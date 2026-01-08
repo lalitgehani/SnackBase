@@ -24,6 +24,9 @@ logger = get_logger(__name__)
 # and to allow for proper cleanup if needed.
 _background_tasks: Set[asyncio.Task] = set()
 
+# Track registered listeners for cleanup (Issue #7)
+_registered_listeners: list[tuple[Any, str, Any]] = []
+
 
 class ModelSnapshot:
     """A detached snapshot of a model's state for async processing.
@@ -32,7 +35,7 @@ class ModelSnapshot:
     by the AuditLogService without triggering lazy loads or requiring an active session.
     """
     def __init__(self, model: Any):
-        self.__tablename__ = model.__tablename__
+        self.__tablename__ = getattr(model, "__tablename__", None)
         self.__is_snapshot__ = True
         
         # Capture class name for logging/debugging
@@ -40,7 +43,6 @@ class ModelSnapshot:
         
         # Inspect model to get primary key and columns
         from sqlalchemy import inspect
-        from sqlalchemy.exc import InvalidRequestError
         
         try:
             mapper = inspect(model.__class__)
@@ -68,6 +70,23 @@ class ModelSnapshot:
                 # If not loaded, don't trigger lazy load, just set to None
                 setattr(self, column.name, None)
 
+        # Capture history for updates if applicable
+        self.__history__ = {}
+        for attr in instance_state.attrs:
+            # Only track simple columns, skip relationships to avoid lazy loads
+            if hasattr(attr, "history") and attr.key in [c.name for c in mapper.columns]:
+                try:
+                    # Accessing history on loaded attributes is generally safe
+                    # but we only do it if the attribute is in the instance dict
+                    if attr.key in instance_dict and attr.history.has_changes():
+                        self.__history__[attr.key] = {
+                            "added": attr.history.added,
+                            "deleted": attr.history.deleted,
+                        }
+                except Exception:
+                    # Fail gracefully if history access fails
+                    pass
+
 
 def register_sqlalchemy_listeners(engine: Any, hook_registry: HookRegistry) -> None:
     """Register global SQLAlchemy event listeners.
@@ -79,12 +98,35 @@ def register_sqlalchemy_listeners(engine: Any, hook_registry: HookRegistry) -> N
     """
     from sqlalchemy.orm import Mapper
     
-    # We bind to Mapper to catch all model operations
-    event.listen(Mapper, "after_insert", _make_listener(hook_registry, "insert"))
-    event.listen(Mapper, "after_update", _make_listener(hook_registry, "update"))
-    event.listen(Mapper, "after_delete", _make_listener(hook_registry, "delete"))
+    # Define listeners
+    listeners = [
+        (Mapper, "after_insert", _make_listener(hook_registry, "insert")),
+        (Mapper, "after_update", _make_listener(hook_registry, "update")),
+        (Mapper, "after_delete", _make_listener(hook_registry, "delete")),
+    ]
+
+    # Register and track for cleanup
+    for target, name, callback in listeners:
+        event.listen(target, name, callback)
+        _registered_listeners.append((target, name, callback))
     
     logger.info("Registered global SQLAlchemy audit listeners")
+
+
+def unregister_sqlalchemy_listeners() -> None:
+    """Unregister all registered SQLAlchemy event listeners.
+
+    This is primarily used for test isolation to prevent listeners from
+    accumulating or affecting unrelated tests.
+    """
+    for target, name, callback in _registered_listeners:
+        try:
+            event.remove(target, name, callback)
+        except Exception as e:
+            logger.warning(f"Failed to remove SQLAlchemy listener: {e}")
+
+    _registered_listeners.clear()
+    logger.info("Unregistered all global SQLAlchemy audit listeners")
 
 
 def _make_listener(hook_registry: HookRegistry, op_type: str):
@@ -100,7 +142,7 @@ def _make_listener(hook_registry: HookRegistry, op_type: str):
         # 1. Get current context
         context = get_current_context()
         if not context:
-            # Background task or system op without context -> skip audit (or log warning)
+            # Background task or system op without context -> skip audit
             return
 
         # Special casing for AccountModel to fix the missing account_id issue
@@ -118,12 +160,16 @@ def _make_listener(hook_registry: HookRegistry, op_type: str):
         if table_name in AuditLogService.EXCLUDED_TABLES:
             return
             
-        # 3. Synchronous Audit Logging using existing connection
+        # 3. Safe Data Extraction & Snapshot
+        # Using the ModelSnapshot ensures we don't trigger lazy loads in async driver
+        snapshot = ModelSnapshot(target)
+
+        # 4. Synchronous Audit Logging using existing connection
         try:
-            from snackbase.infrastructure.persistence.repositories.sync_audit_log_repository import SyncAuditLogRepository
-            from snackbase.domain.services.audit_log_service import AuditLogService
-            from sqlalchemy import inspect
             from sqlalchemy.exc import MissingGreenlet
+            
+            from snackbase.domain.services.audit_log_service import AuditLogService
+            from snackbase.infrastructure.persistence.repositories.sync_audit_log_repository import SyncAuditLogRepository
             
             # Helper to check for sensitive data masking
             def mask_sensitive_helper(col_name, val):
@@ -134,44 +180,38 @@ def _make_listener(hook_registry: HookRegistry, op_type: str):
                 service = AuditLogService(None)
                 return service.mask_sensitive_only(col_name, val)
 
-            # Get record ID
-            # Copied from AuditLogService._get_record_id logic
-            pk_keys = [col.name for col in mapper.primary_key]
-            if pk_keys:
-                pk_val = getattr(target, pk_keys[0], None)
-                record_id = str(pk_val) if pk_val is not None else None
-            else:
-                record_id = None
+            # Get record ID from snapshot
+            record_id = (
+                str(getattr(snapshot, snapshot.primary_key_name))
+                if snapshot.primary_key_name
+                else None
+            )
                 
             if not record_id:
                 logger.warning(f"Cannot audit {op_type.upper()} for {table_name}: no record ID found")
             else:
-                # Extract values synchronously
-                instance_dict = inspect(target).dict
-                columns = mapper.columns
-                
                 # Determine account_id
-                account_id = getattr(target, "account_id", None) or context.account_id
+                account_id = getattr(snapshot, "account_id", None) or context.account_id
                 # Special case: If audit is for AccountModel creation, use its own ID if not found
                 if not account_id and table_name == "accounts":
-                     account_id = getattr(target, "id", None)
+                     account_id = getattr(snapshot, "id", None)
 
                 if account_id:
                     sync_repo = SyncAuditLogRepository(connection)
                     audit_entries = []
                     
                     if op_type == "insert":
-                        # Audit all columns
-                        for col in columns:
-                            new_val = instance_dict.get(col.name)
-                            masked_val = mask_sensitive_helper(col.name, new_val)
+                        # Audit all columns from snapshot
+                        for column in mapper.columns:
+                            new_val = getattr(snapshot, column.name, None)
+                            masked_val = mask_sensitive_helper(column.name, new_val)
                             
                             audit_entries.append({
                                 "account_id": str(account_id),
                                 "operation": "CREATE",
                                 "table_name": table_name,
                                 "record_id": record_id,
-                                "column_name": col.name,
+                                "column_name": column.name,
                                 "old_value": None,
                                 "new_value": str(masked_val) if masked_val is not None else None,
                                 "user_id": str(context.user.id) if context.user else "system",
@@ -183,55 +223,43 @@ def _make_listener(hook_registry: HookRegistry, op_type: str):
                             })
                             
                     elif op_type == "update":
-                        # Audit changed columns
-                        # Use SQLAlchemy history
-                        insp = inspect(target)
-                        for attr in insp.attrs:
-                            if attr.history.has_changes():
-                                col_name = attr.key
-                                # history.added contains new values, history.deleted contains old values
-                                # For update, we want single value vs single value usually
-                                new_val = attr.value
-                                old_val = attr.history.deleted[0] if attr.history.deleted else None
+                        # Audit changed columns using snapshot history
+                        for col_name, history in snapshot.__history__.items():
+                            new_val = history["added"][0] if history["added"] else None
+                            old_val = history["deleted"][0] if history["deleted"] else None
                                 
-                                if new_val != old_val:
-                                    masked_new = mask_sensitive_helper(col_name, new_val)
-                                    masked_old = mask_sensitive_helper(col_name, old_val)
-                                    
-                                    audit_entries.append({
-                                        "account_id": str(account_id),
-                                        "operation": "UPDATE",
-                                        "table_name": table_name,
-                                        "record_id": record_id,
-                                        "column_name": col_name,
-                                        "old_value": str(masked_old) if masked_old is not None else None,
-                                        "new_value": str(masked_new) if masked_new is not None else None,
-                                        "user_id": str(context.user.id) if context.user else "system",
-                                        "user_email": context.user.email if context.user else "system",
-                                        "user_name": context.user_name or (context.user.email if context.user else "system"),
-                                        "ip_address": context.ip_address,
-                                        "user_agent": context.user_agent,
-                                        "request_id": context.request_id,
-                                    })
+                            if new_val != old_val:
+                                masked_new = mask_sensitive_helper(col_name, new_val)
+                                masked_old = mask_sensitive_helper(col_name, old_val)
+                                
+                                audit_entries.append({
+                                    "account_id": str(account_id),
+                                    "operation": "UPDATE",
+                                    "table_name": table_name,
+                                    "record_id": record_id,
+                                    "column_name": col_name,
+                                    "old_value": str(masked_old) if masked_old is not None else None,
+                                    "new_value": str(masked_new) if masked_new is not None else None,
+                                    "user_id": str(context.user.id) if context.user else "system",
+                                    "user_email": context.user.email if context.user else "system",
+                                    "user_name": context.user_name or (context.user.email if context.user else "system"),
+                                    "ip_address": context.ip_address,
+                                    "user_agent": context.user_agent,
+                                    "request_id": context.request_id,
+                                })
                                     
                     elif op_type == "delete":
-                        # Audit all columns as deleted
-                        for col in columns:
-                            try:
-                                # For delete, instance_dict might be empty or partial?
-                                # Usually target is fully loaded or we access attrs
-                                old_val = getattr(target, col.name, None)
-                            except:
-                                old_val = None
-                                
-                            masked_val = mask_sensitive_helper(col.name, old_val)
+                        # Audit all columns as deleted from snapshot
+                        for column in mapper.columns:
+                            old_val = getattr(snapshot, column.name, None)
+                            masked_val = mask_sensitive_helper(column.name, old_val)
                             
                             audit_entries.append({
                                 "account_id": str(account_id),
                                 "operation": "DELETE",
                                 "table_name": table_name,
                                 "record_id": record_id,
-                                "column_name": col.name,
+                                "column_name": column.name,
                                 "old_value": str(masked_val) if masked_val is not None else None,
                                 "new_value": None,
                                 "user_id": str(context.user.id) if context.user else "system",
@@ -247,12 +275,12 @@ def _make_listener(hook_registry: HookRegistry, op_type: str):
                         sync_repo.create_batch(audit_entries)
                         
         except MissingGreenlet as e:
-            # MissingGreenlet occurs when sync event listener tries to access
-            # attributes that trigger lazy loading with async driver (aiosqlite).
-            # Log warning and continue - don't fail the main operation for audit.
+            # This should now be rare given the ModelSnapshot refactor
             logger.warning(
-                f"Audit logging skipped due to async context issue for {op_type.upper()} {table_name}", 
-                error=str(e)
+                f"Audit logging skipped: MissingGreenlet during {op_type.upper()} {table_name}. "
+                "This usually happens when accessing unloaded attributes in a sync listener "
+                "with an async driver. Ensure audit-critical columns are loaded.",
+                error=str(e),
             )
         except Exception as e:
             logger.error(
@@ -264,7 +292,7 @@ def _make_listener(hook_registry: HookRegistry, op_type: str):
             # For now, log and continue to not block the main operation
             # raise e
 
-        # 4. Trigger Async Hooks (User Hooks)
+        # 5. Trigger Async Hooks (User Hooks)
         # We still want to allow users to register hooks, so we keep the async trigger
         if op_type == "insert":
             event_name = HookEvent.ON_MODEL_AFTER_CREATE
@@ -273,24 +301,15 @@ def _make_listener(hook_registry: HookRegistry, op_type: str):
         else:
             event_name = HookEvent.ON_MODEL_AFTER_DELETE
 
-        import asyncio
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
             return
 
-        # Snapshot for async access
-        model_snapshot = ModelSnapshot(target)
-        
-        # We NO LONGER pass 'session' to the hook data for Model events.
-        # This prevents the built-in audit hook from trying to use it if it were still registered.
-        # User hooks that need DB access should request a new session or check documentation.
-        # (Usually hooks for notification/external systems don't need sync DB session)
-        
         async def trigger_async():
             try:
                 data = {
-                    "model": model_snapshot,
+                    "model": snapshot,
                     "session": None, 
                 }
                 # Add old_values for update if needed (captured previously if implemented)
