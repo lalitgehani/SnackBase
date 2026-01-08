@@ -259,11 +259,11 @@ const SystemProvidersTab = () => {
             />
 
             <Dialog open={!!configToEdit} onOpenChange={() => setConfigToEdit(null)}>
-                <DialogContent className="sm:max-w-xl flex flex-col max-h-[90vh]">
-                    <DialogHeader>
+                <DialogContent className="sm:max-w-xl p-0 overflow-hidden flex flex-col h-162.5 max-h-[90vh]">
+                    <DialogHeader className="p-6 pb-0">
                         <DialogTitle>Configure {configToEdit?.display_name}</DialogTitle>
                     </DialogHeader>
-                    <div className="flex-1 overflow-hidden">
+                    <div className="flex-1 overflow-hidden h-full flex flex-col">
                         {configToEdit && (
                             <ConfigurationForm
                                 category={configToEdit.category}

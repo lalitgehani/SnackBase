@@ -1,30 +1,66 @@
 
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { adminService } from '@/services/admin.service';
 import type { Configuration, ConfigurationStats } from '@/services/admin.service';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, Activity, Server, Users, Settings } from 'lucide-react';
+import { Plus, Activity, Server, Users, Settings, RefreshCw } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatDistanceToNow } from 'date-fns';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import SystemProvidersTab from './SystemProvidersTab';
 import AccountProvidersTab from './AccountProvidersTab';
 import EmailTemplatesTab from './EmailTemplatesTab';
 
+const REFRESH_OPTIONS = [
+    { value: '0', label: 'No refresh' },
+    { value: '10', label: '10 seconds' },
+    { value: '30', label: '30 seconds' },
+    { value: '60', label: '60 seconds' },
+    { value: '300', label: '5 minutes' },
+];
+
+const STORAGE_KEY = 'config-dashboard-refresh-frequency';
 
 const ConfigurationDashboardPage = () => {
-    const { data: stats, isLoading: statsLoading } = useQuery<ConfigurationStats>({
-        queryKey: ['admin', 'config', 'stats'],
-        queryFn: adminService.getStats,
-        refetchInterval: 30000, // Auto-refresh every 30s as per requirement
+    const [activeTab, setActiveTab] = useState('dashboard');
+    const [refreshFrequency, setRefreshFrequency] = useState<string>(() => {
+        return localStorage.getItem(STORAGE_KEY) || '0';
     });
 
-    const { data: recentConfigs, isLoading: recentLoading } = useQuery<Configuration[]>({
+    const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useQuery<ConfigurationStats>({
+        queryKey: ['admin', 'config', 'stats'],
+        queryFn: adminService.getStats,
+        refetchInterval: activeTab === 'dashboard' && parseInt(refreshFrequency) > 0
+            ? parseInt(refreshFrequency) * 1000
+            : false,
+    });
+
+    const { data: recentConfigs, isLoading: recentLoading, refetch: refetchRecent } = useQuery<Configuration[]>({
         queryKey: ['admin', 'config', 'recent'],
         queryFn: () => adminService.getRecentConfigs(5),
-        refetchInterval: 30000,
+        refetchInterval: activeTab === 'dashboard' && parseInt(refreshFrequency) > 0
+            ? parseInt(refreshFrequency) * 1000
+            : false,
     });
+
+    // Persist refresh frequency preference
+    useEffect(() => {
+        localStorage.setItem(STORAGE_KEY, refreshFrequency);
+    }, [refreshFrequency]);
+
+    const handleManualRefresh = () => {
+        refetchStats();
+        refetchRecent();
+    };
 
     return (
         <div className="space-y-6">
@@ -35,9 +71,32 @@ const ConfigurationDashboardPage = () => {
                         Manage system and account-level provider configurations.
                     </p>
                 </div>
+                {activeTab === 'dashboard' && (
+                    <div className="flex items-center gap-3">
+                        <Select value={refreshFrequency} onValueChange={setRefreshFrequency}>
+                            <SelectTrigger className="w-40">
+                                <SelectValue placeholder="Refresh frequency" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {REFRESH_OPTIONS.map((option) => (
+                                    <SelectItem key={option.value} value={option.value}>
+                                        {option.label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <Button
+                            onClick={handleManualRefresh}
+                            size="icon"
+                            variant="outline"
+                        >
+                            <RefreshCw className="h-4 w-4" />
+                        </Button>
+                    </div>
+                )}
             </div>
 
-            <Tabs defaultValue="dashboard" className="space-y-4">
+            <Tabs defaultValue="dashboard" className="space-y-4" value={activeTab} onValueChange={setActiveTab}>
                 <TabsList>
                     <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
                     <TabsTrigger value="system">System Providers</TabsTrigger>
