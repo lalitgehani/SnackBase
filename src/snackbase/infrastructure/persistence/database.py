@@ -91,9 +91,13 @@ class DatabaseManager:
                     cursor.execute(f"PRAGMA cache_size={self.settings.db_sqlite_cache_size}")
                     cursor.execute(f"PRAGMA temp_store={self.settings.db_sqlite_temp_store}")
                     cursor.execute(f"PRAGMA mmap_size={self.settings.db_sqlite_mmap_size}")
-                    cursor.execute("PRAGMA foreign_keys=ON")
+                    cursor.execute(f"PRAGMA busy_timeout={self.settings.db_sqlite_busy_timeout}")
+                    
+                    fk_status = "ON" if self.settings.db_sqlite_foreign_keys else "OFF"
+                    cursor.execute(f"PRAGMA foreign_keys={fk_status}")
+                    
                     cursor.close()
-                    logger.debug("Applied SQLite performance pragmas and enabled foreign keys")
+                    logger.debug("Applied SQLite performance pragmas and configured foreign keys")
 
         return self._engine
 

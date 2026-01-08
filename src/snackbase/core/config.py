@@ -54,6 +54,8 @@ class Settings(BaseSettings):
     db_sqlite_cache_size: int = -64000  # 64MB
     db_sqlite_temp_store: str = "MEMORY"
     db_sqlite_mmap_size: int = 268435456  # 256MB
+    db_sqlite_busy_timeout: int = 5000     # 5 seconds
+    db_sqlite_foreign_keys: bool = True
 
     # Security Settings
     secret_key: str = Field(
