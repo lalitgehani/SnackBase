@@ -294,14 +294,14 @@ async def send_test_email(
 
         # Get SMTP configuration
         config_repo = ConfigurationRepository(db)
-        smtp_configs = await config_repo.get_by_category_and_provider(
+        smtp_configs = await config_repo.list_configs(
             category="email_providers",
-            provider_name="smtp",
+            enabled_only=True,
         )
 
         # Find first enabled SMTP config
         smtp_config = next(
-            (c for c in smtp_configs if c.enabled),
+            (c for c in smtp_configs if c.provider_name == "smtp"),
             None,
         )
 

@@ -520,6 +520,31 @@ async def test_provider_connection(
         from snackbase.infrastructure.configuration.providers.saml import (
             OktaSAMLProvider, AzureADSAMLProvider, GenericSAMLProvider
         )
+        from snackbase.infrastructure.services.email.smtp_provider import (
+            SMTPProvider,
+            SMTPSettings,
+        )
+        
+        # Handle SMTP provider separately since it uses a different pattern
+        if provider_name == "smtp" and category == "email_providers":
+            try:
+                smtp_settings = SMTPSettings(**config_values)
+                smtp_provider = SMTPProvider(smtp_settings)
+                success, message = await asyncio.wait_for(
+                    smtp_provider.test_connection(),
+                    timeout=10.0
+                )
+                return {"success": success, "message": message or "SMTP connection successful"}
+            except asyncio.TimeoutError:
+                return {
+                    "success": False,
+                    "message": (
+                        "Connection test timed out after 10 seconds. "
+                        "Check your network or SMTP server settings."
+                    ),
+                }
+            except Exception as e:
+                return {"success": False, "message": f"SMTP test failed: {str(e)}"}
         
         handlers = {
             "google": GoogleOAuthHandler,
