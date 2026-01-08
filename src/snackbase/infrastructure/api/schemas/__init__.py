@@ -87,6 +87,13 @@ from snackbase.infrastructure.api.schemas.file_schemas import (
     FileMetadataResponse,
     FileUploadResponse,
 )
+from snackbase.infrastructure.api.schemas.email_schemas import (
+    EmailTemplateRenderRequest,
+    EmailTemplateRenderResponse,
+    EmailTemplateResponse,
+    EmailTemplateTestRequest,
+    EmailTemplateUpdate,
+)
 
 __all__ = [
     "AccountDetailResponse",
@@ -111,6 +118,11 @@ __all__ = [
     "CreateRoleRequest",
     "CurrentRevisionResponse",
     "DashboardStats",
+    "EmailTemplateRenderRequest",
+    "EmailTemplateRenderResponse",
+    "EmailTemplateResponse",
+    "EmailTemplateTestRequest",
+    "EmailTemplateUpdate",
     "FieldDefinition",
     "FileMetadataResponse",
     "FileUploadResponse",

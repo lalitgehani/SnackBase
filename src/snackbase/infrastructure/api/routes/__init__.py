@@ -5,6 +5,7 @@ from .accounts_router import router as accounts_router
 from .admin_router import router as admin_router
 from .collections_router import router as collections_router
 from .dashboard_router import router as dashboard_router
+from .email_templates_router import router as email_templates_router
 from .files_router import router as files_router
 from .groups_router import router as groups_router
 from .invitations_router import router as invitations_router
@@ -24,6 +25,7 @@ __all__ = [
     "auth_router",
     "collections_router",
     "dashboard_router",
+    "email_templates_router",
     "files_router",
     "groups_router",
     "invitations_router",

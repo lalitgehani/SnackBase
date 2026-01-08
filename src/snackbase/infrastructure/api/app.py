@@ -408,6 +408,7 @@ def register_routes(app: FastAPI) -> None:
         auth_router,
         collections_router,
         dashboard_router,
+        email_templates_router,
         files_router,
         groups_router,
         invitations_router,
@@ -496,6 +497,13 @@ def register_routes(app: FastAPI) -> None:
     # Register admin routes for configuration dashboard
     app.include_router(
         admin_router, prefix=f"{settings.api_prefix}/admin", tags=["admin"]
+    )
+
+    # Register email templates routes
+    app.include_router(
+        email_templates_router,
+        prefix=f"{settings.api_prefix}/admin/email",
+        tags=["admin", "email"],
     )
 
     # Register dynamic record routes with /records prefix to avoid conflicts
