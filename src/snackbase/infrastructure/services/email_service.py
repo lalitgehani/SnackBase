@@ -231,6 +231,58 @@ class EmailService:
 
         return provider, from_email, from_name, reply_to
 
+    async def _get_specific_provider(
+        self,
+        session: AsyncSession,
+        account_id: str,
+        provider_name: str,
+    ) -> tuple[EmailProvider, str, str, Optional[str]]:
+        """Get a specific email provider.
+
+        Args:
+            session: Database session.
+            account_id: Account ID.
+            provider_name: Name of the provider to retrieve (e.g. 'aws_ses').
+
+        Returns:
+            Tuple of (provider, from_email, from_name, reply_to).
+
+        Raises:
+            ValueError: If provider is not configured or enabled.
+        """
+        # Check account level first
+        config_model = await self.config_repository.get_config(
+            category="email_providers",
+            account_id=account_id,
+            provider_name=provider_name,
+            is_system=False,
+        )
+
+        # Fallback to system level if not found
+        if not config_model:
+            config_model = await self.config_repository.get_config(
+                category="email_providers",
+                account_id=SYSTEM_ACCOUNT_ID,
+                provider_name=provider_name,
+                is_system=True,
+            )
+
+        if not config_model or not config_model.enabled:
+            raise ValueError(f"Provider '{provider_name}' is not configured or enabled.")
+
+        # Decrypt configuration
+        decrypted_config = self.encryption_service.decrypt_dict(config_model.config)
+
+        # Create provider instance
+        provider = self._create_provider(provider_name, decrypted_config)
+
+        # Extract email settings
+        from_email = decrypted_config.get("from_email", "noreply@snackbase.io")
+        from_name = decrypted_config.get("from_name", "SnackBase")
+        reply_to = decrypted_config.get("reply_to")
+
+        return provider, from_email, from_name, reply_to
+
     async def _get_provider(
         self,
         session: AsyncSession,
@@ -285,6 +337,7 @@ class EmailService:
         account_id: str,
         template_type: str = "custom",
         variables: dict[str, str] | None = None,
+        provider_name: str | None = None,
     ) -> bool:
         """Send an email using automatic provider selection.
 
@@ -304,10 +357,15 @@ class EmailService:
         log_id = str(uuid.uuid4())
 
         try:
-            # Get provider for this account
-            provider, from_email, from_name, reply_to = await self._get_provider(
-                session, account_id
-            )
+            # Get provider (specific or automatic)
+            if provider_name and provider_name != "auto":
+                provider, from_email, from_name, reply_to = await self._get_specific_provider(
+                    session, account_id, provider_name
+                )
+            else:
+                provider, from_email, from_name, reply_to = await self._get_provider(
+                    session, account_id
+                )
             provider_name = provider.__class__.__name__.replace("Provider", "").lower()
 
             # Send email via provider
@@ -426,6 +484,7 @@ class EmailService:
         variables: dict[str, str],
         account_id: str,
         locale: str = "en",
+        provider_name: str | None = None,
     ) -> bool:
         """Send an email using a template with automatic provider selection.
 
@@ -480,4 +539,5 @@ class EmailService:
             account_id=account_id,
             template_type=template_type,
             variables=merged_variables,
+            provider_name=provider_name,
         )

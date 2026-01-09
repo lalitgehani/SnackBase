@@ -21,7 +21,10 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { emailService, type EmailTemplate, type EmailTemplateUpdate } from '@/services/email.service';
-import { Loader2, Send } from 'lucide-react';
+import { adminService, type Configuration } from '@/services/admin.service';
+import { useQuery } from '@tanstack/react-query';
+import { Loader2, Send, CheckCircle2, XCircle } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 interface EmailTemplateEditDialogProps {
     template: EmailTemplate | null;
@@ -69,6 +72,8 @@ export const EmailTemplateEditDialog = ({
 }: EmailTemplateEditDialogProps) => {
     const [formData, setFormData] = useState<EmailTemplateUpdate>({});
     const [testEmail, setTestEmail] = useState('');
+    const [selectedProvider, setSelectedProvider] = useState<string>('auto');
+    const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
     const queryClient = useQueryClient();
     const { toast } = useToast();
 
@@ -82,6 +87,30 @@ export const EmailTemplateEditDialog = ({
             });
         }
     }, [template]);
+
+    // Fetch enabled email providers (system and account)
+    const { data: providers } = useQuery({
+        queryKey: ['providers', template?.account_id],
+        queryFn: async () => {
+            const systemConfigs = await adminService.getSystemConfigs('email_providers');
+            let configs = [...systemConfigs];
+
+            if (template?.account_id && template.account_id !== '00000000-0000-0000-0000-000000000000') {
+                const accountConfigs = await adminService.getAccountConfigs(template.account_id, 'email_providers');
+                configs = [...configs, ...accountConfigs];
+            }
+
+            // Filter enabled only and deduplicate by provider_name
+            const uniqueProviders = new Map<string, Configuration>();
+            configs.filter(c => c.enabled).forEach(c => {
+                if (!uniqueProviders.has(c.provider_name)) {
+                    uniqueProviders.set(c.provider_name, c);
+                }
+            });
+            return Array.from(uniqueProviders.values());
+        },
+        enabled: !!template,
+    });
 
     const updateMutation = useMutation({
         mutationFn: (data: EmailTemplateUpdate) =>
@@ -108,19 +137,18 @@ export const EmailTemplateEditDialog = ({
             emailService.sendTestEmail(template!.id, {
                 recipient_email: recipient,
                 variables: {},
+                provider: selectedProvider === 'auto' ? undefined : selectedProvider,
             }),
         onSuccess: (data) => {
-            toast({
-                title: 'Test Email Sent',
-                description: data.message,
-            });
             setTestEmail('');
+            setTestResult({ success: true, message: data.message });
+            // Clear message after 5 seconds
+            setTimeout(() => setTestResult(null), 5000);
         },
         onError: (error: any) => {
-            toast({
-                title: 'Error',
-                description: error.response?.data?.detail || 'Failed to send test email.',
-                variant: 'destructive',
+            setTestResult({
+                success: false,
+                message: error.response?.data?.detail || 'Failed to send test email.'
             });
         },
     });
@@ -131,13 +159,13 @@ export const EmailTemplateEditDialog = ({
 
     const handleSendTest = () => {
         if (!testEmail) {
-            toast({
-                title: 'Error',
-                description: 'Please enter a recipient email address.',
-                variant: 'destructive',
+            setTestResult({
+                success: false,
+                message: 'Please enter a recipient email address.'
             });
             return;
         }
+        setTestResult(null);
         testEmailMutation.mutate(testEmail);
     };
 
@@ -273,20 +301,40 @@ export const EmailTemplateEditDialog = ({
                     </div>
 
                     {/* Test Email Section */}
-                    <div className="space-y-2 pt-4 border-t">
-                        <Label htmlFor="test_email">Send Test Email</Label>
-                        <div className="flex gap-2">
-                            <Input
-                                id="test_email"
-                                type="email"
-                                value={testEmail}
-                                onChange={(e) => setTestEmail(e.target.value)}
-                                placeholder="recipient@example.com"
-                            />
+                    <div className="space-y-4 pt-4 border-t">
+                        <Label>Send Test Email</Label>
+                        <div className="grid grid-cols-[1fr,2fr,auto] gap-2 items-end">
+                            <div className="space-y-2">
+                                <Label htmlFor="provider-select" className="text-xs text-muted-foreground">Provider</Label>
+                                <Select value={selectedProvider} onValueChange={setSelectedProvider}>
+                                    <SelectTrigger id="provider-select">
+                                        <SelectValue placeholder="Automatic" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="auto">Automatic (Default)</SelectItem>
+                                        {providers?.map((provider) => (
+                                            <SelectItem key={provider.provider_name} value={provider.provider_name}>
+                                                {provider.display_name || provider.provider_name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="test_email" className="text-xs text-muted-foreground">Recipient</Label>
+                                <Input
+                                    id="test_email"
+                                    type="email"
+                                    value={testEmail}
+                                    onChange={(e) => setTestEmail(e.target.value)}
+                                    placeholder="recipient@example.com"
+                                />
+                            </div>
                             <Button
                                 onClick={handleSendTest}
                                 disabled={testEmailMutation.isPending}
                                 variant="outline"
+                                className="mb-0.5"
                             >
                                 {testEmailMutation.isPending ? (
                                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -296,6 +344,17 @@ export const EmailTemplateEditDialog = ({
                                 <span className="ml-2">Send</span>
                             </Button>
                         </div>
+                        {testResult && (
+                            <Alert variant={testResult.success ? "default" : "destructive"} className="mt-4">
+                                {testResult.success ? (
+                                    <CheckCircle2 className="h-4 w-4" />
+                                ) : (
+                                    <XCircle className="h-4 w-4" />
+                                )}
+                                <AlertTitle>{testResult.success ? "Test Email Sent" : "Sending Failed"}</AlertTitle>
+                                <AlertDescription>{testResult.message}</AlertDescription>
+                            </Alert>
+                        )}
                         <p className="text-xs text-muted-foreground">
                             Send a test email to verify the template renders correctly.
                         </p>
@@ -328,6 +387,6 @@ export const EmailTemplateEditDialog = ({
                     </Button>
                 </DialogFooter>
             </DialogContent>
-        </Dialog>
+        </Dialog >
     );
 };

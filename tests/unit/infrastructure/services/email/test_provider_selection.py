@@ -311,3 +311,50 @@ async def test_provider_factory_creates_correct_providers(email_service):
     with pytest.raises(ValueError) as exc_info:
         email_service._create_provider("unknown", {})
     assert "Unknown email provider" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_get_specific_provider(email_service, mock_config_repository):
+    """Test retrieving a specific provider explicitly."""
+    account_id = "test-account-123"
+    provider_name = "resend"
+
+    # Setup mock config
+    mock_config = MagicMock()
+    mock_config.provider_name = "resend"
+    mock_config.is_system = False
+    mock_config.enabled = True
+    mock_config.config = {
+        "api_key": "re_123456",
+        "from_email": "test@example.com",
+    }
+
+    mock_config_repository.get_config = AsyncMock(return_value=mock_config)
+    mock_session = AsyncMock()
+
+    # Execute
+    provider, from_email, _, _ = await email_service._get_specific_provider(
+        mock_session, account_id, provider_name
+    )
+
+    # Verify
+    assert isinstance(provider, ResendProvider)
+    assert from_email == "test@example.com"
+    
+    mock_config_repository.get_config.assert_called_once_with(
+        category="email_providers",
+        account_id=account_id,
+        provider_name=provider_name,
+        is_system=False,
+    )
+
+    # Test failure case (not found/disabled)
+    mock_config_repository.get_config = AsyncMock(return_value=None)
+    
+    with pytest.raises(ValueError) as exc_info:
+        await email_service._get_specific_provider(
+            mock_session, account_id, provider_name
+        )
+    
+    assert f"Provider '{provider_name}' is not configured or enabled" in str(exc_info.value)
+

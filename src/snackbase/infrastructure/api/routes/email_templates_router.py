@@ -310,6 +310,7 @@ async def send_test_email(
             variables=test_request.variables,
             account_id=template.account_id,
             locale=template.locale,
+            provider_name=test_request.provider,
         )
 
         if not success:

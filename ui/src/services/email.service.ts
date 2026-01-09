@@ -24,6 +24,7 @@ export interface EmailTemplateUpdate {
 export interface EmailTemplateTestRequest {
   recipient_email: string;
   variables?: Record<string, string>;
+  provider?: string;
 }
 
 export interface EmailTemplateRenderRequest {

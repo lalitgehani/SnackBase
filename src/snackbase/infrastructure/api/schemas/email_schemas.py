@@ -66,6 +66,7 @@ class EmailTemplateTestRequest(BaseModel):
 
     recipient_email: EmailStr
     variables: dict[str, str] = Field(default_factory=dict)
+    provider: str | None = None
 
 
 class EmailTemplateRenderRequest(BaseModel):

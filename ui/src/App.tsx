@@ -14,42 +14,46 @@ import MacrosPage from '@/pages/MacrosPage';
 import ConfigurationDashboardPage from '@/pages/ConfigurationDashboardPage';
 import AdminLayout from '@/layouts/AdminLayout';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import { Toaster } from '@/components/ui/toaster';
 
 function App() {
   return (
-    <Routes>
-      {/* Redirect root to admin */}
-      <Route path="/" element={<Navigate to="/admin/dashboard" replace />} />
+    <>
+      <Routes>
+        {/* Redirect root to admin */}
+        <Route path="/" element={<Navigate to="/admin/dashboard" replace />} />
 
-      {/* Public routes */}
-      <Route path="/admin/login" element={<LoginPage />} />
+        {/* Public routes */}
+        <Route path="/admin/login" element={<LoginPage />} />
 
-      {/* Protected admin routes */}
-      <Route
-        path="/admin"
-        element={
-          <ProtectedRoute>
-            <AdminLayout />
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<Navigate to="/admin/dashboard" replace />} />
-        <Route path="dashboard" element={<DashboardPage />} />
-        <Route path="accounts" element={<AccountsPage />} />
-        <Route path="users" element={<UsersPage />} />
-        <Route path="groups" element={<GroupsPage />} />
-        <Route path="collections" element={<CollectionsPage />} />
-        <Route path="collections/:collectionName/records" element={<RecordsPage />} />
-        <Route path="roles" element={<RolesPage />} />
-        <Route path="audit-logs" element={<AuditLogsPage />} />
-        <Route path="migrations" element={<MigrationsPage />} />
-        <Route path="macros" element={<MacrosPage />} />
-        <Route path="configuration" element={<ConfigurationDashboardPage />} />
-      </Route>
+        {/* Protected admin routes */}
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute>
+              <AdminLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<Navigate to="/admin/dashboard" replace />} />
+          <Route path="dashboard" element={<DashboardPage />} />
+          <Route path="accounts" element={<AccountsPage />} />
+          <Route path="users" element={<UsersPage />} />
+          <Route path="groups" element={<GroupsPage />} />
+          <Route path="collections" element={<CollectionsPage />} />
+          <Route path="collections/:collectionName/records" element={<RecordsPage />} />
+          <Route path="roles" element={<RolesPage />} />
+          <Route path="audit-logs" element={<AuditLogsPage />} />
+          <Route path="migrations" element={<MigrationsPage />} />
+          <Route path="macros" element={<MacrosPage />} />
+          <Route path="configuration" element={<ConfigurationDashboardPage />} />
+        </Route>
 
-      {/* Catch all - redirect to dashboard */}
-      <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
-    </Routes>
+        {/* Catch all - redirect to dashboard */}
+        <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
+      </Routes>
+      <Toaster />
+    </>
   );
 }
 
