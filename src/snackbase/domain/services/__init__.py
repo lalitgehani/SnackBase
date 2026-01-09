@@ -42,6 +42,7 @@ from snackbase.domain.services.superadmin_service import (
 from snackbase.domain.services.dashboard_service import DashboardService
 from snackbase.domain.services.account_service import AccountService
 from snackbase.domain.services.audit_log_service import AuditLogService
+from snackbase.domain.services.email_verification_service import EmailVerificationService
 
 
 __all__ = [
@@ -53,6 +54,7 @@ __all__ = [
     "CollectionValidationError",
     "CollectionValidator",
     "DashboardService",
+    "EmailVerificationService",
     "FieldType",
     "OnDeleteAction",
     "PasswordValidationError",

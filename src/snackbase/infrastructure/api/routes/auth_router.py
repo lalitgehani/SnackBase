@@ -6,7 +6,7 @@ Provides endpoints for user registration, login, and token management.
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,15 +17,22 @@ from snackbase.domain.services import (
     SlugGenerator,
     default_password_validator,
 )
-from snackbase.infrastructure.api.dependencies import AuthenticatedUser, CurrentUser
+from snackbase.domain.services.email_verification_service import EmailVerificationService
+from snackbase.infrastructure.api.dependencies import (
+    AuthenticatedUser,
+    CurrentUser,
+    get_verification_service,
+)
 from snackbase.infrastructure.api.schemas import (
     AccountResponse,
     AuthResponse,
     LoginRequest,
     RefreshRequest,
     RegisterRequest,
+    SendVerificationRequest,
     TokenRefreshResponse,
     UserResponse,
+    VerifyEmailRequest,
 )
 from snackbase.infrastructure.auth import (
     DUMMY_PASSWORD_HASH,
@@ -66,8 +73,10 @@ router = APIRouter()
     },
 )
 async def register(
-    request: RegisterRequest,
+    register_request: RegisterRequest,
+    request: Request,
     session: AsyncSession = Depends(get_db_session),
+    verification_service: EmailVerificationService = Depends(get_verification_service),
 ) -> AuthResponse | JSONResponse:
     """Register a new account and user.
 
@@ -86,11 +95,11 @@ async def register(
     9. Return response
     """
     # 1. Validate password strength
-    password_errors = default_password_validator.validate(request.password)
+    password_errors = default_password_validator.validate(register_request.password)
     if password_errors:
         logger.info(
             "Registration failed: password validation",
-            email=request.email,
+            email=register_request.email,
             error_count=len(password_errors),
         )
         return JSONResponse(
@@ -105,13 +114,13 @@ async def register(
         )
 
     # 2. Generate or validate account slug
-    if request.account_slug:
-        slug = request.account_slug.lower()
+    if register_request.account_slug:
+        slug = register_request.account_slug.lower()
         slug_errors = SlugGenerator.validate(slug)
         if slug_errors:
             logger.info(
                 "Registration failed: slug validation",
-                email=request.email,
+                email=register_request.email,
                 slug=slug,
             )
             return JSONResponse(
@@ -125,7 +134,7 @@ async def register(
                 },
             )
     else:
-        slug = SlugGenerator.generate(request.account_name)
+        slug = SlugGenerator.generate(register_request.account_name)
 
     # Initialize repositories
     account_repo = AccountRepository(session)
@@ -136,7 +145,7 @@ async def register(
     if await account_repo.slug_exists(slug):
         logger.info(
             "Registration failed: slug exists",
-            email=request.email,
+            email=register_request.email,
             slug=slug,
         )
         return JSONResponse(
@@ -154,14 +163,14 @@ async def register(
     account_code = AccountCodeGenerator.generate(existing_codes)  # Generate code
 
     # 5. Hash password
-    password_hash = hash_password(request.password)
+    password_hash = hash_password(register_request.password)
 
     # 6. Create account record
     account = AccountModel(
         id=account_id,
         account_code=account_code,
         slug=slug,
-        name=request.account_name,
+        name=register_request.account_name,
     )
     await account_repo.create(account)
 
@@ -177,7 +186,7 @@ async def register(
     user = UserModel(
         id=str(uuid.uuid4()),
         account_id=account_id,
-        email=request.email,
+        email=register_request.email,
         password_hash=password_hash,
         role_id=admin_role.id,
         is_active=True,
@@ -213,7 +222,7 @@ async def register(
         "Account registered successfully",
         account_id=account_id,
         slug=slug,
-        user_email=request.email,
+        user_email=register_request.email,
     )
 
     # 8. Generate JWT tokens
@@ -241,6 +250,21 @@ async def register(
     )
     await refresh_token_repo.create(refresh_token_model)
     await session.commit()
+
+    # 9. Send verification email
+    try:
+        await verification_service.send_verification_email(
+            user_id=user.id,
+            email=user.email,
+            account_id=account.id,
+        )
+    except Exception as e:
+        logger.error(
+            "Failed to send initial verification email during registration",
+            error=str(e),
+            user_id=user.id,
+        )
+        # Don't fail registration if email fails
 
     # 9. Return response
     return AuthResponse(
@@ -614,3 +638,94 @@ async def get_current_user_info(
         "email": current_user.email,
         "role": current_user.role,
     }
+
+
+@router.post(
+    "/send-verification",
+    status_code=status.HTTP_200_OK,
+    responses={
+        200: {"description": "Verification email sent"},
+        401: {"description": "Not authenticated"},
+        500: {"description": "Failed to send email"},
+    },
+)
+async def send_verification_email(
+    request: SendVerificationRequest,
+    current_user: AuthenticatedUser,
+    verification_service: EmailVerificationService = Depends(get_verification_service),
+) -> dict:
+    """Send a verification email to the current user.
+
+    Args:
+        request: Optional email address.
+        current_user: The authenticated user.
+        verification_service: Verification service dependency.
+    """
+    # Use provided email or fall back to current user's email
+    email = request.email or current_user.email
+
+    success = await verification_service.send_verification_email(
+        user_id=current_user.user_id,
+        email=email,
+        account_id=current_user.account_id,
+    )
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to send verification email",
+        )
+
+    return {"message": f"Verification email sent to {email}"}
+
+
+@router.post(
+    "/resend-verification",
+    status_code=status.HTTP_200_OK,
+    responses={
+        400: {"description": "Bad Request"},
+        500: {"description": "Internal Server Error during email sending"},
+    },
+)
+async def resend_verification(
+    request_data: SendVerificationRequest,
+    user: AuthenticatedUser,
+    verification_service: EmailVerificationService = Depends(get_verification_service),
+):
+    """Resend verification email to the user."""
+    email = request_data.email or user.email
+    await verification_service.send_verification_email(
+        user_id=user.user_id,
+        email=email,
+        account_id=user.account_id,
+    )
+    return {"message": "Verification email resent successfully"}
+
+
+@router.post(
+    "/verify-email",
+    status_code=status.HTTP_200_OK,
+    responses={
+        200: {"description": "Email verified successfully"},
+        400: {"description": "Invalid or expired token"},
+    },
+)
+async def verify_email(
+    request: VerifyEmailRequest,
+    verification_service: EmailVerificationService = Depends(get_verification_service),
+) -> dict:
+    """Verify a user's email address using a token.
+
+    Args:
+        request: Verification token.
+        verification_service: Verification service dependency.
+    """
+    success = await verification_service.verify_email(request.token)
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired verification token",
+        )
+
+    return {"message": "Email verified successfully"}

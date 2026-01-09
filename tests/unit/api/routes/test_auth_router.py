@@ -147,8 +147,13 @@ def test_register_endpoint_success(
     async def override_get_db_session():
         yield session_mock
         
+    mock_verification_service = AsyncMock()
+    mock_verification_service.send_verification_email = AsyncMock(return_value=True)
+
     from snackbase.infrastructure.persistence.database import get_db_session
+    from snackbase.infrastructure.api.dependencies import get_verification_service
     app.dependency_overrides[get_db_session] = override_get_db_session
+    app.dependency_overrides[get_verification_service] = lambda: mock_verification_service
 
     payload = {
         "email": "test@example.com",

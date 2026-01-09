@@ -135,9 +135,25 @@ class OAuthCallbackRequest(BaseModel):
     redirect_uri: str = Field(..., description="Original redirect URI used in authorize request")
 
 
+
 class OAuthCallbackResponse(AuthResponse):
     """Response for successful OAuth callback authentication."""
 
     is_new_user: bool = Field(..., description="Whether a new user was created")
     is_new_account: bool = Field(..., description="Whether a new account was created")
+
+
+class SendVerificationRequest(BaseModel):
+    """Request body for sending verification email."""
+
+    email: EmailStr | None = Field(
+        None,
+        description="User's email address. If not provided, the authenticated user's email is used.",
+    )
+
+
+class VerifyEmailRequest(BaseModel):
+    """Request body for verifying email with token."""
+
+    token: str = Field(..., description="Verification token")
 

@@ -50,14 +50,26 @@ class EmailVerificationRepository:
 
     def _to_entity(self, model: EmailVerificationTokenModel) -> EmailVerificationToken:
         """Convert infrastructure model to domain entity."""
+        expires_at = model.expires_at
+        if expires_at and expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+        created_at = model.created_at
+        if created_at and created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=timezone.utc)
+
+        used_at = model.used_at
+        if used_at and used_at.tzinfo is None:
+            used_at = used_at.replace(tzinfo=timezone.utc)
+
         return EmailVerificationToken(
             id=model.id,
             user_id=model.user_id,
             email=model.email,
             token_hash=model.token_hash,
-            expires_at=model.expires_at,
-            created_at=model.created_at,
-            used_at=model.used_at,
+            expires_at=expires_at,
+            created_at=created_at,
+            used_at=used_at,
         )
 
     async def create(self, entity: EmailVerificationToken) -> EmailVerificationToken:

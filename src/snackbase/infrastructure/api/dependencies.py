@@ -288,3 +288,76 @@ SuperadminUser = Annotated[CurrentUser, Depends(require_superadmin)]
 
 # Type alias for authorization context dependency injection
 AuthContext = Annotated[AuthorizationContext, Depends(get_authorization_context)]
+
+
+async def get_email_service(
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> "EmailService":
+    """Get EmailService instance.
+
+    Args:
+        request: FastAPI request object.
+        session: Database session.
+
+    Returns:
+        EmailService instance.
+    """
+    from snackbase.infrastructure.persistence.repositories import (
+        ConfigurationRepository,
+        EmailLogRepository,
+        EmailTemplateRepository,
+    )
+    from snackbase.infrastructure.security.encryption import EncryptionService
+    from snackbase.infrastructure.services.email_service import EmailService
+
+    template_repo = EmailTemplateRepository()
+    log_repo = EmailLogRepository()
+    config_repo = ConfigurationRepository(session)
+    
+    # Get encryption service from app state
+    # Fallback to creating a temporary one if registry is missing (e.g. in tests)
+    registry = getattr(request.app.state, "config_registry", None)
+    if registry:
+        encryption_service = registry.encryption_service
+    else:
+        from snackbase.core.config import get_settings
+        settings = get_settings()
+        encryption_service = EncryptionService(settings.secret_key)
+
+    return EmailService(
+        template_repository=template_repo,
+        log_repository=log_repo,
+        config_repository=config_repo,
+        encryption_service=encryption_service,
+    )
+
+
+async def get_verification_service(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    email_service: Annotated["EmailService", Depends(get_email_service)],
+) -> "EmailVerificationService":
+    """Get EmailVerificationService instance.
+
+    Args:
+        session: Database session.
+        email_service: Email service dependency.
+
+    Returns:
+        EmailVerificationService instance.
+    """
+    from snackbase.domain.services.email_verification_service import EmailVerificationService
+    from snackbase.infrastructure.persistence.repositories import (
+        EmailVerificationRepository,
+        UserRepository,
+    )
+
+    user_repo = UserRepository(session)
+    verification_repo = EmailVerificationRepository(session)
+
+    return EmailVerificationService(
+        session=session,
+        user_repo=user_repo,
+        verification_repo=verification_repo,
+        email_service=email_service,
+    )

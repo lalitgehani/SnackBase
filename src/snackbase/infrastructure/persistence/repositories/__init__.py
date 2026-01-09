@@ -9,6 +9,12 @@ from snackbase.infrastructure.persistence.repositories.collection_repository imp
 from snackbase.infrastructure.persistence.repositories.configuration_repository import (
     ConfigurationRepository,
 )
+from snackbase.infrastructure.persistence.repositories.email_log_repository import (
+    EmailLogRepository,
+)
+from snackbase.infrastructure.persistence.repositories.email_template_repository import (
+    EmailTemplateRepository,
+)
 from snackbase.infrastructure.persistence.repositories.email_verification_repository import (
     EmailVerificationRepository,
 )

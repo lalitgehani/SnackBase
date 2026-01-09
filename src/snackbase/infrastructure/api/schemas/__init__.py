@@ -7,10 +7,12 @@ from snackbase.infrastructure.api.schemas.auth_schemas import (
     LoginRequest,
     RefreshRequest,
     RegisterRequest,
+    SendVerificationRequest,
     TokenRefreshResponse,
     UserResponse,
     ValidationErrorDetail,
     ValidationErrorResponse,
+    VerifyEmailRequest,
 )
 from snackbase.infrastructure.api.schemas.collection_schemas import (
     CollectionListItem,
@@ -153,6 +155,7 @@ __all__ = [
     "RolePermissionsResponse",
     "RoleResponse",
     "SchemaFieldResponse",
+    "SendVerificationRequest",
     "SystemHealthStats",
     "TestRuleRequest",
     "TestRuleResponse",
@@ -166,4 +169,5 @@ __all__ = [
     "ValidateRuleResponse",
     "ValidationErrorDetail",
     "ValidationErrorResponse",
+    "VerifyEmailRequest",
 ]
