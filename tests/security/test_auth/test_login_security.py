@@ -35,6 +35,7 @@ async def login_test_user(db_session: AsyncSession):
         password_hash=hash_password(password),
         role_id=user_role.id,
         is_active=True,
+        email_verified=True,
     )
     db_session.add(user)
     await db_session.commit()

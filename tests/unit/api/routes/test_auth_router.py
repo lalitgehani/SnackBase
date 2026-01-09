@@ -166,8 +166,10 @@ def test_register_endpoint_success(
     
     assert response.status_code == 201
     data = response.json()
-    assert data["token"] == "fake_access_token"
-    assert data["refresh_token"] == "fake_refresh_token"
+    assert "token" not in data
+    assert "refresh_token" not in data
+    assert "message" in data
+    assert "Registration successful" in data["message"]
     assert data["account"]["slug"] == "test-account"
     assert data["user"]["email"] == "test@example.com"
     
@@ -269,6 +271,7 @@ def test_login_success(
     user_mock.email = "test@example.com"
     user_mock.password_hash = "hashed_password"
     user_mock.is_active = True
+    user_mock.email_verified = True
     user_mock.role_id = "role-id"
     user_mock.created_at = datetime.now()
     user_mock.auth_provider = "password"
@@ -385,6 +388,8 @@ def test_login_invalid_password(mock_account_repo, mock_user_repo, mock_verify, 
     user_mock = MagicMock()
     user_mock.password_hash = "hashed_password"
     user_mock.auth_provider = "password"
+    user_mock.email_verified = True
+    user_mock.is_active = True
     mock_user_repo.return_value.get_by_email_and_account = AsyncMock(return_value=user_mock)
     
     mock_verify.return_value = False

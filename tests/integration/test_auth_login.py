@@ -21,14 +21,40 @@ async def test_login_flow(client: AsyncClient, db_session: AsyncSession):
     res = await client.post("/api/v1/auth/register", json=register_payload)
     assert res.status_code == 201
     account_id = res.json()["account"]["id"]
-    
-    # 2. Login with valid credentials
+
+    # 2. Login should fail (email not verified)
     login_payload = {
         "email": "login_test@example.com",
         "password": "Password123!",
         "account": "login-test-corp"
     }
     
+    login_res = await client.post("/api/v1/auth/login", json=login_payload)
+    assert login_res.status_code == 401
+    assert "Email not verified" in login_res.json()["message"]
+
+    # 3. Verify email
+    # Get token row from DB and update it with a known hash
+    import hashlib
+    from sqlalchemy import select, update
+    from snackbase.infrastructure.persistence.models import EmailVerificationTokenModel
+    
+    known_token = "test_verification_token_123"
+    known_hash = hashlib.sha256(known_token.encode()).hexdigest()
+    
+    # Update the existing token with our known hash
+    await db_session.execute(
+        update(EmailVerificationTokenModel)
+        .where(EmailVerificationTokenModel.email == "login_test@example.com")
+        .values(token_hash=known_hash)
+    )
+    await db_session.commit()
+    
+    # Call verify endpoint with known token
+    verify_res = await client.post("/api/v1/auth/verify-email", json={"token": known_token})
+    assert verify_res.status_code == 200
+    
+    # 4. Login with valid credentials (now verified)
     login_res = await client.post("/api/v1/auth/login", json=login_payload)
     assert login_res.status_code == 200
     data = login_res.json()

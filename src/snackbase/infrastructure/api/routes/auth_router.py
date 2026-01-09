@@ -29,6 +29,7 @@ from snackbase.infrastructure.api.schemas import (
     LoginRequest,
     RefreshRequest,
     RegisterRequest,
+    RegistrationResponse,
     SendVerificationRequest,
     TokenRefreshResponse,
     UserResponse,
@@ -66,7 +67,7 @@ router = APIRouter()
 @router.post(
     "/register",
     status_code=status.HTTP_201_CREATED,
-    response_model=AuthResponse,
+    response_model=RegistrationResponse,
     responses={
         400: {"description": "Validation error"},
         409: {"description": "Conflict - email or slug already exists"},
@@ -77,11 +78,11 @@ async def register(
     request: Request,
     session: AsyncSession = Depends(get_db_session),
     verification_service: EmailVerificationService = Depends(get_verification_service),
-) -> AuthResponse | JSONResponse:
+) -> RegistrationResponse | JSONResponse:
     """Register a new account and user.
 
     Creates a new account with the provided details and creates the first user
-    as an admin. Returns JWT tokens for immediate authentication.
+    as an admin. Returns a success message instructing the user to verify their email.
 
     Flow:
     1. Validate password strength
@@ -91,8 +92,8 @@ async def register(
     5. Hash password
     6. Create account record
     7. Create user record with 'admin' role
-    8. Generate JWT tokens
-    9. Return response
+    8. Send verification email
+    9. Return response (no tokens)
     """
     # 1. Validate password strength
     password_errors = default_password_validator.validate(register_request.password)
@@ -190,6 +191,7 @@ async def register(
         password_hash=password_hash,
         role_id=admin_role.id,
         is_active=True,
+        email_verified=False,  # Explicitly set to False
     )
     await user_repo.create(user)
 
@@ -225,33 +227,7 @@ async def register(
         user_email=register_request.email,
     )
 
-    # 8. Generate JWT tokens
-    access_token = jwt_service.create_access_token(
-        user_id=user.id,
-        account_id=account_id,
-        email=user.email,
-        role=admin_role.name,
-    )
-    refresh_token, token_id = jwt_service.create_refresh_token(
-        user_id=user.id,
-        account_id=account_id,
-    )
-    expires_in = jwt_service.get_expires_in()
-
-    # Store refresh token in database for revocation tracking
-    settings = get_settings()
-    refresh_token_repo = RefreshTokenRepository(session)
-    refresh_token_model = RefreshTokenModel(
-        id=token_id,
-        token_hash=refresh_token_repo.hash_token(refresh_token),
-        user_id=user.id,
-        account_id=account_id,
-        expires_at=datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_expire_days),
-    )
-    await refresh_token_repo.create(refresh_token_model)
-    await session.commit()
-
-    # 9. Send verification email
+    # 8. Send verification email
     try:
         await verification_service.send_verification_email(
             user_id=user.id,
@@ -264,13 +240,12 @@ async def register(
             error=str(e),
             user_id=user.id,
         )
-        # Don't fail registration if email fails
+        # Even if email fails, we return success so user can request resend later if needed
+        # Or ideally, we might want to warn them, but for now standard success with email hint is fine
 
-    # 9. Return response
-    return AuthResponse(
-        token=access_token,
-        refresh_token=refresh_token,
-        expires_in=expires_in,
+    # 9. Return response (no tokens)
+    return RegistrationResponse(
+        message="Registration successful. Please check your email to verify your account.",
         account=AccountResponse(
             id=account.id,
             slug=account.slug,
@@ -414,6 +389,21 @@ async def login(
             user_id=user.id,
         )
         return auth_error
+
+    # 5.5. Check if email is verified
+    if not user.email_verified:
+        logger.info(
+            "Login failed: email not verified",
+            account_id=account.id,
+            user_id=user.id,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={
+                "error": "Authentication failed",
+                "message": "Email not verified. Please check your email inbox.",
+            },
+        )
 
     # Get user's role
     role = await role_repo.get_by_id(user.role_id)

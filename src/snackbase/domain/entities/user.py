@@ -43,6 +43,7 @@ class User:
     external_id: str | None = None
     external_email: str | None = None
     profile_data: dict | None = None
+    email_verified: bool = False
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     last_login: datetime | None = None

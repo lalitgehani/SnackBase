@@ -3,8 +3,13 @@ import pytest
 from httpx import AsyncClient
 import asyncio
 
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import update
+from snackbase.infrastructure.persistence.models import EmailVerificationTokenModel
+import hashlib
+
 @pytest.mark.asyncio
-async def test_refresh_token_flow(client: AsyncClient):
+async def test_refresh_token_flow(client: AsyncClient, db_session: AsyncSession):
     """Test full refresh token flow: Register -> Login -> Refresh -> Verify Rotation."""
     
     # 1. Register a user
@@ -19,6 +24,20 @@ async def test_refresh_token_flow(client: AsyncClient):
     res = await client.post("/api/v1/auth/register", json=register_payload)
     assert res.status_code == 201
     
+    # 1.5. Verify email manually
+    known_token = "refresh_test_token"
+    known_hash = hashlib.sha256(known_token.encode()).hexdigest()
+    
+    await db_session.execute(
+        update(EmailVerificationTokenModel)
+        .where(EmailVerificationTokenModel.email == email)
+        .values(token_hash=known_hash)
+    )
+    await db_session.commit()
+    
+    verify_res = await client.post("/api/v1/auth/verify-email", json={"token": known_token})
+    assert verify_res.status_code == 200
+
     # 2. Login to get initial tokens
     login_payload = {
         "email": email,
@@ -67,16 +86,38 @@ async def test_refresh_token_invalid(client: AsyncClient):
     assert refresh_res.status_code == 401
 
 @pytest.mark.asyncio
-async def test_access_token_as_refresh_token(client: AsyncClient):
+async def test_access_token_as_refresh_token(client: AsyncClient, db_session: AsyncSession):
     """Test using an access token as a refresh token (should fail)."""
     
-    # 1. Register & Login
-    res = await client.post("/api/v1/auth/register", json={
-        "email": "wrong_token_type@example.com",
+    # 1. Register
+    email = "wrong_token_type@example.com"
+    await client.post("/api/v1/auth/register", json={
+        "email": email,
         "password": "Password123!",
         "account_name": "Wrong Token Corp"
     })
-    access_token = res.json()["token"]
+    
+    # 2. Verify
+    known_token = "wrong_type_token"
+    known_hash = hashlib.sha256(known_token.encode()).hexdigest()
+    
+    await db_session.execute(
+        update(EmailVerificationTokenModel)
+        .where(EmailVerificationTokenModel.email == email)
+        .values(token_hash=known_hash)
+    )
+    await db_session.commit()
+    
+    await client.post("/api/v1/auth/verify-email", json={"token": known_token})
+    
+    # 3. Login to get tokens
+    login_res = await client.post("/api/v1/auth/login", json={
+        "email": email,
+        "password": "Password123!",
+        "account": "wrong-token-corp"
+    }) # Note: slug is auto-generated from name if not provided (Wrong Token Corp -> wrong-token-corp)
+    
+    access_token = login_res.json()["token"]
     
     # 2. Try to refresh using access token
     refresh_res = await client.post("/api/v1/auth/refresh", json={"refresh_token": access_token})

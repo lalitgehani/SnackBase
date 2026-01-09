@@ -148,8 +148,10 @@ async def test_auth_pw_007_valid_password(attack_client: AttackClient):
     
     assert response.status_code == status.HTTP_201_CREATED
     data = response.json()
-    assert "token" in data
-    assert "refresh_token" in data
+    assert "message" in data
+    assert "Registration successful" in data["message"]
+    assert "token" not in data
+    assert "refresh_token" not in data
 
 
 @pytest.mark.asyncio

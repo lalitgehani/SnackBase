@@ -44,8 +44,11 @@ async def test_register_integration_success(db_session):
     assert response.status_code == 201
     data = response.json()
     
-    assert "token" in data
-    assert "refresh_token" in data
+    assert "message" in data
+    assert "Registration successful" in data["message"]
+    assert "token" not in data
+    assert "refresh_token" not in data
+    
     assert data["user"]["email"] == "integration@example.com"
     assert data["account"]["name"] == "Integration Corp"
     assert "slug" in data["account"]

@@ -57,13 +57,21 @@ class UserResponse(BaseModel):
 
 
 class AuthResponse(BaseModel):
-    """Response for successful authentication (login/register)."""
+    """Response for successful authentication (login)."""
 
     token: str = Field(..., description="JWT access token")
     refresh_token: str = Field(..., description="JWT refresh token")
     expires_in: int = Field(..., description="Access token expiration time in seconds")
     account: AccountResponse = Field(..., description="Account information")
     user: UserResponse = Field(..., description="User information")
+
+
+class RegistrationResponse(BaseModel):
+    """Response for successful registration (verification required)."""
+
+    message: str = Field(..., description="Success message instructing to verify email")
+    user: UserResponse = Field(..., description="User information")
+    account: AccountResponse = Field(..., description="Account information")
 
 
 class ValidationErrorDetail(BaseModel):
@@ -135,7 +143,6 @@ class OAuthCallbackRequest(BaseModel):
     redirect_uri: str = Field(..., description="Original redirect URI used in authorize request")
 
 
-
 class OAuthCallbackResponse(AuthResponse):
     """Response for successful OAuth callback authentication."""
 
@@ -156,4 +163,3 @@ class VerifyEmailRequest(BaseModel):
     """Request body for verifying email with token."""
 
     token: str = Field(..., description="Verification token")
-
