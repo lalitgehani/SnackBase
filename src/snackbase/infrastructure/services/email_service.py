@@ -5,7 +5,8 @@ and comprehensive logging for audit purposes.
 """
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,10 +21,84 @@ from snackbase.infrastructure.persistence.repositories.email_log_repository impo
 from snackbase.infrastructure.persistence.repositories.email_template_repository import (
     EmailTemplateRepository,
 )
+from snackbase.infrastructure.security.encryption import EncryptionService
+from snackbase.infrastructure.services.email.aws_ses_provider import (
+    AWSESProvider,
+    AWSESSettings,
+)
 from snackbase.infrastructure.services.email.email_provider import EmailProvider
+from snackbase.infrastructure.services.email.resend_provider import (
+    ResendProvider,
+    ResendSettings,
+)
+from snackbase.infrastructure.services.email.smtp_provider import (
+    SMTPProvider,
+    SMTPSettings,
+)
 from snackbase.infrastructure.services.email.template_renderer import get_template_renderer
 
 logger = get_logger(__name__)
+
+SYSTEM_ACCOUNT_ID = "00000000-0000-0000-0000-000000000000"
+
+
+class ProviderCache:
+    """Cache for email provider instances with TTL."""
+
+    def __init__(self, ttl_seconds: int = 300) -> None:
+        """Initialize the provider cache.
+
+        Args:
+            ttl_seconds: Time-to-live for cached providers (default: 5 minutes).
+        """
+        self.ttl_seconds = ttl_seconds
+        self._cache: dict[
+            str, tuple[tuple[EmailProvider, str, str, Optional[str]], datetime]
+        ] = {}
+
+    def get(
+        self, key: str
+    ) -> Optional[tuple[EmailProvider, str, str, Optional[str]]]:
+        """Get a provider from cache if not expired.
+
+        Args:
+            key: Cache key (typically account_id).
+
+        Returns:
+            Cached provider tuple if found and not expired, None otherwise.
+        """
+        if key not in self._cache:
+            return None
+
+        provider_tuple, cached_at = self._cache[key]
+        if datetime.now(UTC) - cached_at > timedelta(seconds=self.ttl_seconds):
+            # Expired, remove from cache
+            del self._cache[key]
+            return None
+
+        return provider_tuple
+
+    def set(
+        self, key: str, provider_tuple: tuple[EmailProvider, str, str, Optional[str]]
+    ) -> None:
+        """Store a provider tuple in cache.
+
+        Args:
+            key: Cache key (typically account_id).
+            provider_tuple: Provider tuple to cache (provider, from_email, from_name, reply_to).
+        """
+        self._cache[key] = (provider_tuple, datetime.now(UTC))
+
+    def invalidate(self, key: Optional[str] = None) -> None:
+        """Invalidate cache entries.
+
+        Args:
+            key: Specific cache key to invalidate. If None, clears entire cache.
+        """
+        if key is None:
+            self._cache.clear()
+        elif key in self._cache:
+            del self._cache[key]
 
 
 class EmailService:
@@ -38,6 +113,7 @@ class EmailService:
         template_repository: EmailTemplateRepository,
         log_repository: EmailLogRepository,
         config_repository: ConfigurationRepository,
+        encryption_service: EncryptionService,
     ) -> None:
         """Initialize the email service.
 
@@ -45,11 +121,159 @@ class EmailService:
             template_repository: Repository for email templates.
             log_repository: Repository for email logs.
             config_repository: Repository for configuration settings.
+            encryption_service: Encryption service for decrypting provider configs.
         """
         self.template_repository = template_repository
         self.log_repository = log_repository
         self.config_repository = config_repository
+        self.encryption_service = encryption_service
         self.renderer = get_template_renderer()
+        self._provider_cache = ProviderCache(ttl_seconds=300)  # 5-minute TTL
+
+    def _create_provider(self, provider_name: str, config: dict) -> EmailProvider:
+        """Factory method to create provider instances from configuration.
+
+        Args:
+            provider_name: Name of the provider (smtp, aws_ses, resend).
+            config: Decrypted configuration dictionary.
+
+        Returns:
+            Instantiated email provider.
+
+        Raises:
+            ValueError: If provider name is not recognized.
+        """
+        if provider_name == "smtp":
+            settings = SMTPSettings(**config)
+            return SMTPProvider(settings)
+        elif provider_name == "aws_ses":
+            settings = AWSESSettings(**config)
+            return AWSESProvider(settings)
+        elif provider_name == "resend":
+            settings = ResendSettings(**config)
+            return ResendProvider(settings)
+        else:
+            raise ValueError(f"Unknown email provider: {provider_name}")
+
+    async def _select_provider(
+        self,
+        session: AsyncSession,
+        account_id: str,
+    ) -> tuple[EmailProvider, str, str, Optional[str]]:
+        """Select the appropriate email provider for the account.
+
+        Selection logic:
+        1. Check for account-specific enabled provider
+        2. Fall back to system-level enabled provider
+        3. Return error if no enabled provider found
+
+        Args:
+            session: Database session.
+            account_id: Account ID for provider selection.
+
+        Returns:
+            Tuple of (provider, from_email, from_name, reply_to).
+
+        Raises:
+            ValueError: If no enabled email provider is configured.
+        """
+        # Try account-specific provider first
+        account_configs = await self.config_repository.list_configs(
+            category="email_providers",
+            account_id=account_id,
+            is_system=False,
+            enabled_only=True,
+        )
+
+        # If no account-specific config, try system-level
+        if not account_configs:
+            logger.debug(
+                "No account-specific email provider, falling back to system",
+                account_id=account_id,
+            )
+            account_configs = await self.config_repository.list_configs(
+                category="email_providers",
+                account_id=SYSTEM_ACCOUNT_ID,
+                is_system=True,
+                enabled_only=True,
+            )
+
+        if not account_configs:
+            error_msg = (
+                "No enabled email provider configured. "
+                "Please configure an email provider (SMTP, AWS SES, or Resend) "
+                "before sending emails."
+            )
+            logger.error(error_msg, account_id=account_id)
+            raise ValueError(error_msg)
+
+        # Use the first enabled provider (they're ordered by priority)
+        config_model = account_configs[0]
+        provider_name = config_model.provider_name
+
+        # Decrypt configuration
+        decrypted_config = self.encryption_service.decrypt_dict(config_model.config)
+
+        # Create provider instance
+        provider = self._create_provider(provider_name, decrypted_config)
+
+        # Extract email settings
+        from_email = decrypted_config.get("from_email", "noreply@snackbase.io")
+        from_name = decrypted_config.get("from_name", "SnackBase")
+        reply_to = decrypted_config.get("reply_to")
+
+        logger.info(
+            "Email provider selected",
+            provider=provider_name,
+            account_id=account_id,
+            is_system=config_model.is_system,
+        )
+
+        return provider, from_email, from_name, reply_to
+
+    async def _get_provider(
+        self,
+        session: AsyncSession,
+        account_id: str,
+    ) -> tuple[EmailProvider, str, str, Optional[str]]:
+        """Get email provider with caching.
+
+        Args:
+            session: Database session.
+            account_id: Account ID for provider selection.
+
+        Returns:
+            Tuple of (provider, from_email, from_name, reply_to).
+        """
+        # Check cache first
+        cache_key = f"provider:{account_id}"
+        cached_result = self._provider_cache.get(cache_key)
+
+        if cached_result is not None:
+            logger.debug("Using cached email provider", account_id=account_id)
+            return cached_result
+
+        # Select provider
+        result = await self._select_provider(session, account_id)
+
+        # Cache the full result tuple
+        self._provider_cache.set(cache_key, result)
+
+        return result
+
+    def invalidate_provider_cache(self, account_id: Optional[str] = None) -> None:
+        """Invalidate provider cache.
+
+        Args:
+            account_id: Specific account to invalidate. If None, clears entire cache.
+        """
+        if account_id is None:
+            self._provider_cache.invalidate()
+            logger.info("Email provider cache cleared")
+        else:
+            cache_key = f"provider:{account_id}"
+            self._provider_cache.invalidate(cache_key)
+            logger.info("Email provider cache invalidated", account_id=account_id)
 
     async def send_email(
         self,
@@ -58,14 +282,10 @@ class EmailService:
         subject: str,
         html_body: str,
         text_body: str,
-        provider: EmailProvider,
-        from_email: str,
-        from_name: str,
         account_id: str,
         template_type: str = "custom",
-        reply_to: str | None = None,
     ) -> bool:
-        """Send an email using the specified provider.
+        """Send an email using automatic provider selection.
 
         Args:
             session: Database session for logging.
@@ -73,20 +293,21 @@ class EmailService:
             subject: Email subject line.
             html_body: HTML email body.
             text_body: Plain text email body.
-            provider: Email provider instance.
-            from_email: Sender email address.
-            from_name: Sender display name.
-            account_id: Account ID for logging.
+            account_id: Account ID for provider selection and logging.
             template_type: Template type for logging (default: 'custom').
-            reply_to: Optional reply-to email address.
 
         Returns:
             True if email was sent successfully, False otherwise.
         """
         log_id = str(uuid.uuid4())
-        provider_name = provider.__class__.__name__.replace("Provider", "").lower()
 
         try:
+            # Get provider for this account
+            provider, from_email, from_name, reply_to = await self._get_provider(
+                session, account_id
+            )
+            provider_name = provider.__class__.__name__.replace("Provider", "").lower()
+
             # Send email via provider
             success = await provider.send_email(
                 to=to,
@@ -199,26 +420,18 @@ class EmailService:
         to: str,
         template_type: str,
         variables: dict[str, str],
-        provider: EmailProvider,
-        from_email: str,
-        from_name: str,
         account_id: str,
         locale: str = "en",
-        reply_to: str | None = None,
     ) -> bool:
-        """Send an email using a template.
+        """Send an email using a template with automatic provider selection.
 
         Args:
             session: Database session.
             to: Recipient email address.
             template_type: Template type (e.g., 'email_verification').
             variables: Dictionary of variables for template rendering.
-            provider: Email provider instance.
-            from_email: Sender email address.
-            from_name: Sender display name.
-            account_id: Account ID.
+            account_id: Account ID for provider selection.
             locale: Language/locale code (default: 'en').
-            reply_to: Optional reply-to email address.
 
         Returns:
             True if email was sent successfully, False otherwise.
@@ -260,10 +473,6 @@ class EmailService:
             subject=subject,
             html_body=html_body,
             text_body=text_body,
-            provider=provider,
-            from_email=from_email,
-            from_name=from_name,
             account_id=account_id,
             template_type=template_type,
-            reply_to=reply_to,
         )

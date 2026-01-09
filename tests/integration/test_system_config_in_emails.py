@@ -14,12 +14,15 @@ async def test_system_variables_merged_into_template():
     template_repo = MagicMock()
     log_repo = MagicMock()
     config_repo = MagicMock()
+    encryption_service = MagicMock()
+    encryption_service.decrypt_dict = MagicMock(side_effect=lambda x: x)  # Pass-through
     
     # Create email service
     email_service = EmailService(
         template_repository=template_repo,
         log_repository=log_repo,
         config_repository=config_repo,
+        encryption_service=encryption_service,
     )
     
     # Mock template with system variables
@@ -57,33 +60,59 @@ async def test_system_variables_merged_into_template():
     template_repo.get_template = AsyncMock(return_value=mock_template)
     config_repo.get_config = AsyncMock(return_value=mock_system_config)
     
+    # Mock provider configuration for provider selection
+    mock_provider_config = ConfigurationModel(
+        id="provider-config-id",
+        account_id="test-account-id",
+        category="email_providers",
+        provider_name="smtp",
+        display_name="SMTP",
+        config={
+            "host": "smtp.example.com",
+            "port": 587,
+            "username": "user",
+            "password": "pass",
+            "use_tls": True,
+            "from_email": "noreply@testapp.com",
+            "from_name": "TestApp",
+        },
+        enabled=True,
+        is_builtin=False,
+        is_system=False,
+        priority=0,
+    )
+    
+    # Setup config_repo to return provider config for list_configs
+    config_repo.list_configs = AsyncMock(return_value=[mock_provider_config])
+    
     # Mock provider
     mock_provider = MagicMock()
     mock_provider.send_email = AsyncMock(return_value=True)
-    mock_provider.__class__.__name__ = "MockProvider"
+    mock_provider.__class__.__name__ = "SMTPProvider"
     
-    # Mock session and log creation
-    mock_session = MagicMock()
-    log_repo.create = AsyncMock()
-    mock_session.commit = AsyncMock()
-    
-    # Call send_template_email with user variables
-    user_variables = {
-        "verification_url": "https://testapp.com/verify/abc123",
-        "user_name": "John Doe",
-    }
-    
-    result = await email_service.send_template_email(
-        session=mock_session,
-        to="test@example.com",
-        template_type="email_verification",
-        variables=user_variables,
-        provider=mock_provider,
-        from_email="noreply@testapp.com",
-        from_name="TestApp",
-        account_id="test-account-id",
-        locale="en",
-    )
+    # Patch the provider creation to return our mock
+    with MagicMock() as mock_create:
+        email_service._create_provider = MagicMock(return_value=mock_provider)
+        
+        # Mock session and log creation
+        mock_session = MagicMock()
+        log_repo.create = AsyncMock()
+        mock_session.commit = AsyncMock()
+        
+        # Call send_template_email with user variables (no provider params)
+        user_variables = {
+            "verification_url": "https://testapp.com/verify/abc123",
+            "user_name": "John Doe",
+        }
+        
+        result = await email_service.send_template_email(
+            session=mock_session,
+            to="test@example.com",
+            template_type="email_verification",
+            variables=user_variables,
+            account_id="test-account-id",
+            locale="en",
+        )
     
     # Verify system config was fetched
     assert config_repo.get_config.called
@@ -121,12 +150,15 @@ async def test_user_variables_override_system_variables():
     template_repo = MagicMock()
     log_repo = MagicMock()
     config_repo = MagicMock()
+    encryption_service = MagicMock()
+    encryption_service.decrypt_dict = MagicMock(side_effect=lambda x: x)  # Pass-through
     
     # Create email service
     email_service = EmailService(
         template_repository=template_repo,
         log_repository=log_repo,
         config_repository=config_repo,
+        encryption_service=encryption_service,
     )
     
     # Mock template
@@ -164,10 +196,38 @@ async def test_user_variables_override_system_variables():
     template_repo.get_template = AsyncMock(return_value=mock_template)
     config_repo.get_config = AsyncMock(return_value=mock_system_config)
     
+    # Mock provider configuration for provider selection
+    mock_provider_config = ConfigurationModel(
+        id="provider-config-id",
+        account_id="test-account-id",
+        category="email_providers",
+        provider_name="smtp",
+        display_name="SMTP",
+        config={
+            "host": "smtp.example.com",
+            "port": 587,
+            "username": "user",
+            "password": "pass",
+            "use_tls": True,
+            "from_email": "noreply@test.com",
+            "from_name": "Test",
+        },
+        enabled=True,
+        is_builtin=False,
+        is_system=False,
+        priority=0,
+    )
+    
+    # Setup config_repo to return provider config for list_configs
+    config_repo.list_configs = AsyncMock(return_value=[mock_provider_config])
+    
     # Mock provider
     mock_provider = MagicMock()
     mock_provider.send_email = AsyncMock(return_value=True)
-    mock_provider.__class__.__name__ = "MockProvider"
+    mock_provider.__class__.__name__ = "SMTPProvider"
+    
+    # Patch the provider creation to return our mock
+    email_service._create_provider = MagicMock(return_value=mock_provider)
     
     # Mock session
     mock_session = MagicMock()
@@ -184,9 +244,6 @@ async def test_user_variables_override_system_variables():
         to="test@example.com",
         template_type="custom",
         variables=user_variables,
-        provider=mock_provider,
-        from_email="noreply@test.com",
-        from_name="Test",
         account_id="test-account-id",
         locale="en",
     )

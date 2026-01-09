@@ -524,27 +524,76 @@ async def test_provider_connection(
             SMTPProvider,
             SMTPSettings,
         )
+        from snackbase.infrastructure.services.email.aws_ses_provider import (
+            AWSESProvider,
+            AWSESSettings,
+        )
+        from snackbase.infrastructure.services.email.resend_provider import (
+            ResendProvider,
+            ResendSettings,
+        )
         
-        # Handle SMTP provider separately since it uses a different pattern
-        if provider_name == "smtp" and category == "email_providers":
-            try:
-                smtp_settings = SMTPSettings(**config_values)
-                smtp_provider = SMTPProvider(smtp_settings)
-                success, message = await asyncio.wait_for(
-                    smtp_provider.test_connection(),
-                    timeout=10.0
-                )
-                return {"success": success, "message": message or "SMTP connection successful"}
-            except asyncio.TimeoutError:
-                return {
-                    "success": False,
-                    "message": (
-                        "Connection test timed out after 10 seconds. "
-                        "Check your network or SMTP server settings."
-                    ),
-                }
-            except Exception as e:
-                return {"success": False, "message": f"SMTP test failed: {str(e)}"}
+        # Handle email providers
+        if category == "email_providers":
+            if provider_name == "smtp":
+                try:
+                    smtp_settings = SMTPSettings(**config_values)
+                    smtp_provider = SMTPProvider(smtp_settings)
+                    success, message = await asyncio.wait_for(
+                        smtp_provider.test_connection(),
+                        timeout=10.0
+                    )
+                    return {"success": success, "message": message or "SMTP connection successful"}
+                except asyncio.TimeoutError:
+                    return {
+                        "success": False,
+                        "message": (
+                            "Connection test timed out after 10 seconds. "
+                            "Check your network or SMTP server settings."
+                        ),
+                    }
+                except Exception as e:
+                    return {"success": False, "message": f"SMTP test failed: {str(e)}"}
+            
+            elif provider_name == "aws_ses":
+                try:
+                    ses_settings = AWSESSettings(**config_values)
+                    ses_provider = AWSESProvider(ses_settings)
+                    success, message = await asyncio.wait_for(
+                        ses_provider.test_connection(),
+                        timeout=10.0
+                    )
+                    return {"success": success, "message": message or "AWS SES connection successful"}
+                except asyncio.TimeoutError:
+                    return {
+                        "success": False,
+                        "message": (
+                            "Connection test timed out after 10 seconds. "
+                            "Check your network or AWS credentials."
+                        ),
+                    }
+                except Exception as e:
+                    return {"success": False, "message": f"AWS SES test failed: {str(e)}"}
+            
+            elif provider_name == "resend":
+                try:
+                    resend_settings = ResendSettings(**config_values)
+                    resend_provider = ResendProvider(resend_settings)
+                    success, message = await asyncio.wait_for(
+                        resend_provider.test_connection(),
+                        timeout=10.0
+                    )
+                    return {"success": success, "message": message or "Resend connection successful"}
+                except asyncio.TimeoutError:
+                    return {
+                        "success": False,
+                        "message": (
+                            "Connection test timed out after 10 seconds. "
+                            "Check your network or API key."
+                        ),
+                    }
+                except Exception as e:
+                    return {"success": False, "message": f"Resend test failed: {str(e)}"}
         
         handlers = {
             "google": GoogleOAuthHandler,

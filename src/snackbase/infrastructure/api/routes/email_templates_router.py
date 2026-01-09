@@ -28,10 +28,6 @@ from snackbase.infrastructure.persistence.repositories.email_log_repository impo
 from snackbase.infrastructure.persistence.repositories.email_template_repository import (
     EmailTemplateRepository,
 )
-from snackbase.infrastructure.services.email.smtp_provider import (
-    SMTPProvider,
-    SMTPSettings,
-)
 from snackbase.infrastructure.services.email_service import EmailService
 
 router = APIRouter(tags=["admin", "email"])
@@ -278,7 +274,7 @@ async def send_test_email(
         Success message with email details.
 
     Raises:
-        HTTPException: 404 if template not found, 400 if SMTP not configured,
+        HTTPException: 404 if template not found, 400 if no email provider configured,
                       500 if sending fails.
     """
     try:
@@ -292,54 +288,26 @@ async def send_test_email(
                 detail=f"Email template not found: {template_id}",
             )
 
-        # Get SMTP configuration
+        # Initialize email service with encryption service
         config_repo = ConfigurationRepository(db)
-        smtp_configs = await config_repo.list_configs(
-            category="email_providers",
-            enabled_only=True,
-        )
-
-        # Find first enabled SMTP config
-        smtp_config = next(
-            (c for c in smtp_configs if c.provider_name == "smtp"),
-            None,
-        )
-
-        if smtp_config is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No enabled SMTP provider configured. "
-                "Please configure SMTP before sending test emails.",
-            )
-
-        # Decrypt SMTP configuration
-        registry = request.app.state.config_registry
-        smtp_values = registry.encryption_service.decrypt_dict(smtp_config.config)
-
-        # Create SMTP provider
-        smtp_settings = SMTPSettings(**smtp_values)
-        smtp_provider = SMTPProvider(smtp_settings)
-
-        # Initialize email service
         log_repo = EmailLogRepository()
+        registry = request.app.state.config_registry
+        
         email_service = EmailService(
             template_repository=template_repo,
             log_repository=log_repo,
             config_repository=config_repo,
+            encryption_service=registry.encryption_service,
         )
 
-        # Send test email
+        # Send test email (provider selection is automatic)
         success = await email_service.send_template_email(
             session=db,
             to=test_request.recipient_email,
             template_type=template.template_type,
             variables=test_request.variables,
-            provider=smtp_provider,
-            from_email=smtp_values.get("from_email", "noreply@snackbase.io"),
-            from_name=smtp_values.get("from_name", "SnackBase"),
             account_id=template.account_id,
             locale=template.locale,
-            reply_to=smtp_values.get("reply_to"),
         )
 
         if not success:
