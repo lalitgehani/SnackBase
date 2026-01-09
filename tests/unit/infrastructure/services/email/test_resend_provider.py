@@ -205,3 +205,34 @@ async def test_resend_test_connection_rate_limit(
         assert success is False
         assert message is not None
         assert "Rate limit" in message
+
+
+@pytest.mark.asyncio
+async def test_resend_test_connection_encoding_error(
+    resend_provider: ResendProvider,
+) -> None:
+    """Test connection test deals with encoding error (invalid chars in key)."""
+    with mock.patch("resend.Domains.list") as mock_list:
+        # Simulate the error message that comes from http client
+        error = Exception("'latin-1' codec can't encode characters in position 7-14")
+        mock_list.side_effect = error
+
+        success, message = await resend_provider.test_connection()
+
+        assert success is False
+        assert message is not None
+        assert "API Key contains invalid characters" in message
+
+
+def test_resend_init_strips_api_key() -> None:
+    """Test that the provider strips whitespace from the API key."""
+    settings = ResendSettings(
+        api_key="  re_test_key_with_spaces  ",
+        from_email="noreply@example.com",
+    )
+    
+    # Provider init should strip it
+    ResendProvider(settings)
+    
+    # Check that resend.api_key was set correctly
+    assert resend.api_key == "re_test_key_with_spaces"

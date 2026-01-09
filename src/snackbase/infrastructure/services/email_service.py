@@ -284,6 +284,7 @@ class EmailService:
         text_body: str,
         account_id: str,
         template_type: str = "custom",
+        variables: dict[str, str] | None = None,
     ) -> bool:
         """Send an email using automatic provider selection.
 
@@ -295,6 +296,7 @@ class EmailService:
             text_body: Plain text email body.
             account_id: Account ID for provider selection and logging.
             template_type: Template type for logging (default: 'custom').
+            variables: Template variables used for rendering (optional, for logging).
 
         Returns:
             True if email was sent successfully, False otherwise.
@@ -328,6 +330,7 @@ class EmailService:
                 provider=provider_name,
                 status="sent" if success else "failed",
                 error_message=None if success else "Provider returned failure",
+                variables=variables,
                 sent_at=datetime.now(UTC),
             )
             await self.log_repository.create(session, log)
@@ -351,6 +354,7 @@ class EmailService:
                 provider=provider_name,
                 status="failed",
                 error_message=str(e),
+                variables=variables,
                 sent_at=datetime.now(UTC),
             )
             await self.log_repository.create(session, log)
@@ -475,4 +479,5 @@ class EmailService:
             text_body=text_body,
             account_id=account_id,
             template_type=template_type,
+            variables=merged_variables,
         )

@@ -39,7 +39,11 @@ class ResendProvider(EmailProvider):
         """
         self.settings = settings
         # Set the API key for the Resend SDK
-        resend.api_key = settings.api_key
+        # Strip whitespace to prevent common copy-paste errors
+        if settings.api_key:
+            resend.api_key = settings.api_key.strip()
+        else:
+            resend.api_key = ""
 
     async def send_email(
         self,
@@ -110,6 +114,19 @@ class ResendProvider(EmailProvider):
                     error=error_message,
                     to=to,
                 )
+            elif "latin-1" in error_message and "encode" in error_message:
+                logger.error(
+                    "Resend API key contains invalid characters",
+                    error=error_message,
+                    to=to,
+                )
+                # Re-raise with a cleaner message or let it bubble up?
+                # For send_email, re-raising the original exception is safer for now 
+                # but logged correctly.
+                # Actually, let's wrap it in an Exception with clear message so the caller knows.
+                raise Exception(
+                    "Resend API Key contains invalid characters (check for hidden spaces or formatting)"
+                ) from e
             elif "rate limit" in error_message.lower():
                 logger.error(
                     "Resend rate limit exceeded",
@@ -166,6 +183,11 @@ class ResendProvider(EmailProvider):
                 error_msg = "Resend connection failed: Invalid API key"
             elif "rate limit" in error_message.lower():
                 error_msg = "Resend connection failed: Rate limit exceeded"
+            elif "latin-1" in error_message and "encode" in error_message:
+                # This happens when the API key or headers contain non-ASCII characters
+                error_msg = (
+                    "Resend connection failed: API Key contains invalid characters (check for hidden spaces or formatting)"
+                )
             else:
                 error_msg = f"Resend connection failed: {error_message}"
 

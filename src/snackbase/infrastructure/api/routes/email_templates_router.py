@@ -12,6 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from snackbase.core.logging import get_logger
 from snackbase.infrastructure.api.dependencies import SuperadminUser
 from snackbase.infrastructure.api.schemas.email_schemas import (
+    EmailLogListResponse,
+    EmailLogResponse,
     EmailTemplateRenderRequest,
     EmailTemplateRenderResponse,
     EmailTemplateResponse,
@@ -341,3 +343,123 @@ async def send_test_email(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to send test email: {str(e)}",
         )
+
+
+@router.get("/logs")
+async def list_email_logs(
+    _admin: SuperadminUser,
+    status_filter: str | None = None,
+    template_type: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    page: int = 1,
+    page_size: int = 25,
+    db: AsyncSession = Depends(get_db_session),
+) -> EmailLogListResponse:
+    """List email logs with optional filters and pagination.
+
+    Args:
+        status_filter: Optional filter by status ('sent', 'failed', 'pending').
+        template_type: Optional filter by template type.
+        start_date: Optional filter by start date (ISO format).
+        end_date: Optional filter by end date (ISO format).
+        page: Page number (default: 1).
+        page_size: Number of logs per page (default: 25, max: 100).
+
+    Returns:
+        Paginated list of email logs.
+    """
+    try:
+        from datetime import datetime
+
+        # Validate and limit page_size
+        page_size = min(page_size, 100)
+        offset = (page - 1) * page_size
+
+        # Parse dates if provided
+        start_datetime = None
+        end_datetime = None
+        if start_date:
+            try:
+                start_datetime = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail=f"Invalid start_date format: {start_date}",
+                )
+        if end_date:
+            try:
+                end_datetime = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail=f"Invalid end_date format: {end_date}",
+                )
+
+        # Get logs from repository
+        log_repo = EmailLogRepository()
+        logs, total = await log_repo.list_logs(
+            session=db,
+            status=status_filter,
+            template_type=template_type,
+            start_date=start_datetime,
+            end_date=end_datetime,
+            limit=page_size,
+            offset=offset,
+        )
+
+        return EmailLogListResponse(
+            logs=[EmailLogResponse.model_validate(log) for log in logs],
+            total=total,
+            page=page,
+            page_size=page_size,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to list email logs", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to list email logs",
+        )
+
+
+@router.get("/logs/{log_id}")
+async def get_email_log(
+    _admin: SuperadminUser,
+    log_id: str,
+    db: AsyncSession = Depends(get_db_session),
+) -> EmailLogResponse:
+    """Get email log by ID.
+
+    Args:
+        log_id: Log ID to retrieve.
+
+    Returns:
+        Email log details.
+
+    Raises:
+        HTTPException: 404 if log not found.
+    """
+    try:
+        log_repo = EmailLogRepository()
+        log = await log_repo.get_by_id(session=db, log_id=log_id)
+
+        if log is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Email log not found: {log_id}",
+            )
+
+        return EmailLogResponse.model_validate(log)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to get email log", log_id=log_id, error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get email log",
+        )
+

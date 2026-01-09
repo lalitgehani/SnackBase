@@ -39,6 +39,25 @@ export interface EmailTemplateRenderResponse {
   text_body: string;
 }
 
+export interface EmailLog {
+  id: string;
+  account_id: string;
+  template_type: string;
+  recipient_email: string;
+  provider: string;
+  status: string;
+  error_message: string | null;
+  variables: Record<string, string> | null;
+  sent_at: string;
+}
+
+export interface EmailLogListResponse {
+  logs: EmailLog[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
 export const emailService = {
   listEmailTemplates: async (params?: {
     template_type?: string;
@@ -91,4 +110,32 @@ export const emailService = {
     );
     return response.data;
   },
+
+  listEmailLogs: async (params?: {
+    status_filter?: string;
+    template_type?: string;
+    start_date?: string;
+    end_date?: string;
+    page?: number;
+    page_size?: number;
+  }): Promise<EmailLogListResponse> => {
+    const queryParams = new URLSearchParams();
+    if (params?.status_filter) queryParams.append('status_filter', params.status_filter);
+    if (params?.template_type) queryParams.append('template_type', params.template_type);
+    if (params?.start_date) queryParams.append('start_date', params.start_date);
+    if (params?.end_date) queryParams.append('end_date', params.end_date);
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.page_size) queryParams.append('page_size', params.page_size.toString());
+
+    const response = await api.get<EmailLogListResponse>(
+      `/admin/email/logs?${queryParams.toString()}`
+    );
+    return response.data;
+  },
+
+  getEmailLog: async (id: string): Promise<EmailLog> => {
+    const response = await api.get<EmailLog>(`/admin/email/logs/${id}`);
+    return response.data;
+  },
 };
+

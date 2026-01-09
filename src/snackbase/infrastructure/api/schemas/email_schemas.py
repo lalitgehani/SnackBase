@@ -96,3 +96,48 @@ class EmailTemplateRenderResponse(BaseModel):
     subject: str
     html_body: str
     text_body: str
+
+
+class EmailLogResponse(BaseModel):
+    """Response schema for email log data.
+
+    Attributes:
+        id: Log ID (UUID string).
+        account_id: Account ID this log belongs to.
+        template_type: Template type used (e.g., 'email_verification').
+        recipient_email: Email address of the recipient.
+        provider: Email provider used (e.g., 'smtp', 'ses', 'resend').
+        status: Delivery status ('sent', 'failed', 'pending').
+        error_message: Error message if status is 'failed' (nullable).
+        variables: Template variables used for rendering (nullable).
+        sent_at: Timestamp when the email was sent or attempted.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    account_id: str
+    template_type: str
+    recipient_email: str
+    provider: str
+    status: str
+    error_message: str | None = None
+    variables: dict[str, str] | None = None
+    sent_at: datetime
+
+
+class EmailLogListResponse(BaseModel):
+    """Response schema for paginated email log list.
+
+    Attributes:
+        logs: List of email logs.
+        total: Total number of logs matching the filters.
+        page: Current page number.
+        page_size: Number of logs per page.
+    """
+
+    logs: list[EmailLogResponse]
+    total: int
+    page: int
+    page_size: int
+

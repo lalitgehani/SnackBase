@@ -32,6 +32,7 @@ class EmailLog:
     provider: str
     status: str
     error_message: str | None = None
+    variables: dict[str, str] | None = None
     sent_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def __post_init__(self) -> None:

@@ -14,6 +14,8 @@ from sqlalchemy import (
     Text,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.types import JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from snackbase.infrastructure.persistence.database import Base
@@ -32,6 +34,7 @@ class EmailLogModel(Base):
         provider: Email provider used (e.g., 'smtp', 'ses', 'resend').
         status: Delivery status ('sent', 'failed', 'pending').
         error_message: Error message if status is 'failed' (nullable).
+        variables: Template variables used for rendering (nullable).
         sent_at: Timestamp when the email was sent or attempted.
     """
 
@@ -72,6 +75,11 @@ class EmailLogModel(Base):
         Text,
         nullable=True,
         comment="Error message if status is 'failed'",
+    )
+    variables: Mapped[dict[str, str] | None] = mapped_column(
+        JSON().with_variant(JSONB(), "postgresql"),
+        nullable=True,
+        comment="Template variables used for rendering",
     )
     sent_at: Mapped[datetime] = mapped_column(
         DateTime,
