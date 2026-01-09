@@ -69,6 +69,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # Register built-in authentication providers
         from snackbase.core.configuration.config_registry import ConfigurationRegistry
         from snackbase.infrastructure.configuration.providers import EmailPasswordProvider
+        from snackbase.infrastructure.configuration.providers.email.aws_ses import AWSESConfiguration
         from snackbase.infrastructure.configuration.providers.email.smtp import SMTPConfiguration
         from snackbase.infrastructure.configuration.providers.oauth import (
             AppleOAuthHandler,
@@ -114,6 +115,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 logo_url=smtp_provider.logo_url,
                 config_schema=smtp_provider.config_schema,
                 is_builtin=smtp_provider.is_builtin,
+            )
+
+            # Register AWS SES provider
+            aws_ses_provider = AWSESConfiguration()
+            config_registry.register_provider_definition(
+                category=aws_ses_provider.category,
+                provider_name=aws_ses_provider.provider_name,
+                display_name=aws_ses_provider.display_name,
+                logo_url=aws_ses_provider.logo_url,
+                config_schema=aws_ses_provider.config_schema,
+                is_builtin=aws_ses_provider.is_builtin,
             )
 
             # Register System Configuration
@@ -212,6 +224,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 providers=[
                     email_password_provider.provider_name,
                     smtp_provider.provider_name,
+                    aws_ses_provider.provider_name,
                     system_config.provider_name,
                     google_oauth_handler.provider_name,
                     github_oauth_handler.provider_name,
