@@ -29,6 +29,7 @@ dependencies = [
     "aiosmtplib>=5.0.0",
     "boto3>=1.42.24",
     "types-aiobotocore-ses>=3.1.0",
+    "resend>=2.0.0",
 ]
 
 [project.scripts]
