@@ -12,6 +12,7 @@ from snackbase.infrastructure.persistence.models.configuration import (
     OAuthStateModel,
 )
 from snackbase.infrastructure.persistence.models.email_log import EmailLogModel
+from snackbase.infrastructure.persistence.models.email_verification import EmailVerificationTokenModel
 from snackbase.infrastructure.persistence.models.email_template import EmailTemplateModel
 from snackbase.infrastructure.persistence.models.group import GroupModel
 from snackbase.infrastructure.persistence.models.invitation import InvitationModel
@@ -29,6 +30,7 @@ __all__ = [
     "ConfigurationModel",
     "OAuthStateModel",
     "EmailLogModel",
+    "EmailVerificationTokenModel",
     "EmailTemplateModel",
     "GroupModel",
     "InvitationModel",

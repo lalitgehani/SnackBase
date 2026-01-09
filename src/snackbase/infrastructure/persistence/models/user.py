@@ -30,6 +30,8 @@ class UserModel(Base):
         external_id: External provider's user ID for identity linking.
         external_email: Email from external provider (may differ from local email).
         profile_data: Additional profile data from external provider (JSON).
+        email_verified: Whether the user's email is verified.
+        email_verified_at: Timestamp when the email was verified.
         created_at: Timestamp when the user was created.
         updated_at: Timestamp when the user was last updated.
         last_login: Timestamp of last successful login.
@@ -71,6 +73,18 @@ class UserModel(Base):
         nullable=False,
         default=True,
         comment="Whether the user can log in",
+    )
+    email_verified: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="0",
+        comment="Whether the user's email is verified",
+    )
+    email_verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+        comment="Timestamp when the email was verified",
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
@@ -135,6 +149,11 @@ class UserModel(Base):
     )
     refresh_tokens: Mapped[list["RefreshTokenModel"]] = relationship(  # noqa: F821
         "RefreshTokenModel",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    email_verification_tokens: Mapped[list["EmailVerificationTokenModel"]] = relationship(  # noqa: F821
+        "EmailVerificationTokenModel",
         back_populates="user",
         cascade="all, delete-orphan",
     )
