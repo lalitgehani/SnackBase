@@ -24,6 +24,9 @@ import {
   Key,
   UserX,
   Search,
+  CheckCircle2,
+  AlertTriangle,
+  Mail,
 } from 'lucide-react';
 import CreateUserDialog from '@/components/users/CreateUserDialog';
 import EditUserDialog from '@/components/users/EditUserDialog';
@@ -35,6 +38,8 @@ import {
   updateUser,
   resetUserPassword,
   deactivateUser,
+  verifyUser,
+  resendUserVerification,
   type User,
   type UserListParams,
   type CreateUserRequest,
@@ -44,8 +49,10 @@ import { getAccounts, type AccountListItem } from '@/services/accounts.service';
 import { getRoles, type RoleListItem } from '@/services/roles.service';
 import { handleApiError } from '@/lib/api';
 import { DataTable, type Column } from '@/components/common/DataTable';
+import { useToast } from "@/hooks/use-toast";
 
 export default function UsersPage() {
+  const { toast } = useToast();
   const [data, setData] = useState<User[] | null>(null);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -135,6 +142,39 @@ export default function UsersPage() {
     await fetchUsers();
   };
 
+  const handleVerifyUser = async (userId: string) => {
+    try {
+      await verifyUser(userId);
+      toast({
+        title: "Success",
+        description: "User verified successfully",
+      });
+      await fetchUsers();
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: handleApiError(err),
+      });
+    }
+  };
+
+  const handleResendVerification = async (userId: string) => {
+    try {
+      await resendUserVerification(userId);
+      toast({
+        title: "Success",
+        description: "Verification email sent successfully",
+      });
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: handleApiError(err),
+      });
+    }
+  };
+
   const handleEdit = (user: User) => {
     setSelectedUser(user);
     setEditDialogOpen(true);
@@ -175,6 +215,24 @@ export default function UsersPage() {
         <Badge variant={user.is_active ? 'default' : 'secondary'}>
           {user.is_active ? 'Active' : 'Inactive'}
         </Badge>
+      )
+    },
+    {
+      header: 'Verified',
+      render: (user) => (
+        <div className="flex items-center gap-1.5">
+          {user.email_verified ? (
+            <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50 gap-1 pl-1">
+              <CheckCircle2 className="h-3 w-3" />
+              Verified
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50 gap-1 pl-1">
+              <AlertTriangle className="h-3 w-3" />
+              Pending
+            </Badge>
+          )}
+        </div>
       )
     },
     {
@@ -231,6 +289,35 @@ export default function UsersPage() {
           >
             <UserX className="h-4 w-4" />
           </Button>
+
+          {!user.email_verified && (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleVerifyUser(user.id);
+                }}
+                title="Verify user manually"
+                className="text-green-600 hover:text-green-700"
+              >
+                <CheckCircle2 className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleResendVerification(user.id);
+                }}
+                title="Resend verification email"
+                className="text-blue-600 hover:text-blue-700"
+              >
+                <Mail className="h-4 w-4" />
+              </Button>
+            </>
+          )}
         </div>
       )
     }
@@ -373,29 +460,6 @@ export default function UsersPage() {
           )}
 
           {/* Table */}
-
-
-          {/* Empty State visual embedded in DataTable if noDataMessage is simple string, but here we had actions.
-              DataTable supports complex noDataMessage? Currently it takes string.
-              But if data is empty, DataTable shows noDataMessage.
-              If we want the specific empty state with "Create User" button, we might need a custom empty state in DataTable or just wrap it.
-              Actually, the original code had a nice empty state.
-              DataTable implementation:
-                ) : data.length === 0 ? (
-                    <TableRow>
-                        <TableCell colSpan={columns.length} className="h-24 text-center text-muted-foreground">
-                            {noDataMessage}
-                        </TableCell>
-                    </TableRow>
-              It's simple. 
-              If I want strict parity, I should probably handle empty state outside if I want buttons.
-              But `DataTable` handles the "No data" row.
-              If `data` is empty, generic table shows "No data found" or custom message.
-              The original empty state had a button "Create User".
-              I'll just pass a simple message for now to `DataTable`. 
-              Or I can conditionally render `DataTable` only if `data.length > 0`.
-              Start simple.
-          */}
           {!loading && data && data.length === 0 && (
             <div className="text-center py-12">
               <UsersIcon className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
@@ -412,7 +476,6 @@ export default function UsersPage() {
             </div>
           )}
 
-          {/* We only render DataTable if data.length > 0 to preserve the custom empty state which has a button */}
           {!loading && data && data.length > 0 && (
             <DataTable
               data={data}

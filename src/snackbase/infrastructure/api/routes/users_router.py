@@ -4,6 +4,7 @@ Superadmin-only endpoints for managing users across all accounts.
 """
 
 import uuid
+from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -11,10 +12,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.core.logging import get_logger
+from snackbase.domain.services.email_verification_service import EmailVerificationService
 from snackbase.domain.services.password_validator import default_password_validator
 from snackbase.infrastructure.api.dependencies import (
     SuperadminUser,
     get_db_session,
+    get_verification_service,
     require_superadmin,
 )
 from snackbase.infrastructure.api.schemas.users_schemas import (
@@ -151,6 +154,8 @@ async def create_user(
         external_id=created_user.external_id,
         external_email=created_user.external_email,
         profile_data=created_user.profile_data,
+        email_verified=created_user.email_verified,
+        email_verified_at=created_user.email_verified_at,
         created_at=created_user.created_at,
         last_login=created_user.last_login,
     )
@@ -209,6 +214,8 @@ async def list_users(
                 external_id=user.external_id,
                 external_email=user.external_email,
                 profile_data=user.profile_data,
+                email_verified=user.email_verified,
+                email_verified_at=user.email_verified_at,
                 created_at=user.created_at,
                 last_login=user.last_login,
             )
@@ -258,6 +265,8 @@ async def get_user(
         external_id=user.external_id,
         external_email=user.external_email,
         profile_data=user.profile_data,
+        email_verified=user.email_verified,
+        email_verified_at=user.email_verified_at,
         created_at=user.created_at,
         last_login=user.last_login,
     )
@@ -360,6 +369,8 @@ async def update_user(
         external_id=updated_user.external_id,
         external_email=updated_user.external_email,
         profile_data=updated_user.profile_data,
+        email_verified=updated_user.email_verified,
+        email_verified_at=updated_user.email_verified_at,
         created_at=updated_user.created_at,
         last_login=updated_user.last_login,
     )
@@ -424,6 +435,95 @@ async def reset_user_password(
     )
 
     return {"message": "Password reset successfully"}
+
+
+@router.post(
+    "/{user_id}/verify",
+    status_code=status.HTTP_200_OK,
+    summary="Manually verify user email",
+)
+async def verify_user_email(
+    user_id: str,
+    current_user: Annotated[SuperadminUser, Depends(require_superadmin)],
+    user_repo: UserRepo,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> dict[str, str]:
+    """Manually mark a user's email as verified (superadmin only).
+    
+    This bypasses the email token flow and directly updates the user's status.
+    """
+    # Get user
+    user = await user_repo.get_by_id(user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    if user.email_verified:
+        return {"message": "User email is already verified"}
+
+    # Update verification status
+    user.email_verified = True
+    user.email_verified_at = datetime.now(timezone.utc)
+    await user_repo.update(user)
+    await session.commit()
+
+    logger.info(
+        "user_manually_verified",
+        user_id=user_id,
+        verified_by=current_user.user_id,
+    )
+
+    return {"message": "User email verified successfully"}
+
+
+@router.post(
+    "/{user_id}/resend-verification",
+    status_code=status.HTTP_200_OK,
+    summary="Resend verification email",
+)
+async def resend_user_verification(
+    user_id: str,
+    current_user: Annotated[SuperadminUser, Depends(require_superadmin)],
+    user_repo: UserRepo,
+    verification_service: Annotated[EmailVerificationService, Depends(get_verification_service)],
+) -> dict[str, str]:
+    """Resend verification email to a user (superadmin only)."""
+    # Get user
+    user = await user_repo.get_by_id(user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    if user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User email is already verified",
+        )
+
+    # Send verification email
+    success = await verification_service.send_verification_email(
+        user_id=user.id,
+        email=user.email,
+        account_id=user.account_id,
+    )
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to send verification email",
+        )
+
+    logger.info(
+        "verification_email_resent_by_admin",
+        user_id=user_id,
+        resent_by=current_user.user_id,
+    )
+
+    return {"message": f"Verification email sent to {user.email}"}
 
 
 @router.delete(

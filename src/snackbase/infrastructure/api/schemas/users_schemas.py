@@ -107,6 +107,8 @@ class UserResponse(BaseModel):
     external_id: str | None = Field(None, description="External provider's user ID")
     external_email: str | None = Field(None, description="Email from external provider")
     profile_data: dict | None = Field(None, description="Additional profile data from external provider")
+    email_verified: bool = Field(..., description="Whether the user's email is verified")
+    email_verified_at: datetime | None = Field(None, description="When the email was verified")
     created_at: datetime = Field(..., description="When the user was created")
     last_login: datetime | None = Field(None, description="Last successful login")
 
@@ -132,6 +134,8 @@ class UserListItem(BaseModel):
     external_id: str | None = Field(None, description="External provider's user ID")
     external_email: str | None = Field(None, description="Email from external provider")
     profile_data: dict | None = Field(None, description="Additional profile data from external provider")
+    email_verified: bool = Field(..., description="Whether the user's email is verified")
+    email_verified_at: datetime | None = Field(None, description="When the email was verified")
     created_at: datetime = Field(..., description="When the user was created")
     last_login: datetime | None = Field(None, description="Last successful login")
 

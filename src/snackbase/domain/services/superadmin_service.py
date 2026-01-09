@@ -127,6 +127,8 @@ class SuperadminService:
         # Hash password
         password_hash = hash_password(password)
 
+        from datetime import datetime, timezone
+
         # Create superadmin user
         user = UserModel(
             id=str(uuid.uuid4()),
@@ -135,6 +137,8 @@ class SuperadminService:
             password_hash=password_hash,
             role_id=admin_role.id,
             is_active=True,
+            email_verified=True,
+            email_verified_at=datetime.now(timezone.utc),
         )
 
         try:

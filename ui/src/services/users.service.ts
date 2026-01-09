@@ -16,6 +16,8 @@ export interface User {
   is_active: boolean;
   created_at: string;
   last_login: string | null;
+  email_verified: boolean;
+  email_verified_at: string | null;
 }
 
 export type UserListItem = User;
@@ -93,6 +95,22 @@ export const resetUserPassword = async (
   data: PasswordResetRequest
 ): Promise<{ message: string }> => {
   const response = await apiClient.put<{ message: string }>(`/users/${userId}/password`, data);
+  return response.data;
+};
+
+/**
+ * Manually verify a user's email
+ */
+export const verifyUser = async (userId: string): Promise<{ message: string }> => {
+  const response = await apiClient.post<{ message: string }>(`/users/${userId}/verify`);
+  return response.data;
+};
+
+/**
+ * Resend verification email to a user
+ */
+export const resendUserVerification = async (userId: string): Promise<{ message: string }> => {
+  const response = await apiClient.post<{ message: string }>(`/users/${userId}/resend-verification`);
   return response.data;
 };
 
