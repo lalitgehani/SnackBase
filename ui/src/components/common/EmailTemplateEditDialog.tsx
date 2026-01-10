@@ -24,7 +24,6 @@ import { emailService, type EmailTemplate, type EmailTemplateUpdate } from '@/se
 import { adminService, type Configuration } from '@/services/admin.service';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2, Send, CheckCircle2, XCircle } from 'lucide-react';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 interface EmailTemplateEditDialogProps {
     template: EmailTemplate | null;

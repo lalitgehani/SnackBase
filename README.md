@@ -15,6 +15,10 @@ SnackBase is a Python/FastAPI-based BaaS providing auto-generated REST APIs, mul
 
 **Phase 1: Foundation & MVP** (92% Complete - 12/13 features)
 
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/new?template=https%3A%2F%2Fgithub.com%2Flalitgehani%2Fsnackbase&envs=SNACKBASE_SECRET_KEY%2CSNACKBASE_ENCRYPTION_KEY&optionalEnvs=SNACKBASE_SUPERADMIN_EMAIL%2CSNACKBASE_SUPERADMIN_PASSWORD)
+
+> **Note**: For the button above to work, you must fork this repository and update the URL in the button link to point to your fork.
+
 - [x] F1.1: Project Scaffolding & Architecture Setup
 - [x] F1.2: Database Schema & Core System Tables
 - [x] F1.3: Account Registration
@@ -229,6 +233,21 @@ SNACKBASE_LOG_LEVEL=INFO
 SNACKBASE_LOG_FORMAT=json
 ```
 
+## Deployment
+
+### One-Click Deployment (Railway)
+
+SnackBase is ready for one-click deployment on Railway with a managed PostgreSQL database.
+
+1. Fork this repository.
+2. Click the **Deploy on Railway** button above.
+3. Railway will prompt you for the required environment variables:
+   - `SNACKBASE_SECRET_KEY`
+   - `SNACKBASE_ENCRYPTION_KEY`
+4. The database will be provisioned automatically.
+
+See the [Deployment Guide](docs/deployment.md) for other platforms.
+
 ## API Structure
 
 ```
@@ -369,6 +388,7 @@ async def send_post_notification(record, context):
 ```
 
 Built-in hooks (cannot be unregistered):
+
 - `timestamp_hook` - Auto-sets created_at/updated_at
 - `account_isolation_hook` - Enforces account_id filtering
 - `created_by_hook` - Sets created_by/updated_by user
