@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import and_, delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from snackbase.infrastructure.persistence.models import InvitationModel
 
@@ -60,6 +61,53 @@ class InvitationRepository:
         )
         return result.scalar_one_or_none()
 
+    async def list_invitations(
+        self,
+        account_id: str | None = None,
+        status: str | None = None,
+    ) -> list[InvitationModel]:
+        """List invitations with optional filtering.
+
+        Args:
+            account_id: Optional account ID to filter by.
+            status: Optional status filter.
+
+        Returns:
+            List of invitation models.
+        """
+        query = select(InvitationModel)
+
+        if account_id:
+            query = query.where(InvitationModel.account_id == account_id)
+
+        now = datetime.now(timezone.utc)
+
+        if status == "pending":
+            query = query.where(
+                and_(
+                    InvitationModel.accepted_at.is_(None),
+                    InvitationModel.expires_at > now,
+                )
+            )
+        elif status == "accepted":
+            query = query.where(InvitationModel.accepted_at.isnot(None))
+        elif status == "expired":
+            query = query.where(
+                and_(
+                    InvitationModel.accepted_at.is_(None),
+                    InvitationModel.expires_at <= now,
+                )
+            )
+
+        # Eager load account relationship for efficient access
+        query = query.options(joinedload(InvitationModel.account))
+
+        query = query.order_by(InvitationModel.created_at.desc())
+
+        result = await self.session.execute(query)
+        return list(result.scalars().all())
+
+    # Kept for backward compatibility, but can delegate to list_invitations
     async def list_by_account(
         self,
         account_id: str,
@@ -69,42 +117,12 @@ class InvitationRepository:
 
         Args:
             account_id: Account ID to filter by.
-            status: Optional status filter (pending, accepted, expired, cancelled).
+            status: Optional status filter.
 
         Returns:
             List of invitation models.
         """
-        query = select(InvitationModel).where(InvitationModel.account_id == account_id)
-
-        now = datetime.now(timezone.utc)
-
-        if status == "pending":
-            # Pending: not accepted and not expired
-            query = query.where(
-                and_(
-                    InvitationModel.accepted_at.is_(None),
-                    InvitationModel.expires_at > now,
-                )
-            )
-        elif status == "accepted":
-            # Accepted: has accepted_at timestamp
-            query = query.where(InvitationModel.accepted_at.isnot(None))
-        elif status == "expired":
-            # Expired: not accepted and past expiration
-            query = query.where(
-                and_(
-                    InvitationModel.accepted_at.is_(None),
-                    InvitationModel.expires_at <= now,
-                )
-            )
-        # Note: "cancelled" status would require a separate field in the model
-        # For now, cancelled invitations are deleted from the database
-
-        # Order by created_at descending (newest first)
-        query = query.order_by(InvitationModel.created_at.desc())
-
-        result = await self.session.execute(query)
-        return list(result.scalars().all())
+        return await self.list_invitations(account_id, status)
 
     async def mark_as_accepted(self, invitation_id: str) -> None:
         """Mark an invitation as accepted.

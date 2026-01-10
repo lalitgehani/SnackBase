@@ -4,6 +4,7 @@ import LoginPage from '@/pages/LoginPage';
 import DashboardPage from '@/pages/DashboardPage';
 import AccountsPage from '@/pages/AccountsPage';
 import UsersPage from '@/pages/UsersPage';
+import InvitationsPage from '@/pages/InvitationsPage';
 import GroupsPage from '@/pages/GroupsPage';
 import CollectionsPage from '@/pages/CollectionsPage';
 import RecordsPage from '@/pages/RecordsPage';
@@ -39,6 +40,7 @@ function App() {
           <Route path="dashboard" element={<DashboardPage />} />
           <Route path="accounts" element={<AccountsPage />} />
           <Route path="users" element={<UsersPage />} />
+          <Route path="invitations" element={<InvitationsPage />} />
           <Route path="groups" element={<GroupsPage />} />
           <Route path="collections" element={<CollectionsPage />} />
           <Route path="collections/:collectionName/records" element={<RecordsPage />} />

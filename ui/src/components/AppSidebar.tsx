@@ -11,6 +11,7 @@ import {
     CodeXml,
     LogOut,
     Settings,
+    Mail,
 } from "lucide-react"
 import { useLocation, Link, useNavigate } from "react-router"
 import { useAuthStore } from "@/stores/auth.store"
@@ -58,6 +59,11 @@ const items = [
         title: "Users",
         url: "/admin/users",
         icon: UserCog,
+    },
+    {
+        title: "Invitations",
+        url: "/admin/invitations",
+        icon: Mail,
     },
     {
         title: "Groups",

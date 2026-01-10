@@ -286,12 +286,44 @@ async def main():
             
             await test_cancel_invitation(client, admin_token)
             
+            # Verify Email Logs
+            # We need to get account_id from somewhere. 
+            # In test_create_invitation, we got it but didn't return it.
+            # Let's simple query by email in check_email_logs or fetch account_id again.
+            # Easier to fetch account_id from admin_email
+            engine = create_async_engine(DATABASE_URL)
+            async with engine.begin() as conn:
+                 result = await conn.execute(text("SELECT account_id FROM users WHERE email = :email"), {"email": admin_email})
+                 row = result.fetchone()
+                 if row:
+                     await check_email_logs(row[0])
+            await engine.dispose()
+            
             print(f"\n{Colors.GREEN}{Colors.BOLD}All tests completed!{Colors.RESET}\n")
             
         except Exception as e:
             print_error(f"Test suite failed: {e}")
             import traceback
             traceback.print_exc()
+
+
+async def check_email_logs(account_id: str) -> None:
+    """Check email logs for the account."""
+    print_info("Checking email logs...")
+    engine = create_async_engine(DATABASE_URL)
+    async with engine.begin() as conn:
+        result = await conn.execute(
+            text("SELECT id, status, provider, error_message FROM email_logs WHERE account_id = :account_id"),
+            {"account_id": account_id},
+        )
+        rows = result.fetchall()
+        if not rows:
+            print_error("No email logs found for this account!")
+        else:
+            print_success(f"Found {len(rows)} email logs:")
+            for row in rows:
+                print_info(f"  - [{row.status}] Provider: {row.provider}, Error: {row.error_message}")
+    await engine.dispose()
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -409,7 +409,7 @@ class EmailService:
                 account_id=account_id,
                 template_type=template_type,
                 recipient_email=to,
-                provider=provider_name,
+                provider=provider_name or "unknown",
                 status="failed",
                 error_message=str(e),
                 variables=variables,
