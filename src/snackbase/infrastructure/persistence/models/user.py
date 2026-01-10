@@ -157,6 +157,11 @@ class UserModel(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+    password_reset_tokens: Mapped[list["PasswordResetTokenModel"]] = relationship(  # noqa: F821
+        "PasswordResetTokenModel",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
 
     @property
     def account_code(self) -> str | None:
