@@ -190,8 +190,8 @@ async def create_invitation(
     )
 
     # 6. Send invitation email
-    account = await account_repo.get_by_id(current_user.account_id)
-    account_name = account.name if account else current_user.account_id
+    account = await account_repo.get_by_id(target_account_id)
+    account_name = account.name if account else "Unknown Account"
 
     # Get inviter's user record to get their email/name
     inviter = await user_repo.get_by_id(current_user.user_id)
@@ -292,8 +292,8 @@ async def resend_invitation(
         )
         
     # 3. Send email
-    account = await account_repo.get_by_id(current_user.account_id)
-    account_name = account.name if account else current_user.account_id
+    account = await account_repo.get_by_id(invitation.account_id)
+    account_name = account.name if account else "Unknown Account"
     
     inviter = await user_repo.get_by_id(invitation.invited_by)
     inviter_name = inviter.email if inviter else "Team Member"
