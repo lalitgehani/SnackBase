@@ -12,6 +12,7 @@ import RolesPage from '@/pages/RolesPage';
 import AuditLogsPage from '@/pages/AuditLogsPage';
 import MigrationsPage from '@/pages/MigrationsPage';
 import MacrosPage from '@/pages/MacrosPage';
+import AcceptInvitationPage from '@/pages/AcceptInvitationPage';
 import ConfigurationDashboardPage from '@/pages/ConfigurationDashboardPage';
 import AdminLayout from '@/layouts/AdminLayout';
 import ProtectedRoute from '@/components/ProtectedRoute';
@@ -24,8 +25,10 @@ function App() {
         {/* Redirect root to admin */}
         <Route path="/" element={<Navigate to="/admin/dashboard" replace />} />
 
+
         {/* Public routes */}
         <Route path="/admin/login" element={<LoginPage />} />
+        <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
 
         {/* Protected admin routes */}
         <Route

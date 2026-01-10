@@ -6,7 +6,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import * as authService from '@/services/auth.service';
-import type { UserInfo, AccountInfo } from '@/types/auth.types';
+import type { AuthResponse, UserInfo, AccountInfo } from '@/types/auth.types';
 
 interface AuthState {
   // State
@@ -23,6 +23,7 @@ interface AuthState {
   logout: () => void;
   clearError: () => void;
   restoreSession: () => Promise<void>;
+  setAuth: (response: AuthResponse) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -108,6 +109,19 @@ export const useAuthStore = create<AuthState>()(
             get().logout();
           }
         }
+      },
+
+      // Set auth state manually (e.g. after registration or invitation acceptance)
+      setAuth: (response: AuthResponse) => {
+        set({
+          user: response.user,
+          account: response.account,
+          token: response.token,
+          refreshToken: response.refresh_token,
+          isAuthenticated: true,
+          isLoading: false,
+          error: null,
+        });
       },
     }),
     {

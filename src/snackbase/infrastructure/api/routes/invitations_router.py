@@ -25,6 +25,7 @@ from snackbase.infrastructure.api.schemas import (
     InvitationAcceptRequest,
     InvitationCreateRequest,
     InvitationListResponse,
+    InvitationPublicResponse,
     InvitationResponse,
     InvitationStatus,
     UserResponse,
@@ -274,7 +275,10 @@ async def resend_invitation(
     
     # 1. Get invitation
     invitation = await invitation_repo.get_by_id(invitation_id)
-    if invitation is None or invitation.account_id != current_user.account_id:
+    
+    # Check access: Allow if user belongs to account OR is superadmin
+    is_superadmin = current_user.account_id == SYSTEM_ACCOUNT_ID
+    if invitation is None or (invitation.account_id != current_user.account_id and not is_superadmin):
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
             content={"error": "Not found", "message": "Invitation not found"},
@@ -343,6 +347,90 @@ async def resend_invitation(
             content={"error": "Internal error", "message": "Failed to send email"},
         )
 
+
+
+@router.get(
+    "/{token}",
+    status_code=status.HTTP_200_OK,
+    response_model=InvitationPublicResponse,
+    responses={
+        404: {"description": "Invalid, expired, or already accepted token"},
+    },
+)
+async def get_invitation(
+    token: str,
+    session: AsyncSession = Depends(get_db_session),
+) -> InvitationPublicResponse | JSONResponse:
+    """Get public invitation details.
+
+    Validates the invitation token and returns non-sensitive details
+    for the acceptance page.
+
+    Flow:
+    1. Validate token exists
+    2. Validate token not expired
+    3. Validate token not already accepted
+    4. Return public details
+    """
+    invitation_repo = InvitationRepository(session)
+    account_repo = AccountRepository(session)
+    user_repo = UserRepository(session)
+
+    # 1. Validate token exists
+    invitation = await invitation_repo.get_by_token(token)
+    if invitation is None:
+        # Generic 404 to avoid enumeration
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={
+                "error": "Not found",
+                "message": "Invalid invitation token",
+            },
+        )
+
+    # 2. Validate token not expired
+    expires_at = invitation.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    
+    # Check expiry
+    # We return 400 for specific errors to help the UI show better messages
+    if expires_at <= datetime.now(timezone.utc):
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "error": "Expired",
+                "message": "Invitation has expired",
+            },
+        )
+
+    # 3. Validate token not already accepted
+    if invitation.accepted_at is not None:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "error": "Already accepted",
+                "message": "Invitation has already been accepted",
+            },
+        )
+
+    # 4. Fetch additional details for response
+    account = await account_repo.get_by_id(invitation.account_id)
+    account_name = account.name if account else "Unknown Account"
+
+    inviter = await user_repo.get_by_id(invitation.invited_by)
+    inviter_name = inviter.email if inviter else "Team Member"
+    # Try to use name if available
+    if inviter and hasattr(inviter, "full_name") and inviter.full_name:
+         inviter_name = inviter.full_name
+
+    return InvitationPublicResponse(
+        email=invitation.email,
+        account_name=account_name,
+        invited_by_name=inviter_name,
+        expires_at=expires_at,
+        is_valid=True,
+    )
 
 
 @router.post(
@@ -465,8 +553,21 @@ async def accept_invitation(
         password_hash=password_hash,
         role_id=user_role.id,
         is_active=True,
+        email_verified=True,  # Auto-verify email since they received the invitation
     )
     await user_repo.create(user)
+
+    # Create email verification record for audit/completeness
+    from snackbase.infrastructure.persistence.models import EmailVerificationTokenModel
+    verification = EmailVerificationTokenModel(
+        id=str(uuid.uuid4()),
+        user_id=user.id,
+        email=user.email,
+        token_hash=f"invitation_accepted_{user.id}", # Unique placeholder hash
+        expires_at=datetime.now(timezone.utc),
+        used_at=datetime.now(timezone.utc), # Mark as used immediately
+    )
+    session.add(verification)
 
     # 6. Mark invitation as accepted
     await invitation_repo.mark_as_accepted(invitation.id)
@@ -653,7 +754,8 @@ async def cancel_invitation(
     # Get invitation to verify it belongs to the user's account
     invitation = await invitation_repo.get_by_id(invitation_id)
 
-    if invitation is None or invitation.account_id != current_user.account_id:
+    is_superadmin = current_user.account_id == SYSTEM_ACCOUNT_ID
+    if invitation is None or (invitation.account_id != current_user.account_id and not is_superadmin):
         logger.info(
             "Invitation cancellation failed: not found or wrong account",
             invitation_id=invitation_id,

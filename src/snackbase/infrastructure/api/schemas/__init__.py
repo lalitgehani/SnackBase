@@ -35,6 +35,7 @@ from snackbase.infrastructure.api.schemas.invitation_schemas import (
     InvitationAcceptRequest,
     InvitationCreateRequest,
     InvitationListResponse,
+    InvitationPublicResponse,
     InvitationResponse,
     InvitationStatus,
 )
@@ -141,6 +142,7 @@ __all__ = [
     "InvitationAcceptRequest",
     "InvitationCreateRequest",
     "InvitationListResponse",
+    "InvitationPublicResponse",
     "InvitationResponse",
     "InvitationStatus",
     "LoginRequest",

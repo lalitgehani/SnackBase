@@ -53,3 +53,27 @@ export const resendInvitation = async (invitationId: string): Promise<{ message:
   const response = await api.post<{ message: string }>(`/invitations/${invitationId}/resend`);
   return response.data;
 };
+
+export interface InvitationPublicResponse {
+  email: string;
+  account_name: string;
+  invited_by_name: string;
+  expires_at: string;
+  is_valid: boolean;
+}
+
+export interface InvitationAcceptRequest {
+  password?: string;
+}
+
+import type { AuthResponse } from '@/types/auth.types';
+
+export const getInvitation = async (token: string): Promise<InvitationPublicResponse> => {
+  const response = await api.get<InvitationPublicResponse>(`/invitations/${token}`);
+  return response.data;
+};
+
+export const acceptInvitation = async (token: string, data: InvitationAcceptRequest): Promise<AuthResponse> => {
+  const response = await api.post<AuthResponse>(`/invitations/${token}/accept`, data);
+  return response.data;
+};

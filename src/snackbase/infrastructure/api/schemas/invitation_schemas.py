@@ -61,6 +61,18 @@ class InvitationAcceptRequest(BaseModel):
     )
 
 
+class InvitationPublicResponse(BaseModel):
+    """Response schema for public invitation details."""
+
+    email: EmailStr = Field(..., description="Email address of the invited user")
+    account_name: str = Field(..., description="Name of the inviting account")
+    invited_by_name: str = Field(..., description="Name of the person who invited")
+    expires_at: datetime = Field(..., description="Expiration timestamp")
+    is_valid: bool = Field(True, description="Whether the invitation is valid")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class InvitationListResponse(BaseModel):
     """Response schema for listing invitations."""
 

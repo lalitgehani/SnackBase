@@ -227,6 +227,23 @@ async def test_accept_invitation(client: AsyncClient, invite_email: str):
     if response.status_code == 200:
         auth = response.json()
         print_success(f"Accepted! New User: {auth['user']['email']}")
+
+        # Verify email_verified status in DB
+        engine = create_async_engine(DATABASE_URL)
+        async with engine.begin() as conn:
+            result = await conn.execute(
+                text("SELECT email_verified FROM users WHERE email = :email"),
+                {"email": invite_email},
+            )
+            row = result.fetchone()
+            is_verified = row[0] if row else None
+        await engine.dispose()
+        
+        if is_verified:
+            print_success(f"User is verified (email_verified={is_verified})")
+        else:
+            print_error(f"User is NOT verified (email_verified={is_verified})")
+
         return auth["token"]
     else:
         print_error(f"Failed to accept: {response.status_code}: {response.text}")
