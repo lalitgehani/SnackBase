@@ -9,6 +9,7 @@ Complete guide to using the SnackBase REST API with practical examples.
 - [Getting Started](#getting-started)
 - [Authentication](#authentication)
 - [Email Verification](#email-verification)
+- [Password Reset](#password-reset)
 - [Accounts Management](#accounts-management)
 - [Collections](#collections)
 - [Records (CRUD)](#records-crud)
@@ -114,6 +115,7 @@ curl -X POST http://localhost:8000/api/v1/auth/register \
 ```
 
 **Important Changes**:
+
 - Registration NO LONGER returns tokens immediately
 - Email verification is REQUIRED before login
 - Response includes `email_verified` field
@@ -127,6 +129,7 @@ curl -X POST http://localhost:8000/api/v1/auth/register \
 - `password`: Min 12 characters, must include uppercase, lowercase, number, and special character
 
 **Password Strength Requirements**:
+
 - Minimum 12 characters
 - At least one uppercase letter (A-Z)
 - At least one lowercase letter (a-z)
@@ -197,6 +200,7 @@ curl -X POST http://localhost:8000/api/v1/auth/login \
 ```
 
 **Account Identifier Options**:
+
 - Account slug: `"acme"`
 - Account ID: `"AB1234"`
 
@@ -259,6 +263,7 @@ curl -X POST http://localhost:8000/api/v1/auth/refresh \
 ```
 
 **Notes**:
+
 - Old refresh token is invalidated after successful refresh (token rotation)
 - Access tokens expire in 1 hour (configurable)
 - Refresh tokens expire in 7 days (configurable)
@@ -413,11 +418,122 @@ curl -X POST http://localhost:8000/api/v1/auth/verify-email \
 
 ---
 
+## Password Reset
+
+Password reset flow allows users to recover access to their account if they forget their password.
+
+### 1. Request Password Reset
+
+Send a password reset email (public endpoint).
+
+**Endpoint**: `POST /api/v1/auth/forgot-password`
+
+**Authentication**: None (public)
+
+**Request**:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/auth/forgot-password \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "admin@acme.com",
+    "account": "acme"
+  }'
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "message": "If an account with that email exists, a password reset link has been sent."
+}
+```
+
+**Note**: To prevent user enumeration, this endpoint always returns the same success message regardless of whether the email or account exists.
+
+---
+
+### 2. Verify Reset Token
+
+Check if a password reset token is valid before showing the reset form.
+
+**Endpoint**: `GET /api/v1/auth/verify-reset-token/{token}`
+
+**Authentication**: None (public)
+
+**Request**:
+
+```bash
+curl -X GET http://localhost:8000/api/v1/auth/verify-reset-token/reset_token_abc123...
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "valid": true,
+  "expires_at": "2026-01-10T20:00:00Z"
+}
+```
+
+---
+
+### 3. Reset Password
+
+Update the password using a valid reset token.
+
+**Endpoint**: `POST /api/v1/auth/reset-password`
+
+**Authentication**: None (public)
+
+**Request**:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/auth/reset-password \
+  -H "Content-Type: application/json" \
+  -d '{
+    "token": "reset_token_abc123...",
+    "new_password": "NewSecurePass789!"
+  }'
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "message": "Password reset successfully. You can now log in with your new password."
+}
+```
+
+**Error Responses**:
+
+```json
+// Invalid/expired token (400)
+{
+  "error": "Bad Request",
+  "message": "Invalid, expired, or already used reset token"
+}
+
+// Password validation error (400)
+{
+  "error": "Validation error",
+  "details": [
+    {
+      "field": "password",
+      "message": "Password must be at least 12 characters and include uppercase, lowercase, number, and special character"
+    }
+  ]
+}
+```
+
+---
+
 ## Accounts Management
 
 All account management endpoints require **Superadmin** access (user must belong to system account `SY0000`).
 
 **System Account Details**:
+
 - Account ID: `00000000-0000-0000-0000-000000000000` (UUID format for system-level configs)
 - Account Code: `SY0000` (display format)
 
@@ -429,13 +545,13 @@ All account management endpoints require **Superadmin** access (user must belong
 
 **Query Parameters**:
 
-| Parameter | Type | Default | Constraints |
-|-----------|------|---------|-------------|
-| `page` | int | 1 | >= 1 |
-| `page_size` | int | 25 | >= 1, <= 100 |
-| `sort_by` | str | "created_at" | id, account_code, slug, name, created_at |
-| `sort_order` | str | "desc" | asc, desc |
-| `search` | str | null | - |
+| Parameter    | Type | Default      | Constraints                              |
+| ------------ | ---- | ------------ | ---------------------------------------- |
+| `page`       | int  | 1            | >= 1                                     |
+| `page_size`  | int  | 25           | >= 1, <= 100                             |
+| `sort_by`    | str  | "created_at" | id, account_code, slug, name, created_at |
+| `sort_order` | str  | "desc"       | asc, desc                                |
+| `search`     | str  | null         | -                                        |
 
 **Request**:
 
@@ -620,13 +736,13 @@ All collection endpoints require **Superadmin** access.
 
 **Query Parameters**:
 
-| Parameter | Type | Default | Constraints |
-|-----------|------|---------|-------------|
-| `page` | int | 1 | >= 1 |
-| `page_size` | int | 25 | >= 1, <= 100 |
-| `sort_by` | str | "created_at" | - |
-| `sort_order` | str | "desc" | asc, desc |
-| `search` | str | null | - |
+| Parameter    | Type | Default      | Constraints  |
+| ------------ | ---- | ------------ | ------------ |
+| `page`       | int  | 1            | >= 1         |
+| `page_size`  | int  | 25           | >= 1, <= 100 |
+| `sort_by`    | str  | "created_at" | -            |
+| `sort_order` | str  | "desc"       | asc, desc    |
+| `search`     | str  | null         | -            |
 
 **Request**:
 
@@ -809,16 +925,16 @@ curl -X POST http://localhost:8000/api/v1/collections/ \
 
 **Field Types**:
 
-| Type | SQL Type | Description |
-|------|----------|-------------|
-| `text` | TEXT | String values |
-| `number` | REAL | Numeric values (int or float, not bool) |
-| `boolean` | INTEGER (0/1) | True/false |
-| `datetime` | DATETIME | ISO 8601 datetime strings |
-| `email` | TEXT | Email addresses (validated) |
-| `url` | TEXT | URLs (validated, must start with http:// or https://) |
-| `json` | TEXT | JSON objects |
-| `reference` | TEXT | Foreign key to another collection |
+| Type        | SQL Type      | Description                                           |
+| ----------- | ------------- | ----------------------------------------------------- |
+| `text`      | TEXT          | String values                                         |
+| `number`    | REAL          | Numeric values (int or float, not bool)               |
+| `boolean`   | INTEGER (0/1) | True/false                                            |
+| `datetime`  | DATETIME      | ISO 8601 datetime strings                             |
+| `email`     | TEXT          | Email addresses (validated)                           |
+| `url`       | TEXT          | URLs (validated, must start with http:// or https://) |
+| `json`      | TEXT          | JSON objects                                          |
+| `reference` | TEXT          | Foreign key to another collection                     |
 
 **Field Options**:
 
@@ -831,6 +947,7 @@ curl -X POST http://localhost:8000/api/v1/collections/ \
 
 **Auto-Added Fields**:
 Every collection automatically includes:
+
 - `id` (TEXT PRIMARY KEY) - Auto-generated UUID
 - `account_id` (TEXT NOT NULL) - For multi-tenancy
 - `created_at` (DATETIME) - ISO 8601 timestamp
@@ -842,6 +959,7 @@ Every collection automatically includes:
 Tables are prefixed with `col_` (e.g., collection "posts" becomes `col_posts`).
 
 **Validation Rules**:
+
 - Collection name: 3-64 chars, starts with letter, alphanumeric + underscores only
 - Field names: Cannot use reserved names (id, account_id, created_at, created_by, updated_at, updated_by)
 - Reference fields require `collection` and `on_delete` attributes
@@ -855,6 +973,7 @@ Tables are prefixed with `col_` (e.g., collection "posts" becomes `col_posts`).
 **Authentication**: Superadmin required
 
 **Constraints**:
+
 - Cannot delete existing fields
 - Cannot change field types
 - Can only add new fields
@@ -971,6 +1090,7 @@ curl -X POST http://localhost:8000/api/v1/records/posts \
 ```
 
 **Notes**:
+
 - `account_id`, `created_at`, `created_by`, `updated_at`, `updated_by` are auto-set by built-in hooks
 - Required fields must be provided
 - Default values are applied for missing optional fields
@@ -987,13 +1107,13 @@ curl -X POST http://localhost:8000/api/v1/records/posts \
 
 **Query Parameters**:
 
-| Parameter | Type | Default | Constraints |
-|-----------|------|---------|-------------|
-| `skip` | int | 0 | >= 0 |
-| `limit` | int | 30 | >= 1, <= 100 |
-| `sort` | str | "-created_at" | +/- prefix for asc/desc |
-| `fields` | str | null | Comma-separated field list |
-| `{field}` | any | - | Filter by field value |
+| Parameter | Type | Default       | Constraints                |
+| --------- | ---- | ------------- | -------------------------- |
+| `skip`    | int  | 0             | >= 0                       |
+| `limit`   | int  | 30            | >= 1, <= 100               |
+| `sort`    | str  | "-created_at" | +/- prefix for asc/desc    |
+| `fields`  | str  | null          | Comma-separated field list |
+| `{field}` | any  | -             | Filter by field value      |
 
 **Example - List Posts**:
 
@@ -1335,9 +1455,9 @@ curl -X GET http://localhost:8000/api/v1/roles/3/permissions \
     {
       "collection": "posts",
       "permission_id": 10,
-      "create": {"rule": "true", "fields": ["title", "content"]},
-      "read": {"rule": "true", "fields": "*"},
-      "update": {"rule": "@owns_record()", "fields": ["title", "content"]},
+      "create": { "rule": "true", "fields": ["title", "content"] },
+      "read": { "rule": "true", "fields": "*" },
+      "update": { "rule": "@owns_record()", "fields": ["title", "content"] },
       "delete": null
     }
   ]
@@ -1631,6 +1751,7 @@ curl -X POST http://localhost:8000/api/v1/groups \
 **Endpoint**: `GET /api/v1/groups`
 
 **Query Parameters**:
+
 - `skip`: Default 0
 - `limit`: Default 100
 
@@ -1788,6 +1909,7 @@ curl -X POST http://localhost:8000/api/v1/users \
 ```
 
 **Authentication Provider Fields**:
+
 - `auth_provider`: "password", "oauth", or "saml"
 - `auth_provider_name`: Provider name (e.g., "google", "github", "azure_ad", "okta")
 - For non-password auth, password is auto-generated and user cannot login with password
@@ -1802,15 +1924,15 @@ curl -X POST http://localhost:8000/api/v1/users \
 
 **Query Parameters**:
 
-| Parameter | Type | Default | Constraints |
-|-----------|------|---------|-------------|
-| `skip` | int | 0 | >= 0 |
-| `limit` | int | 25 | >= 1, <= 100 |
-| `account_id` | str | null | Filter by account |
-| `role_id` | int | null | Filter by role |
-| `is_active` | bool | null | Filter by active status |
-| `search` | str | null | Search in email |
-| `sort` | str | "created_at" | Field name (prefix with `-` for desc) |
+| Parameter    | Type | Default      | Constraints                           |
+| ------------ | ---- | ------------ | ------------------------------------- |
+| `skip`       | int  | 0            | >= 0                                  |
+| `limit`      | int  | 25           | >= 1, <= 100                          |
+| `account_id` | str  | null         | Filter by account                     |
+| `role_id`    | int  | null         | Filter by role                        |
+| `is_active`  | bool | null         | Filter by active status               |
+| `search`     | str  | null         | Search in email                       |
+| `sort`       | str  | "created_at" | Field name (prefix with `-` for desc) |
 
 **Request**:
 
@@ -2019,6 +2141,7 @@ curl -X POST http://localhost:8000/api/v1/invitations \
 **Endpoint**: `GET /api/v1/invitations`
 
 **Query Parameters**:
+
 - `status_filter`: "pending" | "accepted" | "expired" | "cancelled" (note: cancelled invitations are deleted from database, so this filter returns no results)
 
 **Request**:
@@ -2144,6 +2267,7 @@ curl -X POST http://localhost:8000/api/v1/macros/ \
 ```
 
 **SQL Validation Rules**:
+
 - Must start with `SELECT`
 - Forbidden keywords: INSERT, UPDATE, DELETE, DROP, ALTER, TRUNCATE, GRANT, REVOKE
 - Name must be valid Python identifier
@@ -2157,6 +2281,7 @@ curl -X POST http://localhost:8000/api/v1/macros/ \
 **Authentication**: Required (all authenticated users)
 
 **Query Parameters**:
+
 - `skip`: Default 0
 - `limit`: Default 100
 
@@ -2230,13 +2355,13 @@ curl -X POST http://localhost:8000/api/v1/macros/1/test \
 
 These macros are executed directly by the macro engine:
 
-| Macro | Description |
-|-------|-------------|
-| `@has_group(group_name)` | Check if user has a group |
-| `@has_role(role_name)` | Check if user has a role |
-| `@owns_record()` / `@is_creator()` | Check if user owns the record |
+| Macro                                  | Description                       |
+| -------------------------------------- | --------------------------------- |
+| `@has_group(group_name)`               | Check if user has a group         |
+| `@has_role(role_name)`                 | Check if user has a role          |
+| `@owns_record()` / `@is_creator()`     | Check if user owns the record     |
 | `@in_time_range(start_hour, end_hour)` | Check if current time is in range |
-| `@has_permission(action, collection)` | Check specific permission |
+| `@has_permission(action, collection)`  | Check specific permission         |
 
 ---
 
@@ -2280,6 +2405,7 @@ curl -X POST http://localhost:8000/api/v1/auth/oauth/google/authorize \
 ```
 
 **Query Parameters**:
+
 - `account` (required): Account slug or ID
 - `redirect_uri` (required): URL to redirect after authentication
 - `state` (optional): CSRF protection token
@@ -2359,6 +2485,7 @@ curl -X GET "http://localhost:8000/api/v1/auth/saml/sso?account=acme&provider=az
 **Response**: Redirects to the Identity Provider's login page
 
 **Query Parameters**:
+
 - `account` (required): Account slug or ID
 - `provider` (optional): SAML provider name (default: first configured)
 - `relay_state` (optional): State to return after authentication
@@ -2420,6 +2547,7 @@ curl -X GET "http://localhost:8000/api/v1/auth/saml/metadata?account=acme&provid
 **Response**: XML metadata file for importing into your Identity Provider
 
 **Query Parameters**:
+
 - `account` (required): Account slug or ID
 - `provider` (optional): SAML provider name (default: first configured)
 
@@ -2520,6 +2648,7 @@ All provider configurations (auth, email, storage) are managed through these end
 **Authentication**: Superadmin required
 
 **Query Parameters**:
+
 - `category`: Filter by category (auth, oauth, saml, email)
 
 **Request**:
@@ -2557,6 +2686,7 @@ curl -X GET "http://localhost:8000/api/v1/admin/configuration/system?category=oa
 **Authentication**: Superadmin required
 
 **Query Parameters**:
+
 - `account_id` (required): Account ID
 - `category`: Filter by category
 
@@ -2647,7 +2777,7 @@ curl -X PATCH http://localhost:8000/api/v1/admin/configuration/config_xyz789/val
 ```json
 {
   "client_id": "your-client-id.apps.googleusercontent.com",
-  "client_secret": "********",  // Masked for security
+  "client_secret": "********", // Masked for security
   "scope": "openid email profile"
 }
 ```
@@ -2692,6 +2822,7 @@ curl -X PATCH http://localhost:8000/api/v1/admin/configuration/config_xyz789 \
 **Authentication**: Superadmin required
 
 **Query Parameters**:
+
 - `category`: Filter by category
 
 **Response** (200 OK):
@@ -2792,6 +2923,7 @@ curl -X POST http://localhost:8000/api/v1/admin/configuration/test-connection \
 **Authentication**: Superadmin required
 
 **Query Parameters**:
+
 - `limit`: Number of results (default: 10)
 
 ---
@@ -2808,11 +2940,11 @@ Admin API for managing email templates and viewing email logs.
 
 **Query Parameters**:
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `type` | str | null | Filter by template type |
-| `enabled` | bool | null | Filter by enabled status |
-| `search` | str | null | Search in name/description |
+| Parameter | Type | Default | Description                |
+| --------- | ---- | ------- | -------------------------- |
+| `type`    | str  | null    | Filter by template type    |
+| `enabled` | bool | null    | Filter by enabled status   |
+| `search`  | str  | null    | Search in name/description |
 
 **Request**:
 
@@ -2916,6 +3048,7 @@ curl -X PUT http://localhost:8000/api/v1/admin/email/templates/email_verify_abc1
 ```
 
 **Available Template Variables**:
+
 - `email_verification`: `{{verification_link}}`, `{{user_email}}`, `{{account_name}}`
 - `password_reset`: `{{reset_link}}`, `{{user_email}}`, `{{account_name}}`
 - `invitation`: `{{invitation_link}}`, `{{inviter_email}}`, `{{account_name}}`
@@ -2999,15 +3132,15 @@ curl -X POST http://localhost:8000/api/v1/admin/email/templates/email_verify_abc
 
 **Query Parameters**:
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `skip` | int | 0 | Pagination offset |
-| `limit` | int | 50 | Results per page (max 100) |
-| `template_type` | str | null | Filter by template type |
-| `status` | str | null | Filter by status (sent, failed, pending) |
-| `recipient_email` | str | null | Filter by recipient |
-| `from_date` | datetime | null | ISO 8601 start date |
-| `to_date` | datetime | null | ISO 8601 end date |
+| Parameter         | Type     | Default | Description                              |
+| ----------------- | -------- | ------- | ---------------------------------------- |
+| `skip`            | int      | 0       | Pagination offset                        |
+| `limit`           | int      | 50      | Results per page (max 100)               |
+| `template_type`   | str      | null    | Filter by template type                  |
+| `status`          | str      | null    | Filter by status (sent, failed, pending) |
+| `recipient_email` | str      | null    | Filter by recipient                      |
+| `from_date`       | datetime | null    | ISO 8601 start date                      |
+| `to_date`         | datetime | null    | ISO 8601 end date                        |
 
 **Request**:
 
@@ -3074,6 +3207,7 @@ curl -X GET http://localhost:8000/api/v1/admin/email/logs/log_abc123 \
 ```
 
 **Status Values**:
+
 - `pending`: Queued for sending
 - `sent`: Successfully sent
 - `failed`: Failed to send (check `error_message`)
@@ -3092,19 +3226,19 @@ Audit logging for GxP compliance. Logs are immutable and PII is masked based on 
 
 **Query Parameters**:
 
-| Parameter | Type | Default | Constraints |
-|-----------|------|---------|-------------|
-| `skip` | int | 0 | >= 0 |
-| `limit` | int | 50 | >= 1, <= 100 |
-| `account_id` | str | null | Filter by account |
-| `table_name` | str | null | Filter by table/collection |
-| `record_id` | str | null | Filter by record ID |
-| `user_id` | str | null | Filter by user |
-| `operation` | str | null | Filter by operation |
-| `from_date` | datetime | null | ISO 8601 format |
-| `to_date` | datetime | null | ISO 8601 format |
-| `sort_by` | str | "timestamp" | Field name |
-| `sort_order` | str | "desc" | asc, desc |
+| Parameter    | Type     | Default     | Constraints                |
+| ------------ | -------- | ----------- | -------------------------- |
+| `skip`       | int      | 0           | >= 0                       |
+| `limit`      | int      | 50          | >= 1, <= 100               |
+| `account_id` | str      | null        | Filter by account          |
+| `table_name` | str      | null        | Filter by table/collection |
+| `record_id`  | str      | null        | Filter by record ID        |
+| `user_id`    | str      | null        | Filter by user             |
+| `operation`  | str      | null        | Filter by operation        |
+| `from_date`  | datetime | null        | ISO 8601 format            |
+| `to_date`    | datetime | null        | ISO 8601 format            |
+| `sort_by`    | str      | "timestamp" | Field name                 |
+| `sort_order` | str      | "desc"      | asc, desc                  |
 
 **Request**:
 
@@ -3126,8 +3260,8 @@ curl -X GET "http://localhost:8000/api/v1/audit-logs?skip=0&limit=50&sort_order=
       "operation": "UPDATE",
       "user_id": "usr_abc123",
       "user_email": "admin@acme.com",
-      "old_values": {"title": "Old Title"},
-      "new_values": {"title": "New Title"},
+      "old_values": { "title": "Old Title" },
+      "new_values": { "title": "New Title" },
       "changed_fields": ["title"],
       "ip_address": "192.168.1.100",
       "user_agent": "Mozilla/5.0...",
@@ -3159,6 +3293,7 @@ curl -X GET "http://localhost:8000/api/v1/audit-logs?skip=0&limit=50&sort_order=
 **Authentication**: Superadmin required
 
 **Query Parameters**:
+
 - `format`: `csv` or `json` (default: `csv`)
 - Same filters as list endpoint
 
