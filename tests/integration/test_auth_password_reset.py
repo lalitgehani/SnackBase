@@ -294,3 +294,143 @@ async def test_verify_reset_token_invalid(db_session):
         assert response.json()["expires_at"] is None
 
     app.dependency_overrides = {}
+
+
+@pytest.mark.asyncio
+async def test_superadmin_reset_password_direct(db_session):
+    """Test superadmin directly resetting a user's password."""
+    # Setup
+    result = await db_session.execute(select(RoleModel).where(RoleModel.name == "user"))
+    user_role = result.scalar_one()
+
+    import uuid
+    account_id = str(uuid.uuid4())
+    account = AccountModel(id=account_id, account_code="SA0001", slug="sa-test", name="SA Test")
+    db_session.add(account)
+
+    user_id = str(uuid.uuid4())
+    user = UserModel(
+        id=user_id,
+        email="sa-reset@example.com",
+        password_hash=hash_password("old-password"),
+        account_id=account_id,
+        email_verified=True,
+        role_id=user_role.id,
+        auth_provider="password",
+    )
+    db_session.add(user)
+    await db_session.commit()
+
+    # Mock superadmin
+    from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID
+    
+    # Mock current user to be a superadmin
+    from snackbase.infrastructure.api.dependencies import get_current_user, CurrentUser
+    
+    async def override_get_current_user():
+        return CurrentUser(
+            user_id="admin-id",
+            account_id=SYSTEM_ACCOUNT_ID,
+            email="admin@snackbase.io",
+            role="superadmin",
+            groups=[],
+        )
+
+    # Dependency overrides
+    async def override_get_db_session():
+        yield db_session
+
+    app.dependency_overrides[get_db_session] = override_get_db_session
+    app.dependency_overrides[get_current_user] = override_get_current_user
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        new_password = "SuperAdminNewPassword123!"
+        response = await ac.put(
+            f"/api/v1/users/{user_id}/password",
+            json={"new_password": new_password},
+        )
+        assert response.status_code == 200
+        assert "Password updated successfully" in response.json()["message"]
+
+    # Verify password change
+    await db_session.refresh(user)
+    from snackbase.infrastructure.auth import verify_password
+    assert verify_password(new_password, user.password_hash)
+
+    app.dependency_overrides = {}
+
+
+@pytest.mark.asyncio
+async def test_superadmin_reset_password_link(db_session):
+    """Test superadmin sending a reset link to a user."""
+    # Setup
+    result = await db_session.execute(select(RoleModel).where(RoleModel.name == "user"))
+    user_role = result.scalar_one()
+
+    import uuid
+    account_id = str(uuid.uuid4())
+    account = AccountModel(id=account_id, account_code="SA0002", slug="sa-test-link", name="SA Test Link")
+    db_session.add(account)
+
+    user_id = str(uuid.uuid4())
+    email = "sa-link@example.com"
+    user = UserModel(
+        id=user_id,
+        email=email,
+        password_hash=hash_password("old-password"),
+        account_id=account_id,
+        email_verified=True,
+        role_id=user_role.id,
+        auth_provider="password",
+    )
+    db_session.add(user)
+    await db_session.commit()
+
+    # Mock EmailService
+    mock_email_service = AsyncMock()
+    mock_email_service.send_template_email.return_value = True
+    mock_email_service._get_system_variables = AsyncMock(
+        return_value={"app_url": "http://localhost:3000"}
+    )
+
+    from snackbase.infrastructure.api.dependencies import get_current_user, CurrentUser, SYSTEM_ACCOUNT_ID
+    
+    async def override_get_current_user():
+        return CurrentUser(
+            user_id="admin-id",
+            account_id=SYSTEM_ACCOUNT_ID,
+            email="admin@snackbase.io",
+            role="superadmin",
+            groups=[],
+        )
+
+    async def override_get_db_session():
+        yield db_session
+
+    async def override_get_email_service():
+        return mock_email_service
+
+    app.dependency_overrides[get_db_session] = override_get_db_session
+    app.dependency_overrides[get_current_user] = override_get_current_user
+    app.dependency_overrides[get_email_service] = override_get_email_service
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        response = await ac.put(
+            f"/api/v1/users/{user_id}/password",
+            json={"send_reset_link": True},
+        )
+        assert response.status_code == 200
+        assert f"Password reset link sent to {email}" in response.json()["message"]
+
+    # Verify email was sent
+    assert mock_email_service.send_template_email.called
+    
+    # Verify token exists in DB
+    from snackbase.infrastructure.persistence.models import PasswordResetTokenModel
+    result = await db_session.execute(
+        select(PasswordResetTokenModel).where(PasswordResetTokenModel.user_id == user_id)
+    )
+    token = result.scalar_one()
+    assert token.email == email
+
+    app.dependency_overrides = {}

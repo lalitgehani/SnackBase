@@ -175,3 +175,61 @@ class PasswordResetService:
             expires_at=expires_at,
         )
         return is_valid, expires_at
+
+    async def send_reset_link_by_admin(
+        self, user_id: str, email: str, account_id: str
+    ) -> bool:
+        """Send a password reset link initiated by an admin.
+
+        Args:
+            user_id: ID of the user.
+            email: Email address of the user.
+            account_id: Account ID of the user.
+
+        Returns:
+            True if email sent successfully.
+        """
+        # Revoke all existing refresh tokens for the user (security)
+        await self.refresh_token_repo.revoke_all_for_user(user_id, account_id)
+
+        # Reuse existing send_reset_email logic
+        return await self.send_reset_email(user_id, email, account_id)
+
+    async def set_password_by_admin(self, user_id: str, new_password: str) -> UserModel:
+        """Directly set a user's password by an admin.
+
+        Args:
+            user_id: ID of the user.
+            new_password: The new password to set.
+
+        Returns:
+            The updated user model.
+        """
+        # Get user
+        user = await self.user_repo.get_by_id(user_id)
+        if not user:
+            raise ValueError(f"User with ID {user_id} not found")
+
+        # Update password
+        user.password_hash = hash_password(new_password)
+        await self.user_repo.update(user)
+
+        # Invalidate all existing reset tokens for this user
+        await self.reset_repo.delete_for_user(user.id)
+
+        # Invalidate all refresh tokens for this user
+        revoked_count = await self.refresh_token_repo.revoke_all_for_user(
+            user.id, user.account_id
+        )
+
+        # Commit changes
+        await self.session.commit()
+
+        logger.info(
+            "password_set_by_admin",
+            user_id=user.id,
+            email=user.email,
+            account_id=user.account_id,
+            refresh_tokens_revoked=revoked_count,
+        )
+        return user

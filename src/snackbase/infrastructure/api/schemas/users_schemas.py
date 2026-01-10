@@ -6,7 +6,7 @@ displaying user information in the admin UI.
 
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr, Field, SecretStr, field_validator
+from pydantic import BaseModel, EmailStr, Field, SecretStr, field_validator, model_validator
 
 
 class UserCreateRequest(BaseModel):
@@ -72,20 +72,30 @@ class PasswordResetRequest(BaseModel):
     Used by superadmins to reset user passwords.
     """
 
-    new_password: SecretStr = Field(..., min_length=1, description="New password")
+    new_password: SecretStr | None = Field(None, min_length=1, description="New password")
+    send_reset_link: bool = Field(False, description="Whether to send a password reset link instead of setting password directly")
 
     @field_validator("new_password")
     @classmethod
-    def validate_password_strength(cls, v: SecretStr) -> SecretStr:
+    def validate_password_strength(cls, v: SecretStr | None) -> SecretStr | None:
         """Validate password strength.
 
         This is a placeholder - actual validation happens in the router
         using the PasswordValidator service to provide detailed error messages.
         """
+        if v is None:
+            return v
         password = v.get_secret_value()
         if not password:
             raise ValueError("Password cannot be empty")
         return v
+
+    @model_validator(mode="after")
+    def validate_request(self) -> "PasswordResetRequest":
+        """Validate that either new_password is provided or send_reset_link is True."""
+        if not self.send_reset_link and self.new_password is None:
+            raise ValueError("Either new_password must be provided or send_reset_link must be True")
+        return self
 
 
 class UserResponse(BaseModel):

@@ -176,3 +176,16 @@ class PasswordResetRepository:
         )
         result = await self._session.execute(stmt)
         return result.rowcount
+
+    async def delete_for_user(self, user_id: str) -> int:
+        """Delete all tokens for a specific user.
+
+        Args:
+            user_id: The user's UUID.
+
+        Returns:
+            Number of tokens deleted.
+        """
+        stmt = delete(PasswordResetTokenModel).where(PasswordResetTokenModel.user_id == user_id)
+        result = await self._session.execute(stmt)
+        return result.rowcount

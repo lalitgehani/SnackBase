@@ -13,10 +13,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.core.logging import get_logger
 from snackbase.domain.services.email_verification_service import EmailVerificationService
+from snackbase.domain.services.password_reset_service import PasswordResetService
 from snackbase.domain.services.password_validator import default_password_validator
 from snackbase.infrastructure.api.dependencies import (
     SuperadminUser,
     get_db_session,
+    get_password_reset_service,
     get_verification_service,
     require_superadmin,
 )
@@ -387,9 +389,11 @@ async def reset_user_password(
     current_user: Annotated[SuperadminUser, Depends(require_superadmin)],
     user_repo: UserRepo,
     session: Annotated[AsyncSession, Depends(get_db_session)],
+    reset_service: Annotated[PasswordResetService, Depends(get_password_reset_service)],
 ) -> dict[str, str]:
     """Reset a user's password (superadmin only).
 
+    Can either send a reset link email or set a new password directly.
     Invalidates all of the user's refresh tokens, forcing them to log in again.
     """
     # Get user
@@ -400,6 +404,27 @@ async def reset_user_password(
             detail="User not found",
         )
 
+    if password_data.send_reset_link:
+        # Mode 1: Send reset link
+        success = await reset_service.send_reset_link_by_admin(
+            user_id=user.id,
+            email=user.email,
+            account_id=user.account_id,
+        )
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to send password reset email",
+            )
+        
+        logger.info(
+            "password_reset_link_sent",
+            user_id=user_id,
+            reset_by=current_user.user_id,
+        )
+        return {"message": f"Password reset link sent to {user.email}"}
+
+    # Mode 2: Set password directly
     # Validate password strength
     password = password_data.new_password.get_secret_value()
     password_errors = default_password_validator.validate(password)
@@ -419,14 +444,8 @@ async def reset_user_password(
             },
         )
 
-    # Update password
-    password_hash = hash_password(password)
-    await user_repo.update_password(user_id, password_hash)
-
-    # Invalidate all refresh tokens for the user
-    await user_repo.invalidate_refresh_tokens(user_id)
-    
-    await session.commit()
+    # Use service to set password (handles refresh token revocation and reset token cleanup)
+    await reset_service.set_password_by_admin(user_id, password)
 
     logger.info(
         "password_reset",
@@ -434,7 +453,7 @@ async def reset_user_password(
         reset_by=current_user.user_id,
     )
 
-    return {"message": "Password reset successfully"}
+    return {"message": "Password updated successfully"}
 
 
 @router.post(
