@@ -1,4 +1,4 @@
-<img width="2816" height="1536" alt="Gemini_Generated_Image_2g6dru2g6dru2g6d" src="https://github.com/user-attachments/assets/71d1b9b7-1b31-44c7-8520-eb748f788190" />
+<img width="2816" height="1536" alt="SnackBase" src="https://github.com/user-attachments/assets/71d1b9b7-1b31-44c7-8520-eb748f788190" />
 
 # SnackBase
 
@@ -9,7 +9,19 @@
 [![React](https://img.shields.io/badge/React-19-cyan.svg)](https://react.dev/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-SnackBase is a Python/FastAPI-based BaaS providing auto-generated REST APIs, multi-tenancy, row-level security, authentication, and comprehensive admin UI.
+SnackBase is a Python/FastAPI-based BaaS providing auto-generated REST APIs, multi-tenancy, row-level security, authentication, enterprise OAuth/SAML, and comprehensive admin UI.
+
+## Project Statistics
+
+| Category | Count | Lines |
+|----------|-------|-------|
+| **Backend Code** | ~350 files | ~120,000 |
+| **Frontend Code** | ~100 files | ~25,000 |
+| **Tests** | 153 files | ~29,600 |
+| **Documentation** | 25+ files | ~20,000 |
+| **Total** | ~525 files | ~195,000 |
+
+---
 
 ## Status
 
@@ -59,7 +71,9 @@ SnackBase is a Python/FastAPI-based BaaS providing auto-generated REST APIs, mul
 
 **Phase 5: Enterprise Features** (Not Started)
 
-- [ ] OAuth/SAML, Rate Limiting, Advanced Monitoring
+- [ ] Rate Limiting, Advanced Monitoring
+
+---
 
 ## Quick Start
 
@@ -82,11 +96,13 @@ uv run python -m snackbase serve
 open http://localhost:8000
 ```
 
+---
+
 ## Features
 
 ### Core Platform
 
-- **Clean Architecture** - Domain, application, and infrastructure layer separation
+- **Clean Architecture** - Domain, application, and infrastructure layer separation (~120K LOC)
 - **Multi-Tenancy** - Row-level isolation with account-scoped data
 - **Configuration Management** - Environment variables and `.env` file support
 - **Structured JSON Logging** - Correlation ID tracking for request tracing
@@ -100,20 +116,23 @@ open http://localhost:8000
 - **JWT Token Management** - Access tokens (1 hour) and refresh tokens (7 days) with rotation
 - **Password Hashing** - Argon2id (OWASP recommended)
 - **Multi-Account Support** - Users can belong to multiple accounts
+- **OAuth 2.0** - Google, GitHub, Microsoft, Apple
+- **SAML 2.0** - Okta, Azure AD, Generic SAML
 
 ### Dynamic Collections & Records
 
 - **Collection Management** - Create, read, update, delete collections with custom schemas
 - **Auto-Generated CRUD APIs** - RESTful endpoints for any collection
-- **Field Types** - Text, number, email, boolean, date, JSON, select, relation
+- **Field Types** - Text, number, boolean, datetime, email, url, json, reference, file
 - **Schema Builder UI** - Visual interface for designing collection schemas
 - **Bulk Operations** - Bulk create, update, delete with filtering
+- **Reference Fields** - Foreign keys to other collections with cascade options
 
 ### Authorization & Security
 
 - **Role-Based Access Control (RBAC)** - Flexible roles and permissions system
 - **Permission System** - Granular CRUD permissions per collection
-- **Rule Engine** - Custom DSL for permission expressions (`@has_role()`, `@owns_record()`)
+- **Rule Engine** - Custom DSL for permission expressions (lexer, parser, AST, evaluator)
 - **Wildcard Collection Support** - `*` for all collections
 - **Field-Level Access Control** - Show/hide specific fields
 - **Permission Caching** - 5-minute TTL with invalidation
@@ -122,17 +141,17 @@ open http://localhost:8000
 ### Extensibility
 
 - **Hook System (Stable API v1.0)** - Event-driven extensibility
-  - App Lifecycle, Model Operations, Record Operations, Collection Operations
+  - 40+ hook events across 8 categories
   - Built-in hooks: timestamp, account_isolation, created_by, audit_capture
   - Custom hooks with priority-based execution
 - **SQL Macros** - Reusable SQL snippets with safe execution
-  - Built-in permission macros: `@has_role()`, `@has_group()`, `@owns_record()`, `@in_time_range()`
+  - Built-in permission macros: `@has_role()`, `@has_group()`, `@owns_record()`, `@in_time_range()`, `@has_permission()`
   - Timeout protection (5 seconds) and test mode with rollback
 - **Group Management** - User groups for easier permission assignment
 
 ### Admin UI
 
-- **React + TypeScript** - Modern admin interface
+- **React 19 + TypeScript** - Modern admin interface with 12 pages
 - **Dashboard** - Platform statistics and metrics with auto-refresh
 - **Account Management** - Create and manage accounts (superadmin)
 - **User Management** - Full CRUD for users across accounts (superadmin)
@@ -144,13 +163,20 @@ open http://localhost:8000
 - **Macros Management** - SQL macro editor with test execution
 - **Migrations Viewer** - Alembic revision history and status
 - **Audit Logs** - Filterable, exportable audit trail with PII masking
+- **Configuration Dashboard** - System/account-level provider configs (OAuth, SAML, Email)
+- **Email Templates** - Customizable email template management
 
 ### API & Testing
 
-- **13 API Routers** - Comprehensive REST API coverage
+- **19 API Routers** - Comprehensive REST API coverage with 100+ endpoints
 - **Interactive Docs** - Swagger/OpenAPI at `/docs`
-- **Comprehensive Tests** - Unit, integration, and security tests with pytest (680+ tests)
-- **Test Coverage** - High coverage across core functionality
+- **Comprehensive Tests** - 1,022 tests (unit, integration, security)
+  - 705 unit tests
+  - 317 integration tests
+  - 50+ security tests with HTML reporting
+- **Test Coverage** - ~29,600 lines of test code
+
+---
 
 ## Installation
 
@@ -174,18 +200,38 @@ cp .env.example .env
 # Edit .env with your configuration
 ```
 
+---
+
 ## Documentation
 
 Comprehensive documentation is available in the [`docs/`](docs/) directory:
 
+### Core Documentation
 - **[Quick Start Tutorial](docs/quick-start.md)** - Get up and running in 5 minutes
-- **[Conceptual Guides](docs/concepts/)** - Deep dives into multi-tenancy, collections, authentication, and security
-- **[Developer Guides](docs/guides/)** - Practical tutorials for API endpoints, hooks, rules, and testing
+- **[Architecture](docs/architecture.md)** - Complete system architecture with diagrams
 - **[Deployment Guide](docs/deployment.md)** - Development and production deployment
-- **[Frontend Guide](docs/frontend.md)** - React admin UI development
-- **[Hook System](docs/hooks.md)** - Extensibility framework and stable API
-- **[API Examples](docs/api-examples.md)** - Practical usage examples
+
+### Conceptual Guides
+- **[Multi-Tenancy](docs/concepts/multi-tenancy.md)** - Shared database, row-level isolation model
+- **[Collections](docs/concepts/collections.md)** - Dynamic schemas and field types
+- **[Authentication](docs/concepts/authentication.md)** - Authentication concepts
+- **[Security](docs/concepts/security.md)** - Security model
+
+### Developer Guides
+- **[Testing](docs/guides/testing.md)** - pytest with async testing patterns
+- **[Creating Custom Hooks](docs/guides/creating-custom-hooks.md)** - Hook system extension
+- **[Writing Permission Rules](docs/guides/writing-rules.md)** - Rule engine syntax
+- **[Adding API Endpoints](docs/guides/adding-api-endpoints.md)** - API development
+- **[Frontend Development](docs/frontend.md)** - React UI development
+
+### Reference Documentation
+- **[Hook System](docs/hooks.md)** - Extensibility framework (Stable API v1.0)
+- **[Permission System](docs/permissions.md)** - Authorization and rules
+- **[Macros](docs/macros.md)** - Built-in and SQL macros
+- **[API Examples](docs/api-examples.md)** - Practical usage examples (3,700+ lines)
 - **[API Reference (Swagger)](http://localhost:8000/docs)** - Interactive API documentation
+
+---
 
 ## CLI Commands
 
@@ -199,9 +245,16 @@ uv run python -m snackbase info           # Show configuration
 uv run python -m snackbase init-db        # Initialize database (dev only)
 uv run python -m snackbase create-superadmin  # Create superadmin user
 
+# Migrations
+uv run python -m snackbase migrate upgrade    # Apply migrations
+uv run python -m snackbase migrate downgrade  # Rollback
+uv run python -m snackbase migrate history    # Show history
+
 # Interactive shell
 uv run python -m snackbase shell          # IPython REPL with pre-loaded context
 ```
+
+---
 
 ## Environment Variables
 
@@ -224,6 +277,7 @@ SNACKBASE_DATABASE_URL=sqlite+aiosqlite:///./sb_data/snackbase.db
 
 # Security
 SNACKBASE_SECRET_KEY=your-secret-key-here
+SNACKBASE_ENCRYPTION_KEY=your-encryption-key
 
 # CORS
 SNACKBASE_CORS_ORIGINS=http://localhost:3000,http://localhost:8000
@@ -232,6 +286,8 @@ SNACKBASE_CORS_ORIGINS=http://localhost:3000,http://localhost:8000
 SNACKBASE_LOG_LEVEL=INFO
 SNACKBASE_LOG_FORMAT=json
 ```
+
+---
 
 ## Deployment
 
@@ -248,13 +304,18 @@ SnackBase is ready for one-click deployment on Railway with a managed PostgreSQL
 
 See the [Deployment Guide](docs/deployment.md) for other platforms.
 
+---
+
 ## API Structure
 
 ```
 /health, /ready, /live          # Health checks (no prefix)
 /api/v1/
-├── /auth/                      # Register, login, refresh, me
+├── /auth/                      # Register, login, refresh, me, password reset
+├── /auth/oauth/                # OAuth 2.0 flow (Google, GitHub, Microsoft, Apple)
+├── /auth/saml/                 # SAML 2.0 SSO (Okta, Azure AD, Generic)
 ├── /collections/               # Collection CRUD (superadmin)
+├── /records/{collection}/      # Dynamic collection CRUD
 ├── /accounts/                  # Account management (superadmin)
 ├── /users/                     # User management (superadmin)
 ├── /roles/                     # Role management
@@ -265,61 +326,159 @@ See the [Deployment Guide](docs/deployment.md) for other platforms.
 ├── /dashboard/                 # Dashboard statistics
 ├── /audit-logs/                # Audit log retrieval and export
 ├── /migrations/                # Alembic migration status
-└── /records/{collection}/      # Dynamic collection CRUD
+├── /files/                     # File upload/download
+├── /admin/                     # System/configuration management
+└── /admin/email/               # Email template management
 ```
+
+---
 
 ## Project Structure
 
 ```
 SnackBase/
 ├── src/snackbase/
-│   ├── core/                         # Cross-cutting concerns
+│   ├── core/                         # Cross-cutting concerns (~3,000 LOC)
 │   │   ├── config.py                 # Pydantic Settings
 │   │   ├── logging.py                # Structured logging
+│   │   ├── context.py                # ContextVar-based global state
 │   │   ├── hooks/                    # Hook registry (STABLE API v1.0)
+│   │   │   ├── hook_registry.py      # Registration and execution
+│   │   │   ├── hook_decorator.py     # Decorator API
+│   │   │   └── hook_events.py        # 40+ event definitions
 │   │   ├── macros/                   # SQL macro execution engine
-│   │   └── rules/                    # Rule engine (lexer, parser, AST)
-│   ├── domain/                       # Core business logic
-│   │   ├── entities/                 # Business entities (Account, User, Role, etc.)
-│   │   └── services/                 # Business logic (validators, resolvers)
-│   ├── application/                  # Use cases
-│   │   ├── commands/                 # Write operations (placeholder)
-│   │   ├── queries/                  # Read operations (placeholder)
+│   │   │   └── engine.py             # Built-in macros, SQL execution
+│   │   ├── rules/                    # Rule engine (lexer, parser, AST)
+│   │   │   ├── lexer.py              # Tokenization
+│   │   │   ├── parser.py             # Recursive descent parser
+│   │   │   ├── ast.py                # AST nodes
+│   │   │   └── evaluator.py          # Safe evaluation
+│   │   └── configuration/            # Configuration registry
+│   │       └── config_registry.py    # Hierarchical config resolution
+│   ├── domain/                       # Core business logic (~6,000 LOC)
+│   │   ├── entities/                 # Business entities (dataclasses)
+│   │   │   ├── account.py            # Account entity
+│   │   │   ├── user.py               # User entity
+│   │   │   ├── role.py               # Role entity
+│   │   │   ├── permission.py         # Permission entity
+│   │   │   ├── group.py              # Group entity
+│   │   │   ├── collection.py         # Collection entity
+│   │   │   ├── hook_context.py       # Hook context, abort exception
+│   │   │   └── ...                   # 17 entities total
+│   │   └── services/                 # Business logic
+│   │       ├── permission_resolver.py    # Permission evaluation
+│   │       ├── permission_cache.py        # 5-min TTL cache
+│   │       ├── audit_log_service.py       # GxP audit logging
+│   │       ├── pii_masking_service.py     # PII masking (6 types)
+│   │       ├── account_code_generator.py  # XX#### format
+│   │       └── ...                       # 20+ services
+│   ├── application/                  # Use cases (minimal)
+│   │   ├── commands/                 # Write operations
+│   │   ├── queries/                  # Read operations
 │   │   └── services/                 # Migration query service
-│   └── infrastructure/               # External dependencies
+│   └── infrastructure/               # External dependencies (~110,000 LOC)
 │       ├── api/
 │       │   ├── app.py                # FastAPI app factory
 │       │   ├── dependencies.py       # FastAPI dependencies
-│       │   ├── routes/               # 13 API routers
+│       │   ├── routes/               # 19 API routers
+│       │   │   ├── auth_router.py           # Authentication
+│       │   │   ├── oauth_router.py          # OAuth flow
+│       │   │   ├── saml_router.py           # SAML SSO
+│       │   │   ├── collections_router.py    # Collection CRUD
+│       │   │   ├── records_router.py        # Dynamic records
+│       │   │   ├── accounts_router.py       # Account mgmt
+│       │   │   ├── users_router.py          # User mgmt
+│       │   │   ├── roles_router.py          # Role mgmt
+│       │   │   ├── permissions_router.py    # Permission mgmt
+│       │   │   ├── groups_router.py         # Group mgmt
+│       │   │   ├── invitations_router.py    # Invitations
+│       │   │   ├── audit_log_router.py      # Audit logs
+│       │   │   ├── dashboard_router.py      # Statistics
+│       │   │   ├── macros_router.py         # SQL macros
+│       │   │   ├── migrations_router.py     # Alembic status
+│       │   │   ├── files_router.py          # File upload
+│       │   │   ├── admin_router.py          # System config
+│       │   │   └── email_templates_router.py # Email templates
 │       │   ├── schemas/              # Pydantic models
 │       │   └── middleware/           # Authorization, context, logging
 │       ├── persistence/
 │       │   ├── database.py           # SQLAlchemy 2.0 async
-│       │   ├── models/               # ORM models (11 models)
-│       │   ├── repositories/         # Repository pattern (11 repositories)
-│       │   └── table_builder.py      # Dynamic table creation
+│       │   ├── models/               # ORM models (17 models)
+│       │   ├── repositories/         # Repository pattern (18 repos)
+│       │   ├── table_builder.py      # Dynamic table creation
+│       │   ├── migration_service.py  # Dynamic migrations
+│       │   └── event_listeners.py    # SQLAlchemy event hooks
+│       ├── configuration/
+│       │   └── providers/            # Provider implementations
+│       │       ├── auth/             # Email/password
+│       │       ├── oauth/            # Google, GitHub, Microsoft, Apple
+│       │       ├── saml/             # Okta, Azure AD, Generic
+│       │       └── email/            # SMTP, AWS SES, Resend
 │       ├── auth/                     # JWT, password hasher
+│       ├── security/                 # Encryption service
 │       ├── hooks/                    # Built-in hooks implementation
-│       ├── services/                 # Token, email services
-│       ├── realtime/                 # WebSocket/SSE (TODO)
-│       └── storage/                  # File storage (TODO)
-├── ui/                               # React Admin UI
+│       └── services/                 # Token, email services
+├── ui/                               # React Admin UI (~25,000 LOC)
 │   ├── src/
-│   │   ├── pages/                    # Dashboard, Accounts, Collections, etc. (11 pages)
-│   │   ├── components/               # React components (Radix + Tailwind)
-│   │   ├── services/                 # API clients (11 services)
+│   │   ├── pages/                    # 12 pages
+│   │   │   ├── DashboardPage.tsx
+│   │   │   ├── AccountsPage.tsx
+│   │   │   ├── UsersPage.tsx
+│   │   │   ├── CollectionsPage.tsx
+│   │   │   ├── RecordsPage.tsx
+│   │   │   ├── RolesPage.tsx
+│   │   │   ├── GroupsPage.tsx
+│   │   │   ├── InvitationsPage.tsx
+│   │   │   ├── AuditLogsPage.tsx
+│   │   │   ├── MigrationsPage.tsx
+│   │   │   ├── MacrosPage.tsx
+│   │   │   └── ConfigurationDashboardPage.tsx
+│   │   ├── components/               # React components
+│   │   │   ├── ui/                   # 35 ShadCN components
+│   │   │   ├── accounts/             # Account-specific components
+│   │   │   ├── audit-logs/           # Audit log components
+│   │   │   ├── collections/          # Schema builder, CRUD dialogs
+│   │   │   ├── common/               # Reusable components
+│   │   │   ├── groups/               # Group management
+│   │   │   ├── invitations/          # Invitation components
+│   │   │   ├── macros/               # SQL macro editor
+│   │   │   ├── migrations/           # Migration status
+│   │   │   ├── records/              # Dynamic record CRUD
+│   │   │   └── roles/                # Permission matrix, rule editor
+│   │   ├── services/                 # API clients (15 services)
+│   │   │   ├── auth.service.ts
+│   │   │   ├── accounts.service.ts
+│   │   │   ├── collections.service.ts
+│   │   │   ├── records.service.ts
+│   │   │   └── ...                   # + 11 more
 │   │   ├── stores/                   # Zustand state
-│   │   └── lib/                      # Utilities
-├── tests/                            # Unit, integration, security tests
-│   ├── unit/                         # 40+ test files
-│   ├── integration/                  # 29+ test files
-│   ├── security/                     # 8+ test files with HTML reporter
+│   │   │   └── auth.store.ts         # Authentication state
+│   │   └── lib/                      # Utilities, axios config
+├── tests/                            # Test suite (~29,600 LOC)
+│   ├── unit/                         # 705 unit tests
+│   ├── integration/                  # 317 integration tests
+│   ├── security/                     # 50+ security tests
+│   ├── verification/                 # 8 verification scripts
 │   └── conftest.py                   # Pytest fixtures
+├── docs/                             # Documentation (~20,000 LOC)
+│   ├── quick-start.md                # 5-minute tutorial
+│   ├── architecture.md               # System architecture
+│   ├── deployment.md                 # Deployment guide
+│   ├── frontend.md                   # Frontend development
+│   ├── hooks.md                      # Hook system (v1.0)
+│   ├── permissions.md                # Permission system
+│   ├── macros.md                     # Macro documentation
+│   ├── api-examples.md               # API examples (3,700+ lines)
+│   ├── concepts/                     # Conceptual guides
+│   └── guides/                       # Developer guides
 ├── sb_data/                          # Data directory (gitignored)
+├── alembic/                          # Database migrations
 ├── CLAUDE.md                         # AI assistant instructions
 ├── pyproject.toml                    # Project configuration
 └── README.md                         # This file
 ```
+
+---
 
 ## Development
 
@@ -332,16 +491,18 @@ uv run ruff format .                       # Format
 uv run mypy src/                           # Type check
 
 # Testing
-uv run pytest                              # Run all tests
-uv run pytest tests/unit/                  # Unit tests only
-uv run pytest tests/integration/           # Integration tests only
+uv run pytest                              # Run all tests (1,022 tests)
+uv run pytest tests/unit/                  # Unit tests only (705)
+uv run pytest tests/integration/           # Integration tests only (317)
+uv run pytest tests/security/              # Security tests only (50+)
 uv run pytest --cov=snackbase              # With coverage
 uv run pytest -k "test_name"               # Run specific test
+uv run pytest -m enable_audit_hooks        # Run with audit hooks
 ```
 
 ### Frontend
 
-**Tech Stack**: React 19 + React Router v7 + Vite 7 + TailwindCSS 4 + Radix UI + TanStack Query + Zustand + Zod
+**Tech Stack**: React 19 + React Router v7 + Vite 7 + TailwindCSS 4 + Radix UI + TanStack Query v5 + Zustand v5 + Zod
 
 ```bash
 cd ui
@@ -352,15 +513,29 @@ npm run preview    # Preview production build
 npx shadcn@latest add {component}  # Install ShadCN components
 ```
 
+---
+
 ## Architecture
 
 ### Clean Architecture
 
 SnackBase follows **Clean Architecture** with three layers:
 
-1. **Domain Layer** - Core business logic with zero external dependencies
-2. **Application Layer** - Use cases and orchestration
-3. **Infrastructure Layer** - All external dependencies (FastAPI, SQLAlchemy)
+1. **Core Layer** - Cross-cutting concerns with ZERO external dependencies
+   - Configuration (Pydantic Settings)
+   - Structured logging (structlog)
+   - Hook registry (STABLE API v1.0)
+   - Rule engine (lexer, parser, AST, evaluator)
+   - Macro execution engine
+
+2. **Domain Layer** - Core business logic with zero external dependencies
+   - Entities (dataclasses)
+   - Services (validators, resolvers)
+
+3. **Infrastructure Layer** - All external dependencies
+   - FastAPI (web framework)
+   - SQLAlchemy 2.0 (ORM)
+   - Configuration providers (OAuth, SAML, Email)
 
 ### Multi-Tenancy Model
 
@@ -369,13 +544,14 @@ Accounts represent isolated tenants using row-level isolation via `account_id`:
 - **Account ID Format**: `XX####` (2 letters + 4 digits, e.g., `AB1234`)
 - **User Identity**: `(email, account_id)` tuple
 - **Password Scope**: Per-account (same email = different passwords per account)
+- **System Account**: `00000000-0000-0000-0000-000000000000` for system-level configs
 
 ### Two-Tier Table Architecture
 
-1. **Core System Tables** - Schema changes via releases (accounts, users, roles, permissions, collections, macros, migrations)
+1. **Core System Tables** - Schema changes via releases (17 ORM models)
 2. **User-Created Collections** - Single global tables shared by ALL accounts
 
-**Critical**: User collections are ONE physical table where all accounts store data together, isolated by `account_id`. The `collections` table stores schema definitions only.
+**Critical**: User collections are ONE physical table (`col_*`) where all accounts store data together, isolated by `account_id`. The `collections` table stores schema definitions only.
 
 ### Hook System (Stable API v1.0)
 
@@ -387,22 +563,69 @@ async def send_post_notification(record, context):
     await notification_service.send(record.created_by, "Post created!")
 ```
 
-Built-in hooks (cannot be unregistered):
+**40+ Hook Events** across 8 categories:
+- App Lifecycle: `on_bootstrap`, `on_serve`, `on_terminate`
+- Model Operations: `on_model_before/after_create/update/delete`
+- Record Operations: `on_record_before/after_create/update/delete/query`
+- Collection Operations: `on_collection_before/after_create/update/delete`
+- Auth Operations: `on_auth_before/after_login/register/logout`
+- Request Processing: `on_before_request`, `on_after_request`
+- Realtime: `on_realtime_connect/disconnect/message`
+- Mailer: `on_mailer_before/after_send`
 
-- `timestamp_hook` - Auto-sets created_at/updated_at
-- `account_isolation_hook` - Enforces account_id filtering
-- `created_by_hook` - Sets created_by/updated_by user
-- `audit_capture_hook` - Captures GxP-compliant audit entries for CREATE/UPDATE/DELETE
+**Built-in hooks** (cannot be unregistered):
+- `timestamp_hook` (-100 priority): Auto-sets created_at/updated_at
+- `account_isolation_hook` (-200 priority): Enforces account_id filtering
+- `created_by_hook` (-150 priority): Sets created_by/updated_by user
+- `audit_capture_hook` (100 priority): Captures GxP-compliant audit entries
 
 ### Rule Engine
 
-Custom DSL for permission expressions:
+Custom DSL for permission expressions with full lexer/parser/AST implementation:
 
 ```python
+# Simple comparisons
 user.id == "user_abc123"
+
+# Macro calls
 @has_role("admin") and @owns_record()
+
+# List membership
 status in ["draft", "published"]
+
+# Time-based access
+@in_time_range(9, 17)
+
+# Complex expressions
+(@has_role("editor") and record.status in ["draft", "pending"]) or @has_role("admin")
 ```
+
+**Supported operators**: `==`, `!=`, `<`, `>`, `<=`, `>=`, `in`, `and`, `or`, `not`
+
+**Built-in macros**:
+- `@has_role(role_name)` - Check user role
+- `@has_group(group_name)` - Check group membership
+- `@owns_record()` / `@is_creator()` - Check record ownership
+- `@in_time_range(start, end)` - Time-based access
+- `@has_permission(action, collection)` - Permission check
+
+### Configuration Hierarchy
+
+**Two-level hierarchy** for provider configurations:
+
+1. **System-level** (`00000000-0000-0000-0000-000000000000`)
+   - Default configs for all accounts
+   - Managed by superadmins
+
+2. **Account-level**
+   - Per-account overrides
+   - Takes precedence over system defaults
+
+**Providers**:
+- **Auth**: Email/password, OAuth (Google, GitHub, Microsoft, Apple), SAML (Okta, Azure AD, Generic)
+- **Email**: SMTP, AWS SES, Resend
+
+---
 
 ## Roadmap
 
@@ -410,17 +633,23 @@ See [PRD_PHASES.md](PRD_PHASES.md) for detailed specifications.
 
 - [x] **Phase 1**: Foundation & MVP - Multi-tenancy, auth, dynamic collections, UI (92% complete)
 - [x] **Phase 2**: Security & Authorization - RBAC, permissions, rule engine, groups, PII masking (90% complete)
-- [ ] **Phase 3**: Operations - GxP audit logging (done), migrations (done), dashboard UI (done)
+- [x] **Phase 3**: Operations - GxP audit logging, migrations, dashboard UI (70% complete)
 - [ ] **Phase 4**: Advanced Features - Real-time (WebSocket/SSE), file storage, PostgreSQL support
-- [ ] **Phase 5**: Enterprise - OAuth/SAML, rate limiting, monitoring
+- [ ] **Phase 5**: Enterprise - Rate limiting, monitoring
+
+---
 
 ## Contributing
 
 Contributions are welcome! Please read [CLAUDE.md](CLAUDE.md) for development guidelines.
 
+---
+
 ## License
 
 MIT License - See LICENSE file for details
+
+---
 
 ## Acknowledgments
 
