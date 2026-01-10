@@ -107,12 +107,20 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <OAuthButton
-              provider="google"
-              account={account || undefined}
-              onSuccess={() => navigate('/todos')}
-              onError={(error) => console.error('OAuth error:', error)}
-            />
+            <div className="space-y-3">
+              <OAuthButton
+                provider="google"
+                account={account || undefined}
+                onSuccess={() => navigate('/todos')}
+                onError={(error) => console.error('OAuth error:', error)}
+              />
+              <OAuthButton
+                provider="apple"
+                account={account || undefined}
+                onSuccess={() => navigate('/todos')}
+                onError={(error) => console.error('OAuth error:', error)}
+              />
+            </div>
 
             <p className="text-sm text-gray-600">
               Don't have an account?{' '}
