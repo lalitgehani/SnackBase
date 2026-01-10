@@ -44,6 +44,7 @@ import {
   type UserListParams,
   type CreateUserRequest,
   type UpdateUserRequest,
+  type PasswordResetRequest,
 } from '@/services/users.service';
 import { getAccounts, type AccountListItem } from '@/services/accounts.service';
 import { getRoles, type RoleListItem } from '@/services/roles.service';
@@ -133,7 +134,7 @@ export default function UsersPage() {
     await fetchUsers();
   };
 
-  const handleResetPassword = async (userId: string, data: { new_password: string }) => {
+  const handleResetPassword = async (userId: string, data: PasswordResetRequest) => {
     await resetUserPassword(userId, data);
   };
 

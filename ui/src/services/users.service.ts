@@ -52,7 +52,8 @@ export interface UpdateUserRequest {
 }
 
 export interface PasswordResetRequest {
-  new_password: string;
+  new_password?: string;
+  send_reset_link?: boolean;
 }
 
 /**
