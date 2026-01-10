@@ -83,6 +83,9 @@ class EmailTemplateRenderRequest(BaseModel):
     variables: dict[str, str]
     locale: str = "en"
     account_id: str | None = None
+    subject: str | None = None
+    html_body: str | None = None
+    text_body: str | None = None
 
 
 class EmailTemplateRenderResponse(BaseModel):

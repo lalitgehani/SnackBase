@@ -32,6 +32,9 @@ export interface EmailTemplateRenderRequest {
   variables: Record<string, string>;
   locale?: string;
   account_id?: string;
+  subject?: string;
+  html_body?: string;
+  text_body?: string;
 }
 
 export interface EmailTemplateRenderResponse {

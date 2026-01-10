@@ -223,9 +223,14 @@ async def render_email_template(
         renderer = get_template_renderer()
 
         try:
-            subject = renderer.render(template.subject, render_request.variables)
-            html_body = renderer.render(template.html_body, render_request.variables)
-            text_body = renderer.render(template.text_body, render_request.variables)
+            # Use provided content or fallback to template content
+            raw_subject = render_request.subject if render_request.subject is not None else template.subject
+            raw_html = render_request.html_body if render_request.html_body is not None else template.html_body
+            raw_text = render_request.text_body if render_request.text_body is not None else template.text_body
+
+            subject = renderer.render(raw_subject, render_request.variables)
+            html_body = renderer.render(raw_html, render_request.variables)
+            text_body = renderer.render(raw_text, render_request.variables)
         except Exception as e:
             logger.error(
                 "Template rendering failed",
