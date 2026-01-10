@@ -574,8 +574,9 @@ async def _seed_default_email_templates(db: DatabaseManager) -> None:
                     <tr>
                         <td>
                             <h2 style="margin: 0 0 20px 0; color: #2c3e50; font-size: 24px; font-weight: 600;">Verify Your Email Address</h2>
-                            <p style="margin: 0 0 16px 0; color: #4a5568; font-size: 16px; line-height: 1.6;">Hello{% if user_name %} {{ user_name }}{% endif %},</p>
-                            <p style="margin: 0 0 16px 0; color: #4a5568; font-size: 16px; line-height: 1.6;">Thank you for signing up for {{ app_name }}! To complete your registration and start using your account, please verify your email address by clicking the button below:</p>
+                            <p style="margin: 0 0 16px 0; color: #4a5568; font-size: 16px; line-height: 1.6;">Hello,</p>
+                            <p style="margin: 0 0 16px 0; color: #4a5568; font-size: 16px; line-height: 1.6;">We received a request to create an account for <strong style="color: #2c3e50;">{{ email }}</strong>.</p>
+                            <p style="margin: 0 0 16px 0; color: #4a5568; font-size: 16px; line-height: 1.6;">To complete your registration and start using {{ app_name }}, please verify your email address by clicking the button below:</p>
                         </td>
                     </tr>
                     <!-- Button -->
@@ -611,7 +612,7 @@ async def _seed_default_email_templates(db: DatabaseManager) -> None:
                     <!-- Footer -->
                     <tr>
                         <td style="padding-top: 30px; border-top: 1px solid #e2e8f0; margin-top: 30px;">
-                            <p style="margin: 0 0 8px 0; color: #a0aec0; font-size: 13px; line-height: 1.5;">If you didn't create an account with {{ app_name }}, you can safely ignore this email.</p>
+                            <p style="margin: 0 0 8px 0; color: #a0aec0; font-size: 13px; line-height: 1.5;">If you didn't create an account with {{ app_name }} using this email address, you can safely ignore this email.</p>
                             <p style="margin: 0; color: #a0aec0; font-size: 13px;">Need help? Visit <a href="{{ app_url }}" style="color: #3498db; text-decoration: none;">{{ app_name }}</a></p>
                         </td>
                     </tr>
@@ -625,9 +626,11 @@ async def _seed_default_email_templates(db: DatabaseManager) -> None:
             "text_body": """
 {{ app_name }} - Verify Your Email Address
 
-Hello{% if user_name %} {{ user_name }}{% endif %},
+Hello,
 
-Thank you for signing up for {{ app_name }}! To complete your registration and start using your account, please verify your email address by visiting the following link:
+We received a request to create an account for {{ email }}.
+
+To complete your registration and start using {{ app_name }}, please verify your email address by visiting the following link:
 
 {{ verification_url }}
 
@@ -635,7 +638,7 @@ Thank you for signing up for {{ app_name }}! To complete your registration and s
 
 {% if expires_at %}This verification link will expire on {{ expires_at }}.{% endif %}
 
-If you didn't create an account with {{ app_name }}, you can safely ignore this email.
+If you didn't create an account with {{ app_name }} using this email address, you can safely ignore this email.
 
 Need help? Visit {{ app_url }}
             """.strip(),
