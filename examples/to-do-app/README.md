@@ -117,13 +117,16 @@ The app will be available at `http://localhost:5173`
    - **Email**: Your email address
    - **Password**: Must be 12+ characters with uppercase, lowercase, number, and special character
 3. Click "Create Account"
-4. You'll be automatically logged in and redirected to the todos page
+4. **Check your email** for a verification link
+5. Click the verification link in the email to verify your account
+6. Return to the app and log in
 
 ### Login
 
 1. Navigate to `http://localhost:5173/login`
 2. Enter your account slug/ID, email, and password
 3. Click "Login"
+4. **Note**: You must verify your email before you can log in
 
 ### Manage Todos
 
@@ -156,25 +159,27 @@ src/
 
 ## API Endpoints Used
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/v1/auth/register` | POST | Create new account + user |
-| `/api/v1/auth/login` | POST | Login with credentials |
-| `/api/v1/auth/refresh` | POST | Refresh access token |
-| `/api/v1/auth/me` | GET | Get current user info |
-| `/api/v1/records/todos` | GET | List todos (filtered by account) |
-| `/api/v1/records/todos` | POST | Create new todo |
-| `/api/v1/records/todos/{id}` | GET | Get single todo |
-| `/api/v1/records/todos/{id}` | PATCH | Update todo |
-| `/api/v1/records/todos/{id}` | DELETE | Delete todo |
+| Endpoint                     | Method | Description                      |
+| ---------------------------- | ------ | -------------------------------- |
+| `/api/v1/auth/register`      | POST   | Create new account + user        |
+| `/api/v1/auth/login`         | POST   | Login with credentials           |
+| `/api/v1/auth/refresh`       | POST   | Refresh access token             |
+| `/api/v1/auth/me`            | GET    | Get current user info            |
+| `/api/v1/records/todos`      | GET    | List todos (filtered by account) |
+| `/api/v1/records/todos`      | POST   | Create new todo                  |
+| `/api/v1/records/todos/{id}` | GET    | Get single todo                  |
+| `/api/v1/records/todos/{id}` | PATCH  | Update todo                      |
+| `/api/v1/records/todos/{id}` | DELETE | Delete todo                      |
 
 ## Authentication Flow
 
-1. User registers/logs in → receives `access_token` (1 hour) and `refresh_token` (7 days)
-2. Tokens stored in localStorage via Zustand persist middleware
-3. Axios request interceptor injects `Authorization: Bearer <token>` header
-4. On 401 error → response interceptor attempts token refresh
-5. If refresh fails → user redirected to login
+1. User registers → receives success message to check email
+2. User clicks verification link in email → email is verified
+3. User logs in → receives `access_token` (1 hour) and `refresh_token` (7 days)
+4. Tokens stored in localStorage via Zustand persist middleware
+5. Axios request interceptor injects `Authorization: Bearer <token>` header
+6. On 401 error → response interceptor attempts token refresh
+7. If refresh fails → user redirected to login
 
 ## Multi-Tenancy
 

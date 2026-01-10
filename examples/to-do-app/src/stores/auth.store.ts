@@ -18,10 +18,11 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
+  registrationEmail: string | null; // Track email for pending verification
 
   // Actions
   login: (account: string, email: string, password: string) => Promise<void>;
-  register: (accountName: string, accountSlug: string | undefined, email: string, password: string) => Promise<void>;
+  register: (accountName: string, accountSlug: string | undefined, email: string, password: string) => Promise<{ message: string; accountSlug: string }>;
   oauthLogin: (provider?: 'google' | 'github' | 'microsoft' | 'apple', account?: string, accountName?: string) => Promise<void>;
   logout: () => void;
   clearError: () => void;
@@ -39,6 +40,7 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       isLoading: false,
       error: null,
+      registrationEmail: null,
 
       // Login action
       login: async (account: string, email: string, password: string) => {
@@ -55,6 +57,7 @@ export const useAuthStore = create<AuthState>()(
             isAuthenticated: true,
             isLoading: false,
             error: null,
+            registrationEmail: null,
           });
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Login failed';
@@ -73,33 +76,31 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      // Register action
+      // Register action - now returns registration info without tokens
       register: async (accountName: string, accountSlug: string | undefined, email: string, password: string) => {
         set({ isLoading: true, error: null });
 
         try {
           const response = await authService.register(accountName, accountSlug, email, password);
 
+          // Store email for verification flow, but don't authenticate
           set({
-            user: response.user,
-            account: response.account,
-            token: response.token,
-            refreshToken: response.refresh_token,
-            isAuthenticated: true,
+            registrationEmail: email,
             isLoading: false,
             error: null,
           });
+
+          return {
+            message: response.message,
+            accountSlug: response.account.slug,
+          };
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Registration failed';
 
           set({
-            user: null,
-            account: null,
-            token: null,
-            refreshToken: null,
-            isAuthenticated: false,
             isLoading: false,
             error: errorMessage,
+            registrationEmail: null,
           });
 
           throw error;

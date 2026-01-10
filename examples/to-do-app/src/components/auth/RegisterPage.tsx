@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, Check, X } from 'lucide-react';
+import { Loader2, Check, X, Mail } from 'lucide-react';
 import OAuthButton from '@/components/ui/oauthButton';
 
 export default function RegisterPage() {
@@ -21,6 +21,8 @@ export default function RegisterPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [registrationSuccess, setRegistrationSuccess] = useState(false);
+  const [registeredAccountSlug, setRegisteredAccountSlug] = useState('');
 
   // Password validation
   const passwordRequirements = {
@@ -62,12 +64,53 @@ export default function RegisterPage() {
     }
 
     try {
-      await register(accountName, accountSlug || undefined, email, password);
-      navigate('/todos');
+      const result = await register(accountName, accountSlug || undefined, email, password);
+      setRegistrationSuccess(true);
+      setRegisteredAccountSlug(result.accountSlug);
     } catch (err) {
       console.error('Registration failed:', err);
     }
   };
+
+  // Show success message after registration
+  if (registrationSuccess) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8">
+        <Card className="w-full max-w-md">
+          <CardHeader className="space-y-1 text-center">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
+              <Mail className="h-6 w-6 text-green-600" />
+            </div>
+            <CardTitle className="text-2xl font-bold">Check Your Email</CardTitle>
+            <CardDescription>
+              We've sent a verification link to <strong>{email}</strong>
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="rounded-md bg-blue-50 p-4 text-sm text-blue-800">
+              <p className="font-medium mb-2">Next steps:</p>
+              <ol className="list-decimal list-inside space-y-1">
+                <li>Check your email inbox</li>
+                <li>Click the verification link</li>
+                <li>Return here to log in</li>
+              </ol>
+            </div>
+            <p className="text-xs text-gray-500 text-center">
+              Didn't receive the email? Check your spam folder or contact support.
+            </p>
+          </CardContent>
+          <CardFooter>
+            <Button
+              onClick={() => navigate(`/login?account=${registeredAccountSlug}&email=${email}`)}
+              className="w-full"
+            >
+              Go to Login
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8">

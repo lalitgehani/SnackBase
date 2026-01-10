@@ -104,18 +104,18 @@ export default function RecordsTable({
 
 		// Handle datetime
 		if (field.type === 'datetime') {
-			return <span className="text-sm">{formatDate(value)}</span>;
+			return <span className="text-sm">{formatDate(value as string)}</span>;
 		}
 
 		// Handle number
 		if (field.type === 'number') {
-			return <span className="font-mono">{value}</span>;
+			return <span className="font-mono">{value as React.ReactNode}</span>;
 		}
 
 		// Handle long text
 		if (field.type === 'text' && String(value).length > 50) {
 			return (
-				<span className="text-sm" title={value}>
+				<span className="text-sm" title={String(value)}>
 					{String(value).slice(0, 50)}...
 				</span>
 			);

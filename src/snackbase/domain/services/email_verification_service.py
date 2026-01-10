@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from snackbase.core.logging import get_logger
 from snackbase.domain.entities.email_verification import EmailVerificationToken
+from snackbase.infrastructure.persistence.models.user import UserModel
 from snackbase.infrastructure.persistence.repositories.email_verification_repository import (
     EmailVerificationRepository,
 )
@@ -55,6 +56,9 @@ class EmailVerificationService:
         # Generate token entity and plain token
         entity, raw_token = EmailVerificationToken.generate(user_id, email)
 
+        # Clean up any existing tokens for this user and email to avoid UNIQUE constraint violation
+        await self.verification_repo.delete_for_user_email(user_id, email)
+
         # Store token in database
         await self.verification_repo.create(entity)
 
@@ -96,27 +100,27 @@ class EmailVerificationService:
 
         return success
 
-    async def verify_email(self, token_plain: str) -> bool:
+    async def verify_email(self, token_plain: str) -> UserModel | None:
         """Verify a user's email using a plain text token.
 
         Args:
             token_plain: The raw token string sent to the user.
 
         Returns:
-            True if verification succeeded, False if token is invalid or expired.
+            The user model if verification succeeded, None if token is invalid or expired.
         """
         # Look up token by its hash
         token = await self.verification_repo.get_by_token(token_plain)
 
         if not token or not token.is_valid():
             logger.info("Email verification failed: token invalid or expired")
-            return False
+            return None
 
         # Get user to verify
         user = await self.user_repo.get_by_id(token.user_id)
         if not user:
             logger.error("Email verification failed: user not found", user_id=token.user_id)
-            return False
+            return None
 
         # Mark user as verified
         user.email_verified = True
@@ -135,4 +139,4 @@ class EmailVerificationService:
             email=user.email,
             account_id=user.account_id,
         )
-        return True
+        return user

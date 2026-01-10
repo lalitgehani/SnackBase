@@ -81,6 +81,9 @@ class EmailVerificationRepository:
         Returns:
             The stored entity.
         """
+        # Delete existing tokens for this user/email to avoid UNIQUE constraint violation
+        await self.delete_for_user_email(entity.user_id, entity.email)
+
         model = self._to_model(entity)
         self._session.add(model)
         await self._session.flush()
@@ -153,3 +156,23 @@ class EmailVerificationRepository:
         result = await self._session.execute(stmt)
         model = result.scalar_one_or_none()
         return self._to_entity(model) if model else None
+
+    async def delete_for_user_email(self, user_id: str, email: str) -> int:
+        """Delete all tokens for a specific user and email address.
+
+        This is used to clean up any existing tokens (even if expired or used)
+        before creating a new verification token to avoid UNIQUE constraint violations.
+
+        Args:
+            user_id: The user's UUID.
+            email: The email address.
+
+        Returns:
+            Number of tokens deleted.
+        """
+        stmt = delete(EmailVerificationTokenModel).where(
+            EmailVerificationTokenModel.user_id == user_id,
+            EmailVerificationTokenModel.email == email,
+        )
+        result = await self._session.execute(stmt)
+        return result.rowcount

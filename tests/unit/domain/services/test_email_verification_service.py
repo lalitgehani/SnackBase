@@ -73,6 +73,7 @@ async def test_send_verification_email_success(
 
     # Verify
     assert success is True
+    mock_verification_repo.delete_for_user_email.assert_called_once_with(user_id, email)
     mock_verification_repo.create.assert_called_once()
     mock_email_service.send_template_email.assert_called_once()
     mock_session.commit.assert_called_once()
@@ -133,10 +134,10 @@ async def test_verify_email_success(
     mock_user_repo.get_by_id.return_value = user_model
 
     # Execute
-    success = await verification_service.verify_email(token_plain)
+    result = await verification_service.verify_email(token_plain)
 
     # Verify
-    assert success is True
+    assert result == user_model
     assert user_model.email_verified is True
     assert user_model.email_verified_at is not None
     mock_verification_repo.mark_as_used.assert_called_once_with("token-id")
@@ -152,10 +153,10 @@ async def test_verify_email_invalid_token(
     mock_verification_repo.get_by_token.return_value = None
 
     # Execute
-    success = await verification_service.verify_email("invalid-token")
+    result = await verification_service.verify_email("invalid-token")
 
     # Verify
-    assert success is False
+    assert result is None
     mock_session.commit.assert_not_called()
 
 
@@ -175,8 +176,8 @@ async def test_verify_email_expired_token(
     mock_verification_repo.get_by_token.return_value = token_entity
 
     # Execute
-    success = await verification_service.verify_email("expired-token")
+    result = await verification_service.verify_email("expired-token")
 
     # Verify
-    assert success is False
+    assert result is None
     mock_session.commit.assert_not_called()

@@ -9,7 +9,12 @@ services:
     environment:
       - SNACKBASE_DATABASE_URL=sqlite+aiosqlite:////app/sb_data/snackbase.db
       - SNACKBASE_SECRET_KEY=${SNACKBASE_SECRET_KEY:-change-this-secret-key-in-production}
-      - SNACKBASE_CORS_ORIGINS=["http://localhost:3000","http://frontend","http://localhost:80"]
+      - SNACKBASE_ENCRYPTION_KEY=${SNACKBASE_ENCRYPTION_KEY:-change-this-encryption-key-in-production}
+      - SNACKBASE_EXTERNAL_URL=${SNACKBASE_EXTERNAL_URL:-http://localhost}
+      - SNACKBASE_ENVIRONMENT=${SNACKBASE_ENVIRONMENT:-production}
+      - SNACKBASE_CORS_ORIGINS=["http://localhost","http://localhost:80","http://frontend"]
+      - SNACKBASE_LOG_FORMAT=json
+      - SNACKBASE_LOG_LEVEL=INFO
       - SNACKBASE_SUPERADMIN_EMAIL=${SNACKBASE_SUPERADMIN_EMAIL:-admin@example.com}
       - SNACKBASE_SUPERADMIN_PASSWORD=${SNACKBASE_SUPERADMIN_PASSWORD:-ChangeMe123!}
     volumes:

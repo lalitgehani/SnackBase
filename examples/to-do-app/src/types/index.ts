@@ -4,6 +4,7 @@ export interface UserInfo {
   email: string;
   role: string;
   is_active: boolean;
+  email_verified?: boolean;
   created_at: string;
 }
 
@@ -12,6 +13,12 @@ export interface AccountInfo {
   slug: string;
   name: string;
   created_at: string;
+}
+
+export interface RegisterResponse {
+  message: string;
+  account: AccountInfo;
+  user: UserInfo;
 }
 
 export interface AuthResponse {
