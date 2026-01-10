@@ -17,10 +17,12 @@ import ConfigurationDashboardPage from '@/pages/ConfigurationDashboardPage';
 import AdminLayout from '@/layouts/AdminLayout';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { Toaster } from '@/components/ui/toaster';
+import { DemoBanner } from '@/components/DemoBanner';
 
 function App() {
   return (
     <>
+      <DemoBanner />
       <Routes>
         {/* Redirect root to admin */}
         <Route path="/" element={<Navigate to="/admin/dashboard" replace />} />
