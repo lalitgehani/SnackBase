@@ -735,6 +735,8 @@ async def verify_email(
     }
 
 
+from fastapi import Request
+
 @router.post(
     "/forgot-password",
     status_code=status.HTTP_200_OK,
@@ -744,7 +746,8 @@ async def verify_email(
     },
 )
 async def forgot_password(
-    request: ForgotPasswordRequest,
+    request: Request,
+    forgot_request: ForgotPasswordRequest,
     session: AsyncSession = Depends(get_db_session),
     reset_service: PasswordResetService = Depends(get_password_reset_service),
 ) -> ForgotPasswordResponse:
@@ -754,7 +757,8 @@ async def forgot_password(
     Always returns 200 regardless of whether the email exists (security - don't reveal user existence).
 
     Args:
-        request: Email and account identifier.
+        request: FastAPI request object to get client IP.
+        forgot_request: Email and account identifier.
         session: Database session.
         reset_service: Password reset service dependency.
 
@@ -766,28 +770,28 @@ async def forgot_password(
     user_repo = UserRepository(session)
 
     # Resolve account by slug or ID
-    account = await account_repo.get_by_slug_or_code(request.account)
+    account = await account_repo.get_by_slug_or_code(forgot_request.account)
 
     if account is None:
         # Account not found - return success anyway (don't reveal account existence)
         logger.info(
             "Password reset requested: account not found",
-            account_identifier=request.account,
-            email=request.email,
+            account_identifier=forgot_request.account,
+            email=forgot_request.email,
         )
         return ForgotPasswordResponse(
             message="If an account with that email exists, a password reset link has been sent."
         )
 
     # Look up user by email in account
-    user = await user_repo.get_by_email_and_account(request.email, account.id)
+    user = await user_repo.get_by_email_and_account(forgot_request.email, account.id)
 
     if user is None:
         # User not found - return success anyway (don't reveal user existence)
         logger.info(
             "Password reset requested: user not found in account",
             account_id=account.id,
-            email=request.email,
+            email=forgot_request.email,
         )
         return ForgotPasswordResponse(
             message="If an account with that email exists, a password reset link has been sent."
@@ -812,6 +816,7 @@ async def forgot_password(
             user_id=user.id,
             email=user.email,
             account_id=account.id,
+            ip_address=request.client.host if request.client else None,
         )
         logger.info(
             "Password reset email sent",

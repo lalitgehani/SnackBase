@@ -646,7 +646,7 @@ Need help? Visit {{ app_url }}
         {
             "template_type": "password_reset",
             "locale": "en",
-            "subject": "Reset your password for {{ app_name }}",
+            "subject": "Reset your {{ app_name }} password",
             "html_body": """
 <!DOCTYPE html>
 <html>
@@ -716,7 +716,7 @@ Need help? Visit {{ app_url }}
                         <td style="padding-top: 20px;">
                             <div style="background-color: #fff5f5; border-left: 4px solid #fc8181; padding: 16px; border-radius: 6px;">
                                 <p style="margin: 0 0 8px 0; color: #c53030; font-size: 14px; font-weight: 600;">🔒 Security Notice</p>
-                                <p style="margin: 0; color: #742a2a; font-size: 13px; line-height: 1.5;">If you didn't request a password reset, please ignore this email. Your password will remain unchanged. For security, we recommend changing your password if you suspect unauthorized access to your account.</p>
+                                <p style="margin: 0; color: #742a2a; font-size: 13px; line-height: 1.5;">If you didn't request a password reset, please ignore this email. Your password will remain unchanged.{% if ip_address %} This request was initiated from IP address: <strong>{{ ip_address }}</strong>.{% endif %} For security, we recommend changing your password if you suspect unauthorized access to your account.</p>
                             </div>
                         </td>
                     </tr>
@@ -748,7 +748,7 @@ We received a request to reset the password for your {{ app_name }} account{% if
 {% if expires_at %}This password reset link will expire on {{ expires_at }}.{% endif %}
 
 SECURITY NOTICE:
-If you didn't request a password reset, please ignore this email. Your password will remain unchanged. For security, we recommend changing your password if you suspect unauthorized access to your account.
+If you didn't request a password reset, please ignore this email. Your password will remain unchanged.{% if ip_address %} This request was initiated from IP address: {{ ip_address }}.{% endif %} For security, we recommend changing your password if you suspect unauthorized access to your account.
 
 This password reset was requested from your {{ app_name }} account.
 

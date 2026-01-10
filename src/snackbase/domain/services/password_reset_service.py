@@ -48,7 +48,7 @@ class PasswordResetService:
         self.email_service = email_service
 
     async def send_reset_email(
-        self, user_id: str, email: str, account_id: str
+        self, user_id: str, email: str, account_id: str, ip_address: str | None = None
     ) -> bool:
         """Generate a password reset token and send the reset email.
 
@@ -90,6 +90,7 @@ class PasswordResetService:
                 "reset_url": reset_url,
                 "token": raw_token,
                 "email": email,
+                "ip_address": ip_address,
             },
             account_id=account_id,
         )
@@ -177,7 +178,7 @@ class PasswordResetService:
         return is_valid, expires_at
 
     async def send_reset_link_by_admin(
-        self, user_id: str, email: str, account_id: str
+        self, user_id: str, email: str, account_id: str, ip_address: str | None = None
     ) -> bool:
         """Send a password reset link initiated by an admin.
 
@@ -193,7 +194,7 @@ class PasswordResetService:
         await self.refresh_token_repo.revoke_all_for_user(user_id, account_id)
 
         # Reuse existing send_reset_email logic
-        return await self.send_reset_email(user_id, email, account_id)
+        return await self.send_reset_email(user_id, email, account_id, ip_address)
 
     async def set_password_by_admin(self, user_id: str, new_password: str) -> UserModel:
         """Directly set a user's password by an admin.

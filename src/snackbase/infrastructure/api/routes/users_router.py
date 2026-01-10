@@ -378,6 +378,8 @@ async def update_user(
     )
 
 
+from fastapi import Request
+
 @router.put(
     "/{user_id}/password",
     status_code=status.HTTP_200_OK,
@@ -386,6 +388,7 @@ async def update_user(
 async def reset_user_password(
     user_id: str,
     password_data: PasswordResetRequest,
+    request: Request,
     current_user: Annotated[SuperadminUser, Depends(require_superadmin)],
     user_repo: UserRepo,
     session: Annotated[AsyncSession, Depends(get_db_session)],
@@ -410,6 +413,7 @@ async def reset_user_password(
             user_id=user.id,
             email=user.email,
             account_id=user.account_id,
+            ip_address=request.client.host if request.client else None,
         )
         if not success:
             raise HTTPException(
