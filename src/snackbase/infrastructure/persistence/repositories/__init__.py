@@ -18,6 +18,9 @@ from snackbase.infrastructure.persistence.repositories.email_template_repository
 from snackbase.infrastructure.persistence.repositories.email_verification_repository import (
     EmailVerificationRepository,
 )
+from snackbase.infrastructure.persistence.repositories.password_reset_repository import (
+    PasswordResetRepository,
+)
 from snackbase.infrastructure.persistence.repositories.invitation_repository import (
     InvitationRepository,
 )
@@ -54,11 +57,14 @@ __all__ = [
     "AuditLogRepository",
     "CollectionRepository",
     "ConfigurationRepository",
+    "EmailLogRepository",
+    "EmailTemplateRepository",
     "EmailVerificationRepository",
     "GroupRepository",
     "InvitationRepository",
     "MacroRepository",
     "OAuthStateRepository",
+    "PasswordResetRepository",
     "PermissionRepository",
     "RecordRepository",
     "RefreshTokenRepository",

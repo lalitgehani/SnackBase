@@ -18,22 +18,29 @@ from snackbase.domain.services import (
     default_password_validator,
 )
 from snackbase.domain.services.email_verification_service import EmailVerificationService
+from snackbase.domain.services.password_reset_service import PasswordResetService
 from snackbase.infrastructure.api.dependencies import (
     AuthenticatedUser,
     CurrentUser,
+    get_password_reset_service,
     get_verification_service,
 )
 from snackbase.infrastructure.api.schemas import (
     AccountResponse,
     AuthResponse,
+    ForgotPasswordRequest,
+    ForgotPasswordResponse,
     LoginRequest,
     RefreshRequest,
     RegisterRequest,
     RegistrationResponse,
+    ResetPasswordRequest,
+    ResetPasswordResponse,
     SendVerificationRequest,
     TokenRefreshResponse,
     UserResponse,
     VerifyEmailRequest,
+    VerifyResetTokenResponse,
 )
 from snackbase.infrastructure.auth import (
     DUMMY_PASSWORD_HASH,
@@ -726,3 +733,198 @@ async def verify_email(
             "email_verified": user.email_verified,
         }
     }
+
+
+@router.post(
+    "/forgot-password",
+    status_code=status.HTTP_200_OK,
+    response_model=ForgotPasswordResponse,
+    responses={
+        200: {"description": "Password reset email sent (or email not found - same response)"},
+    },
+)
+async def forgot_password(
+    request: ForgotPasswordRequest,
+    session: AsyncSession = Depends(get_db_session),
+    reset_service: PasswordResetService = Depends(get_password_reset_service),
+) -> ForgotPasswordResponse:
+    """Initiate password reset flow.
+
+    Generates a reset token and sends an email with reset instructions.
+    Always returns 200 regardless of whether the email exists (security - don't reveal user existence).
+
+    Args:
+        request: Email and account identifier.
+        session: Database session.
+        reset_service: Password reset service dependency.
+
+    Returns:
+        Generic success message.
+    """
+    # Initialize repositories
+    account_repo = AccountRepository(session)
+    user_repo = UserRepository(session)
+
+    # Resolve account by slug or ID
+    account = await account_repo.get_by_slug_or_code(request.account)
+
+    if account is None:
+        # Account not found - return success anyway (don't reveal account existence)
+        logger.info(
+            "Password reset requested: account not found",
+            account_identifier=request.account,
+            email=request.email,
+        )
+        return ForgotPasswordResponse(
+            message="If an account with that email exists, a password reset link has been sent."
+        )
+
+    # Look up user by email in account
+    user = await user_repo.get_by_email_and_account(request.email, account.id)
+
+    if user is None:
+        # User not found - return success anyway (don't reveal user existence)
+        logger.info(
+            "Password reset requested: user not found in account",
+            account_id=account.id,
+            email=request.email,
+        )
+        return ForgotPasswordResponse(
+            message="If an account with that email exists, a password reset link has been sent."
+        )
+
+    # Check authentication provider - only password auth users can reset password
+    if user.auth_provider != "password":
+        logger.info(
+            "Password reset requested: wrong authentication method",
+            account_id=account.id,
+            user_id=user.id,
+            auth_provider=user.auth_provider,
+        )
+        # Still return success (don't reveal auth method)
+        return ForgotPasswordResponse(
+            message="If an account with that email exists, a password reset link has been sent."
+        )
+
+    # Send reset email
+    try:
+        await reset_service.send_reset_email(
+            user_id=user.id,
+            email=user.email,
+            account_id=account.id,
+        )
+        logger.info(
+            "Password reset email sent",
+            account_id=account.id,
+            user_id=user.id,
+            email=user.email,
+        )
+    except Exception as e:
+        logger.error(
+            "Failed to send password reset email",
+            error=str(e),
+            user_id=user.id,
+        )
+        # Still return success (don't reveal email sending failure)
+
+    return ForgotPasswordResponse(
+        message="If an account with that email exists, a password reset link has been sent."
+    )
+
+
+@router.post(
+    "/reset-password",
+    status_code=status.HTTP_200_OK,
+    response_model=ResetPasswordResponse,
+    responses={
+        200: {"description": "Password reset successfully"},
+        400: {"description": "Invalid, expired, or used token"},
+    },
+)
+async def reset_password(
+    request: ResetPasswordRequest,
+    reset_service: PasswordResetService = Depends(get_password_reset_service),
+) -> ResetPasswordResponse:
+    """Reset password using a valid reset token.
+
+    Validates the token, updates the password, and invalidates all refresh tokens.
+
+    Args:
+        request: Reset token and new password.
+        reset_service: Password reset service dependency.
+
+    Returns:
+        Success message.
+
+    Raises:
+        HTTPException: 400 if token is invalid, expired, or already used.
+    """
+    # Validate password strength
+    password_errors = default_password_validator.validate(request.new_password)
+    if password_errors:
+        logger.info(
+            "Password reset failed: password validation",
+            error_count=len(password_errors),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": "Validation error",
+                "details": [
+                    {"field": e.field, "message": e.message, "code": e.code}
+                    for e in password_errors
+                ],
+            },
+        )
+
+    # Reset password
+    user = await reset_service.reset_password(request.token, request.new_password)
+
+    if not user:
+        logger.info("Password reset failed: invalid or expired token")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid, expired, or already used reset token",
+        )
+
+    logger.info(
+        "Password reset successfully",
+        user_id=user.id,
+        email=user.email,
+    )
+
+    return ResetPasswordResponse(
+        message="Password reset successfully. You can now log in with your new password."
+    )
+
+
+@router.get(
+    "/verify-reset-token/{token}",
+    status_code=status.HTTP_200_OK,
+    response_model=VerifyResetTokenResponse,
+    responses={
+        200: {"description": "Token validity status"},
+    },
+)
+async def verify_reset_token(
+    token: str,
+    reset_service: PasswordResetService = Depends(get_password_reset_service),
+) -> VerifyResetTokenResponse:
+    """Verify if a password reset token is valid without using it.
+
+    Used by frontend to pre-validate the token before showing the reset form.
+
+    Args:
+        token: The reset token to verify.
+        reset_service: Password reset service dependency.
+
+    Returns:
+        Token validity status and expiration time.
+    """
+    is_valid, expires_at = await reset_service.verify_reset_token(token)
+
+    return VerifyResetTokenResponse(
+        valid=is_valid,
+        expires_at=expires_at,
+    )
+

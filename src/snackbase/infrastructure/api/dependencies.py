@@ -361,3 +361,37 @@ async def get_verification_service(
         verification_repo=verification_repo,
         email_service=email_service,
     )
+
+
+async def get_password_reset_service(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    email_service: Annotated["EmailService", Depends(get_email_service)],
+) -> "PasswordResetService":
+    """Get PasswordResetService instance.
+
+    Args:
+        session: Database session.
+        email_service: Email service dependency.
+
+    Returns:
+        PasswordResetService instance.
+    """
+    from snackbase.domain.services.password_reset_service import PasswordResetService
+    from snackbase.infrastructure.persistence.repositories import (
+        PasswordResetRepository,
+        RefreshTokenRepository,
+        UserRepository,
+    )
+
+    user_repo = UserRepository(session)
+    reset_repo = PasswordResetRepository(session)
+    refresh_token_repo = RefreshTokenRepository(session)
+
+    return PasswordResetService(
+        session=session,
+        user_repo=user_repo,
+        reset_repo=reset_repo,
+        refresh_token_repo=refresh_token_repo,
+        email_service=email_service,
+    )
+

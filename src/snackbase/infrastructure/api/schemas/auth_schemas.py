@@ -163,3 +163,44 @@ class VerifyEmailRequest(BaseModel):
     """Request body for verifying email with token."""
 
     token: str = Field(..., description="Verification token")
+
+
+class ForgotPasswordRequest(BaseModel):
+    """Request body for forgot password."""
+
+    email: EmailStr = Field(..., description="User's email address")
+    account: str = Field(
+        ...,
+        min_length=1,
+        description="Account identifier (slug or ID in XX#### format)",
+    )
+
+
+class ForgotPasswordResponse(BaseModel):
+    """Response for forgot password request."""
+
+    message: str = Field(
+        ...,
+        description="Success message (always returned regardless of whether email exists)",
+    )
+
+
+class ResetPasswordRequest(BaseModel):
+    """Request body for reset password."""
+
+    token: str = Field(..., description="Password reset token")
+    new_password: str = Field(..., min_length=8, description="New password (min 8 characters)")
+
+
+class ResetPasswordResponse(BaseModel):
+    """Response for successful password reset."""
+
+    message: str = Field(..., description="Success message")
+
+
+class VerifyResetTokenResponse(BaseModel):
+    """Response for reset token verification."""
+
+    valid: bool = Field(..., description="Whether token is valid")
+    expires_at: datetime | None = Field(None, description="Token expiration time if valid")
+
