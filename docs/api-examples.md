@@ -8,6 +8,7 @@ Complete guide to using the SnackBase REST API with practical examples.
 
 - [Getting Started](#getting-started)
 - [Authentication](#authentication)
+- [Email Verification](#email-verification)
 - [Accounts Management](#accounts-management)
 - [Collections](#collections)
 - [Records (CRUD)](#records-crud)
@@ -20,6 +21,7 @@ Complete guide to using the SnackBase REST API with practical examples.
 - [SAML Authentication](#saml-authentication)
 - [Files](#files)
 - [Admin Configuration](#admin-configuration)
+- [Email Template Management](#email-template-management)
 - [Audit Logs](#audit-logs)
 - [Migrations](#migrations)
 - [Dashboard](#dashboard)
@@ -45,8 +47,10 @@ All endpoints are prefixed with `/api/v1`:
 ```
 http://localhost:8000/api/v1/auth/register
 http://localhost:8000/api/v1/collections
-http://localhost:8000/api/v1/posts
+http://localhost:8000/api/v1/records/posts
 ```
+
+**Important**: Records are accessed via `/api/v1/records/{collection}`, NOT `/api/v1/{collection}`. This is critical for proper route registration.
 
 ### Interactive Documentation
 
@@ -91,9 +95,7 @@ curl -X POST http://localhost:8000/api/v1/auth/register \
 
 ```json
 {
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "expires_in": 3600,
+  "message": "Registration successful. Please check your email to verify your account.",
   "account": {
     "id": "AB1234",
     "slug": "acme",
@@ -105,10 +107,17 @@ curl -X POST http://localhost:8000/api/v1/auth/register \
     "email": "admin@acme.com",
     "role": "admin",
     "is_active": true,
+    "email_verified": false,
     "created_at": "2025-12-24T22:00:00Z"
   }
 }
 ```
+
+**Important Changes**:
+- Registration NO LONGER returns tokens immediately
+- Email verification is REQUIRED before login
+- Response includes `email_verified` field
+- User must verify email before they can authenticate
 
 **Validation Rules**:
 
@@ -194,14 +203,30 @@ curl -X POST http://localhost:8000/api/v1/auth/login \
 **Error Examples**:
 
 ```json
+// Email not verified (401)
+{
+  "error": "Email not verified",
+  "message": "Please verify your email before logging in",
+  "redirect_url": "/api/v1/auth/send-verification"
+}
+
 // Invalid credentials (401)
 {
   "error": "Authentication failed",
   "message": "Invalid credentials"
 }
+
+// Wrong authentication method (401)
+{
+  "error": "Wrong authentication method",
+  "message": "This account uses OAuth authentication. Please use the OAuth login flow.",
+  "auth_provider": "oauth",
+  "auth_provider_name": "google",
+  "redirect_url": "/api/v1/auth/oauth/google/authorize"
+}
 ```
 
-**Note**: All authentication failures return a generic 401 message (prevents user enumeration).
+**Note**: All authentication failures return a generic 401 message (prevents user enumeration), except for email verification and wrong auth method which provide specific guidance.
 
 ---
 
@@ -262,7 +287,127 @@ curl -X GET http://localhost:8000/api/v1/auth/me \
   "user_id": "usr_abc123",
   "account_id": "AB1234",
   "email": "admin@acme.com",
-  "role": "admin"
+  "role": "admin",
+  "email_verified": true
+}
+```
+
+---
+
+## Email Verification
+
+Email verification is required for new user registrations before they can log in.
+
+### 1. Send Verification Email
+
+Send a verification email to the current authenticated user.
+
+**Endpoint**: `POST /api/v1/auth/send-verification`
+
+**Authentication**: Required
+
+**Request**:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/auth/send-verification \
+  -H "Authorization: Bearer <token>"
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "message": "Verification email sent successfully",
+  "email": "admin@acme.com"
+}
+```
+
+**Error Responses**:
+
+```json
+// Already verified
+{
+  "error": "Email already verified",
+  "message": "Your email has already been verified"
+}
+
+// Rate limited
+{
+  "error": "Too many requests",
+  "message": "Please wait before requesting another verification email"
+}
+```
+
+---
+
+### 2. Resend Verification Email
+
+Resend a verification email (public endpoint for use after registration).
+
+**Endpoint**: `POST /api/v1/auth/resend-verification`
+
+**Authentication**: None (public)
+
+**Request**:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/auth/resend-verification \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "admin@acme.com",
+    "account": "acme"
+  }'
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "message": "Verification email sent successfully",
+  "email": "admin@acme.com"
+}
+```
+
+---
+
+### 3. Verify Email with Token
+
+Verify email address using the token from the verification email.
+
+**Endpoint**: `POST /api/v1/auth/verify-email`
+
+**Authentication**: None (public)
+
+**Request**:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/auth/verify-email \
+  -H "Content-Type: application/json" \
+  -d '{
+    "token": "verify_token_abc123..."
+  }'
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "message": "Email verified successfully",
+  "user": {
+    "id": "usr_abc123",
+    "email": "admin@acme.com",
+    "email_verified": true
+  }
+}
+```
+
+**Error Responses**:
+
+```json
+// Invalid/expired token
+{
+  "error": "Invalid or expired token",
+  "message": "The verification token is invalid or has expired"
 }
 ```
 
@@ -271,6 +416,10 @@ curl -X GET http://localhost:8000/api/v1/auth/me \
 ## Accounts Management
 
 All account management endpoints require **Superadmin** access (user must belong to system account `SY0000`).
+
+**System Account Details**:
+- Account ID: `00000000-0000-0000-0000-000000000000` (UUID format for system-level configs)
+- Account Code: `SY0000` (display format)
 
 ### 1. List Accounts
 
@@ -767,7 +916,9 @@ curl -X DELETE http://localhost:8000/api/v1/collections/col_xyz789 \
 
 ## Records (CRUD)
 
-All record operations are performed on dynamic collection endpoints: `/api/v1/records/{collection}`
+**IMPORTANT**: All record operations use `/api/v1/records/{collection}`, NOT `/api/v1/{collection}`.
+
+**Route Registration Order**: The `records_router` MUST be registered LAST in the FastAPI app to avoid capturing specific routes like `/invitations`, `/collections`, etc.
 
 ### 1. Create Record
 
@@ -804,6 +955,19 @@ curl -X POST http://localhost:8000/api/v1/records/posts \
   "updated_at": "2025-12-24T22:00:00Z",
   "updated_by": "usr_abc123"
 }
+```
+
+**Superadmin Special Access**: Superadmin can create records for any account by passing `account_id` in the request body:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/records/posts \
+  -H "Authorization: Bearer <superadmin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Post for another account",
+    "content": "Content...",
+    "account_id": "AB1235"
+  }'
 ```
 
 **Notes**:
@@ -1574,7 +1738,7 @@ All users endpoints require **Superadmin** access.
 
 **Authentication**: Superadmin required
 
-**Request**:
+**Request** (Password Authentication):
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/users \
@@ -1585,6 +1749,21 @@ curl -X POST http://localhost:8000/api/v1/users \
     "password": "SecurePass123!",
     "account_id": "AB1234",
     "role_id": "2"
+  }'
+```
+
+**Request** (OAuth/SAML Authentication - password auto-generated):
+
+```bash
+curl -X POST http://localhost:8000/api/v1/users \
+  -H "Authorization: Bearer <superadmin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "account_id": "AB1234",
+    "role_id": "2",
+    "auth_provider": "oauth",
+    "auth_provider_name": "google"
   }'
 ```
 
@@ -1599,12 +1778,19 @@ curl -X POST http://localhost:8000/api/v1/users \
     "name": "user"
   },
   "is_active": true,
-  "auth_provider": "email",
+  "email_verified": false,
+  "auth_provider": "password",
+  "auth_provider_name": null,
   "account_id": "AB1234",
   "created_at": "2025-12-24T22:00:00Z",
   "updated_at": "2025-12-24T22:00:00Z"
 }
 ```
+
+**Authentication Provider Fields**:
+- `auth_provider`: "password", "oauth", or "saml"
+- `auth_provider_name`: Provider name (e.g., "google", "github", "azure_ad", "okta")
+- For non-password auth, password is auto-generated and user cannot login with password
 
 ---
 
@@ -1646,7 +1832,9 @@ curl -X GET "http://localhost:8000/api/v1/users?skip=0&limit=25" \
         "name": "admin"
       },
       "is_active": true,
-      "auth_provider": "email",
+      "email_verified": true,
+      "auth_provider": "password",
+      "auth_provider_name": null,
       "account_id": "AB1234",
       "account_code": "AB1234",
       "account_name": "Acme Corporation",
@@ -1688,7 +1876,9 @@ curl -X GET http://localhost:8000/api/v1/users/usr_abc123 \
     "description": "Administrator with full access"
   },
   "is_active": true,
-  "auth_provider": "email",
+  "email_verified": true,
+  "auth_provider": "password",
+  "auth_provider_name": null,
   "account_id": "AB1234",
   "account_code": "AB1234",
   "account_name": "Acme Corporation",
@@ -2606,6 +2796,290 @@ curl -X POST http://localhost:8000/api/v1/admin/configuration/test-connection \
 
 ---
 
+## Email Template Management
+
+Admin API for managing email templates and viewing email logs.
+
+### 1. List Email Templates
+
+**Endpoint**: `GET /api/v1/admin/email/templates`
+
+**Authentication**: Superadmin required
+
+**Query Parameters**:
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `type` | str | null | Filter by template type |
+| `enabled` | bool | null | Filter by enabled status |
+| `search` | str | null | Search in name/description |
+
+**Request**:
+
+```bash
+curl -X GET "http://localhost:8000/api/v1/admin/email/templates" \
+  -H "Authorization: Bearer <superadmin_token>"
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "items": [
+    {
+      "id": "email_verify_abc123",
+      "type": "email_verification",
+      "name": "Email Verification",
+      "description": "Sent to users to verify their email address",
+      "subject": "Verify Your Email Address",
+      "enabled": true,
+      "created_at": "2025-12-24T22:00:00Z",
+      "updated_at": "2025-12-24T22:00:00Z"
+    },
+    {
+      "id": "password_reset_def456",
+      "type": "password_reset",
+      "name": "Password Reset",
+      "description": "Sent when user requests password reset",
+      "subject": "Reset Your Password",
+      "enabled": true,
+      "created_at": "2025-12-24T22:00:00Z",
+      "updated_at": "2025-12-24T22:00:00Z"
+    }
+  ],
+  "total": 2
+}
+```
+
+---
+
+### 2. Get Single Email Template
+
+**Endpoint**: `GET /api/v1/admin/email/templates/{template_id}`
+
+**Authentication**: Superadmin required
+
+**Request**:
+
+```bash
+curl -X GET http://localhost:8000/api/v1/admin/email/templates/email_verify_abc123 \
+  -H "Authorization: Bearer <superadmin_token>"
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "id": "email_verify_abc123",
+  "type": "email_verification",
+  "name": "Email Verification",
+  "description": "Sent to users to verify their email address",
+  "subject": "Verify Your Email Address",
+  "html_content": "<html><body><h1>Verify Your Email</h1>...</body></html>",
+  "text_content": "Verify Your Email\n\nClick the link below...",
+  "enabled": true,
+  "variables": ["verification_link", "user_email", "account_name"],
+  "created_at": "2025-12-24T22:00:00Z",
+  "updated_at": "2025-12-24T22:00:00Z"
+}
+```
+
+---
+
+### 3. Update Email Template
+
+**Endpoint**: `PUT /api/v1/admin/email/templates/{template_id}`
+
+**Authentication**: Superadmin required
+
+**Request**:
+
+```bash
+curl -X PUT http://localhost:8000/api/v1/admin/email/templates/email_verify_abc123 \
+  -H "Authorization: Bearer <superadmin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "subject": "Please Verify Your Email Address",
+    "html_content": "<html><body><h1>Email Verification Required</h1>...</body></html>",
+    "text_content": "Email Verification Required\n\nPlease click...",
+    "enabled": true
+  }'
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "id": "email_verify_abc123",
+  "message": "Template updated successfully"
+}
+```
+
+**Available Template Variables**:
+- `email_verification`: `{{verification_link}}`, `{{user_email}}`, `{{account_name}}`
+- `password_reset`: `{{reset_link}}`, `{{user_email}}`, `{{account_name}}`
+- `invitation`: `{{invitation_link}}`, `{{inviter_email}}`, `{{account_name}}`
+
+---
+
+### 4. Render Template (Preview)
+
+**Endpoint**: `POST /api/v1/admin/email/templates/render`
+
+**Authentication**: Superadmin required
+
+**Request**:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/admin/email/templates/render \
+  -H "Authorization: Bearer <superadmin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "email_verification",
+    "variables": {
+      "verification_link": "https://example.com/verify?token=abc123",
+      "user_email": "user@example.com",
+      "account_name": "Acme Corp"
+    }
+  }'
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "subject": "Verify Your Email Address",
+  "html_content": "<html><body>...</html>",
+  "text_content": "Verify Your Email\n\nClick: https://example.com/verify?token=abc123"
+}
+```
+
+**Note**: This endpoint renders the template without sending an email.
+
+---
+
+### 5. Send Test Email
+
+**Endpoint**: `POST /api/v1/admin/email/templates/{template_id}/test`
+
+**Authentication**: Superadmin required
+
+**Request**:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/admin/email/templates/email_verify_abc123/test \
+  -H "Authorization: Bearer <superadmin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "recipient_email": "test@example.com",
+    "variables": {
+      "verification_link": "https://example.com/verify?token=test123",
+      "user_email": "test@example.com",
+      "account_name": "Test Account"
+    }
+  }'
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "success": true,
+  "message": "Test email sent successfully to test@example.com"
+}
+```
+
+---
+
+### 6. List Email Logs
+
+**Endpoint**: `GET /api/v1/admin/email/logs`
+
+**Authentication**: Superadmin required
+
+**Query Parameters**:
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `skip` | int | 0 | Pagination offset |
+| `limit` | int | 50 | Results per page (max 100) |
+| `template_type` | str | null | Filter by template type |
+| `status` | str | null | Filter by status (sent, failed, pending) |
+| `recipient_email` | str | null | Filter by recipient |
+| `from_date` | datetime | null | ISO 8601 start date |
+| `to_date` | datetime | null | ISO 8601 end date |
+
+**Request**:
+
+```bash
+curl -X GET "http://localhost:8000/api/v1/admin/email/logs?skip=0&limit=50" \
+  -H "Authorization: Bearer <superadmin_token>"
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "items": [
+    {
+      "id": "log_abc123",
+      "template_id": "email_verify_abc123",
+      "template_type": "email_verification",
+      "recipient_email": "user@example.com",
+      "account_id": "AB1234",
+      "status": "sent",
+      "error_message": null,
+      "sent_at": "2025-12-24T22:00:00Z",
+      "created_at": "2025-12-24T22:00:00Z"
+    }
+  ],
+  "total": 1,
+  "skip": 0,
+  "limit": 50
+}
+```
+
+---
+
+### 7. Get Single Email Log
+
+**Endpoint**: `GET /api/v1/admin/email/logs/{log_id}`
+
+**Authentication**: Superadmin required
+
+**Request**:
+
+```bash
+curl -X GET http://localhost:8000/api/v1/admin/email/logs/log_abc123 \
+  -H "Authorization: Bearer <superadmin_token>"
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "id": "log_abc123",
+  "template_id": "email_verify_abc123",
+  "template_type": "email_verification",
+  "template_name": "Email Verification",
+  "recipient_email": "user@example.com",
+  "subject": "Verify Your Email Address",
+  "account_id": "AB1234",
+  "account_name": "Acme Corporation",
+  "status": "sent",
+  "error_message": null,
+  "sent_at": "2025-12-24T22:00:00Z",
+  "created_at": "2025-12-24T22:00:00Z"
+}
+```
+
+**Status Values**:
+- `pending`: Queued for sending
+- `sent`: Successfully sent
+- `failed`: Failed to send (check `error_message`)
+
+---
+
 ## Audit Logs
 
 Audit logging for GxP compliance. Logs are immutable and PII is masked based on group membership.
@@ -2945,10 +3419,10 @@ Health check endpoints have no authentication requirement.
 
 ```bash
 # Bad (production)
-http://api.yourdomain.com/api/v1/posts
+http://api.yourdomain.com/api/v1/records/posts
 
 # Good (production)
-https://api.yourdomain.com/api/v1/posts
+https://api.yourdomain.com/api/v1/records/posts
 ```
 
 ---
@@ -2989,11 +3463,11 @@ async function makeRequest(url) {
 
 ```bash
 # Bad - fetching too many records
-curl -X GET http://localhost:8000/api/v1/posts?limit=1000
+curl -X GET http://localhost:8000/api/v1/records/posts?limit=1000
 
 # Good - paginate results
-curl -X GET "http://localhost:8000/api/v1/posts?skip=0&limit=30"
-curl -X GET "http://localhost:8000/api/v1/posts?skip=30&limit=30"
+curl -X GET "http://localhost:8000/api/v1/records/posts?skip=0&limit=30"
+curl -X GET "http://localhost:8000/api/v1/records/posts?skip=30&limit=30"
 ```
 
 ---
@@ -3002,10 +3476,10 @@ curl -X GET "http://localhost:8000/api/v1/posts?skip=30&limit=30"
 
 ```bash
 # Bad - fetching all fields when you only need a few
-curl -X GET http://localhost:8000/api/v1/posts
+curl -X GET http://localhost:8000/api/v1/records/posts
 
 # Good - limit to needed fields
-curl -X GET "http://localhost:8000/api/v1/posts?fields=id,title,created_at"
+curl -X GET "http://localhost:8000/api/v1/records/posts?fields=id,title,created_at"
 ```
 
 ---
@@ -3014,7 +3488,7 @@ curl -X GET "http://localhost:8000/api/v1/posts?fields=id,title,created_at"
 
 ```bash
 # Add X-Correlation-ID for request tracing
-curl -X POST http://localhost:8000/api/v1/posts \
+curl -X POST http://localhost:8000/api/v1/records/posts \
   -H "Authorization: Bearer <token>" \
   -H "X-Correlation-ID: req_abc123" \
   -d '{...}'
@@ -3027,7 +3501,7 @@ curl -X POST http://localhost:8000/api/v1/posts \
 ```javascript
 async function createPost(data) {
   try {
-    const response = await fetch("/api/v1/posts", {
+    const response = await fetch("/api/v1/records/posts", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -3058,6 +3532,33 @@ async function createPost(data) {
 - `PUT`: Replace entire resource (idempotent)
 - `PATCH`: Update partial resource
 - `DELETE`: Remove resource (idempotent)
+
+---
+
+### 9. Remember Route Registration Order
+
+**CRITICAL**: The `records_router` (for `/api/v1/records/{collection}`) MUST be registered LAST in your FastAPI app. This prevents it from capturing specific routes like `/invitations`, `/collections`, `/accounts`, etc.
+
+```python
+# Correct order in app.py
+app.include_router(invitations_router, prefix="/api/v1/invitations", tags=["invitations"])
+app.include_router(collections_router, prefix="/api/v1/collections", tags=["collections"])
+app.include_router(accounts_router, prefix="/api/v1/accounts", tags=["accounts"])
+# ... all other specific routers ...
+app.include_router(records_router, prefix="/api/v1/records", tags=["records"])  # MUST BE LAST
+```
+
+---
+
+### 10. Verify Emails Before Login
+
+Always implement email verification in your registration flow:
+
+1. User registers → NO TOKENS returned, just message
+2. User receives verification email
+3. User clicks verification link or enters token
+4. Email verified → User can now login
+5. Login checks `email_verified` field, returns 401 if not verified
 
 ---
 

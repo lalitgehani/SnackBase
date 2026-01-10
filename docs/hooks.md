@@ -310,6 +310,43 @@ async def validate_post(event, data, context):
     return data
 ```
 
+#### Available Decorator Methods
+
+The `HookDecoratorProxy` provides convenient decorator methods for common hook events:
+
+**Record Operations:**
+- `on_record_before_create(collection, priority=0)`
+- `on_record_after_create(collection, priority=0)`
+- `on_record_before_update(collection, priority=0)`
+- `on_record_after_update(collection, priority=0)`
+- `on_record_before_delete(collection, priority=0)`
+- `on_record_after_delete(collection, priority=0)`
+- `on_record_before_query(collection, priority=0)`
+- `on_record_after_query(collection, priority=0)`
+
+**Collection Operations:**
+- `on_collection_before_create(priority=0)`
+- `on_collection_after_create(priority=0)`
+- `on_collection_before_update(priority=0)`
+- `on_collection_after_update(priority=0)`
+- `on_collection_before_delete(priority=0)`
+- `on_collection_after_delete(priority=0)`
+
+**Auth Operations:**
+- `on_auth_before_login(priority=0)`
+- `on_auth_after_login(priority=0)`
+- `on_auth_before_register(priority=0)`
+- `on_auth_after_register(priority=0)`
+
+**Note**: For auth events without dedicated decorator methods (`logout`, `password_reset`), use the generic `on()` method:
+
+```python
+@app.state.hook.on(HookEvent.ON_AUTH_BEFORE_LOGOUT, priority=50)
+async def before_logout(event, data, context):
+    """Handle logout event."""
+    return data
+```
+
 ### Hook Function Signature
 
 All hook functions must follow this signature:
@@ -334,14 +371,14 @@ The `HookContext` provides information about the execution environment:
 class HookContext:
     """Context passed to hooks."""
 
-    app: Any = None              # FastAPI app instance
-    user: Any = None             # Current authenticated user
-    account_id: str | None = None  # Current account ID
-    request_id: str | None = None  # Request correlation ID
-    request: Any = None          # FastAPI Request object
-
-    # Additional context (future)
-    metadata: dict[str, Any] = field(default_factory=dict)
+    app: Any                      # FastAPI app instance
+    user: Optional["User"]        # Current authenticated user
+    account_id: Optional[str]     # Current account ID
+    request_id: str               # Request correlation ID (auto-generated)
+    request: Optional["Request"]  # FastAPI/Starlette Request object
+    ip_address: Optional[str]     # Client IP address (for audit logging)
+    user_agent: Optional[str]     # Client user agent (for audit logging)
+    user_name: Optional[str]      # User display name (for audit logging)
 ```
 
 ### Aborting Operations
@@ -357,6 +394,23 @@ async def validate_post(event, data, context):
     if data and "spam" in data.get("content", "").lower():
         raise AbortHookException("Spam content detected")
     return data
+```
+
+### HookResult Structure
+
+When using `HookRegistry.trigger()` directly (not via decorator), it returns a `HookResult` object containing information about the hook execution:
+
+```python
+@dataclass
+class HookResult:
+    """Result of a hook trigger operation."""
+
+    success: bool                      # Whether all hooks executed successfully
+    aborted: bool                      # Whether the operation was aborted by a hook
+    abort_message: Optional[str]       # Message from AbortHookException if aborted
+    abort_status_code: int             # Status code from AbortHookException (default: 400)
+    errors: list[str]                  # List of error messages from hooks that failed
+    data: Optional[dict[str, Any]]     # Modified data from the hook chain
 ```
 
 ### Unregistering Hooks
@@ -375,7 +429,7 @@ success = registry.unregister(hook_id)
 
 ## Built-in Hooks
 
-SnackBase includes **3 built-in hooks** that provide core functionality. These hooks are **always active** and cannot be disabled.
+SnackBase includes **4 built-in hooks** that provide core functionality. These hooks are **always active** and cannot be disabled.
 
 ### 1. Timestamp Hook
 
@@ -438,6 +492,36 @@ data["updated_by"] = context.user.id
 data["updated_by"] = context.user.id
 ```
 
+### 4. Audit Capture Hook
+
+**Purpose**: Automatically capture audit log entries for record operations.
+
+**Events**:
+
+- `on_record_after_create`
+- `on_record_after_update`
+- `on_record_after_delete`
+
+**Priority**: `100` (runs after all user hooks)
+
+**Behavior**:
+
+```python
+# Captures audit entries with column-level granularity
+# Includes user context (user_id, user_email, user_name)
+# Includes request context (ip_address, user_agent, request_id)
+# Captures old_values for updates
+# Handles account_id isolation
+```
+
+**Notes**:
+
+- Only runs when user context is available (authenticated requests)
+- Requires a database session to be passed in the hook data
+- Errors are logged but don't fail the main operation
+- For model (ORM) events, audit is captured synchronously via SQLAlchemy event listeners
+- For record (dynamic collection) events, audit is captured via this async hook
+
 ### Built-in Hook Execution Order
 
 ```
@@ -448,6 +532,8 @@ Priority -150: created_by_hook         (set created_by/updated_by)
 Priority -100: timestamp_hook          (set timestamps)
     ↓
 Priority 0+:   User hooks              (custom logic)
+    ↓
+Priority 100:  audit_capture_hook      (capture audit logs)
 ```
 
 ---
@@ -571,6 +657,37 @@ async def hook_2(event, data, context):
 async def hook_3(event, data, context):
     data["step"] = "3"
     return data
+```
+
+**Registration Order**: When multiple hooks have the same priority, they execute in FIFO (first-in-first-out) registration order. The first hook registered with a given priority will execute first among hooks with that priority.
+
+### SQLAlchemy Event Listeners
+
+For model operations (ORM models), hooks are triggered through global SQLAlchemy event listeners registered in `event_listeners.py`. These listeners:
+
+1. **Capture Model State**: Use `ModelSnapshot` to safely capture model state in async contexts without triggering lazy loads
+2. **Bridge ORM to Hooks**: Convert SQLAlchemy events into hook registry calls
+3. **Handle Async**: Execute async hooks from synchronous SQLAlchemy event listeners using background tasks
+4. **Synchronous Audit**: For audit logging, model events are handled synchronously to prevent database lock issues with SQLite
+
+Example of how this works:
+
+```python
+# In event_listeners.py
+@event.listens_for(ModelClass, "after_update")
+def after_update(mapper, connection, target):
+    """Called by SQLAlchemy after model update."""
+    # Create snapshot for async processing
+    snapshot = ModelSnapshot(target)
+
+    # Trigger async hook in background
+    task = asyncio.create_task(
+        hook_registry.trigger(
+            HookEvent.ON_MODEL_AFTER_UPDATE,
+            data={"model": snapshot, "old_values": old_values},
+            context=get_current_context()
+        )
+    )
 ```
 
 ### Tag-Based Filtering
@@ -842,12 +959,29 @@ class HookRegistry:
 ```python
 @dataclass
 class HookContext:
-    app: Any = None
-    user: Any = None
-    account_id: str | None = None
-    request_id: str | None = None
-    request: Any = None
-    metadata: dict[str, Any] = field(default_factory=dict)
+    """Context passed to all hook callbacks."""
+    app: Any
+    user: Optional["User"] = None
+    account_id: Optional[str] = None
+    request_id: str = ""
+    request: Optional["Request"] = None
+    ip_address: Optional[str] = None
+    user_agent: Optional[str] = None
+    user_name: Optional[str] = None
+```
+
+### HookResult
+
+```python
+@dataclass
+class HookResult:
+    """Result of a hook trigger operation."""
+    success: bool = True
+    aborted: bool = False
+    abort_message: Optional[str] = None
+    abort_status_code: int = 400
+    errors: list[str] = field(default_factory=list)
+    data: Optional[dict[str, Any]] = None
 ```
 
 ### AbortHookException
@@ -881,10 +1015,13 @@ For questions and issues:
 - ✅ 40+ hook events defined
 - ✅ Priority-based execution
 - ✅ Tag-based filtering
-- ✅ Built-in hooks (timestamp, account_isolation, created_by)
+- ✅ Built-in hooks (timestamp, account_isolation, created_by, audit_capture)
 - ✅ AbortHookException for canceling operations
 - ✅ Decorator-based registration
 - ✅ Full async support
+- ✅ SQLAlchemy event listeners for model operations
+- ✅ HookContext with IP address, user agent, and user name fields
+- ✅ HookResult class for trigger operation results
 
 ### Future Versions
 
