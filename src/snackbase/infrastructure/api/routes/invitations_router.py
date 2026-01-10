@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from snackbase.core.config import get_settings
 from snackbase.core.logging import get_logger
 from snackbase.domain.services import default_password_validator
-from snackbase.infrastructure.api.dependencies import AuthenticatedUser
+from snackbase.infrastructure.api.dependencies import AuthenticatedUser, get_email_service
 from snackbase.infrastructure.api.schemas import (
     AccountResponse,
     AuthResponse,
@@ -39,8 +39,7 @@ from snackbase.infrastructure.persistence.repositories import (
     RoleRepository,
     UserRepository,
 )
-# TODO: Update to use new EmailService with provider pattern (F1.1 infrastructure complete)
-# from snackbase.infrastructure.services.email_service import email_service
+from snackbase.infrastructure.services.email_service import EmailService
 from snackbase.infrastructure.services.token_service import token_service
 
 logger = get_logger(__name__)
@@ -81,6 +80,7 @@ def get_invitation_status(invitation: InvitationModel) -> InvitationStatus:
 async def create_invitation(
     request: InvitationCreateRequest,
     current_user: AuthenticatedUser,
+    email_service: EmailService = Depends(get_email_service),
     session: AsyncSession = Depends(get_db_session),
 ) -> InvitationResponse | JSONResponse:
     """Create a new invitation.
@@ -171,25 +171,56 @@ async def create_invitation(
     inviter = await user_repo.get_by_id(current_user.user_id)
     inviter_name = inviter.email if inviter else current_user.email
 
-    # TODO: Update to use new EmailService with template rendering (F1.1 infrastructure complete)
-    # For now, just log the invitation - email integration will be added in later phase
-    logger.info(
-        "Invitation created - email sending will be implemented in next phase",
-        invitation_id=invitation_id,
-        recipient_email=request.email,
-        inviter_name=inviter_name,
-        account_name=account_name,
-    )
+    try:
+        # TODO: Get app_url from settings service when available
+        # For now, construct from request or use default
+        app_url = "http://localhost:8000"  
+        invitation_url = f"{app_url}/accept-invitation?token={invitation_token}"
+        
+        email_sent = await email_service.send_template_email(
+            session=session,
+            to=request.email,
+            template_type="invitation",
+            variables={
+                "invitation_url": invitation_url,
+                "token": invitation_token,
+                "email": request.email,
+                "account_name": account_name,
+                "invited_by": inviter_name,
+                "expires_at": expires_at.strftime("%Y-%m-%d %H:%M:%S UTC"),
+            },
+            account_id=current_user.account_id,
+        )
+        
+        if email_sent:
+            invitation.email_sent = True
+            invitation.email_sent_at = datetime.now(timezone.utc)
+            await session.commit()
+            await session.refresh(invitation)
+            
+    except Exception as e:
+        logger.error(
+            "Failed to send invitation email",
+            error=str(e),
+            email=request.email,
+            invitation_id=invitation_id
+        )
+        # Continue execution - invitation is created even if email fails
+        # The UI can show email_sent=False status
 
+    # 7. Return invitation details (excluding token)
     # 7. Return invitation details (excluding token)
     return InvitationResponse(
         id=invitation.id,
         account_id=invitation.account_id,
+        account_code=account.account_code if account else "UNKNOWN",
         email=invitation.email,
         invited_by=invitation.invited_by,
         expires_at=invitation.expires_at,
         accepted_at=invitation.accepted_at,
         created_at=invitation.created_at,
+        email_sent=invitation.email_sent,
+        email_sent_at=invitation.email_sent_at,
         status=get_invitation_status(invitation),
     )
 
@@ -409,6 +440,11 @@ async def list_invitations(
         List of invitations.
     """
     invitation_repo = InvitationRepository(session)
+    account_repo = AccountRepository(session)
+    
+    # Get account to retrieve account_code
+    account = await account_repo.get_by_id(current_user.account_id)
+    account_code = account.account_code if account else "UNKNOWN"
 
     # Get invitations for the account
     invitations = await invitation_repo.list_by_account(
@@ -428,11 +464,14 @@ async def list_invitations(
         InvitationResponse(
             id=inv.id,
             account_id=inv.account_id,
+            account_code=account_code,
             email=inv.email,
             invited_by=inv.invited_by,
             expires_at=inv.expires_at,
             accepted_at=inv.accepted_at,
             created_at=inv.created_at,
+            email_sent=inv.email_sent,
+            email_sent_at=inv.email_sent_at,
             status=get_invitation_status(inv),
         )
         for inv in invitations

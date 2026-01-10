@@ -25,6 +25,8 @@ class InvitationModel(Base):
         invited_by: Foreign key to users table.
         expires_at: Timestamp when the invitation expires.
         accepted_at: Timestamp when the invitation was accepted.
+        email_sent: Whether the invitation email has been sent.
+        email_sent_at: Timestamp when the email was sent.
         created_at: Timestamp when the invitation was created.
     """
 
@@ -70,6 +72,17 @@ class InvitationModel(Base):
         DateTime,
         nullable=True,
         comment="Timestamp when the invitation was accepted",
+    )
+    email_sent: Mapped[bool] = mapped_column(
+        default=False,
+        nullable=False,
+        index=True,
+        comment="Whether the invitation email has been sent",
+    )
+    email_sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+        comment="Timestamp when the email was sent",
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime,

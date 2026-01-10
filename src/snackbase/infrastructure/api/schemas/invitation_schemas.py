@@ -40,6 +40,8 @@ class InvitationResponse(BaseModel):
         None, description="Acceptance timestamp (if accepted)"
     )
     created_at: datetime = Field(..., description="Creation timestamp")
+    email_sent: bool = Field(False, description="Whether the invitation email has been sent")
+    email_sent_at: datetime | None = Field(None, description="Timestamp when the email was sent")
     status: InvitationStatus = Field(..., description="Current invitation status")
 
     model_config = ConfigDict(from_attributes=True)

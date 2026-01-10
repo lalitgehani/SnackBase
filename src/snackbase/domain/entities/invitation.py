@@ -23,6 +23,8 @@ class Invitation:
         invited_by: Foreign key to the user who sent the invitation.
         expires_at: Timestamp when the invitation expires.
         accepted_at: Timestamp when the invitation was accepted (nullable).
+        email_sent: Whether the invitation email has been sent.
+        email_sent_at: Timestamp when the email was sent (nullable).
         created_at: Timestamp when the invitation was created.
     """
 
@@ -33,6 +35,8 @@ class Invitation:
     invited_by: str
     expires_at: datetime
     accepted_at: datetime | None = None
+    email_sent: bool = False
+    email_sent_at: datetime | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def __post_init__(self) -> None:
