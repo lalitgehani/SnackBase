@@ -28,9 +28,6 @@ COPY alembic.ini ./alembic.ini
 # Sync dependencies
 RUN uv sync --frozen --no-dev
 
-# Create volume for SQLite database
-VOLUME /app/sb_data
-
 # Expose port
 EXPOSE 8000
 
