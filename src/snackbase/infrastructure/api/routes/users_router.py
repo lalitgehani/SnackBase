@@ -313,6 +313,17 @@ async def update_user(
             detail="User not found",
         )
 
+    # Demo mode protection
+    from snackbase.core.config import get_settings
+    from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID
+    
+    settings = get_settings()
+    if settings.is_demo and user.account_id == SYSTEM_ACCOUNT_ID:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Demo mode: superadmin credentials cannot be modified",
+        )
+
     # Update email if provided
     if user_data.email is not None:
         # Check email uniqueness if changing email
@@ -405,6 +416,17 @@ async def reset_user_password(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
+        )
+
+    # Demo mode protection
+    from snackbase.core.config import get_settings
+    from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID
+    
+    settings = get_settings()
+    if settings.is_demo and user.account_id == SYSTEM_ACCOUNT_ID:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Demo mode: superadmin credentials cannot be modified",
         )
 
     if password_data.send_reset_link:
@@ -578,6 +600,17 @@ async def deactivate_user(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
+        )
+
+    # Demo mode protection
+    from snackbase.core.config import get_settings
+    from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID
+    
+    settings = get_settings()
+    if settings.is_demo and user.account_id == SYSTEM_ACCOUNT_ID:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Demo mode: superadmin credentials cannot be modified",
         )
 
     # Soft delete (set is_active=False)

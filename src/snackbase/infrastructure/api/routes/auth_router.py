@@ -892,6 +892,17 @@ async def reset_password(
             detail="Invalid, expired, or already used reset token",
         )
 
+    # Demo mode protection
+    from snackbase.core.config import get_settings
+    from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID
+
+    settings = get_settings()
+    if settings.is_demo and user.account_id == SYSTEM_ACCOUNT_ID:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Demo mode: superadmin credentials cannot be modified",
+        )
+
     logger.info(
         "Password reset successfully",
         user_id=user.id,

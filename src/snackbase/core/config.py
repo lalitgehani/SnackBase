@@ -113,6 +113,12 @@ class Settings(BaseSettings):
         description="Password for initial superadmin creation (auto-created on startup if set)",
     )
 
+    # Demo Mode
+    is_demo: bool = Field(
+        default=False,
+        description="When enabled, prevents modifications to superadmin credentials",
+    )
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, v: str | list[str]) -> list[str]:
