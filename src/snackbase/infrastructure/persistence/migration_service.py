@@ -76,7 +76,7 @@ class MigrationService:
         # Now we need to find the file and inject the DDL
         # Alembic revision() returns the Script object in latest versions
         rev_id = rev.revision
-        filename = f"{rev_id}_{message}.py"
+        filename = f"{rev_id}_{message.lower()}.py"
         filepath = os.path.join(dynamic_dir, filename)
         
         # Build DDL logic using TableBuilder
@@ -113,7 +113,7 @@ class MigrationService:
         )
         
         rev_id = rev.revision
-        filename = f"{rev_id}_{message}.py"
+        filename = f"{rev_id}_{message.lower()}.py"
         filepath = os.path.join(dynamic_dir, filename)
         
         upgrade_lines = self._generate_add_columns_op_lines(collection_name, new_fields)
@@ -146,7 +146,7 @@ class MigrationService:
         )
         
         rev_id = rev.revision
-        filename = f"{rev_id}_{message}.py"
+        filename = f"{rev_id}_{message.lower()}.py"
         filepath = os.path.join(dynamic_dir, filename)
         
         upgrade_lines = self._generate_drop_table_op_lines(collection_name)
