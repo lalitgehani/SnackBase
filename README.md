@@ -7,7 +7,7 @@
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green.svg)](https://fastapi.tiangolo.com/)
 [![React](https://img.shields.io/badge/React-19-cyan.svg)](https://react.dev/)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 
 SnackBase is a Python/FastAPI-based BaaS providing auto-generated REST APIs, multi-tenancy, row-level security, authentication, enterprise OAuth/SAML, and comprehensive admin UI.
 
@@ -647,7 +647,7 @@ Contributions are welcome! Please read [CLAUDE.md](CLAUDE.md) for development gu
 
 ## License
 
-MIT License - See LICENSE file for details
+GNU Affero General Public License v3.0 (AGPLv3) - See LICENSE file for details
 
 ---
 
