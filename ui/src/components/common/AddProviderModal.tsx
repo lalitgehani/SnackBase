@@ -9,12 +9,14 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { ConfigurationForm } from './ConfigurationForm';
-import { Loader2, ArrowLeft } from 'lucide-react';
+import { Loader2, ArrowLeft, BadgeCheck } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ProviderLogo } from '@/components/common/ProviderLogo';
 import { useToast } from '@/hooks/use-toast';
 
 
+// List of providers that have been manually tested and verified
+const VERIFIED_PROVIDERS = ['google'];
 
 interface AddProviderModalProps {
     open: boolean;
@@ -48,23 +50,12 @@ export const AddProviderModal = ({
                     const filtered = data.filter(
                         (p: AvailableProvider) =>
                             p.provider_name !== "email_password" &&
-                            !existingConfigs.some((ec) => ec.provider_name === p.provider_name)
+                            !existingConfigs.some((ec) => ec.provider_name === p.provider_name) &&
+                            // System settings are only applicable to system level (no accountId)
+                            !(p.category === 'system_settings' && accountId)
                     );
 
-                    // TEMPORARY: Comment out untested providers (only email providers and Google OAuth tested)
-                    const testedProviders = filtered.filter((p: AvailableProvider) => {
-                        // Include all email providers
-                        if (p.category === 'email_providers') return true;
-                        // Include all system settings providers ONLY for system-level (no accountId)
-                        if (p.category === 'system_settings' && !accountId) return true;
-                        // Include Google and Apple OAuth for auth providers
-                        if (p.category === 'auth_providers' && (p.provider_name === 'google' || p.provider_name === 'apple')) return true;
-                        // Exclude all other auth providers (github, microsoft, apple, saml_*)
-                        return false;
-                        // Uncomment below to enable all providers when tested:
-                        // return true;
-                    });
-                    setAvailableProviders(testedProviders);
+                    setAvailableProviders(filtered);
                 } catch (error) {
                     console.error("Failed to load providers", error);
                     toast({
@@ -132,25 +123,33 @@ export const AddProviderModal = ({
                     ) : (
                         <ScrollArea className="flex-1 px-6">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4">
-                                {availableProviders.map((p) => (
-                                    <Button
-                                        key={`${p.category}:${p.provider_name}`}
-                                        variant="outline"
-                                        className="h-24 flex flex-col items-center justify-center gap-2 hover:border-primary hover:bg-primary/5 transition-all text-center p-4"
-                                        onClick={() => setSelectedProvider(p)}
-                                    >
-                                        <ProviderLogo
-                                            logoUrl={p.logo_url}
-                                            providerName={p.provider_name}
-                                            className="h-8 w-8"
-                                            size={32}
-                                        />
-                                        <div className="flex flex-col">
-                                            <span className="font-medium text-sm line-clamp-1">{p.display_name}</span>
-                                            <span className="text-[10px] text-muted-foreground uppercase">{p.category.replace('_', ' ')}</span>
-                                        </div>
-                                    </Button>
-                                ))}
+                                {availableProviders.map((p) => {
+                                    const isVerified = VERIFIED_PROVIDERS.includes(p.provider_name);
+                                    return (
+                                        <Button
+                                            key={`${p.category}:${p.provider_name}`}
+                                            variant="outline"
+                                            className="h-24 flex flex-col items-center justify-center gap-2 hover:border-primary hover:bg-primary/5 transition-all text-center p-4 relative"
+                                            onClick={() => setSelectedProvider(p)}
+                                        >
+                                            {isVerified && (
+                                                <div className="absolute top-2 right-2">
+                                                    <BadgeCheck className="h-4 w-4 text-green-600 dark:text-green-500" />
+                                                </div>
+                                            )}
+                                            <ProviderLogo
+                                                logoUrl={p.logo_url}
+                                                providerName={p.provider_name}
+                                                className="h-8 w-8"
+                                                size={32}
+                                            />
+                                            <div className="flex flex-col">
+                                                <span className="font-medium text-sm line-clamp-1">{p.display_name}</span>
+                                                <span className="text-[10px] text-muted-foreground uppercase">{p.category.replace('_', ' ')}</span>
+                                            </div>
+                                        </Button>
+                                    );
+                                })}
                                 {availableProviders.length === 0 && (
                                     <div className="col-span-full py-12 text-center text-muted-foreground">
                                         No providers available for this category.
