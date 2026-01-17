@@ -73,7 +73,7 @@ graph TB
             CORS_MW[CORS Middleware]
         end
 
-        subgraph "Routers (19)"
+        subgraph "Routers (20)"
             AUTH_R[/auth/]
             OAUTH_R[/oauth/]
             SAML_R[/saml/]
@@ -91,6 +91,7 @@ graph TB
             MIG_R[/migrations/]
             ADMIN_R[/admin/]
             EMAIL_T_R[/email_templates/]
+            REALTIME_R[realtime_router]
             REC_R[records_router]
             HEALTH_R[/health/]
         end
@@ -260,8 +261,14 @@ graph TB
             EL[Event Listeners<br/>Systemic Audit]
         end
 
+        subgraph "Realtime System"
+            RT_R[realtime_router]
+            CM[ConnectionManager]
+            EB[EventBroadcaster]
+            RA[realtime_auth]
+        end
+
         subgraph "Empty/TODO"
-            RT[Realtime<br/>WebSocket/SSE]
             ST[Storage<br/>File Storage]
         end
     end
@@ -429,16 +436,17 @@ SnackBase follows **Clean Architecture** principles with clear separation betwee
 
 1. **Repository Pattern**: 17 repositories abstract data access
 2. **Service Layer Pattern**: 17 domain services contain business logic
-3. **Hook System**: 33+ events across 7 categories for extensibility (stable API v1.0)
+3. **Hook System**: 38+ events across 8 categories for extensibility (stable API v1.0)
 4. **Rule Engine**: Custom DSL for permission expressions
 5. **Multi-Tenancy**: Row-level isolation via `account_id`
 6. **JWT Authentication**: Access token (1h) + refresh token (7d)
 7. **Configuration System**: Hierarchical provider configuration with encryption at rest
 8. **Email System**: Multi-provider email with template rendering
+9. **Realtime System**: WebSocket and Server-Sent Events for live data updates
 
 ### Component Statistics
 
-- **19 API Routers**: auth, oauth, saml, accounts, collections, roles, permissions, users, groups, invitations, macros, dashboard, files, audit-logs, migrations, admin, email_templates, records, health
+- **20 API Routers**: auth, oauth, saml, accounts, collections, roles, permissions, users, groups, invitations, macros, dashboard, files, audit-logs, migrations, admin, email_templates, realtime, records, health
 - **17 ORM Models**: Account, User, Role, Permission, Collection, Macro, Group, Invitation, RefreshToken, UsersGroups, AuditLog, Configuration, OAuthState, EmailVerification, EmailTemplate, EmailLog
 - **17 Repositories** matching each model
 - **17 Domain Entities** + **17 Domain Services**
@@ -658,6 +666,64 @@ EmailService.send_template_email()
   → Commit transaction atomically
 ```
 
+**Realtime Broadcast Flow:**
+
+```
+POST /api/v1/records/posts (create/update/delete)
+  → RecordRepository operation completes
+  → EventBroadcaster.publish_event()
+    → Creates async task for non-blocking broadcast
+    → ConnectionManager.broadcast_to_account()
+      → Iterate all active connections in account
+      → Match collection subscriptions
+      → Filter by operation type
+      → Send event via WebSocket or SSE queue
+  → Client receives: {type: "posts.create", timestamp: "...", data: {...}}
+```
+
+### 6. Realtime System (WebSocket & SSE)
+
+Provides real-time event broadcasting for data changes via WebSocket and Server-Sent Events.
+
+**Components:**
+- `ConnectionManager` - Manages active connections and subscriptions
+- `RealtimeConnection` - Represents a single client connection
+- `Subscription` - Per-collection subscription with operation filtering
+- `EventBroadcaster` - Service for broadcasting events to subscribers
+- `realtime_auth` - JWT authentication for realtime connections
+
+**Features:**
+- **Dual Protocol Support**: WebSocket (full-duplex) and SSE (one-way)
+- **Per-Collection Subscriptions**: Subscribe to specific collections
+- **Operation Filtering**: Listen to create/update/delete selectively
+- **Account Isolation**: Events only broadcast within same account
+- **JWT Authentication**: Secure using existing access tokens
+- **Heartbeat Messages**: 30-second heartbeat for connection health
+- **Max 100 Subscriptions**: Per connection limit
+
+**Event Format:**
+```json
+{
+  "type": "posts.create",
+  "timestamp": "2026-01-17T12:34:56.789Z",
+  "data": {...}
+}
+```
+
+**API Endpoints:**
+- `WS /api/v1/realtime/ws` - WebSocket endpoint for realtime subscriptions
+- `GET /api/v1/realtime/subscribe` - SSE endpoint for realtime subscriptions
+
+**Hook Events:**
+- `on_realtime_connect` - Client connected
+- `on_realtime_disconnect` - Client disconnected
+- `on_realtime_subscribe` - Client subscribed to collection
+- `on_realtime_unsubscribe` - Client unsubscribed
+- `on_realtime_message` - Message received (WebSocket only)
+
+**Integration with Hooks:**
+Realtime events are triggered automatically after record operations via the hook system. When a record is created, updated, or deleted, the system broadcasts the event to all subscribed clients within the same account.
+
 ---
 
 ### Key Files
@@ -676,6 +742,10 @@ EmailService.send_template_email()
 | `src/snackbase/infrastructure/persistence/table_builder.py` | Dynamic table creation                   |
 | `src/snackbase/infrastructure/services/email_service.py`    | Email sending with templates             |
 | `src/snackbase/infrastructure/hooks/builtin_hooks.py`       | Built-in hook implementations            |
+| `src/snackbase/infrastructure/realtime/realtime_manager.py` | Connection and subscription management   |
+| `src/snackbase/infrastructure/realtime/event_broadcaster.py` | Event broadcasting service               |
+| `src/snackbase/infrastructure/realtime/realtime_auth.py`    | Realtime authentication                  |
+| `src/snackbase/infrastructure/api/routes/realtime_router.py`| WebSocket and SSE endpoints              |
 | `ui/src/main.tsx`                                           | React app entry                          |
 | `ui/src/App.tsx`                                            | Route configuration                      |
 | `ui/src/lib/api.ts`                                         | Axios client with token refresh          |
