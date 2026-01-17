@@ -1,12 +1,14 @@
 import { create } from 'zustand';
 import type { ConnectionState } from '../services/realtime.service';
-import type { RealtimeEvent } from '../types';
+import type { RealtimeEvent, AuthResponse } from '../types';
 
 interface RealtimeStore {
   connectionState: ConnectionState;
   events: RealtimeEvent[];
   isSubscribed: boolean;
   error: string | null;
+  token: string | null;
+  user: AuthResponse['user'] | null;
   setConnecting: () => void;
   setConnected: () => void;
   setDisconnected: () => void;
@@ -14,6 +16,8 @@ interface RealtimeStore {
   addEvent: (event: RealtimeEvent) => void;
   clearEvents: () => void;
   setSubscribed: (status: boolean) => void;
+  setAuth: (response: AuthResponse) => void;
+  logout: () => void;
 }
 
 export const useRealtimeStore = create<RealtimeStore>((set) => ({
@@ -21,6 +25,8 @@ export const useRealtimeStore = create<RealtimeStore>((set) => ({
   events: [],
   isSubscribed: false,
   error: null,
+  token: localStorage.getItem('token'),
+  user: JSON.parse(localStorage.getItem('user') || 'null'),
 
   setConnecting: () => set({ connectionState: 'connecting', error: null }),
   setConnected: () => set({ connectionState: 'connected', error: null }),
@@ -38,4 +44,14 @@ export const useRealtimeStore = create<RealtimeStore>((set) => ({
   
   clearEvents: () => set({ events: [] }),
   setSubscribed: (status) => set({ isSubscribed: status }),
+  setAuth: (response) => {
+    localStorage.setItem('token', response.token);
+    localStorage.setItem('user', JSON.stringify(response.user));
+    set({ token: response.token, user: response.user });
+  },
+  logout: () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    set({ token: null, user: null, connectionState: 'disconnected', isSubscribed: false });
+  },
 }));

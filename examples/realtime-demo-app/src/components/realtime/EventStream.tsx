@@ -4,7 +4,8 @@ import { useRealtimeStore } from '../../stores/realtime.store';
 import { cn } from '../../lib/utils';
 
 export function EventStream() {
-    const { events } = useRealtimeStore();
+    const { events: allEvents } = useRealtimeStore();
+    const events = allEvents.slice(0, 50); // Show only 50 most recent
     const scrollRef = useRef<HTMLDivElement>(null);
     const [isPaused, setIsPaused] = useState(false);
 

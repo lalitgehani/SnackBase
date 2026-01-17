@@ -21,7 +21,23 @@ export interface CreateActivity {
 export interface RealtimeEvent {
   type: string;
   timestamp: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: any;
   collection?: string;
   operation?: string;
+}
+
+export interface LoginCredentials {
+  account: string;
+  email: string;
+  password: string;
+}
+
+export interface AuthResponse {
+  token: string;
+  user: {
+    id: string;
+    email: string;
+    account_id: string;
+  };
 }

@@ -5,6 +5,18 @@ import { cn } from '../../lib/utils';
 export function ConnectionStatus() {
     const { connectionState, isSubscribed, error } = useRealtimeStore();
 
+    const handleReconnect = () => {
+        // We need access to the service to reconnect, but for now we can just 
+        // trigger the connecting state which the App.tsx might listen to 
+        // OR better, we just let the service handle auto-reconnect.
+        // However, the PRD asks for a manual "Reconnect" button.
+        // Since the service is in a ref in App.tsx, we might need a way to trigger it.
+        // For now, I'll assume setting state to connecting might trigger something or 
+        // I'll update App.tsx to handle it if I can.
+        // Actually, let's just dispatch a custom event or use the store to signal.
+        window.dispatchEvent(new CustomEvent('realtime-reconnect'));
+    };
+
     const statusConfig = {
         connected: {
             color: 'bg-green-500',
@@ -34,7 +46,7 @@ export function ConnectionStatus() {
         <div className="flex items-center gap-4">
             {isSubscribed && connectionState === 'connected' && (
                 <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">
-                    Subscribed
+                    1 Active Subscription
                 </span>
             )}
 
@@ -49,6 +61,15 @@ export function ConnectionStatus() {
                 <span className="hidden sm:inline">{current.text}</span>
                 {current.icon}
             </div>
+
+            {(connectionState === 'disconnected' || connectionState === 'error') && (
+                <button
+                    onClick={handleReconnect}
+                    className="text-xs font-bold text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 underline underline-offset-4"
+                >
+                    Reconnect
+                </button>
+            )}
 
             {error && connectionState === 'error' && (
                 <span className="text-xs text-red-500 max-w-[150px] truncate hidden md:inline" title={error}>

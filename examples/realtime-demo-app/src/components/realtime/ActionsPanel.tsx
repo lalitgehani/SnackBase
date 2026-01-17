@@ -4,7 +4,7 @@ import { activitiesService } from '../../services/activities.service';
 import { cn } from '../../lib/utils';
 import type { ActivityType, CreateActivity } from '../../types';
 
-export function ActionPanel() {
+export function ActionsPanel() {
     const [loading, setLoading] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
     const [formData, setFormData] = useState<CreateActivity>({
@@ -128,14 +128,23 @@ export function ActionPanel() {
                         />
                     </div>
 
-                    <button
-                        type="submit"
-                        disabled={loading !== null || !formData.message}
-                        className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2.5 text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-70 disabled:active:scale-100"
-                    >
-                        {loading === 'manual' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                        Send Activity
-                    </button>
+                    <div className="flex gap-2">
+                        <button
+                            type="submit"
+                            disabled={loading !== null || !formData.message}
+                            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2.5 text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-70 disabled:active:scale-100"
+                        >
+                            {loading === 'manual' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                            Send Activity
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setFormData({ ...formData, message: '' })}
+                            className="px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                        >
+                            Clear
+                        </button>
+                    </div>
                 </form>
             </div>
         </div>
