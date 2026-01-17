@@ -94,6 +94,7 @@ def _mask_record_pii(
 )
 async def create_record(
     collection: str,
+    request: Request,
     data: dict[str, Any],
     current_user: AuthenticatedUser,
     auth_context: AuthContext,
@@ -272,6 +273,19 @@ async def create_record(
         account_id=current_user.account_id,
         created_by=current_user.user_id,
     )
+
+    # 7.5 Broadcast create event
+    try:
+        broadcaster = request.app.state.event_broadcaster
+        # Use full record for creation broadcast
+        await broadcaster.publish_event(
+            account_id=target_account_id,
+            collection=collection,
+            operation="create",
+            data=created_record
+        )
+    except Exception as e:
+        logger.error("Failed to broadcast create event", error=str(e))
 
     # 8. Apply field filter to response
     if allowed_fields != "*":
@@ -525,6 +539,7 @@ async def get_record(
 async def update_record_full(
     collection: str,
     record_id: str,
+    request: Request,
     data: dict[str, Any],
     current_user: AuthenticatedUser,
     auth_context: AuthContext,
@@ -534,7 +549,7 @@ async def update_record_full(
     
     Replaces the entire record with the provided data (except system fields).
     """
-    return await _update_record(collection, record_id, data, current_user, auth_context, session, partial=False)
+    return await _update_record(collection, record_id, request, data, current_user, auth_context, session, partial=False)
 
 
 @router.patch(
@@ -550,6 +565,7 @@ async def update_record_full(
 async def update_record_partial(
     collection: str,
     record_id: str,
+    request: Request,
     data: dict[str, Any],
     current_user: AuthenticatedUser,
     auth_context: AuthContext,
@@ -559,12 +575,13 @@ async def update_record_partial(
     
     Updates only the provided fields.
     """
-    return await _update_record(collection, record_id, data, current_user, auth_context, session, partial=True)
+    return await _update_record(collection, record_id, request, data, current_user, auth_context, session, partial=True)
 
 
 async def _update_record(
     collection: str,
     record_id: str,
+    request: Request,
     data: dict[str, Any],
     current_user: AuthenticatedUser,
     auth_context: AuthContext,
@@ -750,7 +767,20 @@ async def _update_record(
         account_id=current_user.account_id,
         updated_by=current_user.user_id,
     )
-    
+
+    # 7.5 Broadcast update event
+    try:
+        broadcaster = request.app.state.event_broadcaster
+        # Use full updated record for broadcast
+        await broadcaster.publish_event(
+            account_id=current_user.account_id,
+            collection=collection,
+            operation="update",
+            data=updated_record
+        )
+    except Exception as e:
+        logger.error("Failed to broadcast update event", error=str(e))
+
     # 8. Apply field filter to response
     if allowed_fields != "*":
         updated_record = apply_field_filter(updated_record, allowed_fields)
@@ -774,6 +804,7 @@ async def _update_record(
 async def delete_record(
     collection: str,
     record_id: str,
+    request: Request,
     current_user: AuthenticatedUser,
     auth_context: AuthContext,
     session: AsyncSession = Depends(get_db_session),
@@ -871,6 +902,18 @@ async def delete_record(
             deleted_by=current_user.user_id,
         )
         
+        # Broadcast delete event
+        try:
+            broadcaster = request.app.state.event_broadcaster
+            await broadcaster.publish_event(
+                account_id=current_user.account_id,
+                collection=collection,
+                operation="delete",
+                data={"id": record_id}
+            )
+        except Exception as e:
+            logger.error("Failed to broadcast delete event", error=str(e))
+
         # Return 204 No Content
         return Response(status_code=status.HTTP_204_NO_CONTENT)
         

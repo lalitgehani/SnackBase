@@ -109,7 +109,7 @@ async def test_create_record_success(
     mock_check_permission.return_value = (True, "*")
 
     # Act
-    response = await create_record("posts", data, mock_user, mock_auth_context, mock_session)
+    response = await create_record("posts", mock_request, data, mock_user, mock_auth_context, mock_session)
 
     # Assert
     assert response.id == "rec-new"
@@ -137,7 +137,7 @@ async def test_create_record_collection_not_found(
     # Mock permission check
     mock_check_permission.return_value = (True, "*")
 
-    response = await create_record("unknown", {}, mock_user, mock_auth_context, mock_session)
+    response = await create_record("unknown", mock_request, {}, mock_user, mock_auth_context, mock_session)
 
     assert isinstance(response, JSONResponse)
     assert response.status_code == status.HTTP_404_NOT_FOUND
@@ -169,7 +169,7 @@ async def test_create_record_validation_error(
     # Mock permission check
     mock_check_permission.return_value = (True, "*")
 
-    response = await create_record("posts", {}, mock_user, mock_auth_context, mock_session)
+    response = await create_record("posts", mock_request, {}, mock_user, mock_auth_context, mock_session)
 
     assert isinstance(response, JSONResponse)
     assert response.status_code == status.HTTP_400_BAD_REQUEST
@@ -361,7 +361,7 @@ async def test_update_record_success(
     # Mock permission check
     mock_check_permission.return_value = (True, "*")
 
-    response = await update_record_partial("posts", "rec-1", {"title": "Updated"}, mock_user, mock_auth_context, mock_session)
+    response = await update_record_partial("posts", "rec-1", mock_request, {"title": "Updated"}, mock_user, mock_auth_context, mock_session)
 
     assert response.title == "Updated"
     mock_rec_repo.update_record.assert_called_once()
@@ -402,7 +402,7 @@ async def test_delete_record_success(
     # Mock permission check
     mock_check_permission.return_value = (True, "*")
 
-    response = await delete_record("posts", "rec-1", mock_user, mock_auth_context, mock_session)
+    response = await delete_record("posts", "rec-1", mock_request, mock_user, mock_auth_context, mock_session)
 
     assert response.status_code == status.HTTP_204_NO_CONTENT
     mock_rec_repo.delete_record.assert_called_once()

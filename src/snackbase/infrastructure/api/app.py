@@ -287,6 +287,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             ttl_seconds=settings.permission_cache_ttl_seconds,
         )
 
+        # Initialize Realtime components
+        from snackbase.infrastructure.realtime.realtime_manager import ConnectionManager
+        from snackbase.infrastructure.realtime.event_broadcaster import EventBroadcaster
+        
+        connection_manager = ConnectionManager()
+        event_broadcaster = EventBroadcaster(connection_manager)
+        
+        app.state.connection_manager = connection_manager
+        app.state.event_broadcaster = event_broadcaster
+        logger.info("Realtime components initialized")
+
         logger.info("SnackBase startup complete and ready to serve")
         yield
 
@@ -461,6 +472,7 @@ def register_routes(app: FastAPI) -> None:
         saml_router,
         users_router,
         api_keys_router,
+        realtime_router,
     )
 
     settings = get_settings()
@@ -557,6 +569,11 @@ def register_routes(app: FastAPI) -> None:
     # Collections are accessed via /api/v1/records/{collection}
     app.include_router(
         records_router, prefix=f"{settings.api_prefix}/records", tags=["records"]
+    )
+
+    # Register realtime routes
+    app.include_router(
+        realtime_router, prefix=f"{settings.api_prefix}/realtime", tags=["realtime"]
     )
 
     # These will be registered as we implement features
