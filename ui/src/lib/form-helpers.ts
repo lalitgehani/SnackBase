@@ -41,6 +41,7 @@ export function getDefaultValueForType(type: string): unknown {
 		case 'reference':
 			return null;
 		case 'datetime':
+		case 'date':
 			return '';
 		default:
 			return '';
@@ -91,6 +92,12 @@ export function validateFieldValue(field: FieldDefinition, value: unknown): stri
 			case 'datetime':
 				if (typeof value === 'string' && !isValidDatetime(value)) {
 					return 'Invalid datetime format';
+				}
+				break;
+
+			case 'date':
+				if (typeof value === 'string' && !isValidDate(value)) {
+					return 'Invalid date format';
 				}
 				break;
 
@@ -179,6 +186,17 @@ function isValidDatetime(value: string): boolean {
 }
 
 /**
+ * Validate date format (YYYY-MM-DD)
+ */
+function isValidDate(value: string): boolean {
+	if (!value) return false;
+	// Pattern for YYYY-MM-DD
+	if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+	const date = new Date(value);
+	return !isNaN(date.getTime());
+}
+
+/**
  * Format field value for display
  */
 export function formatFieldValue(value: unknown, fieldType: string): string {
@@ -192,6 +210,10 @@ export function formatFieldValue(value: unknown, fieldType: string): string {
 		case 'datetime':
 			return typeof value === 'string' || typeof value === 'number' || value instanceof Date 
 				? new Date(value as string | number | Date).toLocaleString() 
+				: '';
+		case 'date':
+			return typeof value === 'string' || typeof value === 'number' || value instanceof Date 
+				? new Date(value as string | number | Date).toLocaleDateString() 
 				: '';
 		case 'json':
 			if (typeof value === 'string') {

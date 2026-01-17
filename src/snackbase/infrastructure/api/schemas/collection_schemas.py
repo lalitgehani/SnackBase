@@ -17,7 +17,7 @@ class FieldDefinition(BaseModel):
     )
     type: str = Field(
         ...,
-        description="Field type: text, number, boolean, datetime, email, url, json, reference, file",
+        description="Field type: text, number, boolean, datetime, email, url, json, reference, file, date",
     )
     required: bool = Field(
         default=False,

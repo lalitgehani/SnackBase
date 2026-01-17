@@ -1,13 +1,13 @@
 """Record validation service for validating record data against collection schemas.
 
 Provides validation for record data, ensuring it conforms to the collection schema.
-Supports field types: text, number, boolean, datetime, email, url, json, reference, file.
+Supports field types: text, number, boolean, datetime, email, url, json, reference, file, date.
 """
 
 import json
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from snackbase.domain.services.collection_validator import FieldType
@@ -92,6 +92,33 @@ class RecordValidator:
         return RecordValidationError(
             field=field_name,
             message=f"Expected datetime string, got {type(value).__name__}",
+            code="invalid_type",
+        )
+
+    @classmethod
+    def validate_date(cls, value: Any, field_name: str) -> RecordValidationError | None:
+        """Validate a date field value.
+
+        Accepts ISO 8601 formatted strings (YYYY-MM-DD) or date objects.
+        """
+        if isinstance(value, (datetime, date)):
+            return None
+
+        if isinstance(value, str):
+            try:
+                # Try parsing YYYY-MM-DD format
+                datetime.strptime(value, "%Y-%m-%d")
+                return None
+            except ValueError:
+                return RecordValidationError(
+                    field=field_name,
+                    message="Invalid date format. Use YYYY-MM-DD format",
+                    code="invalid_date_format",
+                )
+
+        return RecordValidationError(
+            field=field_name,
+            message=f"Expected date string, got {type(value).__name__}",
             code="invalid_type",
         )
 
@@ -265,6 +292,7 @@ class RecordValidator:
             FieldType.JSON.value: cls.validate_json,
             FieldType.REFERENCE.value: cls.validate_reference,
             FieldType.FILE.value: cls.validate_file,
+            FieldType.DATE.value: cls.validate_date,
         }
 
         validator = validators.get(field_type.lower())

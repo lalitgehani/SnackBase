@@ -123,15 +123,16 @@ export const deleteCollection = async (collectionId: string): Promise<void> => {
  * Field type options for the schema builder
  */
 export const FIELD_TYPES = [
-  { value: 'text', label: 'Text' },
-  { value: 'number', label: 'Number' },
   { value: 'boolean', label: 'Boolean' },
+  { value: 'date', label: 'Date' },
   { value: 'datetime', label: 'DateTime' },
   { value: 'email', label: 'Email' },
-  { value: 'url', label: 'URL' },
-  { value: 'json', label: 'JSON' },
-  { value: 'reference', label: 'Reference' },
   { value: 'file', label: 'File' },
+  { value: 'json', label: 'JSON' },
+  { value: 'number', label: 'Number' },
+  { value: 'reference', label: 'Reference' },
+  { value: 'text', label: 'Text' },
+  { value: 'url', label: 'URL' },
 ] as const;
 
 /**

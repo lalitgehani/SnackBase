@@ -1,7 +1,7 @@
 """Collection validation service for schema and field validation.
 
 Provides validation for collection names, schema definitions, and field configurations.
-Supports field types: text, number, boolean, datetime, email, url, json, reference, file.
+Supports field types: text, number, boolean, datetime, email, url, json, reference, file, date.
 """
 
 import re
@@ -21,6 +21,7 @@ class FieldType(str, Enum):
     JSON = "json"
     REFERENCE = "reference"
     FILE = "file"
+    DATE = "date"
 
 
 class OnDeleteAction(str, Enum):

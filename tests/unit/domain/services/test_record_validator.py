@@ -32,6 +32,13 @@ class TestRecordValidator:
         assert RecordValidator.validate_datetime("not-a-date", "f").code == "invalid_datetime_format"
         assert RecordValidator.validate_datetime(123, "f").code == "invalid_type"
 
+    def test_validate_date(self):
+        from datetime import date
+        assert RecordValidator.validate_date("2024-01-01", "f") is None
+        assert RecordValidator.validate_date(date(2024, 1, 1), "f") is None
+        assert RecordValidator.validate_date("not-a-date", "f").code == "invalid_date_format"
+        assert RecordValidator.validate_date(123, "f").code == "invalid_type"
+
     def test_validate_email(self):
         assert RecordValidator.validate_email("test@example.com", "f") is None
         assert RecordValidator.validate_email("invalid-email", "f").code == "invalid_email_format"
@@ -60,14 +67,16 @@ class TestRecordValidator:
         schema = [
             {"name": "title", "type": "text", "required": True},
             {"name": "status", "type": "text", "default": "draft"},
-            {"name": "count", "type": "number"}
+            {"name": "count", "type": "number"},
+            {"name": "birth_date", "type": "date"}
         ]
-        data = {"title": "Hello"}
+        data = {"title": "Hello", "birth_date": "1990-01-01"}
         
         processed, errors = RecordValidator.validate_and_apply_defaults(data, schema)
         assert len(errors) == 0
         assert processed["title"] == "Hello"
         assert processed["status"] == "draft"  # Default applied
+        assert processed["birth_date"] == "1990-01-01"
         assert "count" not in processed  # Optional missing
 
     def test_validate_required_missing(self):

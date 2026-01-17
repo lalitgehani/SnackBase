@@ -257,3 +257,12 @@ class TestCollectionValidator:
         ]
         errors = CollectionValidator.validate_schema(schema)
         assert len(errors) == 0
+
+    def test_validate_date_field(self):
+        """Test valid date field definition."""
+        field = {
+            "name": "birth_date",
+            "type": "date"
+        }
+        errors = CollectionValidator.validate_field(field, 0)
+        assert len(errors) == 0

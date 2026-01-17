@@ -9,6 +9,12 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
+import { format } from 'date-fns';
+import { CalendarIcon } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import type { FieldDefinition } from '@/services/collections.service';
 import type { RecordData } from '@/types/records.types';
 import { isoToDatetimeLocal, datetimeLocalToIso } from '@/lib/form-helpers';
@@ -114,6 +120,45 @@ export default function DynamicFieldInput({
 					/>
 				);
 
+			case 'date':
+				return (
+					<Popover>
+						<PopoverTrigger asChild>
+							<Button
+								variant={'outline'}
+								className={cn(
+									'w-full justify-start text-left font-normal',
+									!value && 'text-muted-foreground',
+									error ? 'border-destructive' : '',
+								)}
+								disabled={disabled}
+							>
+								<CalendarIcon className="mr-2 h-4 w-4" />
+								{value ? (
+									format(new Date(value as string), 'PPP')
+								) : (
+									<span>Pick a date</span>
+								)}
+							</Button>
+						</PopoverTrigger>
+						<PopoverContent className="w-auto p-0">
+							<Calendar
+								mode="single"
+								selected={value ? new Date(value as string) : undefined}
+								onSelect={(date) => {
+									if (date) {
+										// Format as YYYY-MM-DD for backend
+										onChange(format(date, 'yyyy-MM-dd'));
+									} else {
+										onChange(null);
+									}
+								}}
+								initialFocus
+							/>
+						</PopoverContent>
+					</Popover>
+				);
+
 			case 'json':
 				return (
 					<div className="space-y-2">
@@ -210,6 +255,7 @@ export default function DynamicFieldInput({
 			json: 'JSON',
 			reference: `Reference to ${field.collection}`,
 			file: 'File',
+			date: 'Date',
 		};
 		return typeLabels[field.type] || field.type;
 	};

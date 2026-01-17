@@ -25,6 +25,7 @@ FIELD_TYPE_TO_SQL = {
     FieldType.JSON.value: "TEXT",  # JSON stored as TEXT for SQLite
     FieldType.REFERENCE.value: "TEXT",  # Reference stored as TEXT (foreign key ID)
     FieldType.FILE.value: "TEXT",  # File metadata stored as JSON TEXT
+    FieldType.DATE.value: "DATE",
 }
 
 # System columns auto-added to every collection table
