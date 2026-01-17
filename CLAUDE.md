@@ -84,16 +84,16 @@ src/snackbase/
 └── infrastructure/               # External concerns
     ├── api/
     │   ├── app.py                # FastAPI app factory, lifespan, middleware
-    │   ├── dependencies.py       # FastAPI dependencies (auth, session)
-    │   ├── routes/               # 13+ API routers
+    │   ├── dependencies.py       # FastAPI dependencies (auth, session, API key auth)
+    │   ├── routes/               # 14+ API routers
     │   ├── schemas/              # Pydantic request/response models
     │   └── middleware/           # Authorization middleware
     ├── persistence/
     │   ├── database.py           # SQLAlchemy 2.0 async engine
-    │   ├── models/               # ORM models (Account, User, Role, Configuration, etc.)
-    │   ├── repositories/         # Repository pattern (11+ repositories)
+    │   ├── models/               # ORM models (Account, User, Role, Configuration, ApiKey, etc.)
+    │   ├── repositories/         # Repository pattern (12+ repositories)
     │   └── table_builder.py      # Dynamic table creation
-    ├── auth/                     # JWT service, password hasher (Argon2)
+    ├── auth/                     # JWT service, password hasher (Argon2), API key service
     ├── configuration/            # Provider handlers (OAuth, SAML, email)
     │   └── providers/            # Provider implementations
     ├── hooks/                    # Built-in hooks implementation
@@ -104,7 +104,7 @@ src/snackbase/
 
 ui/                               # React + TypeScript Admin UI
 ├── src/
-│   ├── pages/                    # Dashboard, Accounts, Collections, Roles, etc.
+│   ├── pages/                    # Dashboard, Accounts, Collections, Roles, ApiKeys, etc.
 │   ├── components/               # React components (Radix UI + TailwindCSS)
 │   ├── services/                 # API clients (axios)
 │   ├── stores/                   # Zustand state management
@@ -152,6 +152,17 @@ Users can belong to multiple accounts with the same email address. User identity
 - Passwords are **per-account** - each `(email, account_id)` has its own password
 - Login always requires account context (slug/ID from URL or request body)
 - JWT with access token (1 hour) and refresh token (7 days) with rotation
+
+### API Key Authentication
+
+Alternative authentication method for service-to-service communication:
+
+- API keys use format: `sb_sk_<account_code>_<random_32_chars>`
+- Keys are hashed using SHA-256 before storage (plaintext only shown once at creation)
+- Authenticate via `Authorization: Bearer <api_key>` header
+- Scoped to account level with optional name/description for identification
+- Can be revoked via API or admin UI
+- Managed via `/api/v1/api-keys/` endpoint
 
 ## Key Technical Decisions
 
@@ -218,6 +229,7 @@ status in ["draft", "published"]
 - Config resolution: account-level config → system-level fallback
 - All sensitive config values encrypted at rest
 - Built-in providers marked with `is_builtin` flag (cannot be deleted)
+- **Verified providers**: Some providers (e.g., Google OAuth) are marked with a verified badge in the UI indicating they have been manually tested
 
 ## API Structure
 
@@ -233,6 +245,7 @@ status in ["draft", "published"]
 ├── /macros/                    # SQL macro management
 ├── /groups/                    # Group management
 ├── /invitations/               # User invitations
+├── /api-keys/                  # API key management (create, list, revoke)
 ├── /dashboard/                 # Dashboard statistics
 ├── /audit-logs/                # Audit log retrieval and export
 ├── /migrations/                # Alembic migration status

@@ -1,6 +1,6 @@
 # Authentication Model
 
-SnackBase provides a comprehensive authentication system designed for multi-tenant applications. This guide explains authentication flows, token management, multi-account users, email verification, OAuth/SAML integration, and security considerations.
+SnackBase provides a comprehensive authentication system designed for multi-tenant applications. This guide explains authentication flows, token management, multi-account users, email verification, API keys, OAuth/SAML integration, and security considerations.
 
 ---
 
@@ -17,6 +17,7 @@ SnackBase provides a comprehensive authentication system designed for multi-tena
 - [SAML 2.0 Authentication](#saml-20-authentication)
 - [Multi-Provider Authentication](#multi-provider-authentication)
 - [Multi-Account Users](#multi-account-users)
+- [API Key Authentication](#api-key-authentication)
 - [Security Features](#security-features)
 - [Authentication Configuration](#authentication-configuration)
 - [Best Practices](#best-practices)
@@ -34,6 +35,7 @@ SnackBase authentication is built for **enterprise multi-account scenarios**:
 | **Per-Account Passwords**  | Different passwords per (email, account) tuple        |
 | **JWT Tokens**             | Access tokens (1 hour) + Refresh tokens (7 days)      |
 | **Token Rotation**         | Refresh token rotation on each use with revocation    |
+| **API Keys**               | Service authentication with hashed keys                |
 | **Email Verification**     | Required for login, tokens expire in 1 hour           |
 | **Multi-Provider**         | Support for Password, OAuth, and SAML providers       |
 | **Identity Linking**       | Link local accounts with external provider identities |
@@ -1349,6 +1351,431 @@ To switch accounts, user logs in with credentials for the target account.
 > **Screenshot Placeholder 20**
 >
 > **Description**: A UI screenshot showing an account switcher dropdown displaying multiple accounts the user belongs to.
+
+---
+
+## API Key Authentication
+
+API keys provide an alternative authentication method designed for service-to-service communication, CLI tools, and integrations where JWT token management is impractical.
+
+### When to Use API Keys
+
+| Use Case                     | Recommended Method          | Reason                                          |
+| ---------------------------- | --------------------------- | ----------------------------------------------- |
+| Browser applications         | JWT (access/refresh tokens) | Token rotation, user session management         |
+| Mobile apps                  | JWT (access/refresh tokens) | Built-in token refresh, user experience         |
+| Service-to-service calls     | **API Keys**                | No token refresh needed, long-lived credentials |
+| CLI tools                    | **API Keys**                | Easy configuration, no session management        |
+| Webhooks                     | **API Keys**                | Static credentials for incoming requests         |
+| Third-party integrations     | **API Keys**                | Simple credential sharing                       |
+| IoT devices                  | **API Keys**                | Limited token handling capabilities              |
+
+### API Key Format
+
+API keys follow a structured format:
+
+```
+sb_sk_<account_code>_<random_32_characters>
+```
+
+**Example**: `sb_sk_AB1234_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6`
+
+**Components:**
+- `sb_sk` - SnackBase Secret Key prefix (identifies the key type)
+- `AB1234` - Account code (human-readable account identifier)
+- `a1b2c3...o5p6` - 32-character cryptographically secure random string
+
+> **Screenshot Placeholder 21**
+>
+> **Description**: A visual breakdown of an API key showing its three components: prefix (sb_sk), account code (AB1234), and random string.
+
+### API Key Authentication Flow
+
+```
+┌──────────────┐
+│ Admin creates │
+│ API key via  │
+│ UI or API    │
+└──────┬───────┘
+       │
+       ▼
+┌─────────────────────────────────┐
+│ POST /api/v1/api-keys/         │
+│ {                               │
+│   "name": "Production Service", │
+│   "description": "Backend API"  │
+│ }                               │
+└──────┬──────────────────────────┘
+       │
+       ▼
+┌─────────────────────────────────┐
+│ System generates API key:       │
+│ - Format: sb_sk_<code>_<random> │
+│ - Store SHA-256 hash in DB      │
+│ - Return full key (ONCE ONLY)   │
+└──────┬──────────────────────────┘
+       │
+       ▼
+┌─────────────────────────────────┐
+│ Admin stores key securely:      │
+│ - Environment variable          │
+│ - Secret manager (Vault, AWS)   │
+│ - Configuration file (secured)  │
+└──────┬──────────────────────────┘
+       │
+       ▼
+┌─────────────────────────────────┐
+│ Service uses API key:           │
+│ Authorization: Bearer sb_sk_... │
+└──────┬──────────────────────────┘
+       │
+       ▼
+┌─────────────────────────────────┐
+│ Server validates:               │
+│ 1. Extract key from header      │
+│ 2. Hash with SHA-256            │
+│ 3. Lookup hash in database      │
+│ 4. Check not revoked            │
+│ 5. Get associated user/account  │
+└──────┬──────────────────────────┘
+       │
+       ▼
+┌─────────────────────────────────┐
+│ Request processed with user     │
+│ context from API key            │
+└─────────────────────────────────┘
+```
+
+> **Screenshot Placeholder 22**
+>
+> **Description**: A flow diagram showing the complete API key lifecycle from creation through storage, usage, validation, and request processing.
+
+### API Key Data Model
+
+```python
+# API Key in Database
+{
+  "id": "ak_abc123xyz",                     # Key ID (public)
+  "key_hash": "<SHA-256 hash>",              # Hashed API key (never plaintext)
+  "account_id": "550e8400-...",              # Associated account
+  "account_code": "AB1234",                  # Human-readable account code
+  "created_by": "usr_abc123",                # User who created the key
+  "name": "Production Service",              # Human-readable name
+  "description": "Backend API for prod",     # Optional description
+  "last_used_at": "2026-01-17T15:45:00Z",   # Last authentication timestamp
+  "is_revoked": false,                       # Revocation status
+  "created_at": "2026-01-01T00:00:00Z",
+  "revoked_at": null,                        # Set when revoked
+  "revoked_by": null                         # User who revoked it
+}
+```
+
+**Security Properties:**
+
+- **SHA-256 Hashing**: Keys are hashed before storage (plaintext never persisted)
+- **Single-User Association**: Each key is linked to one user in one account
+- **Immediate Revocation**: Keys can be revoked instantly
+- **Audit Trail**: Tracks creation, last used, and revocation
+- **Account Scoping**: Keys are automatically scoped to their account
+
+### Authentication Comparison
+
+| Feature              | API Keys                          | JWT Tokens                        |
+| -------------------- | --------------------------------- | --------------------------------- |
+| **Use Case**         | Service-to-service, CLI, webhooks | Browser, mobile apps             |
+| **Lifetime**         | Indefinite (until revoked)        | Access: 1 hour, Refresh: 7 days  |
+| **Storage**          | Server-side (hash)                | Client-side (localStorage/cookie)|
+| **Visibility**       | Full key shown only at creation   | Tokens visible in responses       |
+| **Rotation**         | Manual (create new, revoke old)   | Automatic (on refresh)           |
+| **Revocation**       | Immediate                         | On refresh or logout              |
+| **User Context**     | Single user per key               | Can include user, role, account   |
+| **Security**         | SHA-256 hashed at rest            | Signed, verifiable signature      |
+| **Token Management** | Not applicable                    | Required (refresh mechanism)      |
+| **Session Support**  | None (stateless)                  | Yes (with refresh tokens)         |
+
+> **Screenshot Placeholder 23**
+>
+> **Description**: A comparison table showing API Keys vs JWT Tokens with visual indicators for each feature category.
+
+### Creating API Keys
+
+**Via API**:
+
+```bash
+# Create API key
+curl -X POST http://localhost:8000/api/v1/api-keys/ \
+  -H "Authorization: Bearer <jwt_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Production Service",
+    "description": "Backend API for production environment"
+  }'
+
+# Response (only time full key is shown)
+{
+  "id": "ak_abc123xyz",
+  "name": "Production Service",
+  "description": "Backend API for production environment",
+  "key": "sb_sk_AB1234_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6",  # SAVE THIS!
+  "account_id": "AB1234",
+  "created_at": "2026-01-17T10:30:00Z"
+}
+```
+
+**Via Admin UI**:
+
+1. Navigate to Settings → API Keys
+2. Click "Create API Key"
+3. Enter name and description
+4. Copy the displayed key (shown only once)
+5. Store securely in your application
+
+### Using API Keys
+
+API keys use the standard `Authorization: Bearer` header:
+
+```bash
+# Using API key for authentication
+curl -X GET http://localhost:8000/api/v1/posts \
+  -H "Authorization: Bearer sb_sk_AB1234_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"
+
+# Creating a record
+curl -X POST http://localhost:8000/api/v1/posts \
+  -H "Authorization: Bearer sb_sk_AB1234_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Hello World",
+    "content": "Created with API key"
+  }'
+```
+
+**In Code**:
+
+```python
+import requests
+
+# Configure API key
+API_KEY = "sb_sk_AB1234_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"
+headers = {"Authorization": f"Bearer {API_KEY}"}
+
+# Make requests
+response = requests.get(
+    "http://localhost:8000/api/v1/posts",
+    headers=headers
+)
+```
+
+```javascript
+// Using fetch
+const API_KEY = "sb_sk_AB1234_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6";
+
+const response = await fetch("http://localhost:8000/api/v1/posts", {
+  headers: {
+    "Authorization": `Bearer ${API_KEY}`
+  }
+});
+```
+
+### Managing API Keys
+
+**List API Keys**:
+
+```bash
+curl -X GET http://localhost:8000/api/v1/api-keys/ \
+  -H "Authorization: Bearer <jwt_token>"
+```
+
+**Response** (metadata only, no full keys):
+
+```json
+{
+  "items": [
+    {
+      "id": "ak_abc123xyz",
+      "name": "Production Service",
+      "description": "Backend API",
+      "created_at": "2026-01-17T10:30:00Z",
+      "last_used_at": "2026-01-17T15:45:00Z",
+      "is_revoked": false
+    }
+  ]
+}
+```
+
+**Revoke API Key**:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/api-keys/ak_abc123xyz/revoke \
+  -H "Authorization: Bearer <jwt_token>"
+```
+
+**Get Key Details**:
+
+```bash
+curl -X GET http://localhost:8000/api/v1/api-keys/ak_abc123xyz \
+  -H "Authorization: Bearer <jwt_token>"
+```
+
+### Security Best Practices
+
+**1. Secure Storage**:
+
+```python
+# ✅ Good: Environment variable
+import os
+API_KEY = os.environ.get("SNACKBASE_API_KEY")
+
+# ✅ Good: Secret manager
+import boto3
+client = boto3.client('secretsmanager')
+response = client.get_secret_value(SecretId='snackbase/api_key')
+API_KEY = response['SecretString']
+
+# ❌ Bad: Hardcoded in source
+API_KEY = "sb_sk_AB1234_..."  # NEVER do this
+
+# ❌ Bad: Committed to version control
+# .env files should be in .gitignore
+```
+
+**2. Key Rotation**:
+
+```bash
+# 1. Create new key
+new_key_response=$(curl -s -X POST http://localhost:8000/api/v1/api-keys/ \
+  -H "Authorization: Bearer <jwt_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Rotated Key"}')
+
+# 2. Extract key
+new_key=$(echo "$new_key_response" | jq -r '.key')
+
+# 3. Update application configuration
+export SNACKBASE_API_KEY="$new_key"
+
+# 4. Verify new key works
+curl -H "Authorization: Bearer $new_key" http://localhost:8000/api/v1/auth/me
+
+# 5. Revoke old key
+curl -X POST http://localhost:8000/api/v1/api-keys/ak_old_key/revoke \
+  -H "Authorization: Bearer <jwt_token>"
+```
+
+**3. Scoping and Naming**:
+
+```json
+{
+  "name": "Production - Payment Service",
+  "description": "Used by payment processing service in production environment"
+}
+```
+
+Use descriptive names to identify:
+- Environment (Production, Staging, Development)
+- Service (Payment Service, Webhook Handler, CLI)
+- Purpose (Backup Job, Monitoring Integration)
+
+**4. Monitoring and Auditing**:
+
+```bash
+# Check for unused keys
+curl -X GET http://localhost:8000/api/v1/api-keys/ \
+  -H "Authorization: Bearer <jwt_token>" | \
+  jq '.items[] | select(.last_used_at == null)'
+
+# Check for old keys (not used in 90 days)
+# Implement automated monitoring and alerting
+```
+
+**5. Revocation on Compromise**:
+
+If an API key is accidentally exposed (committed to repo, logged, etc.):
+
+1. Immediately revoke the compromised key
+2. Create a replacement key
+3. Update all services using the old key
+4. Investigate potential unauthorized access
+5. Review audit logs for suspicious activity
+
+### API Key vs User Permissions
+
+API keys inherit the permissions of the user who created them:
+
+```python
+# Admin user creates API key
+# → API key has admin permissions
+
+# Viewer user creates API key
+# → API key has viewer permissions
+
+# Key permissions are tied to creating user's role
+```
+
+This means:
+- Create dedicated service users with minimal required permissions
+- Don't use personal admin accounts to create production API keys
+- Regularly audit which users have created API keys
+
+### Rate Limiting and API Keys
+
+API keys can be used for rate limiting (future feature):
+
+```python
+# Rate limit per API key
+rate_limits = {
+    "ak_abc123xyz": {
+        "requests_per_minute": 1000,
+        "requests_per_hour": 10000
+    }
+}
+```
+
+### Common Patterns
+
+**Service Authentication**:
+
+```python
+# Backend service calling SnackBase
+import os
+import requests
+
+API_KEY = os.environ["SNACKBASE_API_KEY"]
+headers = {"Authorization": f"Bearer {API_KEY}"}
+
+def create_post(title, content):
+    response = requests.post(
+        "http://localhost:8000/api/v1/posts",
+        headers=headers,
+        json={"title": title, "content": content}
+    )
+    return response.json()
+```
+
+**CLI Tool**:
+
+```bash
+# Configure CLI with API key
+snackbase config set api-key sb_sk_AB1234_...
+
+# CLI uses stored key for all commands
+snackbase posts list
+snackbase posts create --title "Hello"
+```
+
+**Webhook Handler**:
+
+```python
+# Webhook endpoint validates API key
+from fastapi import Header, HTTPException
+
+async def webhook_handler(
+    authorization: str = Header(...)
+):
+    if not authorization.startswith("Bearer sb_sk_"):
+        raise HTTPException(401, "Invalid API key")
+
+    # Process webhook
+```
 
 ---
 

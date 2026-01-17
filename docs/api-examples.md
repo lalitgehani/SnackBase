@@ -8,6 +8,7 @@ Complete guide to using the SnackBase REST API with practical examples.
 
 - [Getting Started](#getting-started)
 - [Authentication](#authentication)
+- [API Keys](#api-keys)
 - [Email Verification](#email-verification)
 - [Password Reset](#password-reset)
 - [Accounts Management](#accounts-management)
@@ -294,6 +295,387 @@ curl -X GET http://localhost:8000/api/v1/auth/me \
   "email": "admin@acme.com",
   "role": "admin",
   "email_verified": true
+}
+```
+
+---
+
+## API Keys
+
+API keys provide an alternative authentication method for service-to-service communication, CLI tools, and integrations where JWT token management is impractical.
+
+### When to Use API Keys
+
+| Use Case                     | Recommended Method |
+| ---------------------------- | ------------------ |
+| Browser applications         | JWT (access/refresh tokens) |
+| Mobile apps                  | JWT (access/refresh tokens) |
+| Service-to-service calls     | **API Keys** |
+| CLI tools                    | **API Keys** |
+| Webhooks                     | **API Keys** |
+| Third-party integrations     | **API Keys** |
+
+### API Key Format
+
+API keys follow this format:
+
+```
+sb_sk_<account_code>_<random_32_characters>
+```
+
+Example:
+```
+sb_sk_AB1234_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
+```
+
+**Components:**
+- `sb_sk` - SnackBase Secret Key prefix
+- `AB1234` - Account code (human-readable identifier)
+- `a1b2c3...o5p6` - 32-character cryptographically secure random string
+
+### 1. Create an API Key
+
+Generate a new API key for your account.
+
+**Endpoint**: `POST /api/v1/api-keys/`
+
+**Authentication**: Required (JWT bearer token)
+
+**Request**:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/api-keys/ \
+  -H "Authorization: Bearer <jwt_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Production API",
+    "description": "Used by production backend service"
+  }'
+```
+
+**Response** (201 Created):
+
+```json
+{
+  "id": "ak_abc123xyz",
+  "name": "Production API",
+  "description": "Used by production backend service",
+  "key": "sb_sk_AB1234_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6",
+  "account_id": "AB1234",
+  "created_by": "usr_abc123",
+  "created_at": "2026-01-17T10:30:00Z",
+  "last_used_at": null,
+  "is_revoked": false
+}
+```
+
+**Important**: The full API key (`key` field) is **only shown once** at creation time. Save it securely - you won't be able to retrieve it again.
+
+**Creating with cURL (storing the key)**:
+
+```bash
+# Create and save to environment variable
+response=$(curl -s -X POST http://localhost:8000/api/v1/api-keys/ \
+  -H "Authorization: Bearer <jwt_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "My Service"}')
+
+# Extract and export the key
+export SNACKBASE_API_KEY=$(echo "$response" | jq -r '.key')
+echo "API Key saved to SNACKBASE_API_KEY"
+```
+
+---
+
+### 2. List API Keys
+
+Get all API keys for the current account.
+
+**Endpoint**: `GET /api/v1/api-keys/`
+
+**Authentication**: Required (JWT bearer token)
+
+**Request**:
+
+```bash
+curl -X GET http://localhost:8000/api/v1/api-keys/ \
+  -H "Authorization: Bearer <jwt_token>"
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "items": [
+    {
+      "id": "ak_abc123xyz",
+      "name": "Production API",
+      "description": "Used by production backend service",
+      "account_id": "AB1234",
+      "created_by": "usr_abc123",
+      "created_at": "2026-01-17T10:30:00Z",
+      "last_used_at": "2026-01-17T15:45:00Z",
+      "is_revoked": false
+    },
+    {
+      "id": "ak_def456uvw",
+      "name": "Development CLI",
+      "description": "Local development tools",
+      "account_id": "AB1234",
+      "created_by": "usr_abc123",
+      "created_at": "2026-01-15T09:00:00Z",
+      "last_used_at": "2026-01-17T08:20:00Z",
+      "is_revoked": false
+    }
+  ],
+  "total": 2,
+  "page": 1,
+  "page_size": 50
+}
+```
+
+**Note**: The list endpoint does NOT return the full API key value (only metadata).
+
+---
+
+### 3. Authenticate with API Key
+
+Use an API key instead of JWT token for API requests.
+
+**Endpoint**: Any protected endpoint
+
+**Authentication**: API Key (Bearer token)
+
+**Request**:
+
+```bash
+# Using API key in Authorization header
+curl -X GET http://localhost:8000/api/v1/auth/me \
+  -H "Authorization: Bearer sb_sk_AB1234_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"
+
+# Using API key with records
+curl -X GET http://localhost:8000/api/v1/posts \
+  -H "Authorization: Bearer sb_sk_AB1234_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"
+
+# Creating a record
+curl -X POST http://localhost:8000/api/v1/posts \
+  -H "Authorization: Bearer sb_sk_AB1234_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Hello World",
+    "content": "My first post"
+  }'
+```
+
+**Response**: Same as JWT authentication (user context is extracted from the API key)
+
+```json
+{
+  "id": "post_abc123",
+  "title": "Hello World",
+  "content": "My first post",
+  "created_by": "usr_abc123",
+  "account_id": "AB1234",
+  "created_at": "2026-01-17T10:30:00Z"
+}
+```
+
+---
+
+### 4. Revoke an API Key
+
+Invalidate an API key immediately (useful for security incidents or key rotation).
+
+**Endpoint**: `POST /api/v1/api-keys/{key_id}/revoke`
+
+**Authentication**: Required (JWT bearer token)
+
+**Request**:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/api-keys/ak_abc123xyz/revoke \
+  -H "Authorization: Bearer <jwt_token>"
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "id": "ak_abc123xyz",
+  "name": "Production API",
+  "description": "Used by production backend service",
+  "account_id": "AB1234",
+  "created_by": "usr_abc123",
+  "created_at": "2026-01-17T10:30:00Z",
+  "last_used_at": "2026-01-17T15:45:00Z",
+  "is_revoked": true,
+  "revoked_at": "2026-01-17T16:00:00Z",
+  "revoked_by": "usr_abc123"
+}
+```
+
+**Note**: Once revoked, an API key cannot be restored. You must create a new key.
+
+---
+
+### 5. Get API Key Details
+
+Get details about a specific API key.
+
+**Endpoint**: `GET /api/v1/api-keys/{key_id}`
+
+**Authentication**: Required (JWT bearer token)
+
+**Request**:
+
+```bash
+curl -X GET http://localhost:8000/api/v1/api-keys/ak_abc123xyz \
+  -H "Authorization: Bearer <jwt_token>"
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "id": "ak_abc123xyz",
+  "name": "Production API",
+  "description": "Used by production backend service",
+  "account_id": "AB1234",
+  "created_by": "usr_abc123",
+  "created_at": "2026-01-17T10:30:00Z",
+  "last_used_at": "2026-01-17T15:45:00Z",
+  "is_revoked": false
+}
+```
+
+---
+
+### Security Best Practices for API Keys
+
+**1. Storage**:
+```bash
+# ✅ Good: Environment variable
+export SNACKBASE_API_KEY="sb_sk_..."
+
+# ✅ Good: Secure credential store (AWS Secrets Manager, Vault, etc.)
+
+# ❌ Bad: Hardcoded in source code
+api_key = "sb_sk_..."  # NEVER do this
+
+# ❌ Bad: Committed to version control
+git add .env  # NEVER commit API keys
+```
+
+**2. Key Rotation**:
+```bash
+# Create new key
+new_key=$(curl -s -X POST http://localhost:8000/api/v1/api-keys/ \
+  -H "Authorization: Bearer <jwt_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Rotated Key"}' | jq -r '.key')
+
+# Update your service with new key
+export SNACKBASE_API_KEY="$new_key"
+
+# Verify new key works
+curl -H "Authorization: Bearer $new_key" http://localhost:8000/api/v1/auth/me
+
+# Revoke old key
+curl -X POST http://localhost:8000/api/v1/api-keys/ak_old_key/revoke \
+  -H "Authorization: Bearer <jwt_token>"
+```
+
+**3. Scoping and Naming**:
+```bash
+# Use descriptive names for easy identification
+{
+  "name": "Production - Payment Service",
+  "description": "Used by payment processing service in production"
+}
+
+# Create separate keys for different environments
+{
+  "name": "Development - Local CLI"
+}
+
+# Create separate keys for different services
+{
+  "name": "Staging - Webhook Handler"
+}
+```
+
+**4. Monitoring**:
+```bash
+# Regularly audit API keys
+curl -X GET http://localhost:8000/api/v1/api-keys/ \
+  -H "Authorization: Bearer <jwt_token>" | jq '.items[] | select(.last_used_at == null)'
+
+# Look for unused keys that can be revoked
+# Check for keys with old last_used_at dates
+```
+
+**5. Revocation on Compromise**:
+```bash
+# Immediately revoke if key is leaked
+curl -X POST http://localhost:8000/api/v1/api-keys/ak_leaked_key/revoke \
+  -H "Authorization: Bearer <jwt_token>"
+
+# Create replacement key
+curl -X POST http://localhost:8000/api/v1/api-keys/ \
+  -H "Authorization: Bearer <jwt_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Replacement for leaked key"}'
+```
+
+---
+
+### API Key vs JWT Comparison
+
+| Feature              | API Keys                          | JWT Tokens                        |
+| -------------------- | --------------------------------- | --------------------------------- |
+| **Use Case**         | Service-to-service, CLI, webhooks | Browser, mobile apps             |
+| **Lifetime**         | Indefinite (until revoked)        | Access: 1 hour, Refresh: 7 days  |
+| **Storage**          | Server-side (hash)                | Client-side (localStorage/cookie)|
+| **Visibility**       | Full key shown only at creation   | Tokens visible in responses       |
+| **Rotation**         | Manual (create new, revoke old)   | Automatic (on refresh)           |
+| **Revocation**       | Immediate                         | On refresh or logout              |
+| **User Context**     | Single user per key               | Can include user, role, account   |
+| **Security**         | SHA-256 hashed at rest            | Signed, verifiable signature      |
+
+---
+
+### Error Responses
+
+```json
+// Invalid API key (401)
+{
+  "detail": "Invalid API key"
+}
+
+// Revoked API key (401)
+{
+  "detail": "API key has been revoked"
+}
+
+// API key not found (404)
+{
+  "detail": "API key not found"
+}
+
+// Unauthorized access to key (403)
+{
+  "detail": "You do not have permission to access this API key"
+}
+
+// Missing name on creation (422)
+{
+  "detail": [
+    {
+      "type": "missing",
+      "loc": ["body", "name"],
+      "msg": "Field required"
+    }
+  ]
 }
 ```
 
