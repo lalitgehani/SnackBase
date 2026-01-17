@@ -42,16 +42,19 @@ export default function DynamicFieldInput({
 
 	// JSON field validation
 	const handleJsonChange = (newValue: string) => {
-		if (!newValue.trim()) {
+		setJsonError(null);
+		onChange(newValue);
+	};
+
+	const handleJsonBlur = (currentValue: string) => {
+		if (!currentValue.trim()) {
 			setJsonError(null);
-			onChange(newValue);
 			return;
 		}
 
 		try {
-			JSON.parse(newValue);
+			JSON.parse(currentValue);
 			setJsonError(null);
-			onChange(newValue);
 		} catch {
 			setJsonError('Invalid JSON format');
 		}
@@ -159,13 +162,21 @@ export default function DynamicFieldInput({
 					</Popover>
 				);
 
-			case 'json':
+			case 'json': {
+				const displayValue =
+					typeof value === 'string'
+						? value
+						: value !== null && value !== undefined
+							? JSON.stringify(value, null, 2)
+							: '';
+
 				return (
 					<div className="space-y-2">
 						<Textarea
 							id={`field-${field.name}`}
-							value={(value as string) || ''}
+							value={displayValue}
 							onChange={(e) => handleJsonChange(e.target.value)}
+							onBlur={(e) => handleJsonBlur(e.target.value)}
 							disabled={disabled}
 							placeholder={`Enter JSON for ${field.name}`}
 							rows={4}
@@ -174,6 +185,7 @@ export default function DynamicFieldInput({
 						{jsonError && <p className="text-sm text-destructive">{jsonError}</p>}
 					</div>
 				);
+			}
 
 			case 'reference':
 				return (
