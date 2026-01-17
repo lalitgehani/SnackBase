@@ -460,6 +460,7 @@ def register_routes(app: FastAPI) -> None:
         roles_router,
         saml_router,
         users_router,
+        api_keys_router,
     )
 
     settings = get_settings()
@@ -536,6 +537,13 @@ def register_routes(app: FastAPI) -> None:
     # Register admin routes for configuration dashboard
     app.include_router(
         admin_router, prefix=f"{settings.api_prefix}/admin", tags=["admin"]
+    )
+
+    # Register API keys router
+    app.include_router(
+        api_keys_router,
+        prefix=f"{settings.api_prefix}/admin/api-keys",
+        tags=["admin", "api-keys"],
     )
 
     # Register email templates routes

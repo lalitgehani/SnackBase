@@ -4,6 +4,7 @@ Provides dependencies for extracting and validating JWT tokens from requests.
 """
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException, Request, status
@@ -15,6 +16,7 @@ from snackbase.infrastructure.auth import (
     InvalidTokenError,
     TokenExpiredError,
     jwt_service,
+    api_key_service,
 )
 from snackbase.infrastructure.persistence.database import get_db_session
 
@@ -38,6 +40,7 @@ class CurrentUser:
 async def get_current_user(
     request: Request,
     authorization: Annotated[str | None, Header()] = None,
+    x_api_key: Annotated[str | None, Header(alias="X-API-Key")] = None,
     session: Annotated[AsyncSession, Depends(get_db_session)] = None,
 ) -> CurrentUser:
     """Extract and validate the current user from the Authorization header.
@@ -59,10 +62,13 @@ async def get_current_user(
     )
 
     if authorization is None:
-        logger.info("Authentication failed: missing Authorization header")
+        if x_api_key:
+            return await get_current_user_from_api_key(x_api_key, request, session)
+            
+        logger.info("Authentication failed: missing Authorization and X-API-Key headers")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing Authorization header",
+            detail="Missing authentication credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -147,6 +153,9 @@ async def get_current_user(
             detail=f"Invalid token: {str(e)}",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    except HTTPException:
+        # Re-raise HTTP exceptions from API key validation
+        raise
     except KeyError as e:
         logger.warning("Authentication failed: missing claim in token", missing_claim=str(e))
         raise HTTPException(
@@ -154,6 +163,102 @@ async def get_current_user(
             detail=f"Missing claim: {str(e)}",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+
+async def get_current_user_from_api_key(
+    api_key: str,
+    request: Request,
+    session: AsyncSession,
+) -> CurrentUser:
+    """Validate and extract the current user from an API key.
+
+    Args:
+        api_key: The plaintext API key from the X-API-Key header.
+        request: FastAPI request object.
+        session: Database session.
+
+    Returns:
+        CurrentUser: The authenticated user's context.
+
+    Raises:
+        HTTPException: 401 if key is invalid/expired, 403 if not superadmin.
+    """
+    from snackbase.infrastructure.persistence.repositories import (
+        APIKeyRepository,
+        UserRepository,
+    )
+
+    key_hash = api_key_service.hash_key(api_key)
+    api_key_repo = APIKeyRepository(session)
+    
+    key_model = await api_key_repo.get_by_hash(key_hash)
+    
+    if not key_model:
+        logger.info("API Key authentication failed: key not found or inactive")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid API key",
+        )
+        
+    # Check expiration
+    if key_model.expires_at and key_model.expires_at < datetime.now(key_model.expires_at.tzinfo):
+        logger.info("API Key authentication failed: key expired", key_id=key_model.id)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="API key has expired",
+        )
+        
+    # Load user with groups and role
+    from sqlalchemy.orm import selectinload
+    from sqlalchemy import select
+    from snackbase.infrastructure.persistence.models import UserModel
+    
+    result = await session.execute(
+        select(UserModel)
+        .where(UserModel.id == key_model.user_id)
+        .options(selectinload(UserModel.groups), selectinload(UserModel.role))
+    )
+    user = result.scalar_one_or_none()
+    
+    if not user:
+        logger.warning("API Key authentication failed: user not found", user_id=key_model.user_id)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User associated with API key not found",
+        )
+        
+    # Verify user is superadmin (system account)
+    if user.account_id != SYSTEM_ACCOUNT_ID:
+        logger.warning(
+            "API Key access denied: user is not a superadmin",
+            user_id=user.id,
+            account_id=user.account_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="API keys are restricted to superadmin users",
+        )
+        
+    # Update last_used_at
+    await api_key_repo.update_last_used(key_model.id)
+    
+    # Audit log the usage (simplified here, will be integrated properly)
+    logger.info(
+        "API Key used",
+        key_id=key_model.id,
+        user_id=user.id,
+        path=str(request.url.path),
+    )
+    
+    groups = [group.name for group in user.groups] if user.groups else []
+    
+    return CurrentUser(
+        user_id=user.id,
+        account_id=user.account_id,
+        email=user.email,
+        role=user.role.name if user.role else "admin",
+        groups=groups,
+    )
 
 
 # Type alias for dependency injection

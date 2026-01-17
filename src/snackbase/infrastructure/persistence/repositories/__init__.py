@@ -3,6 +3,9 @@
 from snackbase.infrastructure.persistence.repositories.account_repository import (
     AccountRepository,
 )
+from snackbase.infrastructure.persistence.repositories.api_key_repository import (
+    APIKeyRepository,
+)
 from snackbase.infrastructure.persistence.repositories.collection_repository import (
     CollectionRepository,
 )
@@ -54,6 +57,7 @@ from snackbase.infrastructure.persistence.repositories.oauth_state_repository im
 
 __all__ = [
     "AccountRepository",
+    "APIKeyRepository",
     "AuditLogRepository",
     "CollectionRepository",
     "ConfigurationRepository",

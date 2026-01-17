@@ -35,6 +35,7 @@ async def get_user(session: AsyncSession, user_id: str):
 2. **Use UUID or generated IDs** for primary keys
 3. **Timestamps**: `created_at`, `updated_at` with timezone
 4. **Soft delete pattern**: `deleted_at` timestamp
+5. **Avoid Redundant Indexes**: Do not use `Index()` in `__table_args__` for columns that already have `index=True` in `mapped_column`, as this causes collisions in SQLite during tests.
 
 ## Performance
 

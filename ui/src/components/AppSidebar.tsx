@@ -12,6 +12,7 @@ import {
     LogOut,
     Settings,
     Mail,
+    Key,
 } from "lucide-react"
 import { useLocation, Link, useNavigate } from "react-router"
 import { useAuthStore } from "@/stores/auth.store"
@@ -95,12 +96,18 @@ const items = [
         url: "/admin/macros",
         icon: CodeXml,
     },
+    {
+        title: "API Keys",
+        url: "/admin/api-keys",
+        icon: Key,
+        superadminOnly: true,
+    },
 ]
 
 export function AppSidebar() {
     const location = useLocation()
     const navigate = useNavigate()
-    const { user, logout } = useAuthStore()
+    const { user, account, logout } = useAuthStore()
 
     const handleLogout = () => {
         logout()
@@ -122,19 +129,24 @@ export function AppSidebar() {
                     <SidebarGroupLabel>Application</SidebarGroupLabel>
                     <SidebarGroupContent>
                         <SidebarMenu>
-                            {items.map((item) => (
-                                <SidebarMenuItem key={item.title}>
-                                    <SidebarMenuButton
-                                        asChild
-                                        isActive={location.pathname === item.url}
-                                    >
-                                        <Link to={item.url}>
-                                            <item.icon />
-                                            <span>{item.title}</span>
-                                        </Link>
-                                    </SidebarMenuButton>
-                                </SidebarMenuItem>
-                            ))}
+                            {items.map((item: any) => {
+                                if (item.superadminOnly && account?.id !== "00000000-0000-0000-0000-000000000000") {
+                                    return null;
+                                }
+                                return (
+                                    <SidebarMenuItem key={item.title}>
+                                        <SidebarMenuButton
+                                            asChild
+                                            isActive={location.pathname === item.url}
+                                        >
+                                            <Link to={item.url}>
+                                                <item.icon />
+                                                <span>{item.title}</span>
+                                            </Link>
+                                        </SidebarMenuButton>
+                                    </SidebarMenuItem>
+                                );
+                            })}
                         </SidebarMenu>
                     </SidebarGroupContent>
                 </SidebarGroup>

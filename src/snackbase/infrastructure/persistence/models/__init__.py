@@ -23,6 +23,7 @@ from snackbase.infrastructure.persistence.models.user import UserModel
 from snackbase.infrastructure.persistence.models.users_groups import UsersGroupsModel
 from snackbase.infrastructure.persistence.models.macro import MacroModel
 from snackbase.infrastructure.persistence.models.password_reset import PasswordResetTokenModel
+from snackbase.infrastructure.persistence.models.api_key import APIKeyModel
 
 __all__ = [
     "AccountModel",
@@ -42,6 +43,7 @@ __all__ = [
     "UsersGroupsModel",
     "MacroModel",
     "PasswordResetTokenModel",
+    "APIKeyModel",
 ]
 
 

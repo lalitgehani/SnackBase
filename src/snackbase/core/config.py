@@ -113,6 +113,12 @@ class Settings(BaseSettings):
         description="Password for initial superadmin creation (auto-created on startup if set)",
     )
 
+    # API Key Settings
+    api_key_header: str = "X-API-Key"
+    api_key_max_per_user: int = 10
+    api_key_default_expiration_days: int | None = None  # None = never expires
+    api_key_rate_limit_per_minute: int = 100
+
     # Demo Mode
     is_demo: bool = Field(
         default=False,

@@ -14,6 +14,7 @@ import MigrationsPage from '@/pages/MigrationsPage';
 import MacrosPage from '@/pages/MacrosPage';
 import AcceptInvitationPage from '@/pages/AcceptInvitationPage';
 import ConfigurationDashboardPage from '@/pages/ConfigurationDashboardPage';
+import ApiKeysPage from '@/pages/ApiKeys/ApiKeysPage';
 import AdminLayout from '@/layouts/AdminLayout';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { Toaster } from '@/components/ui/toaster';
@@ -54,6 +55,7 @@ function App() {
           <Route path="migrations" element={<MigrationsPage />} />
           <Route path="macros" element={<MacrosPage />} />
           <Route path="configuration" element={<ConfigurationDashboardPage />} />
+          <Route path="api-keys" element={<ApiKeysPage />} />
         </Route>
 
         {/* Catch all - redirect to dashboard */}
