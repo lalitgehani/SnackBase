@@ -125,6 +125,28 @@ class Settings(BaseSettings):
         description="When enabled, prevents modifications to superadmin credentials",
     )
 
+    # Security Headers Settings
+    security_headers_enabled: bool = Field(
+        default=True,
+        description="Enable security headers middleware",
+    )
+    hsts_max_age: int = Field(
+        default=31536000,  # 1 year in seconds
+        description="HSTS max-age in seconds (only applied in production)",
+    )
+    csp_policy: str = Field(
+        default="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'",
+        description="Content Security Policy header value",
+    )
+    permissions_policy: str = Field(
+        default="geolocation=(), microphone=(), camera=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()",
+        description="Permissions-Policy header value",
+    )
+    https_redirect_enabled: bool = Field(
+        default=False,
+        description="Redirect HTTP to HTTPS in production (requires reverse proxy for actual HTTPS)",
+    )
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, v: str | list[str]) -> list[str]:

@@ -350,7 +350,9 @@ server {
     ssl_ciphers HIGH:!aNULL:!MD5;
     ssl_prefer_server_ciphers on;
 
-    # Security Headers
+    # Security Headers (Defense in Depth)
+    # Note: SnackBase also sets these headers at the application level.
+    # Nginx headers provide an additional layer of security.
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header X-Content-Type-Options "nosniff" always;
@@ -809,6 +811,56 @@ tar -czf files_backup_$(date +%Y%m%d).tar.gz sb_data/files/
 8. **Database security**: Use strong passwords, restrict network access
 9. **File permissions**: Ensure proper ownership and permissions
 10. **Rate limiting**: Add Nginx rate limiting (future enhancement)
+
+### Security Headers
+
+SnackBase automatically sets security headers on all HTTP responses to protect against common web vulnerabilities:
+
+- **X-Content-Type-Options**: Prevents MIME type sniffing
+- **X-Frame-Options**: Prevents clickjacking attacks
+- **X-XSS-Protection**: Enables browser XSS protection
+- **Strict-Transport-Security** (production only): Enforces HTTPS
+- **Content-Security-Policy**: Prevents XSS and injection attacks
+- **Permissions-Policy**: Restricts browser features
+- **Referrer-Policy**: Controls referrer information
+
+#### Customizing Security Headers
+
+You can customize security headers via environment variables:
+
+```bash
+# Disable security headers (not recommended)
+SNACKBASE_SECURITY_HEADERS_ENABLED=false
+
+# Customize HSTS max-age (default: 31536000 = 1 year)
+SNACKBASE_HSTS_MAX_AGE=63072000  # 2 years
+
+# Customize Content Security Policy
+SNACKBASE_CSP_POLICY="default-src 'self'; script-src 'self' https://cdn.example.com"
+
+# Customize Permissions Policy
+SNACKBASE_PERMISSIONS_POLICY="geolocation=(), camera=(), microphone=()"
+
+# Enable HTTP to HTTPS redirect in production (optional)
+SNACKBASE_HTTPS_REDIRECT_ENABLED=true
+```
+
+**Note**: The default CSP policy is designed to work with the SnackBase Admin UI. If you're using a custom frontend with external CDNs or inline scripts, you may need to adjust the CSP policy.
+
+#### Troubleshooting CSP Issues
+
+If your frontend is blocked by CSP:
+
+1. **Check browser console**: Look for CSP violation errors
+2. **Identify blocked resources**: Note the source and type (script, style, image, etc.)
+3. **Update CSP policy**: Add the necessary sources to the appropriate directive
+4. **Test thoroughly**: Ensure all functionality works after CSP changes
+
+Example CSP for frontend with external CDN:
+
+```bash
+SNACKBASE_CSP_POLICY="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self'"
+```
 
 ---
 

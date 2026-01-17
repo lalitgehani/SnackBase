@@ -621,6 +621,14 @@ def register_middleware(app: FastAPI) -> None:
         app: FastAPI application instance.
     """
     from snackbase.infrastructure.api.middleware.context_middleware import ContextMiddleware
+    from snackbase.infrastructure.api.middleware.security_headers_middleware import (
+        SecurityHeadersMiddleware,
+    )
+
+    # Register SecurityHeadersMiddleware first (outermost layer)
+    # Middleware is applied in reverse order, so this will be the last to process
+    # the response, ensuring security headers are added to all responses
+    app.add_middleware(SecurityHeadersMiddleware)
 
     # Register ContextMiddleware (should be early in the stack)
     app.add_middleware(ContextMiddleware)
