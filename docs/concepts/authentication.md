@@ -1286,22 +1286,33 @@ If `SNACKBASE_SINGLE_TENANT_MODE` is `true`, `SNACKBASE_SINGLE_TENANT_ACCOUNT` (
 
 ### Behavioral Changes
 
-| Feature                 | Multi-Tenant (Default)                  | Single-Tenant Mode                                  |
-| ----------------------- | --------------------------------------- | --------------------------------------------------- |
-| **Account Bootstrap**   | None                                    | Configured account created automatically on startup |
-| **Registration**        | Users create a new account + admin user | Users join the configured account as "user"         |
-| **Registration Schema** | `account_name` is required              | `account_name` is ignored/optional                  |
-| **OAuth Callback**      | Creates new account + admin user        | Joins configured account as "user"                  |
-| **User Role**           | First user is "admin"                   | Users are assigned "user" role by default           |
+| Feature                     | Multi-Tenant (Default)                  | Single-Tenant Mode                                  |
+| --------------------------- | --------------------------------------- | --------------------------------------------------- |
+| **Account Bootstrap**       | None                                    | Configured account created automatically on startup |
+| **Registration**            | Users create a new account + admin user | Users join the configured account as "user"         |
+| **Registration Schema**     | `account_name` is required              | `account_name` is optional (auto-assigned)          |
+| **Login / Forgot Password** | `account` is required                   | `account` is optional (resolves to config)          |
+| **OAuth Callback**          | Creates new account + admin user        | Joins configured account as "user"                  |
+| **User Role**               | First user is "admin"                   | Users are assigned "user" role by default           |
 
-### Registration Flow in Single-Tenant Mode
+### Authentication Flow in Single-Tenant Mode
 
-When a user registers at `/api/v1/auth/register`:
+In Single-Tenant Mode, the backend simplifies the authentication process by providing a fallback to the configured account.
 
-1.  **Account Resolution**: The system ignores any user-provided account details and uses `SNACKBASE_SINGLE_TENANT_ACCOUNT`.
-2.  **User Creation**: The user is created within that pre-configured account.
-3.  **Role Assignment**: The user is assigned the standard `user` role (not `admin`).
-4.  **Isolation**: Data isolation still works via `account_id`, but practically all users share the same account ID.
+#### Registration (`/api/v1/auth/register`)
+
+- **Account Resolution**: If `account_name` is missing, the system uses `SNACKBASE_SINGLE_TENANT_ACCOUNT`.
+- **Role**: All new users get the `user` role.
+
+#### Login (`/api/v1/auth/login`)
+
+- **Account Resolution**: If the `account` field is omitted from the request, the system automatically resolves the account using the `SNACKBASE_SINGLE_TENANT_ACCOUNT` slug.
+- **Timing-Safe**: Password verification still occurs in constant time even if the resolved account or user is not found.
+
+#### Forgot Password (`/api/v1/auth/forgot-password`)
+
+- **Account Resolution**: If `account` is omitted, it resolves to the configured single-tenant account.
+- **Privacy**: The response remains identical ("If an account exists...") regardless of whether the account was found.
 
 ### OAuth Flow in Single-Tenant Mode
 

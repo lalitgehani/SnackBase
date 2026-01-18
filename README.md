@@ -104,7 +104,7 @@ open http://localhost:8000
 
 - **Clean Architecture** - Domain, application, and infrastructure layer separation (~120K LOC)
 - **Multi-Tenancy** - Row-level isolation with account-scoped data
-- **Single-Tenant Mode** - Support for dedicated instances where all users join a pre-configured account
+- **Single-Tenant Mode** - Support for dedicated instances where all users join a pre-configured account (optional account identifier for login/registration)
 - **Configuration Management** - Environment variables and `.env` file support
 - **Structured JSON Logging** - Correlation ID tracking for request tracing
 - **Health Checks** - `/health`, `/ready`, `/live` endpoints

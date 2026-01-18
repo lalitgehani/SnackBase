@@ -231,6 +231,10 @@ SNACKBASE_STORAGE_PATH=/home/snackbase/app/sb_data/files
 SNACKBASE_SINGLE_TENANT_MODE=true
 SNACKBASE_SINGLE_TENANT_ACCOUNT=my-app
 SNACKBASE_SINGLE_TENANT_ACCOUNT_NAME="My Application"
+
+# Note: In Single-Tenant Mode, the 'account' field is optional for
+# registration, login, and password reset. The backend automatically
+# uses the 'SNACKBASE_SINGLE_TENANT_ACCOUNT' value.
 ```
 
 > **Security Note**: Generate a strong secret key:
