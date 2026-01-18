@@ -22,7 +22,6 @@ from snackbase.infrastructure.persistence.models.group import GroupModel
 from snackbase.infrastructure.persistence.models.invitation import InvitationModel
 from snackbase.infrastructure.persistence.models.macro import MacroModel
 from snackbase.infrastructure.persistence.models.password_reset import PasswordResetTokenModel
-from snackbase.infrastructure.persistence.models.permission import PermissionModel
 from snackbase.infrastructure.persistence.models.refresh_token import RefreshTokenModel
 from snackbase.infrastructure.persistence.models.role import RoleModel
 from snackbase.infrastructure.persistence.models.user import UserModel
@@ -43,7 +42,6 @@ __all__ = [
     "MacroModel",
     "OAuthStateModel",
     "PasswordResetTokenModel",
-    "PermissionModel",
     "RefreshTokenModel",
     "RoleModel",
     "UserModel",

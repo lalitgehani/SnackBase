@@ -25,8 +25,8 @@ from snackbase.infrastructure.persistence.database import get_db_session
 from snackbase.infrastructure.persistence.repositories.macro_repository import (
     MacroRepository,
 )
-from snackbase.infrastructure.persistence.repositories.permission_repository import (
-    PermissionRepository,
+from snackbase.infrastructure.persistence.repositories.collection_rule_repository import (
+    CollectionRuleRepository,
 )
 
 router = APIRouter()
@@ -278,7 +278,7 @@ async def delete_macro(
     Fails if macro is used in any active permission rules.
     """
     macro_repo = MacroRepository(db)
-    permission_repo = PermissionRepository(db)
+    rule_repo = CollectionRuleRepository(db)
     
     # Check if macro exists
     macro = await macro_repo.get_by_id(macro_id)
@@ -288,18 +288,18 @@ async def delete_macro(
             detail="Macro not found",
         )
     
-    # Check if macro is used in any permissions
-    permissions_using_macro = await permission_repo.find_permissions_using_macro(macro.name)
-    if permissions_using_macro:
+    # Check if macro is used in any collection rules
+    rules_using_macro = await rule_repo.find_rules_using_macro(macro.name)
+    if rules_using_macro:
         logger.warning(
-            "Cannot delete macro: in use by permissions",
+            "Cannot delete macro: in use by collection rules",
             macro_id=macro_id,
             macro_name=macro.name,
-            permission_count=len(permissions_using_macro),
+            rule_count=len(rules_using_macro),
         )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Cannot delete macro '{macro.name}': it is used in {len(permissions_using_macro)} permission rule(s)",
+            detail=f"Cannot delete macro '{macro.name}': it is used in {len(rules_using_macro)} collection rule(s)",
         )
     
     # Delete the macro

@@ -13,7 +13,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.core.logging import get_logger
 from snackbase.core.rules.sql_compiler import compile_to_sql
-from snackbase.core.rules.evaluator import Evaluator
 from snackbase.core.rules.lexer import Lexer
 from snackbase.core.rules.parser import Parser
 from snackbase.core.macros.expander import MacroExpander
@@ -70,7 +69,6 @@ def extract_collection_from_path(path: str) -> str | None:
     # Exclude specific routes like /auth, /permissions, /collections, /invitations, /macros
     excluded_routes = {
         "auth",
-        "permissions",
         "collections",
         "invitations",
         "macros",
@@ -209,6 +207,7 @@ async def check_collection_permission(
     operation: str,
     session: AsyncSession,
     record: dict[str, Any] | None = None,
+    request_data: dict[str, Any] | None = None,
 ) -> RuleFilter:
     """Check if user has permission for collection operation.
 
@@ -319,42 +318,62 @@ async def check_collection_permission(
 
     # 7. Operation-specific enforcement
     
-    # For 'create', we evaluate directly in Python since there's no DB row yet
+    # For 'create', we should ideally validate against the DB
+    # but for now we'll rely on the fact that any subsequent read would fail
+    # or we can implement a simple SQL check in the future.
     if operation == "create":
         if rule_expr == "":
             return RuleFilter(sql="1=1", params={}, allowed_fields=allowed_fields)
             
-        # Parse and evaluate
+        # Compile to SQL to validate syntax and get params
         try:
-            lexer = Lexer(rule_expr)
-            parser = Parser(lexer)
-            ast = parser.parse()
+            sql, params = compile_to_sql(rule_expr, auth_data)
             
-            # Context for evaluation
-            eval_context = {
-                "@request": {
-                    "auth": auth_data,
-                    "data": record or {} # For create, 'record' is the incoming data
-                }
-            }
+            # For 'create', we validate by running a dummy select with payload data
+            # Use CTE to provide mock record values for the WHERE clause
+            # Only include fields present in request_data
+            if not request_data:
+                request_data = {}
+                
+            cols = []
+            cte_params = {}
+            for k, v in request_data.items():
+                param_name = f"payload_{k}"
+                cols.append(f":{param_name} AS {k}")
+                cte_params[param_name] = v
+                
+            # Also handle @request.data.* variables in the SQL
+            for p_name in list(params.keys()):
+                if p_name.startswith("data_"):
+                    field = p_name[len("data_"):]
+                    params[p_name] = request_data.get(field)
             
-            evaluator = Evaluator(eval_context)
-            is_allowed = await evaluator.evaluate(ast)
+            if not cols:
+                # If no data, just run the check directly (might only use @request.auth or constants)
+                check_sql = f"SELECT 1 WHERE {sql}"
+            else:
+                check_sql = f"WITH payload AS (SELECT {', '.join(cols)}) SELECT 1 FROM payload WHERE {sql}"
             
-            if not is_allowed:
+            # Use same params for both CTE and original SQL
+            all_params = {**params, **cte_params}
+            
+            from sqlalchemy import text
+            res = await session.execute(text(check_sql), all_params)
+            val = res.scalar()
+            if not val:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Record does not satisfy collection rules",
                 )
                 
             return RuleFilter(sql="1=1", params={}, allowed_fields=allowed_fields)
+        except HTTPException:
+            raise
         except Exception as e:
-            if isinstance(e, HTTPException):
-                raise
-            logger.error("Rule evaluation failed for create", error=str(e))
+            logger.error("Rule validation failed for create", error=str(e))
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Rule evaluation failed",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Record does not satisfy collection rules or invalid rule expression",
             )
 
     # For other operations (list, view, update, delete), compile to SQL

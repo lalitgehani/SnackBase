@@ -167,6 +167,7 @@ async def create_record(
         operation="create",
         session=session,
         record=processed_temp, # Pass processed data for rule evaluation (@request.data.*)
+        request_data=data,
     )
     allowed_fields = rule_result.allowed_fields
     
@@ -654,6 +655,7 @@ async def _update_record(
         operation="update",
         session=session,
         record=existing_record,
+        request_data=data,
     )
     allowed_fields = rule_result.allowed_fields
     

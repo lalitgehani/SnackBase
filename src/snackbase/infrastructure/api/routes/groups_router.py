@@ -7,11 +7,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.core.logging import get_logger
-from snackbase.domain.services.permission_cache import PermissionCache
 from snackbase.infrastructure.api.dependencies import (
     AuthenticatedUser,
     get_db_session,
-    get_permission_cache,
     require_superadmin,
     SYSTEM_ACCOUNT_ID,
 )
@@ -31,10 +29,9 @@ logger = get_logger(__name__)
 
 def get_group_repository(
     session: Annotated[AsyncSession, Depends(get_db_session)],
-    permission_cache: Annotated[PermissionCache, Depends(get_permission_cache)],
 ) -> GroupRepository:
     """Get the group repository."""
-    return GroupRepository(session, permission_cache)
+    return GroupRepository(session)
 
 
 GroupRepo = Annotated[GroupRepository, Depends(get_group_repository)]

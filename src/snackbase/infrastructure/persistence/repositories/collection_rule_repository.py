@@ -88,3 +88,27 @@ class CollectionRuleRepository:
         """
         await self.session.delete(rule)
         await self.session.flush()
+    async def find_rules_using_macro(self, macro_name: str) -> list[CollectionRuleModel]:
+        """Find all collection rules that use a specific macro.
+
+        Args:
+            macro_name: The name of the macro to search for.
+
+        Returns:
+            List of collection rule models using the macro.
+        """
+        from sqlalchemy import or_
+
+        macro_pattern = f"%@{macro_name}%"
+        result = await self.session.execute(
+            select(CollectionRuleModel).where(
+                or_(
+                    CollectionRuleModel.list_rule.like(macro_pattern),
+                    CollectionRuleModel.view_rule.like(macro_pattern),
+                    CollectionRuleModel.create_rule.like(macro_pattern),
+                    CollectionRuleModel.update_rule.like(macro_pattern),
+                    CollectionRuleModel.delete_rule.like(macro_pattern),
+                )
+            )
+        )
+        return list(result.scalars().all())

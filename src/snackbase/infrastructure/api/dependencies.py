@@ -11,7 +11,6 @@ from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.core.logging import get_logger
-from snackbase.domain.services import PermissionCache
 from snackbase.infrastructure.auth import (
     InvalidTokenError,
     TokenExpiredError,
@@ -86,17 +85,10 @@ async def get_current_user(
 
         user_id = payload["user_id"]
         
-        # Load user info from database or cache
-        permission_cache = get_permission_cache(request)
-        user_info = permission_cache.get_user_info(user_id)
-        
         db_account_id = None
         groups = []
 
-        if user_info:
-            groups = user_info["groups"]
-            db_account_id = user_info["account_id"]
-        elif session is not None:
+        if session is not None:
             from snackbase.infrastructure.persistence.repositories import UserRepository
 
             user_repo = UserRepository(session)
@@ -106,17 +98,14 @@ async def get_current_user(
                 db_account_id = user.account_id
                 if user.groups:
                     groups = [group.name for group in user.groups]
-
-                # Cache for next time
-                permission_cache.set_user_info(user_id, groups, db_account_id)
             else:
                 logger.info("Authentication failed: user not found in database", user_id=user_id)
                 raise credentials_exception
         else:
-            # Without session and cache miss, we can't verify existence.
+            # Without session, we can't verify existence.
             # We should fail to be safe.
             logger.warning(
-                "Authentication failed: cannot verify user existence (no session/cache hit)",
+                "Authentication failed: cannot verify user existence (no session)",
                 user_id=user_id,
             )
             raise credentials_exception
@@ -299,24 +288,6 @@ async def require_superadmin(
     return current_user
 
 
-def get_permission_cache(request: Request) -> PermissionCache:
-    """Get the permission cache from app state.
-    
-    Args:
-        request: FastAPI request object.
-        
-    Returns:
-        PermissionCache instance.
-    """
-    # Check if permission_cache exists, create if not (for test compatibility)
-    if not hasattr(request.app.state, "permission_cache"):
-        from snackbase.core.config import get_settings
-        settings = get_settings()
-        request.app.state.permission_cache = PermissionCache(
-            ttl_seconds=settings.permission_cache_ttl_seconds
-        )
-    
-    return request.app.state.permission_cache
 
 
 async def get_user_role_id(
@@ -357,34 +328,30 @@ async def get_user_role_id(
 class AuthorizationContext:
     """Context for authorization checks.
     
-    Contains user information, role, and permission cache for
+    Contains user information and role for
     performing authorization checks.
     """
     
     user: CurrentUser
     role_id: int
-    permission_cache: PermissionCache
 
 
 async def get_authorization_context(
     current_user: AuthenticatedUser,
     role_id: Annotated[int, Depends(get_user_role_id)],
-    request: Request,
 ) -> AuthorizationContext:
     """Get authorization context for the current request.
     
     Args:
         current_user: The authenticated user.
         role_id: User's role_id from database.
-        request: FastAPI request object.
         
     Returns:
-        AuthorizationContext with user, role_id, and permission cache.
+        AuthorizationContext with user and role_id.
     """
     return AuthorizationContext(
         user=current_user,
         role_id=role_id,
-        permission_cache=get_permission_cache(request),
     )
 
 

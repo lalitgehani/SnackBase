@@ -6,7 +6,6 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from snackbase.domain.services.permission_cache import PermissionCache
 from snackbase.infrastructure.persistence.models import GroupModel, UserModel, UsersGroupsModel
 from snackbase.infrastructure.persistence.models.users_groups import UsersGroupsModel
 
@@ -14,15 +13,13 @@ from snackbase.infrastructure.persistence.models.users_groups import UsersGroups
 class GroupRepository:
     """Repository for group database operations."""
 
-    def __init__(self, session: AsyncSession, permission_cache: PermissionCache | None = None) -> None:
+    def __init__(self, session: AsyncSession) -> None:
         """Initialize the repository.
 
         Args:
             session: SQLAlchemy async session.
-            permission_cache: Optional permission cache for invalidation.
         """
         self.session = session
-        self.permission_cache = permission_cache
 
     async def create(self, group: GroupModel) -> GroupModel:
         """Create a new group.
@@ -190,10 +187,6 @@ class GroupRepository:
         user_group = UsersGroupsModel(user_id=user_id, group_id=group_id)
         self.session.add(user_group)
         await self.session.flush()
-        
-        # Invalidate cache if available
-        if self.permission_cache:
-            self.permission_cache.invalidate_user(user_id)
 
     async def remove_user(self, group_id: str, user_id: str) -> None:
         """Remove a user from a group.
@@ -209,10 +202,6 @@ class GroupRepository:
             )
         )
         await self.session.flush()
-        
-        # Invalidate cache if available
-        if self.permission_cache:
-            self.permission_cache.invalidate_user(user_id)
             
     async def is_user_in_group(self, group_id: str, user_id: str) -> bool:
         """Check if a user is in a group.

@@ -110,22 +110,4 @@ class RoleRepository:
         await self.session.flush()
         return role
 
-    async def get_permissions_count(self, role_id: int) -> int:
-        """Get count of unique collections this role has permissions for.
-
-        Args:
-            role_id: Role ID.
-
-        Returns:
-            Number of unique collections.
-        """
-        from sqlalchemy import func, select as sql_select
-        from snackbase.infrastructure.persistence.models import PermissionModel
-
-        result = await self.session.execute(
-            sql_select(func.count(func.distinct(PermissionModel.collection))).where(
-                PermissionModel.role_id == role_id
-            )
-        )
-        return result.scalar_one()
 

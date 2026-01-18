@@ -30,9 +30,6 @@ from snackbase.infrastructure.persistence.repositories.password_reset_repository
 from snackbase.infrastructure.persistence.repositories.invitation_repository import (
     InvitationRepository,
 )
-from snackbase.infrastructure.persistence.repositories.permission_repository import (
-    PermissionRepository,
-)
 from snackbase.infrastructure.persistence.repositories.record_repository import (
     RecordRepository,
 )
@@ -73,7 +70,6 @@ __all__ = [
     "MacroRepository",
     "OAuthStateRepository",
     "PasswordResetRepository",
-    "PermissionRepository",
     "RecordRepository",
     "RefreshTokenRepository",
     "RoleRepository",

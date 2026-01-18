@@ -37,7 +37,6 @@ async def get_token_from_request(
 
 async def authenticate_realtime(
     token: str,
-    permission_cache: Optional[Any] = None,
     session: Optional[Any] = None
 ) -> CurrentUser:
     """Validate token and return current user."""
