@@ -6,7 +6,10 @@
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Database, Shield } from 'lucide-react';
 import SchemaBuilder from './SchemaBuilder';
+import CollectionRulesTab from './CollectionRulesTab';
 import type { Collection, UpdateCollectionData, FieldDefinition } from '@/services/collections.service';
 import { handleApiError } from '@/lib/api';
 
@@ -108,41 +111,60 @@ export default function EditCollectionDialog({
                     </DialogDescription>
                 </DialogHeader>
 
-                <form onSubmit={handleSubmit} className="space-y-6">
-                    <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 rounded-lg p-4">
-                        <p className="text-sm text-blue-900 dark:text-blue-200">
-                            <strong>ℹ️ Note:</strong> You can add new fields and modify properties of existing fields.
-                            However, changing field types or deleting fields is not allowed to protect existing data.
-                        </p>
-                    </div>
+                <Tabs defaultValue="schema" className="w-full">
+                    <TabsList className="grid w-full grid-cols-2 mb-6">
+                        <TabsTrigger value="schema" className="gap-2">
+                            <Database className="h-4 w-4" />
+                            Schema
+                        </TabsTrigger>
+                        <TabsTrigger value="rules" className="gap-2">
+                            <Shield className="h-4 w-4" />
+                            Rules
+                        </TabsTrigger>
+                    </TabsList>
 
-                    <SchemaBuilder
-                        fields={fields}
-                        onChange={setFields}
-                        originalFieldCount={originalFieldCount}
-                        collections={collections}
-                    />
+                    <TabsContent value="schema">
+                        <form onSubmit={handleSubmit} className="space-y-6">
+                            <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 rounded-lg p-4">
+                                <p className="text-sm text-blue-900 dark:text-blue-200">
+                                    <strong>ℹ️ Note:</strong> You can add new fields and modify properties of existing fields.
+                                    However, changing field types or deleting fields is not allowed to protect existing data.
+                                </p>
+                            </div>
 
-                    {error && (
-                        <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
-                            <p className="text-destructive text-sm">{error}</p>
-                        </div>
-                    )}
+                            <SchemaBuilder
+                                fields={fields}
+                                onChange={setFields}
+                                originalFieldCount={originalFieldCount}
+                                collections={collections}
+                            />
 
-                    <DialogFooter>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => onOpenChange(false)}
-                            disabled={isSubmitting}
-                        >
-                            Cancel
-                        </Button>
-                        <Button type="submit" disabled={isSubmitting}>
-                            {isSubmitting ? 'Updating...' : 'Update Collection'}
-                        </Button>
-                    </DialogFooter>
-                </form>
+                            {error && (
+                                <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
+                                    <p className="text-destructive text-sm">{error}</p>
+                                </div>
+                            )}
+
+                            <DialogFooter>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => onOpenChange(false)}
+                                    disabled={isSubmitting}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button type="submit" disabled={isSubmitting}>
+                                    {isSubmitting ? 'Updating...' : 'Update Schema'}
+                                </Button>
+                            </DialogFooter>
+                        </form>
+                    </TabsContent>
+
+                    <TabsContent value="rules">
+                        <CollectionRulesTab collection={collection} />
+                    </TabsContent>
+                </Tabs>
             </DialogContent>
         </Dialog>
     );

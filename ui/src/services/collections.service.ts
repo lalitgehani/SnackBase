@@ -53,6 +53,34 @@ export interface UpdateCollectionData {
   schema: FieldDefinition[];
 }
 
+export interface CollectionRule {
+  id: string;
+  collection_id: string;
+  list_rule: string | null;
+  view_rule: string | null;
+  create_rule: string | null;
+  update_rule: string | null;
+  delete_rule: string | null;
+  list_fields: string;
+  view_fields: string;
+  create_fields: string;
+  update_fields: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UpdateCollectionRulesData {
+  list_rule?: string | null;
+  view_rule?: string | null;
+  create_rule?: string | null;
+  update_rule?: string | null;
+  delete_rule?: string | null;
+  list_fields?: string;
+  view_fields?: string;
+  create_fields?: string;
+  update_fields?: string;
+}
+
 export interface GetCollectionsParams {
   page?: number;
   page_size?: number;
@@ -117,6 +145,25 @@ export const updateCollection = async (
  */
 export const deleteCollection = async (collectionId: string): Promise<void> => {
   await apiClient.delete(`/collections/${collectionId}`);
+};
+
+/**
+ * Get collection rules by collection name
+ */
+export const getCollectionRules = async (collectionName: string): Promise<CollectionRule> => {
+  const response = await apiClient.get<CollectionRule>(`/collections/${collectionName}/rules`);
+  return response.data;
+};
+
+/**
+ * Update collection rules by collection name
+ */
+export const updateCollectionRules = async (
+  collectionName: string,
+  data: UpdateCollectionRulesData
+): Promise<CollectionRule> => {
+  const response = await apiClient.put<CollectionRule>(`/collections/${collectionName}/rules`, data);
+  return response.data;
 };
 
 /**

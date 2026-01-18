@@ -6,19 +6,18 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Pencil, Trash2, Shield } from 'lucide-react';
+import { Pencil, Trash2 } from 'lucide-react';
 import type { RoleListItem } from '@/services/roles.service';
 
 interface RolesTableProps {
     roles: RoleListItem[];
     onEdit: (role: RoleListItem) => void;
     onDelete: (role: RoleListItem) => void;
-    onViewPermissions: (role: RoleListItem) => void;
 }
 
 const DEFAULT_ROLES = ['admin', 'user'];
 
-export default function RolesTable({ roles, onEdit, onDelete, onViewPermissions }: RolesTableProps) {
+export default function RolesTable({ roles, onEdit, onDelete }: RolesTableProps) {
     const isDefaultRole = (roleName: string) => DEFAULT_ROLES.includes(roleName.toLowerCase());
 
     return (
@@ -58,14 +57,6 @@ export default function RolesTable({ roles, onEdit, onDelete, onViewPermissions 
                                 <TableCell>{role.collections_count}</TableCell>
                                 <TableCell className="text-right">
                                     <div className="flex justify-end gap-2">
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            onClick={() => onViewPermissions(role)}
-                                            title="Manage permissions"
-                                        >
-                                            <Shield className="h-4 w-4" />
-                                        </Button>
                                         <Button
                                             variant="ghost"
                                             size="icon"

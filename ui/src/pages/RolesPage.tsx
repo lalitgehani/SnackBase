@@ -11,7 +11,6 @@ import RolesTable from '@/components/roles/RolesTable';
 import CreateRoleDialog from '@/components/roles/CreateRoleDialog';
 import EditRoleDialog from '@/components/roles/EditRoleDialog';
 import DeleteRoleDialog from '@/components/roles/DeleteRoleDialog';
-import PermissionsMatrixDialog from '@/components/roles/PermissionsMatrixDialog';
 import {
     getRoles,
     createRole,
@@ -33,7 +32,6 @@ export default function RolesPage() {
     const [createDialogOpen, setCreateDialogOpen] = useState(false);
     const [editDialogOpen, setEditDialogOpen] = useState(false);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-    const [permissionsDialogOpen, setPermissionsDialogOpen] = useState(false);
     const [selectedRole, setSelectedRole] = useState<RoleListItem | null>(null);
 
     const fetchRoles = async () => {
@@ -77,11 +75,6 @@ export default function RolesPage() {
     const handleDelete = (role: RoleListItem) => {
         setSelectedRole(role);
         setDeleteDialogOpen(true);
-    };
-
-    const handleViewPermissions = (role: RoleListItem) => {
-        setSelectedRole(role);
-        setPermissionsDialogOpen(true);
     };
 
     return (
@@ -147,7 +140,6 @@ export default function RolesPage() {
                                 roles={data.items}
                                 onEdit={handleEdit}
                                 onDelete={handleDelete}
-                                onViewPermissions={handleViewPermissions}
                             />
 
                             {/* Summary */}
@@ -193,13 +185,6 @@ export default function RolesPage() {
                 onOpenChange={setDeleteDialogOpen}
                 role={selectedRole}
                 onConfirm={handleDeleteRole}
-            />
-
-            <PermissionsMatrixDialog
-                open={permissionsDialogOpen}
-                onOpenChange={setPermissionsDialogOpen}
-                role={selectedRole}
-                onSaved={fetchRoles}
             />
         </div>
     );
