@@ -3,18 +3,20 @@
 Provides endpoints for managing collection-level access rules.
 """
 
+import json
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.core.logging import get_logger
+from snackbase.core.rules import RuleSyntaxError, validate_rule_expression
 from snackbase.infrastructure.api.dependencies import SuperadminUser
-from snackbase.infrastructure.persistence.database import get_db_session
 from snackbase.infrastructure.api.schemas.collection_schemas import (
     CollectionRuleResponse,
     UpdateCollectionRulesRequest,
 )
+from snackbase.infrastructure.persistence.database import get_db_session
 from snackbase.infrastructure.persistence.models import CollectionRuleModel
 from snackbase.infrastructure.persistence.repositories import (
     CollectionRepository,
@@ -132,6 +134,35 @@ async def update_collection_rules(
             detail=f"Collection '{collection_name}' not found",
         )
 
+    # Get collection field names for validation
+    schema = json.loads(collection.schema) if isinstance(collection.schema, str) else collection.schema
+    collection_fields = [field["name"] for field in schema]
+    # Add system fields that are always present
+    collection_fields.extend(["id", "created_at", "updated_at", "created_by", "account_id"])
+
+    # Validate rule expressions
+    update_data = request.model_dump(exclude_unset=True)
+    rule_operations = {
+        "list_rule": "list",
+        "view_rule": "view",
+        "create_rule": "create",
+        "update_rule": "update",
+        "delete_rule": "delete",
+    }
+
+    for rule_field, operation in rule_operations.items():
+        if rule_field in update_data:
+            rule_value = update_data[rule_field]
+            # Skip validation for null (locked) and empty string (public)
+            if rule_value is not None and rule_value != "":
+                try:
+                    validate_rule_expression(rule_value, operation, collection_fields)
+                except RuleSyntaxError as e:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Invalid {rule_field}: {str(e)}",
+                    ) from e
+
     # Get existing rules
     rule_repo = CollectionRuleRepository(session)
     rules = await rule_repo.get_by_collection_id(collection.id)
@@ -158,7 +189,6 @@ async def update_collection_rules(
         rules = await rule_repo.create(rules)
 
     # Update rules (partial update - only update provided fields)
-    update_data = request.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(rules, field, value)
 
@@ -169,3 +199,4 @@ async def update_collection_rules(
     logger.info("Successfully updated collection rules", collection_name=collection_name)
 
     return CollectionRuleResponse.model_validate(rules)
+
