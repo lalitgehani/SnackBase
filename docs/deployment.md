@@ -226,6 +226,11 @@ SNACKBASE_LOG_FORMAT=json
 
 # Storage
 SNACKBASE_STORAGE_PATH=/home/snackbase/app/sb_data/files
+
+# Single-Tenant Mode
+SNACKBASE_SINGLE_TENANT_MODE=true
+SNACKBASE_SINGLE_TENANT_ACCOUNT=my-app
+SNACKBASE_SINGLE_TENANT_ACCOUNT_NAME="My Application"
 ```
 
 > **Security Note**: Generate a strong secret key:
@@ -508,26 +513,29 @@ SNACKBASE_DB_POOL_TIMEOUT=30
 
 ### Complete Reference
 
-| Variable                                | Default                                      | Description                                   |
-| --------------------------------------- | -------------------------------------------- | --------------------------------------------- |
-| `SNACKBASE_ENVIRONMENT`                 | `development`                                | Environment: development, staging, production |
-| `SNACKBASE_DEBUG`                       | `false`                                      | Enable debug mode                             |
-| `SNACKBASE_APP_NAME`                    | `SnackBase`                                  | Application name                              |
-| `SNACKBASE_APP_VERSION`                 | `0.1.0`                                      | Application version                           |
-| `SNACKBASE_API_PREFIX`                  | `/api/v1`                                    | API route prefix                              |
-| `SNACKBASE_HOST`                        | `0.0.0.0`                                    | Server bind address                           |
-| `SNACKBASE_PORT`                        | `8000`                                       | Server port                                   |
-| `SNACKBASE_DATABASE_URL`                | `sqlite+aiosqlite:///./sb_data/snackbase.db` | Database connection URL                       |
-| `SNACKBASE_SECRET_KEY`                  | (auto-generated)                             | JWT signing key                               |
-| `SNACKBASE_ACCESS_TOKEN_EXPIRE_MINUTES` | `60`                                         | Access token expiration                       |
-| `SNACKBASE_REFRESH_TOKEN_EXPIRE_DAYS`   | `7`                                          | Refresh token expiration                      |
-| `SNACKBASE_CORS_ORIGINS`                | `*`                                          | Allowed CORS origins (comma-separated)        |
-| `SNACKBASE_CORS_ALLOW_CREDENTIALS`      | `true`                                       | Allow credentials in CORS                     |
-| `SNACKBASE_CORS_ALLOW_METHODS`          | `*`                                          | Allowed HTTP methods                          |
-| `SNACKBASE_CORS_ALLOW_HEADERS`          | `*`                                          | Allowed headers                               |
-| `SNACKBASE_LOG_LEVEL`                   | `INFO`                                       | Logging level: DEBUG, INFO, WARNING, ERROR    |
-| `SNACKBASE_LOG_FORMAT`                  | `json`                                       | Log format: json, console                     |
-| `SNACKBASE_STORAGE_PATH`                | `./sb_data/files`                            | File storage directory                        |
+| Variable                                | Default                                      | Description                                    |
+| --------------------------------------- | -------------------------------------------- | ---------------------------------------------- |
+| `SNACKBASE_ENVIRONMENT`                 | `development`                                | Environment: development, staging, production  |
+| `SNACKBASE_DEBUG`                       | `false`                                      | Enable debug mode                              |
+| `SNACKBASE_APP_NAME`                    | `SnackBase`                                  | Application name                               |
+| `SNACKBASE_APP_VERSION`                 | `0.1.0`                                      | Application version                            |
+| `SNACKBASE_API_PREFIX`                  | `/api/v1`                                    | API route prefix                               |
+| `SNACKBASE_HOST`                        | `0.0.0.0`                                    | Server bind address                            |
+| `SNACKBASE_PORT`                        | `8000`                                       | Server port                                    |
+| `SNACKBASE_DATABASE_URL`                | `sqlite+aiosqlite:///./sb_data/snackbase.db` | Database connection URL                        |
+| `SNACKBASE_SECRET_KEY`                  | (auto-generated)                             | JWT signing key                                |
+| `SNACKBASE_ACCESS_TOKEN_EXPIRE_MINUTES` | `60`                                         | Access token expiration                        |
+| `SNACKBASE_REFRESH_TOKEN_EXPIRE_DAYS`   | `7`                                          | Refresh token expiration                       |
+| `SNACKBASE_CORS_ORIGINS`                | `*`                                          | Allowed CORS origins (comma-separated)         |
+| `SNACKBASE_CORS_ALLOW_CREDENTIALS`      | `true`                                       | Allow credentials in CORS                      |
+| `SNACKBASE_CORS_ALLOW_METHODS`          | `*`                                          | Allowed HTTP methods                           |
+| `SNACKBASE_CORS_ALLOW_HEADERS`          | `*`                                          | Allowed headers                                |
+| `SNACKBASE_LOG_LEVEL`                   | `INFO`                                       | Logging level: DEBUG, INFO, WARNING, ERROR     |
+| `SNACKBASE_LOG_FORMAT`                  | `json`                                       | Log format: json, console                      |
+| `SNACKBASE_STORAGE_PATH`                | `./sb_data/files`                            | File storage directory                         |
+| `SNACKBASE_SINGLE_TENANT_MODE`          | `false`                                      | Enable single-tenant mode                      |
+| `SNACKBASE_SINGLE_TENANT_ACCOUNT`       | (none)                                       | Target account slug for single-tenant mode     |
+| `SNACKBASE_SINGLE_TENANT_ACCOUNT_NAME`  | (none)                                       | Optional display name for bootstrapped account |
 
 ---
 

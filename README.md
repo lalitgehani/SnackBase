@@ -13,13 +13,13 @@ SnackBase is a Python/FastAPI-based BaaS providing auto-generated REST APIs, mul
 
 ## Project Statistics
 
-| Category | Count | Lines |
-|----------|-------|-------|
-| **Backend Code** | ~350 files | ~120,000 |
-| **Frontend Code** | ~100 files | ~25,000 |
-| **Tests** | 153 files | ~29,600 |
-| **Documentation** | 25+ files | ~20,000 |
-| **Total** | ~525 files | ~195,000 |
+| Category          | Count      | Lines    |
+| ----------------- | ---------- | -------- |
+| **Backend Code**  | ~350 files | ~120,000 |
+| **Frontend Code** | ~100 files | ~25,000  |
+| **Tests**         | 153 files  | ~29,600  |
+| **Documentation** | 25+ files  | ~20,000  |
+| **Total**         | ~525 files | ~195,000 |
 
 ---
 
@@ -104,6 +104,7 @@ open http://localhost:8000
 
 - **Clean Architecture** - Domain, application, and infrastructure layer separation (~120K LOC)
 - **Multi-Tenancy** - Row-level isolation with account-scoped data
+- **Single-Tenant Mode** - Support for dedicated instances where all users join a pre-configured account
 - **Configuration Management** - Environment variables and `.env` file support
 - **Structured JSON Logging** - Correlation ID tracking for request tracing
 - **Health Checks** - `/health`, `/ready`, `/live` endpoints
@@ -207,17 +208,20 @@ cp .env.example .env
 Comprehensive documentation is available in the [`docs/`](docs/) directory:
 
 ### Core Documentation
+
 - **[Quick Start Tutorial](docs/quick-start.md)** - Get up and running in 5 minutes
 - **[Architecture](docs/architecture.md)** - Complete system architecture with diagrams
 - **[Deployment Guide](docs/deployment.md)** - Development and production deployment
 
 ### Conceptual Guides
+
 - **[Multi-Tenancy](docs/concepts/multi-tenancy.md)** - Shared database, row-level isolation model
 - **[Collections](docs/concepts/collections.md)** - Dynamic schemas and field types
 - **[Authentication](docs/concepts/authentication.md)** - Authentication concepts
 - **[Security](docs/concepts/security.md)** - Security model
 
 ### Developer Guides
+
 - **[Testing](docs/guides/testing.md)** - pytest with async testing patterns
 - **[Creating Custom Hooks](docs/guides/creating-custom-hooks.md)** - Hook system extension
 - **[Writing Permission Rules](docs/guides/writing-rules.md)** - Rule engine syntax
@@ -225,6 +229,7 @@ Comprehensive documentation is available in the [`docs/`](docs/) directory:
 - **[Frontend Development](docs/frontend.md)** - React UI development
 
 ### Reference Documentation
+
 - **[Hook System](docs/hooks.md)** - Extensibility framework (Stable API v1.0)
 - **[Permission System](docs/permissions.md)** - Authorization and rules
 - **[Macros](docs/macros.md)** - Built-in and SQL macros
@@ -285,6 +290,11 @@ SNACKBASE_CORS_ORIGINS=http://localhost:3000,http://localhost:8000
 # Logging
 SNACKBASE_LOG_LEVEL=INFO
 SNACKBASE_LOG_FORMAT=json
+
+# Single-Tenant Mode
+SNACKBASE_SINGLE_TENANT_MODE=false
+SNACKBASE_SINGLE_TENANT_ACCOUNT=my-app
+SNACKBASE_SINGLE_TENANT_ACCOUNT_NAME=My Application
 ```
 
 ---
@@ -564,6 +574,7 @@ async def send_post_notification(record, context):
 ```
 
 **40+ Hook Events** across 8 categories:
+
 - App Lifecycle: `on_bootstrap`, `on_serve`, `on_terminate`
 - Model Operations: `on_model_before/after_create/update/delete`
 - Record Operations: `on_record_before/after_create/update/delete/query`
@@ -574,6 +585,7 @@ async def send_post_notification(record, context):
 - Mailer: `on_mailer_before/after_send`
 
 **Built-in hooks** (cannot be unregistered):
+
 - `timestamp_hook` (-100 priority): Auto-sets created_at/updated_at
 - `account_isolation_hook` (-200 priority): Enforces account_id filtering
 - `created_by_hook` (-150 priority): Sets created_by/updated_by user
@@ -603,6 +615,7 @@ status in ["draft", "published"]
 **Supported operators**: `==`, `!=`, `<`, `>`, `<=`, `>=`, `in`, `and`, `or`, `not`
 
 **Built-in macros**:
+
 - `@has_role(role_name)` - Check user role
 - `@has_group(group_name)` - Check group membership
 - `@owns_record()` / `@is_creator()` - Check record ownership
@@ -622,6 +635,7 @@ status in ["draft", "published"]
    - Takes precedence over system defaults
 
 **Providers**:
+
 - **Auth**: Email/password, OAuth (Google, GitHub, Microsoft, Apple), SAML (Okta, Azure AD, Generic)
 - **Email**: SMTP, AWS SES, Resend
 

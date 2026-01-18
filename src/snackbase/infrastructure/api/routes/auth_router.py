@@ -4,7 +4,7 @@ Provides endpoints for user registration, login, and token management.
 """
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
@@ -19,9 +19,9 @@ from snackbase.domain.services import (
 )
 from snackbase.domain.services.email_verification_service import EmailVerificationService
 from snackbase.domain.services.password_reset_service import PasswordResetService
+from snackbase.domain.services.pii_masking_service import PIIMaskingService
 from snackbase.infrastructure.api.dependencies import (
     AuthenticatedUser,
-    CurrentUser,
     get_password_reset_service,
     get_verification_service,
 )
@@ -64,7 +64,6 @@ from snackbase.infrastructure.persistence.repositories import (
     RoleRepository,
     UserRepository,
 )
-from snackbase.domain.services.pii_masking_service import PIIMaskingService
 
 logger = get_logger(__name__)
 
@@ -77,6 +76,7 @@ router = APIRouter()
     response_model=RegistrationResponse,
     responses={
         400: {"description": "Validation error"},
+        404: {"description": "Single-tenant account not found"},
         409: {"description": "Conflict - email or slug already exists"},
     },
 )
@@ -88,20 +88,16 @@ async def register(
 ) -> RegistrationResponse | JSONResponse:
     """Register a new account and user.
 
-    Creates a new account with the provided details and creates the first user
-    as an admin. Returns a success message instructing the user to verify their email.
+    In multi-tenant mode (default):
+    - Creates a new account with the provided details
+    - Creates the first user as an admin
 
-    Flow:
-    1. Validate password strength
-    2. Generate or validate account slug
-    3. Check slug uniqueness
-    4. Generate account ID
-    5. Hash password
-    6. Create account record
-    7. Create user record with 'admin' role
-    8. Send verification email
-    9. Return response (no tokens)
+    In single-tenant mode:
+    - Joins the pre-configured account
+    - Assigns 'user' role (not admin)
     """
+    settings = get_settings()
+
     # 1. Validate password strength
     password_errors = default_password_validator.validate(register_request.password)
     if password_errors:
@@ -117,6 +113,127 @@ async def register(
                 "details": [
                     {"field": e.field, "message": e.message, "code": e.code}
                     for e in password_errors
+                ],
+            },
+        )
+
+    # Initialize repositories
+    account_repo = AccountRepository(session)
+    user_repo = UserRepository(session)
+    role_repo = RoleRepository(session)
+
+    # Hash password
+    password_hash = hash_password(register_request.password)
+
+    # Single-tenant mode: join existing account with 'user' role
+    if settings.single_tenant_mode:
+        logger.debug("Processing registration in single-tenant mode")
+
+        # Look up configured account
+        account = await account_repo.get_by_slug(settings.single_tenant_account)
+        if account is None:
+            logger.error(
+                "Single-tenant account not found",
+                configured_slug=settings.single_tenant_account,
+            )
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={
+                    "error": "Not found",
+                    "message": "Configured single-tenant account not found. Contact administrator.",
+                },
+            )
+
+        # Check for duplicate email in account
+        existing_user = await user_repo.get_by_email_and_account(
+            register_request.email, account.id
+        )
+        if existing_user:
+            logger.info(
+                "Registration failed: email exists in account",
+                email=register_request.email,
+                account_id=account.id,
+            )
+            return JSONResponse(
+                status_code=status.HTTP_409_CONFLICT,
+                content={
+                    "error": "Conflict",
+                    "message": "An account with this email already exists",
+                    "field": "email",
+                },
+            )
+
+        # Get 'user' role (not admin) for single-tenant mode
+        user_role = await role_repo.get_by_name("user")
+        if user_role is None:
+            logger.error("User role not found in database")
+            return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={"error": "Internal error", "message": "Role configuration error"},
+            )
+
+        # Create user record with 'user' role
+        user = UserModel(
+            id=str(uuid.uuid4()),
+            account_id=account.id,
+            email=register_request.email,
+            password_hash=password_hash,
+            role_id=user_role.id,
+            is_active=True,
+            email_verified=False,
+        )
+        await user_repo.create(user)
+        await session.commit()
+        await session.refresh(user)
+
+        logger.info(
+            "User registered in single-tenant mode",
+            account_id=account.id,
+            user_id=user.id,
+            user_email=register_request.email,
+            role="user",
+        )
+
+        # Send verification email
+        try:
+            await verification_service.send_verification_email(
+                user_id=user.id,
+                email=user.email,
+                account_id=account.id,
+            )
+        except Exception as e:
+            logger.error(
+                "Failed to send verification email",
+                error=str(e),
+                user_id=user.id,
+            )
+
+        return RegistrationResponse(
+            message="Registration successful. Please check your email to verify your account.",
+            account=AccountResponse(
+                id=account.id,
+                slug=account.slug,
+                name=account.name,
+                created_at=account.created_at,
+            ),
+            user=UserResponse(
+                id=user.id,
+                email=user.email,
+                role=user_role.name,
+                is_active=user.is_active,
+                created_at=user.created_at,
+            ),
+        )
+
+    # Multi-tenant mode (original behavior): create new account with 'admin' role
+    # Require account_name in multi-tenant mode
+    if not register_request.account_name:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "error": "Validation error",
+                "details": [
+                    {"field": "account_name", "message": "Account name is required", "code": "required"}
                 ],
             },
         )
@@ -144,11 +261,6 @@ async def register(
     else:
         slug = SlugGenerator.generate(register_request.account_name)
 
-    # Initialize repositories
-    account_repo = AccountRepository(session)
-    user_repo = UserRepository(session)
-    role_repo = RoleRepository(session)
-
     # 3. Check slug uniqueness
     if await account_repo.slug_exists(slug):
         logger.info(
@@ -169,9 +281,6 @@ async def register(
     existing_codes = await account_repo.get_all_account_codes()
     account_id = str(uuid.uuid4())  # Generate UUID
     account_code = AccountCodeGenerator.generate(existing_codes)  # Generate code
-
-    # 5. Hash password
-    password_hash = hash_password(register_request.password)
 
     # 6. Create account record
     account = AccountModel(
@@ -345,7 +454,7 @@ async def login(
     if user.auth_provider != "password":
         # Still verify password to maintain constant-time behavior (prevent timing attacks)
         verify_password(request.password, DUMMY_PASSWORD_HASH)
-        
+
         logger.info(
             "Login failed: wrong authentication method",
             account_id=account.id,
@@ -353,21 +462,21 @@ async def login(
             auth_provider=user.auth_provider,
             provider_name=user.auth_provider_name,
         )
-        
+
         # Determine the correct authentication URL based on provider type
         if user.auth_provider == "oauth":
             provider_name = user.auth_provider_name or "oauth"
             redirect_url = f"/api/v1/auth/oauth/{provider_name}/authorize"
-            message = f"This account uses OAuth authentication. Please use the OAuth login flow."
+            message = "This account uses OAuth authentication. Please use the OAuth login flow."
         elif user.auth_provider == "saml":
             provider_name = user.auth_provider_name or "saml"
             redirect_url = f"/api/v1/auth/saml/{provider_name}/login"
-            message = f"This account uses SAML authentication. Please use the SAML SSO flow."
+            message = "This account uses SAML authentication. Please use the SAML SSO flow."
         else:
             # Unknown provider type - return generic error
             redirect_url = None
             message = f"This account uses {user.auth_provider} authentication. Please use the correct login method."
-        
+
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
             content={
@@ -461,7 +570,7 @@ async def login(
         token_hash=refresh_token_repo.hash_token(refresh_token),
         user_id=user.id,
         account_id=account.id,
-        expires_at=datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_expire_days),
+        expires_at=datetime.now(UTC) + timedelta(days=settings.refresh_token_expire_days),
     )
     await refresh_token_repo.create(refresh_token_model)
     await session.commit()
@@ -595,7 +704,7 @@ async def refresh_tokens(
         token_hash=refresh_token_repo.hash_token(new_refresh_token),
         user_id=user_id,
         account_id=account_id,
-        expires_at=datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_expire_days),
+        expires_at=datetime.now(UTC) + timedelta(days=settings.refresh_token_expire_days),
     )
     await refresh_token_repo.create(new_token_model)
     await session.commit()
@@ -736,6 +845,7 @@ async def verify_email(
 
 
 from fastapi import Request
+
 
 @router.post(
     "/forgot-password",

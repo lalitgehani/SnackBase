@@ -24,16 +24,17 @@ SnackBase enables **Software-as-a-Service (SaaS)** applications by allowing mult
 
 ### Key Characteristics
 
-| Characteristic | Description |
-|----------------|-------------|
-| **Isolation Type** | Row-level isolation via `account_id` column |
-| **Database Model** | Shared database, shared tables |
-| **Account Scope** | All data (users, collections, records) scoped to `account_id` |
-| **Cross-Account Access** | Not possible by design (enforced at database and API levels) |
+| Characteristic           | Description                                                   |
+| ------------------------ | ------------------------------------------------------------- |
+| **Isolation Type**       | Row-level isolation via `account_id` column                   |
+| **Database Model**       | Shared database, shared tables                                |
+| **Account Scope**        | All data (users, collections, records) scoped to `account_id` |
+| **Cross-Account Access** | Not possible by design (enforced at database and API levels)  |
 
-> **Screenshot Placeholder 1**
->
 > **Description**: A diagram showing multiple accounts (AB1001, XY2048, ZZ9999) with their respective data in shared tables, isolated by account_id column values.
+
+> [!NOTE]
+> **Single-Tenant Mode**: While SnackBase is natively multi-tenant, it supports a **Single-Tenant Mode** where the server is dedicated to one account. In this mode, the multi-tenancy architecture remains the same (data is still isolated by `account_id`), but the registration and login flows are modified to ensure all users join the same pre-configured account.
 
 ---
 
@@ -42,6 +43,7 @@ SnackBase enables **Software-as-a-Service (SaaS)** applications by allowing mult
 ### What is an Account?
 
 An **Account** (also called a "tenant" or "organization") represents an isolated workspace containing:
+
 - Users who belong to the account
 - Collections (data schemas) defined for the account
 - Records (actual data) created by the account's users
@@ -114,14 +116,14 @@ Most tables in SnackBase include an `account_id` column that references the `acc
 
 The following tables **do not have** an `account_id` column because they define global structures shared by all accounts:
 
-| Table | Why No account_id? |
-|-------|-------------------|
-| `accounts` | Defines accounts themselves (cannot be scoped to an account) |
-| `roles` | Roles are global definitions shared by all accounts |
-| `permissions` | Permissions are global rules shared by all accounts |
+| Table         | Why No account_id?                                           |
+| ------------- | ------------------------------------------------------------ |
+| `accounts`    | Defines accounts themselves (cannot be scoped to an account) |
+| `roles`       | Roles are global definitions shared by all accounts          |
+| `permissions` | Permissions are global rules shared by all accounts          |
 | `collections` | Collection schemas are global definitions (data is isolated) |
-| `macros` | Macros are global SQL snippets shared by all accounts |
-| `migrations` | Migrations are global and affect all accounts |
+| `macros`      | Macros are global SQL snippets shared by all accounts        |
+| `migrations`  | Migrations are global and affect all accounts                |
 
 > **Screenshot Placeholder 3b**
 >
@@ -132,6 +134,7 @@ The following tables **do not have** an `account_id` column because they define 
 SnackBase **automatically filters** all queries by `account_id`. Users never see data from other accounts.
 
 **Example API Request:**
+
 ```bash
 # User from AB1001 requests all posts
 GET /api/v1/posts
@@ -150,13 +153,13 @@ The user doesn't need to specify `account_id`—it's automatically added based o
 
 Isolation is enforced at **multiple layers** for defense-in-depth:
 
-| Layer | Mechanism | Details |
-|-------|-----------|---------|
-| **Database** | `account_id` column with foreign key to accounts | Row-level filtering at SQL level |
-| **Hook** | `account_isolation_hook` (priority -200) | Automatically injects `account_id` filters |
-| **Repository** | All repositories enforce `account_id` in queries | Cannot bypass without explicit override |
-| **API Middleware** | Authorization middleware validates account context | Checks permissions before execution |
-| **Superadmin Bypass** | Superadmin can pass `account_id=None` | Allows cross-account visibility for admins |
+| Layer                 | Mechanism                                          | Details                                    |
+| --------------------- | -------------------------------------------------- | ------------------------------------------ |
+| **Database**          | `account_id` column with foreign key to accounts   | Row-level filtering at SQL level           |
+| **Hook**              | `account_isolation_hook` (priority -200)           | Automatically injects `account_id` filters |
+| **Repository**        | All repositories enforce `account_id` in queries   | Cannot bypass without explicit override    |
+| **API Middleware**    | Authorization middleware validates account context | Checks permissions before execution        |
+| **Superadmin Bypass** | Superadmin can pass `account_id=None`              | Allows cross-account visibility for admins |
 
 > **Screenshot Placeholder 5**
 >
@@ -172,15 +175,15 @@ SnackBase uses a **two-tier table architecture** that's critical to understand:
 
 These tables define the platform structure and are shared across all accounts:
 
-| Table | Purpose | Has account_id? | Schema Changes |
-|-------|---------|-----------------|----------------|
-| `accounts` | Account/tenant definitions | No (defines accounts) | Releases only |
-| `users` | User identities (per-account) | Yes | Releases only |
-| `roles` | Role definitions | No (global) | Releases only |
-| `permissions` | Permission rules | No (global) | Releases only |
-| `collections` | Collection schema definitions | No (global) | Releases only |
-| `macros` | SQL macro definitions | No (global) | Releases only |
-| `migrations` | Database migration history | No (global) | Automatic |
+| Table         | Purpose                       | Has account_id?       | Schema Changes |
+| ------------- | ----------------------------- | --------------------- | -------------- |
+| `accounts`    | Account/tenant definitions    | No (defines accounts) | Releases only  |
+| `users`       | User identities (per-account) | Yes                   | Releases only  |
+| `roles`       | Role definitions              | No (global)           | Releases only  |
+| `permissions` | Permission rules              | No (global)           | Releases only  |
+| `collections` | Collection schema definitions | No (global)           | Releases only  |
+| `macros`      | SQL macro definitions         | No (global)           | Releases only  |
+| `migrations`  | Database migration history    | No (global)           | Automatic      |
 
 **Important**: Schema changes to these tables only happen via SnackBase releases.
 
@@ -192,13 +195,14 @@ These tables define the platform structure and are shared across all accounts:
 
 User collections are **single physical tables** shared by ALL accounts:
 
-| Physical Table | Collection Name | Contains |
-|----------------|----------------|----------|
-| `col_posts` | "posts" | All accounts' post data |
-| `col_products` | "products" | All accounts' product data |
-| `col_orders` | "orders" | All accounts' order data |
+| Physical Table | Collection Name | Contains                   |
+| -------------- | --------------- | -------------------------- |
+| `col_posts`    | "posts"         | All accounts' post data    |
+| `col_products` | "products"      | All accounts' product data |
+| `col_orders`   | "orders"        | All accounts' order data   |
 
 **Critical Concept**: When you create a collection named "posts", you're creating:
+
 1. A **schema definition** in the `collections` table (metadata)
 2. A **physical table** named `col_posts` (if it doesn't exist)
 3. All accounts' post data goes into this **single shared table**
@@ -211,28 +215,29 @@ User collections are **single physical tables** shared by ALL accounts:
 
 Collection tables are **prefixed with `col_`** to avoid conflicts with system tables:
 
-| Collection Name | Physical Table Name | Example Query |
-|-----------------|---------------------|---------------|
-| `posts` | `col_posts` | `SELECT * FROM col_posts WHERE account_id = ?` |
-| `products` | `col_products` | `SELECT * FROM col_products WHERE account_id = ?` |
+| Collection Name | Physical Table Name | Example Query                                          |
+| --------------- | ------------------- | ------------------------------------------------------ |
+| `posts`         | `col_posts`         | `SELECT * FROM col_posts WHERE account_id = ?`         |
+| `products`      | `col_products`      | `SELECT * FROM col_products WHERE account_id = ?`      |
 | `user_profiles` | `col_user_profiles` | `SELECT * FROM col_user_profiles WHERE account_id = ?` |
 
 This prefix:
+
 - Prevents naming conflicts with system tables
 - Makes it clear which tables are user-created collections
 - Allows easy identification of collection tables in database dumps
 
 > **Screenshot Placeholder 7b**
 >
-> **Description**: A mapping diagram showing collection names on the left and their corresponding physical table names with col_ prefix on the right.
+> **Description**: A mapping diagram showing collection names on the left and their corresponding physical table names with col\_ prefix on the right.
 
 ### Why This Architecture?
 
-| Approach | Description | SnackBase Choice |
-|----------|-------------|------------------|
-| **Separate Tables** | Each account gets their own `col_posts_AB1001`, `col_posts_XY2048` tables | ❌ Not scalable (thousands of tables) |
-| **Separate Databases** | Each account gets their own database | ❌ Complex operations and migrations |
-| **Shared Tables** | All accounts share one `col_posts` table with `account_id` | ✅ **Chosen for scalability and simplicity** |
+| Approach               | Description                                                               | SnackBase Choice                             |
+| ---------------------- | ------------------------------------------------------------------------- | -------------------------------------------- |
+| **Separate Tables**    | Each account gets their own `col_posts_AB1001`, `col_posts_XY2048` tables | ❌ Not scalable (thousands of tables)        |
+| **Separate Databases** | Each account gets their own database                                      | ❌ Complex operations and migrations         |
+| **Shared Tables**      | All accounts share one `col_posts` table with `account_id`                | ✅ **Chosen for scalability and simplicity** |
 
 > **Screenshot Placeholder 8**
 >
@@ -246,12 +251,12 @@ Accounts have **three distinct identifiers** that serve different purposes:
 
 ### Identifier Comparison
 
-| Field | Format | Purpose | Example | Uniqueness |
-|-------|--------|---------|---------|------------|
-| `id` | UUID (36 chars) | Primary key, foreign key references | `550e8400-e29b-41d4-a716-446655440000` | Globally unique |
-| `account_code` | XX#### (6 chars) | Human-readable identifier | `AB1234` | Globally unique |
-| `slug` | URL-friendly | Login and URL routing | `acme-corp` | Globally unique |
-| `name` | Free text | Display name only | `Acme Corporation` | Not unique |
+| Field          | Format           | Purpose                             | Example                                | Uniqueness      |
+| -------------- | ---------------- | ----------------------------------- | -------------------------------------- | --------------- |
+| `id`           | UUID (36 chars)  | Primary key, foreign key references | `550e8400-e29b-41d4-a716-446655440000` | Globally unique |
+| `account_code` | XX#### (6 chars) | Human-readable identifier           | `AB1234`                               | Globally unique |
+| `slug`         | URL-friendly     | Login and URL routing               | `acme-corp`                            | Globally unique |
+| `name`         | Free text        | Display name only                   | `Acme Corporation`                     | Not unique      |
 
 ### Account ID (UUID)
 
@@ -299,6 +304,7 @@ Account codes are generated **sequentially** from the highest existing code:
 ```
 
 **Important Notes**:
+
 - Codes are never reused
 - Sequential generation ensures predictability
 - SY#### range is permanently reserved
@@ -310,12 +316,12 @@ Account codes are generated **sequentially** from the highest existing code:
 
 ### Identifier Usage
 
-| Identifier | Used In... | Example |
-|------------|------------|---------|
-| **id** (UUID) | Foreign keys, `account_id` columns | `WHERE account_id = '550e8400-...'` |
-| **account_code** | Admin UI, support, logs | "Account AB1234" |
-| **slug** | Login URLs, subdomain routing | `ab1234.snackbase.com` or `/api/v1/accounts/acme-corp` |
-| **name** | UI display, emails | "Welcome to Acme Corporation" |
+| Identifier       | Used In...                         | Example                                                |
+| ---------------- | ---------------------------------- | ------------------------------------------------------ |
+| **id** (UUID)    | Foreign keys, `account_id` columns | `WHERE account_id = '550e8400-...'`                    |
+| **account_code** | Admin UI, support, logs            | "Account AB1234"                                       |
+| **slug**         | Login URLs, subdomain routing      | `ab1234.snackbase.com` or `/api/v1/accounts/acme-corp` |
+| **name**         | UI display, emails                 | "Welcome to Acme Corporation"                          |
 
 > **Screenshot Placeholder 10**
 >
@@ -329,16 +335,17 @@ Account codes are generated **sequentially** from the highest existing code:
 
 The **system account** is a special reserved account for superadmin operations:
 
-| Attribute | Value |
-|-----------|-------|
-| **ID** | `00000000-0000-0000-0000-000000000000` (nil UUID) |
-| **Account Code** | `SY0000` (fixed) |
-| **Name** | "System" |
-| **Purpose** | Superadmin operations, system-level configuration |
-| **Access** | Superadmin users can operate across ALL accounts |
-| **Data** | Contains minimal data (mostly metadata and system configs) |
+| Attribute        | Value                                                      |
+| ---------------- | ---------------------------------------------------------- |
+| **ID**           | `00000000-0000-0000-0000-000000000000` (nil UUID)          |
+| **Account Code** | `SY0000` (fixed)                                           |
+| **Name**         | "System"                                                   |
+| **Purpose**      | Superadmin operations, system-level configuration          |
+| **Access**       | Superadmin users can operate across ALL accounts           |
+| **Data**         | Contains minimal data (mostly metadata and system configs) |
 
 **Superadmin users** are linked to the system account and have:
+
 - Access to ALL accounts
 - Ability to create/manage accounts
 - Ability to manage global collections
@@ -352,16 +359,17 @@ The **system account** is a special reserved account for superadmin operations:
 
 **User accounts** are regular tenant accounts created by superadmins:
 
-| Attribute | Value |
-|-----------|-------|
-| **ID** | Auto-generated UUID (e.g., `550e8400-e29b-41d4-a716-446655440000`) |
-| **Account Code** | Auto-generated (e.g., `AB1001`) |
-| **Name** | User-defined (e.g., "Acme Corporation") |
-| **Purpose** | Regular tenant operations |
-| **Access** | Users can only access THEIR account |
-| **Data** | Contains all tenant data (users, collections, records) |
+| Attribute        | Value                                                              |
+| ---------------- | ------------------------------------------------------------------ |
+| **ID**           | Auto-generated UUID (e.g., `550e8400-e29b-41d4-a716-446655440000`) |
+| **Account Code** | Auto-generated (e.g., `AB1001`)                                    |
+| **Name**         | User-defined (e.g., "Acme Corporation")                            |
+| **Purpose**      | Regular tenant operations                                          |
+| **Access**       | Users can only access THEIR account                                |
+| **Data**         | Contains all tenant data (users, collections, records)             |
 
 **Regular users** (even with "admin" role) are linked to a specific account and have:
+
 - Access ONLY to their account
 - No cross-account visibility
 - Full CRUD within their account (based on permissions)
@@ -404,6 +412,7 @@ A user's identity is defined by the **(email, account_id) tuple**:
 **Passwords are per-account**, not per-email.
 
 This means:
+
 - `alice@acme.com` in account `AB1001` has password `Password1!`
 - `alice@acme.com` in account `XY2048` has password `Password2!`
 - These are **different credentials** even though the email is the same
@@ -417,6 +426,7 @@ This means:
 When logging in, users must specify their account:
 
 **Option 1: Account in URL**
+
 ```
 POST /api/v1/auth/login
 Host: ab1001.snackbase.com  # Account in subdomain
@@ -427,6 +437,7 @@ Host: ab1001.snackbase.com  # Account in subdomain
 ```
 
 **Option 2: Account in Request Body**
+
 ```
 POST /api/v1/auth/login
 {
@@ -483,12 +494,12 @@ config = config_registry.get_config(
 
 ### Use Cases
 
-| Configuration Type | System-Level | Account-Level |
-|-------------------|--------------|---------------|
-| **SMTP Settings** | Default SMTP server | Custom SMTP per account |
-| **OAuth Providers** | Available to all | Custom app credentials |
-| **Storage Backends** | Default S3 bucket | Per-account buckets |
-| **Auth Providers** | Default providers | Custom provider config |
+| Configuration Type   | System-Level        | Account-Level           |
+| -------------------- | ------------------- | ----------------------- |
+| **SMTP Settings**    | Default SMTP server | Custom SMTP per account |
+| **OAuth Providers**  | Available to all    | Custom app credentials  |
+| **Storage Backends** | Default S3 bucket   | Per-account buckets     |
+| **Auth Providers**   | Default providers   | Custom provider config  |
 
 > **Screenshot Placeholder 16**
 >
@@ -570,6 +581,7 @@ def get_all_posts_as_superadmin():
 ### 4. Collections Are Global
 
 When creating a collection, remember:
+
 - The collection schema is shared across ALL accounts
 - The physical table (`col_<name>`) is shared across ALL accounts
 - Each account only sees their own data (via `account_id` filtering)
@@ -623,17 +635,17 @@ print(f"Processing account {account_id}")  # Hard to read!
 
 ## Summary
 
-| Concept | Key Takeaway |
-|---------|--------------|
-| **Account Model** | Accounts are isolated tenants with their own users, collections, and data |
-| **Account Identifiers** | UUID (id) for system, account_code (XX####) for humans, slug for URLs, name for display |
-| **Data Isolation** | Row-level isolation via `account_id` column, enforced at multiple layers |
-| **Global Tables** | accounts, roles, permissions, collections, macros, migrations have no account_id |
-| **Two-Tier Architecture** | Core system tables (release-only schema) + user collections (shared col_* tables) |
-| **System Account** | Uses nil UUID for ID, SY0000 for account_code, reserved for superadmin operations |
-| **Multi-Account Users** | Same email can exist in multiple accounts with different passwords |
-| **Configuration Hierarchy** | System-level (nil UUID) defaults + account-level overrides |
-| **Developer Implications** | Never handle `account_id` manually; isolation is automatic; collections are global |
+| Concept                     | Key Takeaway                                                                            |
+| --------------------------- | --------------------------------------------------------------------------------------- |
+| **Account Model**           | Accounts are isolated tenants with their own users, collections, and data               |
+| **Account Identifiers**     | UUID (id) for system, account_code (XX####) for humans, slug for URLs, name for display |
+| **Data Isolation**          | Row-level isolation via `account_id` column, enforced at multiple layers                |
+| **Global Tables**           | accounts, roles, permissions, collections, macros, migrations have no account_id        |
+| **Two-Tier Architecture**   | Core system tables (release-only schema) + user collections (shared col\_\* tables)     |
+| **System Account**          | Uses nil UUID for ID, SY0000 for account_code, reserved for superadmin operations       |
+| **Multi-Account Users**     | Same email can exist in multiple accounts with different passwords                      |
+| **Configuration Hierarchy** | System-level (nil UUID) defaults + account-level overrides                              |
+| **Developer Implications**  | Never handle `account_id` manually; isolation is automatic; collections are global      |
 
 ---
 

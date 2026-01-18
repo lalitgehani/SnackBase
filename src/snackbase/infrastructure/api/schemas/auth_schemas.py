@@ -10,8 +10,8 @@ class RegisterRequest(BaseModel):
 
     email: EmailStr = Field(..., description="User's email address")
     password: str = Field(..., min_length=1, description="User's password")
-    account_name: str = Field(
-        ..., min_length=1, max_length=255, description="Display name for the account"
+    account_name: str | None = Field(
+        None, min_length=1, max_length=255, description="Display name for the account (required in multi-tenant mode)"
     )
     account_slug: str | None = Field(
         None,

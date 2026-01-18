@@ -5,7 +5,7 @@ Provides endpoints for OAuth 2.0 authorization flows.
 
 import secrets
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -155,7 +155,7 @@ async def authorize(
 
     # 5. Store state in database
     oauth_state_repo = OAuthStateRepository(session)
-    
+
     # Check if a state with this token already exists
     existing_state = await oauth_state_repo.get_by_token(state_token)
     if existing_state:
@@ -166,8 +166,8 @@ async def authorize(
             )
         state_token = secrets.token_urlsafe(32)
 
-    expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
-    
+    expires_at = datetime.now(UTC) + timedelta(minutes=10)
+
     state_model = OAuthStateModel(
         id=str(uuid.uuid4()),
         provider_name=provider_name,
@@ -176,7 +176,7 @@ async def authorize(
         expires_at=expires_at,
         metadata_={"account_id": account_id, "account_name": request_body.account_name},
     )
-    
+
     await oauth_state_repo.create(state_model)
     await session.commit()
 
@@ -231,11 +231,11 @@ async def callback(
     6. Generate JWT tokens and return response
     """
     logger.debug("OAuth callback: Step 1 - Starting state validation")
-    
+
     # 1. State validation and deletion
     oauth_state_repo = OAuthStateRepository(session)
     logger.debug("OAuth callback: Step 1.1 - Created OAuthStateRepository")
-    
+
     state_model = await oauth_state_repo.get_by_token(request_body.state)
     logger.debug("OAuth callback: Step 1.2 - Retrieved state model", found=state_model is not None)
 
@@ -250,10 +250,10 @@ async def callback(
     # Check expiration - handle both naive and aware datetimes from DB
     expires_at = state_model.expires_at
     logger.debug("OAuth callback: Step 1.4 - Got expires_at", expires_at=str(expires_at))
-    
+
     if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
-    if expires_at <= datetime.now(timezone.utc):
+        expires_at = expires_at.replace(tzinfo=UTC)
+    if expires_at <= datetime.now(UTC):
         logger.info("OAuth callback failed: state token expired", state=request_body.state)
         await oauth_state_repo.delete(state_model.id)
         await session.commit()
@@ -390,7 +390,7 @@ async def callback(
         # Update existing user
         user.external_email = email
         user.profile_data = user_info
-        user.last_login = datetime.now(timezone.utc)
+        user.last_login = datetime.now(UTC)
         await user_repo.update(user)
     else:
         # Create new user
@@ -398,38 +398,128 @@ async def callback(
 
         # Check if we need to create a new account (self-provisioning)
         if account_id == "00000000-0000-0000-0000-000000000000":
-            is_new_account = True
-            # Create account logic (similar to register route)
-            existing_codes = await account_repo.get_all_account_codes()
-            new_account_id = str(uuid.uuid4())
-            account_code = AccountCodeGenerator.generate(existing_codes)
+            # Check for single-tenant mode
+            settings = get_settings()
 
-            from snackbase.domain.services import SlugGenerator
+            if settings.single_tenant_mode:
+                # Single-tenant mode: join configured account with 'user' role
+                logger.debug("OAuth registration in single-tenant mode")
+                account_model = await account_repo.get_by_slug(settings.single_tenant_account)
+                if not account_model:
+                    logger.error(
+                        "Single-tenant account not found for OAuth",
+                        configured_slug=settings.single_tenant_account,
+                    )
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail="Configured single-tenant account not found",
+                    )
+                account_id = account_model.id
+                is_new_account = False
 
-            # Use user-provided account name, fall back to Google profile name
-            provided_account_name = (
-                state_model.metadata_.get("account_name")
-                if state_model.metadata_
-                else None
-            )
-            display_name = provided_account_name or user_info.get("name") or email.split("@")[0]
-            slug = SlugGenerator.generate(display_name)
+                # Get 'user' role for single-tenant mode
+                user_role = await role_repo.get_by_name("user")
+                if not user_role:
+                    logger.error("User role not found in database")
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail="System configuration error: user role missing",
+                    )
 
-            # Ensure slug uniqueness
-            base_slug = slug
-            counter = 1
-            while await account_repo.slug_exists(slug):
-                slug = f"{base_slug}-{counter}"
-                counter += 1
+                user = UserModel(
+                    id=str(uuid.uuid4()),
+                    account_id=account_id,
+                    email=email,
+                    password_hash=hash_password(generate_random_password()),
+                    role_id=user_role.id,
+                    is_active=True,
+                    auth_provider="oauth",
+                    auth_provider_name=provider_name,
+                    external_id=external_id,
+                    external_email=email,
+                    profile_data=user_info,
+                )
+                await user_repo.create(user)
 
-            account_model = AccountModel(
-                id=new_account_id,
-                account_code=account_code,
-                slug=slug,
-                name=display_name,
-            )
-            await account_repo.create(account_model)
-            account_id = new_account_id
+                logger.info(
+                    "OAuth user registered in single-tenant mode",
+                    account_id=account_id,
+                    user_id=user.id,
+                    role="user",
+                )
+            else:
+                # Multi-tenant mode: create new account
+                is_new_account = True
+                # Create account logic (similar to register route)
+                existing_codes = await account_repo.get_all_account_codes()
+                new_account_id = str(uuid.uuid4())
+                account_code = AccountCodeGenerator.generate(existing_codes)
+
+                from snackbase.domain.services import SlugGenerator
+
+                # Use user-provided account name, fall back to Google profile name
+                provided_account_name = (
+                    state_model.metadata_.get("account_name")
+                    if state_model.metadata_
+                    else None
+                )
+                display_name = provided_account_name or user_info.get("name") or email.split("@")[0]
+                slug = SlugGenerator.generate(display_name)
+
+                # Ensure slug uniqueness
+                base_slug = slug
+                counter = 1
+                while await account_repo.slug_exists(slug):
+                    slug = f"{base_slug}-{counter}"
+                    counter += 1
+
+                account_model = AccountModel(
+                    id=new_account_id,
+                    account_code=account_code,
+                    slug=slug,
+                    name=display_name,
+                )
+                await account_repo.create(account_model)
+                account_id = new_account_id
+
+                # Create user record with 'admin' role
+                admin_role = await role_repo.get_by_name("admin")
+                if not admin_role:
+                    logger.error("Admin role not found in database")
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail="System configuration error: admin role missing",
+                    )
+
+                user = UserModel(
+                    id=str(uuid.uuid4()),
+                    account_id=account_id,
+                    email=email,
+                    password_hash=hash_password(generate_random_password()),
+                    role_id=admin_role.id,
+                    is_active=True,
+                    auth_provider="oauth",
+                    auth_provider_name=provider_name,
+                    external_id=external_id,
+                    external_email=email,
+                    profile_data=user_info,
+                )
+                await user_repo.create(user)
+
+                # Add to pii_access group for new account
+                from snackbase.domain.services.pii_masking_service import PIIMaskingService
+                from snackbase.infrastructure.persistence.models import GroupModel
+                from snackbase.infrastructure.persistence.repositories import GroupRepository
+
+                group_repo = GroupRepository(session)
+                pii_group = GroupModel(
+                    id=str(uuid.uuid4()),
+                    account_id=account_id,
+                    name=PIIMaskingService.PII_ACCESS_GROUP,
+                    description="Users in this group can view unmasked PII data",
+                )
+                await group_repo.create(pii_group)
+                await group_repo.add_user(group_id=pii_group.id, user_id=user.id)
         else:
             # Join existing account
             account_model = await account_repo.get_by_id(account_id)
@@ -440,45 +530,29 @@ async def callback(
                     detail="Target account for OAuth flow not found",
                 )
 
-        # Create user record with 'admin' role
-        admin_role = await role_repo.get_by_name("admin")
-        if not admin_role:
-            logger.error("Admin role not found in database")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="System configuration error: admin role missing",
-            )
+            # Create user record with 'admin' role
+            admin_role = await role_repo.get_by_name("admin")
+            if not admin_role:
+                logger.error("Admin role not found in database")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="System configuration error: admin role missing",
+                )
 
-        user = UserModel(
-            id=str(uuid.uuid4()),
-            account_id=account_id,
-            email=email,
-            password_hash=hash_password(generate_random_password()),
-            role_id=admin_role.id,
-            is_active=True,
-            auth_provider="oauth",
-            auth_provider_name=provider_name,
-            external_id=external_id,
-            external_email=email,
-            profile_data=user_info,
-        )
-        await user_repo.create(user)
-
-        # Add to pii_access group if new account
-        if is_new_account:
-            from snackbase.domain.services.pii_masking_service import PIIMaskingService
-            from snackbase.infrastructure.persistence.models import GroupModel
-            from snackbase.infrastructure.persistence.repositories import GroupRepository
-
-            group_repo = GroupRepository(session)
-            pii_group = GroupModel(
+            user = UserModel(
                 id=str(uuid.uuid4()),
                 account_id=account_id,
-                name=PIIMaskingService.PII_ACCESS_GROUP,
-                description="Users in this group can view unmasked PII data",
+                email=email,
+                password_hash=hash_password(generate_random_password()),
+                role_id=admin_role.id,
+                is_active=True,
+                auth_provider="oauth",
+                auth_provider_name=provider_name,
+                external_id=external_id,
+                external_email=email,
+                profile_data=user_info,
             )
-            await group_repo.create(pii_group)
-            await group_repo.add_user(group_id=pii_group.id, user_id=user.id)
+            await user_repo.create(user)
 
     if not user.is_active:
         logger.info("OAuth callback failed: user inactive", user_id=user.id)
@@ -512,7 +586,7 @@ async def callback(
         token_hash=refresh_token_repo.hash_token(refresh_token),
         user_id=user.id,
         account_id=user.account_id,
-        expires_at=datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_expire_days),
+        expires_at=datetime.now(UTC) + timedelta(days=settings.refresh_token_expire_days),
     )
     await refresh_token_repo.create(refresh_token_model)
 

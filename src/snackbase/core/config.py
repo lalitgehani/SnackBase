@@ -150,6 +150,20 @@ class Settings(BaseSettings):
         description="Redirect HTTP to HTTPS in production (requires reverse proxy for actual HTTPS)",
     )
 
+    # Single-Tenant Mode Settings
+    single_tenant_mode: bool = Field(
+        default=False,
+        description="Enable single-tenant mode (all registrations join pre-configured account)",
+    )
+    single_tenant_account: str | None = Field(
+        default=None,
+        description="Account slug for single-tenant mode (required when mode=true)",
+    )
+    single_tenant_account_name: str | None = Field(
+        default=None,
+        description="Display name for single-tenant account (defaults to slug)",
+    )
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, v: str | list[str]) -> list[str]:
@@ -191,6 +205,16 @@ class Settings(BaseSettings):
                 "SQLite does not support multiple worker processes. "
                 f"Requested {self.workers} workers, but SQLite requires workers=1. "
                 "Either use --workers 1 or switch to PostgreSQL."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def validate_single_tenant_config(self) -> "Settings":
+        """Validate single-tenant mode configuration."""
+        if self.single_tenant_mode and not self.single_tenant_account:
+            raise ValueError(
+                "SNACKBASE_SINGLE_TENANT_ACCOUNT is required when "
+                "SNACKBASE_SINGLE_TENANT_MODE=true"
             )
         return self
 

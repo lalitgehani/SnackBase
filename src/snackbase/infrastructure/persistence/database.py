@@ -5,18 +5,17 @@ for SQLAlchemy with async support. It supports both SQLite (aiosqlite) and
 PostgreSQL (asyncpg) drivers.
 """
 
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import AsyncGenerator
 
-from sqlalchemy import text
+from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy import event
 
 from snackbase.core.config import get_settings
 from snackbase.core.logging import get_logger
@@ -70,11 +69,11 @@ class DatabaseManager:
                 if self.settings.database_url.startswith("sqlite")
                 else {},
             )
-            
+
             # Register systemic audit logging listeners
             # We need the hook registry, but it's not easily available here in DatabaseManager
             # Solution: We can register them in `lifespan` in app.py when we have both app.state.hook_registry and db manager.
-            
+
             logger.info(
                 "Database engine created",
                 database_url=self._engine.url.render_as_string(hide_password=True),
@@ -92,10 +91,10 @@ class DatabaseManager:
                     cursor.execute(f"PRAGMA temp_store={self.settings.db_sqlite_temp_store}")
                     cursor.execute(f"PRAGMA mmap_size={self.settings.db_sqlite_mmap_size}")
                     cursor.execute(f"PRAGMA busy_timeout={self.settings.db_sqlite_busy_timeout}")
-                    
+
                     fk_status = "ON" if self.settings.db_sqlite_foreign_keys else "OFF"
                     cursor.execute(f"PRAGMA foreign_keys={fk_status}")
-                    
+
                     cursor.close()
                     logger.debug("Applied SQLite performance pragmas and configured foreign keys")
 
@@ -264,18 +263,19 @@ async def init_database() -> None:
     logger.info("Running Alembic migrations to initialize/update database")
     try:
         import asyncio
+
         from alembic import command
         from alembic.config import Config
-        
+
         alembic_cfg = Config("alembic.ini")
         # Ensure we use the correct database URL
         alembic_cfg.set_main_option("sqlalchemy.url", settings.database_url)
-        
+
         # Run migrations to head in executor to avoid blocking
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, command.upgrade, alembic_cfg, "head")
         logger.info("Alembic migrations applied successfully")
-        
+
         # Seed default roles and permissions after migrations
         await _seed_default_roles(db, RoleModel)
         await _seed_default_permissions(db)
@@ -285,10 +285,13 @@ async def init_database() -> None:
 
     # Create superadmin from environment variables if configured
     await _create_superadmin_from_env(db)
-    
+
+    # Create single-tenant account if mode enabled
+    await _create_single_tenant_account(db)
+
     # Seed default configurations
     await _seed_default_configurations(db)
-    
+
     # Seed default email templates
     await _seed_default_email_templates(db)
 
@@ -435,6 +438,72 @@ async def _create_superadmin_from_env(db: DatabaseManager) -> None:
         # Don't raise - allow application to start
 
 
+async def _create_single_tenant_account(db: DatabaseManager) -> None:
+    """Create single-tenant account if mode is enabled.
+
+    Checks if SINGLE_TENANT_MODE is enabled and creates the configured
+    account if it doesn't already exist. This is idempotent - subsequent
+    startups will skip creation if the account exists.
+
+    Args:
+        db: Database manager instance.
+    """
+    import uuid
+
+    from snackbase.core.config import get_settings
+    from snackbase.domain.services import AccountCodeGenerator
+    from snackbase.infrastructure.persistence.models import AccountModel
+    from snackbase.infrastructure.persistence.repositories import AccountRepository
+
+    settings = get_settings()
+
+    # Only proceed if single-tenant mode is enabled
+    if not settings.single_tenant_mode:
+        logger.debug("Single-tenant mode disabled, skipping account bootstrap")
+        return
+
+    logger.info(
+        "Running in single-tenant mode",
+        account_slug=settings.single_tenant_account,
+    )
+
+    # Check if account already exists
+    async with db.session() as session:
+        account_repo = AccountRepository(session)
+        existing = await account_repo.get_by_slug(settings.single_tenant_account)
+
+        if existing:
+            logger.info(
+                "Single-tenant account already exists, skipping creation",
+                account_id=existing.id,
+                slug=existing.slug,
+            )
+            return
+
+        # Create the account
+        existing_codes = await account_repo.get_all_account_codes()
+        account_id = str(uuid.uuid4())
+        account_code = AccountCodeGenerator.generate(existing_codes)
+        display_name = settings.single_tenant_account_name or settings.single_tenant_account
+
+        account = AccountModel(
+            id=account_id,
+            account_code=account_code,
+            slug=settings.single_tenant_account,
+            name=display_name,
+        )
+        await account_repo.create(account)
+        await session.commit()
+
+        logger.info(
+            "Single-tenant account created",
+            account_id=account_id,
+            account_code=account_code,
+            slug=settings.single_tenant_account,
+            name=display_name,
+        )
+
+
 async def _seed_default_configurations(db: DatabaseManager) -> None:
     """Seed default configurations if they don't exist.
 
@@ -442,19 +511,23 @@ async def _seed_default_configurations(db: DatabaseManager) -> None:
         db: Database manager instance.
     """
     import uuid
+
     from sqlalchemy import select
-    from snackbase.infrastructure.persistence.models.configuration import ConfigurationModel
-    from snackbase.infrastructure.configuration.providers.auth.email_password import EmailPasswordProvider
-    from snackbase.infrastructure.configuration.providers.system import SystemConfiguration
+
     from snackbase.core.config import get_settings
-    
+    from snackbase.infrastructure.configuration.providers.auth.email_password import (
+        EmailPasswordProvider,
+    )
+    from snackbase.infrastructure.configuration.providers.system import SystemConfiguration
+    from snackbase.infrastructure.persistence.models.configuration import ConfigurationModel
+
     # SYSTEM_ACCOUNT_ID constant
     SYSTEM_ACCOUNT_ID = "00000000-0000-0000-0000-000000000000"
-    
+
     settings = get_settings()
     ep_provider = EmailPasswordProvider()
     system_config_provider = SystemConfiguration()
-    
+
     async with db.session() as session:
         # Seed email_password system config
         result = await session.execute(
@@ -466,7 +539,7 @@ async def _seed_default_configurations(db: DatabaseManager) -> None:
             )
         )
         existing = result.scalar_one_or_none()
-        
+
         if existing is None:
             # Create default email_password configuration
             new_config = ConfigurationModel(
@@ -483,7 +556,7 @@ async def _seed_default_configurations(db: DatabaseManager) -> None:
             )
             session.add(new_config)
             logger.info("Seeded default Email/Password configuration")
-        
+
         # Seed system settings configuration
         result = await session.execute(
             select(ConfigurationModel).where(
@@ -494,18 +567,18 @@ async def _seed_default_configurations(db: DatabaseManager) -> None:
             )
         )
         existing_system = result.scalar_one_or_none()
-        
+
         if existing_system is None:
             # Create default system configuration with sensible defaults
             # Use app_url from settings if available, otherwise use placeholder
             app_url = getattr(settings, 'app_url', 'http://localhost:8000')
-            
+
             system_config_data = {
                 "app_name": "SnackBase",
                 "app_url": app_url,
                 "support_email": ""  # Optional field, leave empty by default
             }
-            
+
             new_system_config = ConfigurationModel(
                 id=str(uuid.uuid4()),
                 account_id=SYSTEM_ACCOUNT_ID,
@@ -520,7 +593,7 @@ async def _seed_default_configurations(db: DatabaseManager) -> None:
             )
             session.add(new_system_config)
             logger.info("Seeded default System Configuration", app_name="SnackBase", app_url=app_url)
-        
+
         await session.commit()
 
 
@@ -532,12 +605,14 @@ async def _seed_default_email_templates(db: DatabaseManager) -> None:
         db: Database manager instance.
     """
     import uuid
+
     from sqlalchemy import select
+
     from snackbase.infrastructure.persistence.models.email_template import EmailTemplateModel
-    
+
     # SYSTEM_ACCOUNT_ID constant
     SYSTEM_ACCOUNT_ID = "00000000-0000-0000-0000-000000000000"
-    
+
     # Default templates
     default_templates = [
         {
@@ -878,7 +953,7 @@ Questions? Visit {{ app_url }}
             """.strip(),
         },
     ]
-    
+
     async with db.session() as session:
         for template_data in default_templates:
             # Check if template already exists
@@ -890,7 +965,7 @@ Questions? Visit {{ app_url }}
                 )
             )
             existing = result.scalar_one_or_none()
-            
+
             if existing is None:
                 # Create default email template
                 new_template = EmailTemplateModel(
@@ -910,7 +985,7 @@ Questions? Visit {{ app_url }}
                     template_type=template_data["template_type"],
                     locale=template_data["locale"],
                 )
-        
+
         await session.commit()
 
 

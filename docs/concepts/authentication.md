@@ -16,6 +16,7 @@ SnackBase provides a comprehensive authentication system designed for multi-tena
 - [OAuth 2.0 Authentication](#oauth-20-authentication)
 - [SAML 2.0 Authentication](#saml-20-authentication)
 - [Multi-Provider Authentication](#multi-provider-authentication)
+- [Single-Tenant Mode](#single-tenant-mode)
 - [Multi-Account Users](#multi-account-users)
 - [API Key Authentication](#api-key-authentication)
 - [Security Features](#security-features)
@@ -35,7 +36,7 @@ SnackBase authentication is built for **enterprise multi-account scenarios**:
 | **Per-Account Passwords**  | Different passwords per (email, account) tuple        |
 | **JWT Tokens**             | Access tokens (1 hour) + Refresh tokens (7 days)      |
 | **Token Rotation**         | Refresh token rotation on each use with revocation    |
-| **API Keys**               | Service authentication with hashed keys                |
+| **API Keys**               | Service authentication with hashed keys               |
 | **Email Verification**     | Required for login, tokens expire in 1 hour           |
 | **Multi-Provider**         | Support for Password, OAuth, and SAML providers       |
 | **Identity Linking**       | Link local accounts with external provider identities |
@@ -579,12 +580,12 @@ SnackBase uses **JWT (JSON Web Tokens)** with access and refresh tokens, with tr
 
 ```json
 {
-  "sub": "user_abc123",           // Subject (user ID)
-  "account_id": "550e8400-...",   // Account context (UUID)
-  "email": "alice@acme.com",      // User email
-  "role": "admin",                // User role
-  "exp": 1704067200,              // Expiration timestamp
-  "iat": 1704063600               // Issued at timestamp
+  "sub": "user_abc123", // Subject (user ID)
+  "account_id": "550e8400-...", // Account context (UUID)
+  "email": "alice@acme.com", // User email
+  "role": "admin", // User role
+  "exp": 1704067200, // Expiration timestamp
+  "iat": 1704063600 // Issued at timestamp
 }
 ```
 
@@ -592,11 +593,11 @@ SnackBase uses **JWT (JSON Web Tokens)** with access and refresh tokens, with tr
 
 ```json
 {
-  "sub": "user_abc123",           // Subject (user ID)
-  "account_id": "550e8400-...",   // Account context (UUID)
-  "jti": "token_xyz789",          // JWT ID (unique token identifier)
-  "exp": 1704668400,              // Expiration timestamp (7 days)
-  "iat": 1704063600               // Issued at timestamp
+  "sub": "user_abc123", // Subject (user ID)
+  "account_id": "550e8400-...", // Account context (UUID)
+  "jti": "token_xyz789", // JWT ID (unique token identifier)
+  "exp": 1704668400, // Expiration timestamp (7 days)
+  "iat": 1704063600 // Issued at timestamp
 }
 ```
 
@@ -728,12 +729,12 @@ SnackBase supports OAuth 2.0 / OpenID Connect authentication for popular social 
 
 ### Supported OAuth Providers
 
-| Provider    | Description                     |
-| ----------- | ------------------------------- |
-| **Google**  | Google Account login            |
-| **GitHub**  | GitHub account login            |
-| **Microsoft**| Microsoft / Azure AD login      |
-| **Apple**   | Sign in with Apple              |
+| Provider      | Description                |
+| ------------- | -------------------------- |
+| **Google**    | Google Account login       |
+| **GitHub**    | GitHub account login       |
+| **Microsoft** | Microsoft / Azure AD login |
+| **Apple**     | Sign in with Apple         |
 
 ### OAuth Flow
 
@@ -899,6 +900,7 @@ OAuth can automatically create new accounts on first login (configurable):
 ```
 
 When `auto_provision` is enabled:
+
 1. New account is created with user's email domain
 2. User is added to the account
 3. User can immediately access the application
@@ -914,6 +916,7 @@ password_hash = argon2.hash(random_password)
 ```
 
 This ensures:
+
 - Database `password_hash` column is `NOT NULL`
 - User can only authenticate via OAuth (unless password is reset)
 - Security is maintained even if OAuth is disabled later
@@ -937,6 +940,7 @@ relay_state = base64.urlsafe_b64encode(
 ```
 
 This ensures the callback knows:
+
 - Which account the user is logging into
 - Which OAuth provider was used
 - What state to return to the client
@@ -949,11 +953,11 @@ SnackBase supports SAML 2.0 for enterprise single sign-on (SSO) with identity pr
 
 ### Supported SAML Providers
 
-| Provider    | Description                     |
-| ----------- | ------------------------------- |
-| **Okta**    | Okta Identity Cloud SSO         |
-| **Azure AD**| Microsoft Azure Active Directory|
-| **Generic** | Any SAML 2.0 compliant IdP      |
+| Provider     | Description                      |
+| ------------ | -------------------------------- |
+| **Okta**     | Okta Identity Cloud SSO          |
+| **Azure AD** | Microsoft Azure Active Directory |
+| **Generic**  | Any SAML 2.0 compliant IdP       |
 
 ### SAML Flow
 
@@ -1224,6 +1228,7 @@ password_hash = argon2.hash(random_password)
 ```
 
 This ensures:
+
 1. The `password_hash` column remains `NOT NULL` for database consistency
 2. The user can **only** authenticate via the external provider
 3. Password login is **disabled** unless a superadmin manually resets the password
@@ -1254,9 +1259,58 @@ A user can have multiple linked providers (future feature):
 ```
 
 This allows users to:
+
 - Log in with any linked provider
 - Switch between authentication methods
 - Maintain a single user account across providers
+
+---
+
+## Single-Tenant Mode
+
+### Overview
+
+SnackBase can be configured to run in **Single-Tenant Mode**, where the instance is dedicated to a single application or organization. In this mode, the platform behaves like a standard BaaS (similar to PocketBase or Supabase) where users belong to a fixed, pre-configured account.
+
+### Configuration
+
+Enable single-tenant mode via environment variables:
+
+```bash
+SNACKBASE_SINGLE_TENANT_MODE=true
+SNACKBASE_SINGLE_TENANT_ACCOUNT=my-app
+SNACKBASE_SINGLE_TENANT_ACCOUNT_NAME="My Application"
+```
+
+If `SNACKBASE_SINGLE_TENANT_MODE` is `true`, `SNACKBASE_SINGLE_TENANT_ACCOUNT` (the slug) is **required**.
+
+### Behavioral Changes
+
+| Feature                 | Multi-Tenant (Default)                  | Single-Tenant Mode                                  |
+| ----------------------- | --------------------------------------- | --------------------------------------------------- |
+| **Account Bootstrap**   | None                                    | Configured account created automatically on startup |
+| **Registration**        | Users create a new account + admin user | Users join the configured account as "user"         |
+| **Registration Schema** | `account_name` is required              | `account_name` is ignored/optional                  |
+| **OAuth Callback**      | Creates new account + admin user        | Joins configured account as "user"                  |
+| **User Role**           | First user is "admin"                   | Users are assigned "user" role by default           |
+
+### Registration Flow in Single-Tenant Mode
+
+When a user registers at `/api/v1/auth/register`:
+
+1.  **Account Resolution**: The system ignores any user-provided account details and uses `SNACKBASE_SINGLE_TENANT_ACCOUNT`.
+2.  **User Creation**: The user is created within that pre-configured account.
+3.  **Role Assignment**: The user is assigned the standard `user` role (not `admin`).
+4.  **Isolation**: Data isolation still works via `account_id`, but practically all users share the same account ID.
+
+### OAuth Flow in Single-Tenant Mode
+
+During the OAuth callback:
+
+1.  **Account Check**: If the OAuth request doesn't explicitly specify an `account_id` (via `state`), the system checks if Single-Tenant Mode is enabled.
+2.  **Auto-Join**: If enabled, the new user automatically joins the configured single-tenant account.
+3.  **Role**: The user is assigned the `user` role.
+4.  **No Provisioning**: No new accounts are created during the OAuth flow.
 
 ---
 
@@ -1360,15 +1414,15 @@ API keys provide an alternative authentication method designed for service-to-se
 
 ### When to Use API Keys
 
-| Use Case                     | Recommended Method          | Reason                                          |
-| ---------------------------- | --------------------------- | ----------------------------------------------- |
-| Browser applications         | JWT (access/refresh tokens) | Token rotation, user session management         |
-| Mobile apps                  | JWT (access/refresh tokens) | Built-in token refresh, user experience         |
-| Service-to-service calls     | **API Keys**                | No token refresh needed, long-lived credentials |
-| CLI tools                    | **API Keys**                | Easy configuration, no session management        |
-| Webhooks                     | **API Keys**                | Static credentials for incoming requests         |
-| Third-party integrations     | **API Keys**                | Simple credential sharing                       |
-| IoT devices                  | **API Keys**                | Limited token handling capabilities              |
+| Use Case                 | Recommended Method          | Reason                                          |
+| ------------------------ | --------------------------- | ----------------------------------------------- |
+| Browser applications     | JWT (access/refresh tokens) | Token rotation, user session management         |
+| Mobile apps              | JWT (access/refresh tokens) | Built-in token refresh, user experience         |
+| Service-to-service calls | **API Keys**                | No token refresh needed, long-lived credentials |
+| CLI tools                | **API Keys**                | Easy configuration, no session management       |
+| Webhooks                 | **API Keys**                | Static credentials for incoming requests        |
+| Third-party integrations | **API Keys**                | Simple credential sharing                       |
+| IoT devices              | **API Keys**                | Limited token handling capabilities             |
 
 ### API Key Format
 
@@ -1381,6 +1435,7 @@ sb_sk_<account_code>_<random_32_characters>
 **Example**: `sb_sk_AB1234_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6`
 
 **Components:**
+
 - `sb_sk` - SnackBase Secret Key prefix (identifies the key type)
 - `AB1234` - Account code (human-readable account identifier)
 - `a1b2c3...o5p6` - 32-character cryptographically secure random string
@@ -1482,11 +1537,11 @@ sb_sk_<account_code>_<random_32_characters>
 
 | Feature              | API Keys                          | JWT Tokens                        |
 | -------------------- | --------------------------------- | --------------------------------- |
-| **Use Case**         | Service-to-service, CLI, webhooks | Browser, mobile apps             |
-| **Lifetime**         | Indefinite (until revoked)        | Access: 1 hour, Refresh: 7 days  |
-| **Storage**          | Server-side (hash)                | Client-side (localStorage/cookie)|
+| **Use Case**         | Service-to-service, CLI, webhooks | Browser, mobile apps              |
+| **Lifetime**         | Indefinite (until revoked)        | Access: 1 hour, Refresh: 7 days   |
+| **Storage**          | Server-side (hash)                | Client-side (localStorage/cookie) |
 | **Visibility**       | Full key shown only at creation   | Tokens visible in responses       |
-| **Rotation**         | Manual (create new, revoke old)   | Automatic (on refresh)           |
+| **Rotation**         | Manual (create new, revoke old)   | Automatic (on refresh)            |
 | **Revocation**       | Immediate                         | On refresh or logout              |
 | **User Context**     | Single user per key               | Can include user, role, account   |
 | **Security**         | SHA-256 hashed at rest            | Signed, verifiable signature      |
@@ -1571,8 +1626,8 @@ const API_KEY = "sb_sk_AB1234_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6";
 
 const response = await fetch("http://localhost:8000/api/v1/posts", {
   headers: {
-    "Authorization": `Bearer ${API_KEY}`
-  }
+    Authorization: `Bearer ${API_KEY}`,
+  },
 });
 ```
 
@@ -1671,6 +1726,7 @@ curl -X POST http://localhost:8000/api/v1/api-keys/ak_old_key/revoke \
 ```
 
 Use descriptive names to identify:
+
 - Environment (Production, Staging, Development)
 - Service (Payment Service, Webhook Handler, CLI)
 - Purpose (Backup Job, Monitoring Integration)
@@ -1712,6 +1768,7 @@ API keys inherit the permissions of the user who created them:
 ```
 
 This means:
+
 - Create dedicated service users with minimal required permissions
 - Don't use personal admin accounts to create production API keys
 - Regularly audit which users have created API keys
@@ -1855,6 +1912,7 @@ Default password requirements (configurable via `default_password_validator`):
 ### Email Verification Security
 
 **Token Hashing:**
+
 ```python
 # Verification tokens are hashed, not stored in plaintext
 token = secrets.token_urlsafe(32)  # 256-bit random token
@@ -1870,11 +1928,13 @@ if secrets.compare_digest(provided_hash, stored_hash):
 ```
 
 **Expiration:**
+
 - Tokens expire after **1 hour**
 - Expired tokens cannot be used
 - Users can request new tokens via resend endpoint
 
 **Single-Use:**
+
 - Tokens are deleted after successful verification
 - Prevents token reuse attacks
 
@@ -1933,6 +1993,7 @@ Account-Level Configuration
 ```
 
 **Resolution Order:**
+
 1. Check account-level configuration
 2. If not found, use system-level default
 3. If not found, use built-in defaults
@@ -2140,7 +2201,7 @@ axios.interceptors.response.use(
       }
     }
     return Promise.reject(error);
-  }
+  },
 );
 ```
 
@@ -2154,7 +2215,8 @@ axios.interceptors.response.use(
 async function logout() {
   // Clear tokens from storage
   localStorage.removeItem("access_token");
-  document.cookie = "refresh_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+  document.cookie =
+    "refresh_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
 
   // Call backend logout to revoke refresh token
   await axios.post("/api/v1/auth/logout");
@@ -2192,7 +2254,7 @@ function showVerificationStatus() {
   if (!user.email_verified) {
     showNotification(
       "Please verify your email. Check your inbox for a verification link.",
-      "warning"
+      "warning",
     );
     // Provide resend option
     showResendButton();
@@ -2203,7 +2265,7 @@ function showVerificationStatus() {
 async function resendVerification() {
   await axios.post("/api/v1/auth/resend-verification", {
     email: user.email,
-    account: currentAccount
+    account: currentAccount,
   });
   showNotification("Verification email sent!", "success");
 }
@@ -2222,13 +2284,11 @@ function showLoginOptions() {
 
   return (
     <div>
-      <button onClick={() => loginWithPassword()}>
-        Email and Password
-      </button>
-      <button onClick={() => loginWithOAuth('google')}>
+      <button onClick={() => loginWithPassword()}>Email and Password</button>
+      <button onClick={() => loginWithOAuth("google")}>
         Continue with Google
       </button>
-      <button onClick={() => loginWithSAML('okta')}>
+      <button onClick={() => loginWithSAML("okta")}>
         Single Sign-On (SSO)
       </button>
     </div>
@@ -2244,19 +2304,19 @@ function showLoginOptions() {
 
 ## Summary
 
-| Concept                    | Key Takeaway                                                           |
-| -------------------------- | ---------------------------------------------------------------------- |
-| **User Identity**          | Defined by `(email, account_id)` tuple                                 |
-| **Account Registration**   | Creates new tenant with UUID primary key and `XX####` display code     |
-| **User Registration**      | Creates user within specific account, email unique per account         |
-| **Email Verification**     | Required for login, tokens expire in 1 hour, single-use                |
-| **Login Flow**             | Resolve account → Find user → Check verification → Verify password → Issue JWT |
-| **Token Management**       | Access token (1 hour) + Refresh token (7 days) with true rotation      |
-| **OAuth Authentication**   | Redirect → Authorize → Callback → Exchange tokens → Create/update user |
-| **SAML Authentication**    | SSO request → IdP → ACS response → Verify → Create/update user         |
-| **Multi-Account Users**    | Same email can exist in multiple accounts with different passwords     |
-| **Security**               | Argon2id hashing, timing-safe comparison, token rotation, HTTPS required |
-| **Configuration**          | Hierarchical: system-level defaults → account-level overrides          |
+| Concept                  | Key Takeaway                                                                   |
+| ------------------------ | ------------------------------------------------------------------------------ |
+| **User Identity**        | Defined by `(email, account_id)` tuple                                         |
+| **Account Registration** | Creates new tenant with UUID primary key and `XX####` display code             |
+| **User Registration**    | Creates user within specific account, email unique per account                 |
+| **Email Verification**   | Required for login, tokens expire in 1 hour, single-use                        |
+| **Login Flow**           | Resolve account → Find user → Check verification → Verify password → Issue JWT |
+| **Token Management**     | Access token (1 hour) + Refresh token (7 days) with true rotation              |
+| **OAuth Authentication** | Redirect → Authorize → Callback → Exchange tokens → Create/update user         |
+| **SAML Authentication**  | SSO request → IdP → ACS response → Verify → Create/update user                 |
+| **Multi-Account Users**  | Same email can exist in multiple accounts with different passwords             |
+| **Security**             | Argon2id hashing, timing-safe comparison, token rotation, HTTPS required       |
+| **Configuration**        | Hierarchical: system-level defaults → account-level overrides                  |
 
 ---
 
