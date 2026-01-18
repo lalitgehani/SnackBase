@@ -93,23 +93,16 @@ async def isolation_collection(client: AsyncClient, superadmin_token, isolation_
             {"name": "title", "type": "text", "required": True},
             {"name": "secret_data", "type": "text", "required": True},
         ],
+        # Add default rules for isolation testing
+        "list_rule": "true",
+        "view_rule": "true",
+        "create_rule": "true",
+        "update_rule": "true",
+        "delete_rule": "true",
     }
     
     headers = {"Authorization": f"Bearer {superadmin_token}"}
     response = await client.post("/api/v1/collections", json=collection_data, headers=headers)
     assert response.status_code == 201
-    
-    # Grant permissions to 'user' role for this collection
-    permission_data = {
-        "role_id": 2, # user role
-        "collection": collection_name,
-        "rules": {
-            "create": {"rule": "true", "fields": "*"},
-            "read": {"rule": "true", "fields": "*"},
-            "update": {"rule": "true", "fields": "*"},
-            "delete": {"rule": "true", "fields": "*"},
-        },
-    }
-    await client.post("/api/v1/permissions", json=permission_data, headers=headers)
     
     return collection_name

@@ -39,7 +39,6 @@ def mock_auth_context():
     auth_ctx.user.user_id = "user-123"
     auth_ctx.user.account_id = "acc-123"
     auth_ctx.role_id = 1
-    auth_ctx.permission_cache = MagicMock()
     return auth_ctx
 
 

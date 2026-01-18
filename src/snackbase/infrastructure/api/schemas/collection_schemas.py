@@ -103,6 +103,21 @@ class CreateCollectionRequest(BaseModel):
 
     model_config = {"populate_by_name": True}
 
+    # Collection Rules (optional during creation)
+    list_rule: str | None = Field(default=None, description="Filter expression for listing records")
+    view_rule: str | None = Field(default=None, description="Filter expression for viewing records")
+    create_rule: str | None = Field(
+        default=None, description="Validation expression for creating records"
+    )
+    update_rule: str | None = Field(
+        default=None, description="Filter/validation expression for updates"
+    )
+    delete_rule: str | None = Field(default=None, description="Filter expression for deletions")
+    list_fields: str = Field("*", description="Fields visible in list operations")
+    view_fields: str = Field("*", description="Fields visible in view operations")
+    create_fields: str = Field("*", description="Fields allowed in create requests")
+    update_fields: str = Field("*", description="Fields allowed in update requests")
+
 
 class SchemaFieldResponse(BaseModel):
     """Schema field in collection response."""

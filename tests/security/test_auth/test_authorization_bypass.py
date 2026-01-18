@@ -75,17 +75,6 @@ async def test_auth_az_005_regular_user_to_roles_endpoint(attack_client: AttackC
     assert response.status_code == status.HTTP_403_FORBIDDEN
 
 
-@pytest.mark.asyncio
-async def test_auth_az_006_regular_user_to_permissions_endpoint(attack_client: AttackClient, regular_user_token: str):
-    """AUTH-AZ-006: Verify regular user cannot access permissions management."""
-    headers = {"Authorization": f"Bearer {regular_user_token}"}
-    response = await attack_client.get(
-        "/api/v1/permissions",
-        headers=headers,
-        description="Regular user attempting to list permissions (superadmin only)"
-    )
-    
-    assert response.status_code == status.HTTP_403_FORBIDDEN
 
 
 @pytest.mark.asyncio
@@ -113,7 +102,6 @@ async def test_auth_az_008_superadmin_to_all_endpoints(
         "/api/v1/accounts",
         "/api/v1/collections",
         "/api/v1/roles",
-        "/api/v1/permissions",
         "/api/v1/dashboard/stats"
     ]
     

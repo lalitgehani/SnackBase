@@ -251,9 +251,22 @@ async def create_collection(
     engine = cast(AsyncEngine, session.bind)
     collection_service = CollectionService(session, engine)
 
+    # Extract rules from request
+    rules_data = {
+        "list_rule": request.list_rule,
+        "view_rule": request.view_rule,
+        "create_rule": request.create_rule,
+        "update_rule": request.update_rule,
+        "delete_rule": request.delete_rule,
+        "list_fields": request.list_fields,
+        "view_fields": request.view_fields,
+        "create_fields": request.create_fields,
+        "update_fields": request.update_fields,
+    }
+
     try:
         collection = await collection_service.create_collection(
-            request.name, schema_dicts, current_user.user_id
+            request.name, schema_dicts, current_user.user_id, rules_data=rules_data
         )
         await session.commit()
         await session.refresh(collection)

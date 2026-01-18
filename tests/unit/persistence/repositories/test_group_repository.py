@@ -6,7 +6,6 @@ import pytest
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from snackbase.domain.services.permission_cache import PermissionCache
 from snackbase.infrastructure.persistence.models import GroupModel, UsersGroupsModel
 from snackbase.infrastructure.persistence.repositories.group_repository import GroupRepository
 
@@ -18,16 +17,12 @@ def mock_session():
     return session
 
 
-@pytest.fixture
-def mock_permission_cache():
-    """Create a mock permission cache."""
-    return MagicMock(spec=PermissionCache)
 
 
 @pytest.fixture
-def group_repo(mock_session, mock_permission_cache):
+def group_repo(mock_session):
     """Create a GroupRepository instance."""
-    return GroupRepository(mock_session, mock_permission_cache)
+    return GroupRepository(mock_session)
 
 
 @pytest.mark.asyncio
@@ -61,8 +56,10 @@ async def test_get_by_id(group_repo, mock_session):
     mock_session.execute.assert_called_once()
 
 
+
+
 @pytest.mark.asyncio
-async def test_add_user(group_repo, mock_session, mock_permission_cache):
+async def test_add_user(group_repo, mock_session):
     """Test adding a user to a group."""
     group_id = "g1"
     user_id = "u1"
@@ -72,13 +69,10 @@ async def test_add_user(group_repo, mock_session, mock_permission_cache):
     mock_session.add.assert_called_once()
     assert isinstance(mock_session.add.call_args[0][0], UsersGroupsModel)
     mock_session.flush.assert_called_once()
-    
-    # Verify cache invalidation
-    mock_permission_cache.invalidate_user.assert_called_once_with(user_id)
 
 
 @pytest.mark.asyncio
-async def test_remove_user(group_repo, mock_session, mock_permission_cache):
+async def test_remove_user(group_repo, mock_session):
     """Test removing a user from a group."""
     group_id = "g1"
     user_id = "u1"
@@ -87,6 +81,3 @@ async def test_remove_user(group_repo, mock_session, mock_permission_cache):
     
     mock_session.execute.assert_called_once()
     mock_session.flush.assert_called_once()
-    
-    # Verify cache invalidation
-    mock_permission_cache.invalidate_user.assert_called_once_with(user_id)

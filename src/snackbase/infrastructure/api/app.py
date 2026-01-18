@@ -277,15 +277,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             )
             logger.info("ON_SERVE hooks triggered")
 
-        # Initialize permission cache
-        from snackbase.domain.services import PermissionCache
-        app.state.permission_cache = PermissionCache(
-            ttl_seconds=settings.permission_cache_ttl_seconds
-        )
-        logger.info(
-            "Permission cache initialized",
-            ttl_seconds=settings.permission_cache_ttl_seconds,
-        )
 
         # Initialize Realtime components
         from snackbase.infrastructure.realtime.realtime_manager import ConnectionManager
@@ -308,10 +299,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # Shutdown
         logger.info("Shutting down SnackBase")
 
-        # Clear permission cache
-        if hasattr(app.state, "permission_cache"):
-            app.state.permission_cache.invalidate_all()
-            logger.info("Permission cache cleared")
 
         # Trigger ON_TERMINATE hook
         if hasattr(app.state, "hook_registry"):

@@ -43,14 +43,19 @@ class CollectionService:
         )
 
     async def create_collection(
-        self, name: str, schema: list[dict[str, Any]], user_id: str
+        self,
+        name: str,
+        schema: list[dict[str, Any]],
+        user_id: str,
+        rules_data: dict[str, Any] | None = None,
     ) -> CollectionModel:
-        """Create a new collection with migration.
+        """Create a new collection with schema and optional rules.
 
         Args:
             name: Collection name.
             schema: List of field definitions.
             user_id: ID of the user creating the collection.
+            rules_data: Optional dictionary containing rules for the collection.
 
         Returns:
             The created collection model.
@@ -87,8 +92,32 @@ class CollectionService:
         )
         created_collection = await self.repository.create(collection)
         
+        # 4. Create collection rules
+        from snackbase.infrastructure.persistence.repositories.collection_rule_repository import CollectionRuleRepository
+        from snackbase.infrastructure.persistence.models.collection_rule import CollectionRuleModel
+        
+        rule_repo = CollectionRuleRepository(self.session)
+        
+        # Default rules (locked) if none provided
+        rules_dict = rules_data or {}
+        
+        rule = CollectionRuleModel(
+            id=str(uuid.uuid4()),
+            collection_id=collection_id,
+            list_rule=rules_dict.get("list_rule"),
+            view_rule=rules_dict.get("view_rule"),
+            create_rule=rules_dict.get("create_rule"),
+            update_rule=rules_dict.get("update_rule"),
+            delete_rule=rules_dict.get("delete_rule"),
+            list_fields=rules_dict.get("list_fields", "*"),
+            view_fields=rules_dict.get("view_fields", "*"),
+            create_fields=rules_dict.get("create_fields", "*"),
+            update_fields=rules_dict.get("update_fields", "*"),
+        )
+        await rule_repo.create(rule)
+        
         logger.info(
-            "Collection created successfully with migration",
+            "Collection created successfully with rules and migration",
             collection_id=collection_id,
             collection_name=name,
             revision=rev_id,

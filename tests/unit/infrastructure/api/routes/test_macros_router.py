@@ -11,8 +11,6 @@ from httpx import ASGITransport, AsyncClient
 from snackbase.infrastructure.api.app import app
 from snackbase.infrastructure.api.dependencies import get_current_user, require_superadmin
 from snackbase.infrastructure.persistence.models.macro import MacroModel
-
-
 @pytest.fixture
 def mock_repo():
     """Mock MacroRepository."""
@@ -197,7 +195,7 @@ async def test_update_macro_superadmin(async_client, mock_repo):
 @pytest.mark.asyncio
 async def test_delete_macro_superadmin(async_client, mock_repo):
     """Test deleting a macro as superadmin."""
-    from snackbase.infrastructure.persistence.repositories.permission_repository import PermissionRepository
+    from snackbase.infrastructure.persistence.repositories.collection_rule_repository import CollectionRuleRepository
     
     async def admin_override():
         user = AsyncMock()
@@ -218,13 +216,13 @@ async def test_delete_macro_superadmin(async_client, mock_repo):
     mock_repo.get_by_id.return_value = mock_macro
     mock_repo.delete.return_value = True
     
-    # Mock PermissionRepository to prevent it from running real logic
+    # Mock CollectionRuleRepository to prevent it from running real logic
     with patch(
-        "snackbase.infrastructure.api.routes.macros_router.PermissionRepository"
-    ) as mock_perm_repo_class:
-        mock_perm_repo = AsyncMock()
-        mock_perm_repo_class.return_value = mock_perm_repo
-        mock_perm_repo.find_permissions_using_macro.return_value = []
+        "snackbase.infrastructure.api.routes.macros_router.CollectionRuleRepository"
+    ) as mock_rule_repo_class:
+        mock_rule_repo = AsyncMock()
+        mock_rule_repo_class.return_value = mock_rule_repo
+        mock_rule_repo.find_rules_using_macro.return_value = []
         
         response = await async_client.delete("/api/v1/macros/1", headers={"Authorization": "Bearer dummy"})
         
@@ -343,8 +341,8 @@ async def test_test_macro_not_found(async_client, mock_repo):
 
 @pytest.mark.asyncio
 async def test_delete_macro_in_use(async_client, mock_repo):
-    """Test deleting a macro that is used in permissions."""
-    from snackbase.infrastructure.persistence.models.permission import PermissionModel
+    """Test deleting a macro that is used in collection rules."""
+    from snackbase.infrastructure.persistence.models.collection_rule import CollectionRuleModel
     
     async def admin_override():
         user = AsyncMock()
@@ -364,21 +362,19 @@ async def test_delete_macro_in_use(async_client, mock_repo):
     )
     mock_repo.get_by_id.return_value = mock_macro
     
-    # Mock permission repository to return permissions using the macro
+    # Mock collection rule repository to return rules using the macro
     with patch(
-        "snackbase.infrastructure.api.routes.macros_router.PermissionRepository"
-    ) as mock_perm_repo_class:
-        mock_perm_repo = AsyncMock()
-        mock_perm_repo_class.return_value = mock_perm_repo
+        "snackbase.infrastructure.api.routes.macros_router.CollectionRuleRepository"
+    ) as mock_rule_repo_class:
+        mock_rule_repo = AsyncMock()
+        mock_rule_repo_class.return_value = mock_rule_repo
         
-        # Return a permission that uses the macro
-        mock_permission = PermissionModel(
-            id=1,
-            role_id=1,
-            collection="test",
-            rules='{"read": {"rule": "@test_macro()", "fields": "*"}}',
+        mock_rule = CollectionRuleModel(
+            id="rule-1",
+            collection_id="coll-1",
+            view_rule="@test_macro()",
         )
-        mock_perm_repo.find_permissions_using_macro.return_value = [mock_permission]
+        mock_rule_repo.find_rules_using_macro.return_value = [mock_rule]
         
         response = await async_client.delete(
             "/api/v1/macros/1",
@@ -391,7 +387,7 @@ async def test_delete_macro_in_use(async_client, mock_repo):
 
 @pytest.mark.asyncio
 async def test_delete_macro_unused(async_client, mock_repo):
-    """Test deleting a macro that is not used in permissions."""
+    """Test deleting a macro that is not used in collection rules."""
     async def admin_override():
         user = AsyncMock()
         user.user_id = "admin"
@@ -411,13 +407,13 @@ async def test_delete_macro_unused(async_client, mock_repo):
     mock_repo.get_by_id.return_value = mock_macro
     mock_repo.delete.return_value = True
     
-    # Mock permission repository to return no permissions using the macro
+    # Mock collection rule repository to return no rules using the macro
     with patch(
-        "snackbase.infrastructure.api.routes.macros_router.PermissionRepository"
-    ) as mock_perm_repo_class:
-        mock_perm_repo = AsyncMock()
-        mock_perm_repo_class.return_value = mock_perm_repo
-        mock_perm_repo.find_permissions_using_macro.return_value = []
+        "snackbase.infrastructure.api.routes.macros_router.CollectionRuleRepository"
+    ) as mock_rule_repo_class:
+        mock_rule_repo = AsyncMock()
+        mock_rule_repo_class.return_value = mock_rule_repo
+        mock_rule_repo.find_rules_using_macro.return_value = []
         
         response = await async_client.delete(
             "/api/v1/macros/1",
