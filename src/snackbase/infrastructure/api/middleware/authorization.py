@@ -16,6 +16,7 @@ from snackbase.core.rules.sql_compiler import compile_to_sql
 from snackbase.core.rules.evaluator import Evaluator
 from snackbase.core.rules.lexer import Lexer
 from snackbase.core.rules.parser import Parser
+from snackbase.core.macros.expander import MacroExpander
 from snackbase.infrastructure.api.dependencies import (
     SYSTEM_ACCOUNT_ID,
     AuthorizationContext,
@@ -305,7 +306,18 @@ async def check_collection_permission(
         "account_id": user.account_id,
     }
 
-    # 6. Operation-specific enforcement
+    # 6. Expand macros
+    expander = MacroExpander(session)
+    try:
+        rule_expr = await expander.expand(rule_expr)
+    except Exception as e:
+        logger.error("Macro expansion failed", error=str(e), rule=rule_expr)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal error: macro expansion failed",
+        )
+
+    # 7. Operation-specific enforcement
     
     # For 'create', we evaluate directly in Python since there's no DB row yet
     if operation == "create":
