@@ -102,6 +102,9 @@ class Settings(BaseSettings):
     rate_limit_enabled: bool = False
     rate_limit_per_minute: int = 60
     rate_limit_per_hour: int = 1000
+    rate_limit_burst: int = 10
+    rate_limit_authenticated_per_minute: int = 120
+    rate_limit_endpoints: dict[str, int] = Field(default_factory=dict)
 
     # Superadmin Settings
     superadmin_email: str | None = Field(
