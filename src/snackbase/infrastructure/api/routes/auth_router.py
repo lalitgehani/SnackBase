@@ -424,13 +424,34 @@ async def login(
     role_repo = RoleRepository(session)
 
     # 1. Resolve account by slug or ID
-    account = await account_repo.get_by_slug_or_code(request.account)
+    account_identifier = request.account
+    settings = get_settings()
+
+    if not account_identifier:
+        if settings.single_tenant_mode:
+            account_identifier = settings.single_tenant_account
+        else:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={
+                    "error": "Validation error",
+                    "details": [
+                        {
+                            "field": "account",
+                            "message": "Account is required in multi-tenant mode",
+                            "code": "required",
+                        }
+                    ],
+                },
+            )
+
+    account = await account_repo.get_by_slug_or_code(account_identifier)
 
     if account is None:
         # Account not found - still verify password to prevent timing attacks
         logger.info(
             "Login failed: account not found",
-            account_identifier=request.account,
+            account_identifier=account_identifier,
             email=request.email,
         )
         verify_password(request.password, DUMMY_PASSWORD_HASH)
@@ -880,13 +901,34 @@ async def forgot_password(
     user_repo = UserRepository(session)
 
     # Resolve account by slug or ID
-    account = await account_repo.get_by_slug_or_code(forgot_request.account)
+    account_identifier = forgot_request.account
+    settings = get_settings()
+
+    if not account_identifier:
+        if settings.single_tenant_mode:
+            account_identifier = settings.single_tenant_account
+        else:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={
+                    "error": "Validation error",
+                    "details": [
+                        {
+                            "field": "account",
+                            "message": "Account is required in multi-tenant mode",
+                            "code": "required",
+                        }
+                    ],
+                },
+            )
+
+    account = await account_repo.get_by_slug_or_code(account_identifier)
 
     if account is None:
         # Account not found - return success anyway (don't reveal account existence)
         logger.info(
             "Password reset requested: account not found",
-            account_identifier=forgot_request.account,
+            account_identifier=account_identifier,
             email=forgot_request.email,
         )
         return ForgotPasswordResponse(

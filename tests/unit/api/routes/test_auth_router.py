@@ -71,6 +71,7 @@ async def test_register_success(mock_session):
 # Let's try testing the route path via TestClient but we need to patch objects 
 # where they are imported in auth_router.
 
+@patch("snackbase.infrastructure.api.routes.auth_router.get_settings")
 @patch("snackbase.infrastructure.api.routes.auth_router.default_password_validator")
 @patch("snackbase.infrastructure.api.routes.auth_router.SlugGenerator")
 @patch("snackbase.infrastructure.api.routes.auth_router.AccountRepository")
@@ -92,11 +93,16 @@ def test_register_endpoint_success(
     mock_account_repo,
     mock_slug_gen,
     mock_password_validator,
+    mock_get_settings,
     client
 ):
     """Test successful registration flow via API client."""
     
     # Configure Mocks
+    mock_settings = MagicMock()
+    mock_settings.single_tenant_mode = False
+    mock_settings.refresh_token_expire_days = 7
+    mock_get_settings.return_value = mock_settings
     mock_password_validator.validate.return_value = [] # No errors
     mock_slug_gen.validate.return_value = [] # No errors
     
@@ -206,10 +212,16 @@ def test_register_password_validation_error(mock_validator, client):
     assert data["details"][0]["code"] == "password_too_short"
 
 
+@patch("snackbase.infrastructure.api.routes.auth_router.get_settings")
 @patch("snackbase.infrastructure.api.routes.auth_router.default_password_validator")
 @patch("snackbase.infrastructure.api.routes.auth_router.AccountRepository")
-def test_register_slug_conflict(mock_account_repo, mock_validator, client):
+def test_register_slug_conflict(mock_account_repo, mock_validator, mock_get_settings, client):
     """Test registration fails when slug already exists."""
+    
+    mock_settings = MagicMock()
+    mock_settings.single_tenant_mode = False
+    mock_settings.refresh_token_expire_days = 7
+    mock_get_settings.return_value = mock_settings
     
     mock_validator.validate.return_value = []
     
@@ -239,6 +251,7 @@ def test_register_slug_conflict(mock_account_repo, mock_validator, client):
 
 from datetime import datetime
 
+@patch("snackbase.infrastructure.api.routes.auth_router.get_settings")
 @patch("snackbase.infrastructure.api.routes.auth_router.verify_password")
 @patch("snackbase.infrastructure.api.routes.auth_router.jwt_service")
 @patch("snackbase.infrastructure.api.routes.auth_router.RefreshTokenRepository")
@@ -252,11 +265,16 @@ def test_login_success(
     mock_refresh_repo,
     mock_jwt,
     mock_verify,
+    mock_get_settings,
     client
 ):
     """Test successful login returns tokens and user data."""
     
     # Configure Mocks
+    mock_settings = MagicMock()
+    mock_settings.single_tenant_mode = False
+    mock_settings.refresh_token_expire_days = 7
+    mock_get_settings.return_value = mock_settings
     account_repo = mock_account_repo.return_value
     account_mock = MagicMock()
     account_mock.id = "XY1234"
@@ -320,9 +338,14 @@ def test_login_success(
     app.dependency_overrides = {}
 
 
+@patch("snackbase.infrastructure.api.routes.auth_router.get_settings")
 @patch("snackbase.infrastructure.api.routes.auth_router.AccountRepository")
-def test_login_account_not_found(mock_account_repo, client):
+def test_login_account_not_found(mock_account_repo, mock_get_settings, client):
     """Test login fails when account not found."""
+    mock_settings = MagicMock()
+    mock_settings.single_tenant_mode = False
+    mock_settings.refresh_token_expire_days = 7
+    mock_get_settings.return_value = mock_settings
     
     mock_account_repo.return_value.get_by_slug_or_code = AsyncMock(return_value=None)
     
@@ -345,10 +368,15 @@ def test_login_account_not_found(mock_account_repo, client):
     app.dependency_overrides = {}
 
 
+@patch("snackbase.infrastructure.api.routes.auth_router.get_settings")
 @patch("snackbase.infrastructure.api.routes.auth_router.UserRepository")
 @patch("snackbase.infrastructure.api.routes.auth_router.AccountRepository")
-def test_login_user_not_found(mock_account_repo, mock_user_repo, client):
+def test_login_user_not_found(mock_account_repo, mock_user_repo, mock_get_settings, client):
     """Test login fails when user not found in account."""
+    mock_settings = MagicMock()
+    mock_settings.single_tenant_mode = False
+    mock_settings.refresh_token_expire_days = 7
+    mock_get_settings.return_value = mock_settings
     
     account_mock = MagicMock()
     account_mock.id = "XY1234"
@@ -375,11 +403,16 @@ def test_login_user_not_found(mock_account_repo, mock_user_repo, client):
     app.dependency_overrides = {}
 
 
+@patch("snackbase.infrastructure.api.routes.auth_router.get_settings")
 @patch("snackbase.infrastructure.api.routes.auth_router.verify_password")
 @patch("snackbase.infrastructure.api.routes.auth_router.UserRepository")
 @patch("snackbase.infrastructure.api.routes.auth_router.AccountRepository")
-def test_login_invalid_password(mock_account_repo, mock_user_repo, mock_verify, client):
+def test_login_invalid_password(mock_account_repo, mock_user_repo, mock_verify, mock_get_settings, client):
     """Test login fails with invalid password."""
+    mock_settings = MagicMock()
+    mock_settings.single_tenant_mode = False
+    mock_settings.refresh_token_expire_days = 7
+    mock_get_settings.return_value = mock_settings
     
     account_mock = MagicMock()
     account_mock.id = "XY1234"
@@ -413,11 +446,16 @@ def test_login_invalid_password(mock_account_repo, mock_user_repo, mock_verify, 
     app.dependency_overrides = {}
 
 
+@patch("snackbase.infrastructure.api.routes.auth_router.get_settings")
 @patch("snackbase.infrastructure.api.routes.auth_router.verify_password")
 @patch("snackbase.infrastructure.api.routes.auth_router.UserRepository")
 @patch("snackbase.infrastructure.api.routes.auth_router.AccountRepository")
-def test_login_inactive_user(mock_account_repo, mock_user_repo, mock_verify, client):
+def test_login_inactive_user(mock_account_repo, mock_user_repo, mock_verify, mock_get_settings, client):
     """Test login fails if user is inactive."""
+    mock_settings = MagicMock()
+    mock_settings.single_tenant_mode = False
+    mock_settings.refresh_token_expire_days = 7
+    mock_get_settings.return_value = mock_settings
     
     account_mock = MagicMock()
     account_mock.id = "XY1234"
@@ -444,6 +482,89 @@ def test_login_inactive_user(mock_account_repo, mock_user_repo, mock_verify, cli
     response = client.post("/api/v1/auth/login", json=payload)
     
     assert response.status_code == 401
+    
+    # Cleanup
+    app.dependency_overrides = {}
+
+@patch("snackbase.infrastructure.api.routes.auth_router.get_settings")
+@patch("snackbase.infrastructure.api.routes.auth_router.verify_password")
+@patch("snackbase.infrastructure.api.routes.auth_router.jwt_service")
+@patch("snackbase.infrastructure.api.routes.auth_router.RefreshTokenRepository")
+@patch("snackbase.infrastructure.api.routes.auth_router.RoleRepository")
+@patch("snackbase.infrastructure.api.routes.auth_router.UserRepository")
+@patch("snackbase.infrastructure.api.routes.auth_router.AccountRepository")
+def test_login_single_tenant_no_account(
+    mock_account_repo,
+    mock_user_repo,
+    mock_role_repo,
+    mock_refresh_repo,
+    mock_jwt,
+    mock_verify,
+    mock_get_settings,
+    client
+):
+    """Test login without account slug succeeds in single-tenant mode."""
+    
+    # Configure Mocks
+    mock_settings = MagicMock()
+    mock_settings.single_tenant_mode = True
+    mock_settings.single_tenant_account = "my-app"
+    mock_settings.refresh_token_expire_days = 7
+    mock_get_settings.return_value = mock_settings
+    
+    account_repo = mock_account_repo.return_value
+    account_mock = MagicMock()
+    account_mock.id = "XY1234"
+    account_mock.slug = "my-app"
+    account_mock.name = "My App"
+    account_mock.created_at = datetime.now()
+    account_repo.get_by_slug_or_code = AsyncMock(return_value=account_mock)
+    
+    user_repo = mock_user_repo.return_value
+    user_mock = MagicMock()
+    user_mock.id = "user-id"
+    user_mock.email = "test@example.com"
+    user_mock.password_hash = "hashed_password"
+    user_mock.is_active = True
+    user_mock.email_verified = True
+    user_mock.role_id = "role-id"
+    user_mock.auth_provider = "password"
+    user_mock.created_at = datetime.now()
+    user_repo.get_by_email_and_account = AsyncMock(return_value=user_mock)
+    user_repo.update_last_login = AsyncMock()
+    
+    role_repo = mock_role_repo.return_value
+    role_mock = MagicMock()
+    role_mock.name = "user"
+    role_repo.get_by_id = AsyncMock(return_value=role_mock)
+    
+    mock_verify.return_value = True
+    mock_jwt.create_access_token.return_value = "access_token"
+    mock_jwt.create_refresh_token.return_value = ("refresh_token", "token_id")
+    mock_jwt.get_expires_in.return_value = 3600
+    mock_refresh_repo.return_value.create = AsyncMock()
+    
+    # Override DB session
+    from snackbase.infrastructure.persistence.database import get_db_session
+    session_mock = AsyncMock()
+    session_mock.refresh = AsyncMock()
+    app.dependency_overrides[get_db_session] = lambda: session_mock
+
+    # Payload WITHOUT account
+    payload = {
+        "email": "test@example.com",
+        "password": "Password123!"
+    }
+    
+    response = client.post("/api/v1/auth/login", json=payload)
+    
+    assert response.status_code == 200
+    data = response.json()
+    assert data["token"] == "access_token"
+    assert data["account"]["slug"] == "my-app"
+    
+    # Verify account resolution called with configured slug
+    account_repo.get_by_slug_or_code.assert_called_with("my-app")
     
     # Cleanup
     app.dependency_overrides = {}

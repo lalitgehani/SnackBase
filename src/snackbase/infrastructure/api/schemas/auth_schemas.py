@@ -24,10 +24,10 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     """Request body for user login."""
 
-    account: str = Field(
-        ...,
+    account: str | None = Field(
+        None,
         min_length=1,
-        description="Account identifier (slug or ID in XX#### format)",
+        description="Account identifier (slug or ID in XX#### format). Required in multi-tenant mode.",
     )
     email: EmailStr = Field(..., description="User's email address")
     password: str = Field(..., min_length=1, description="User's password")
@@ -169,10 +169,10 @@ class ForgotPasswordRequest(BaseModel):
     """Request body for forgot password."""
 
     email: EmailStr = Field(..., description="User's email address")
-    account: str = Field(
-        ...,
+    account: str | None = Field(
+        None,
         min_length=1,
-        description="Account identifier (slug or ID in XX#### format)",
+        description="Account identifier (slug or ID in XX#### format). Required in multi-tenant mode.",
     )
 
 
