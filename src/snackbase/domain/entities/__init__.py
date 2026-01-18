@@ -7,6 +7,7 @@ They have no dependencies on infrastructure or external frameworks.
 from snackbase.domain.entities.account import Account
 from snackbase.domain.entities.audit_log import AuditLog
 from snackbase.domain.entities.collection import Collection
+from snackbase.domain.entities.collection_rule import CollectionRule
 from snackbase.domain.entities.email_log import EmailLog
 from snackbase.domain.entities.email_template import EmailTemplate
 from snackbase.domain.entities.group import Group
@@ -29,6 +30,7 @@ __all__ = [
     "Account",
     "AuditLog",
     "Collection",
+    "CollectionRule",
     "EmailLog",
     "EmailTemplate",
     "Group",

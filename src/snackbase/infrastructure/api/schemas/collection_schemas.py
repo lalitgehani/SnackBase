@@ -183,3 +183,97 @@ class GetCollectionsParams(BaseModel):
 
     model_config = {"from_attributes": True}
 
+
+# Collection Rules Schemas
+
+
+class CollectionRuleResponse(BaseModel):
+    """Response schema for collection rules."""
+
+    id: str = Field(..., description="Collection rule ID (UUID)")
+    collection_id: str = Field(..., description="Collection ID")
+    list_rule: str | None = Field(
+        None, description="Filter expression for listing records (null=locked, ''=public)"
+    )
+    view_rule: str | None = Field(
+        None, description="Filter expression for viewing records (null=locked, ''=public)"
+    )
+    create_rule: str | None = Field(
+        None, description="Validation expression for creating records (null=locked, ''=public)"
+    )
+    update_rule: str | None = Field(
+        None, description="Filter/validation expression for updates (null=locked, ''=public)"
+    )
+    delete_rule: str | None = Field(
+        None, description="Filter expression for deletions (null=locked, ''=public)"
+    )
+    list_fields: str = Field("*", description="Fields visible in list operations")
+    view_fields: str = Field("*", description="Fields visible in view operations")
+    create_fields: str = Field("*", description="Fields allowed in create requests")
+    update_fields: str = Field("*", description="Fields allowed in update requests")
+    created_at: datetime = Field(..., description="When the rule was created")
+    updated_at: datetime = Field(..., description="When the rule was last updated")
+
+    model_config = {"from_attributes": True}
+
+
+class UpdateCollectionRulesRequest(BaseModel):
+    """Request schema for updating collection rules."""
+
+    list_rule: str | None = Field(
+        default=None,
+        description="Filter expression for listing records (null=locked, ''=public, omit=no change)",
+    )
+    view_rule: str | None = Field(
+        default=None,
+        description="Filter expression for viewing records (null=locked, ''=public, omit=no change)",
+    )
+    create_rule: str | None = Field(
+        default=None,
+        description="Validation expression for creating records (null=locked, ''=public, omit=no change)",
+    )
+    update_rule: str | None = Field(
+        default=None,
+        description="Filter/validation expression for updates (null=locked, ''=public, omit=no change)",
+    )
+    delete_rule: str | None = Field(
+        default=None,
+        description="Filter expression for deletions (null=locked, ''=public, omit=no change)",
+    )
+    list_fields: str | None = Field(
+        default=None, description="Fields visible in list operations (omit=no change)"
+    )
+    view_fields: str | None = Field(
+        default=None, description="Fields visible in view operations (omit=no change)"
+    )
+    create_fields: str | None = Field(
+        default=None, description="Fields allowed in create requests (omit=no change)"
+    )
+    update_fields: str | None = Field(
+        default=None, description="Fields allowed in update requests (omit=no change)"
+    )
+
+    @field_validator("list_fields", "view_fields", "create_fields", "update_fields")
+    @classmethod
+    def validate_fields(cls, v: str | None) -> str | None:
+        """Validate field list format."""
+        if v is None:
+            return v
+        if v == "*":
+            return v
+        # Try to parse as JSON array
+        try:
+            import json
+
+            parsed = json.loads(v)
+            if not isinstance(parsed, list):
+                raise ValueError("Field list must be '*' or a JSON array")
+            # Validate all items are strings
+            if not all(isinstance(item, str) for item in parsed):
+                raise ValueError("All field names must be strings")
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Field list must be '*' or valid JSON array: {e}") from e
+        return v
+
+    model_config = {"extra": "forbid"}
+

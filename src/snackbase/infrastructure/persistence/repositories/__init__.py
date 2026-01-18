@@ -9,6 +9,9 @@ from snackbase.infrastructure.persistence.repositories.api_key_repository import
 from snackbase.infrastructure.persistence.repositories.collection_repository import (
     CollectionRepository,
 )
+from snackbase.infrastructure.persistence.repositories.collection_rule_repository import (
+    CollectionRuleRepository,
+)
 from snackbase.infrastructure.persistence.repositories.configuration_repository import (
     ConfigurationRepository,
 )
@@ -60,6 +63,7 @@ __all__ = [
     "APIKeyRepository",
     "AuditLogRepository",
     "CollectionRepository",
+    "CollectionRuleRepository",
     "ConfigurationRepository",
     "EmailLogRepository",
     "EmailTemplateRepository",
@@ -75,3 +79,4 @@ __all__ = [
     "RoleRepository",
     "UserRepository",
 ]
+

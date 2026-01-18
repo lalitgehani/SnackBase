@@ -455,9 +455,11 @@ def register_routes(app: FastAPI) -> None:
     from snackbase.infrastructure.api.routes import (
         accounts_router,
         admin_router,
+        api_keys_router,
         audit_log_router,
         auth_router,
         collections_router,
+        collection_rules_router,
         dashboard_router,
         email_templates_router,
         files_router,
@@ -467,12 +469,11 @@ def register_routes(app: FastAPI) -> None:
         migrations_router,
         oauth_router,
         permissions_router,
+        realtime_router,
         records_router,
         roles_router,
         saml_router,
         users_router,
-        api_keys_router,
-        realtime_router,
     )
 
     settings = get_settings()
@@ -488,6 +489,11 @@ def register_routes(app: FastAPI) -> None:
     app.include_router(saml_router, prefix=f"{settings.api_prefix}/auth/saml", tags=["auth"])
 
     # Register collections routes
+    # Include collection rules as sub-router
+    collections_router.include_router(
+        collection_rules_router,
+        tags=["collections", "rules"],
+    )
     app.include_router(
         collections_router, prefix=f"{settings.api_prefix}/collections", tags=["collections"]
     )
