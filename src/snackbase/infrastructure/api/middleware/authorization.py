@@ -5,18 +5,24 @@ apply field-level filtering, and enforce row-level security.
 """
 
 import re
+from dataclasses import dataclass
 from typing import Any
 
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.core.logging import get_logger
-from snackbase.domain.services import PermissionResolver
+from snackbase.core.rules.sql_compiler import compile_to_sql
+from snackbase.core.rules.evaluator import Evaluator
+from snackbase.core.rules.lexer import Lexer
+from snackbase.core.rules.parser import Parser
 from snackbase.infrastructure.api.dependencies import (
     SYSTEM_ACCOUNT_ID,
     AuthorizationContext,
     CurrentUser,
 )
+from snackbase.infrastructure.persistence.repositories import CollectionRuleRepository, RecordRepository
+from snackbase.infrastructure.persistence.repositories.record_repository import RuleFilter
 
 logger = get_logger(__name__)
 
@@ -202,25 +208,26 @@ async def check_collection_permission(
     operation: str,
     session: AsyncSession,
     record: dict[str, Any] | None = None,
-) -> tuple[bool, list[str] | str]:
+) -> RuleFilter:
     """Check if user has permission for collection operation.
-    
+
     Args:
         auth_context: Authorization context with user and role info.
         collection: Collection name.
-        operation: Operation type (create, read, update, delete).
+        operation: Operation type (list, view, create, update, delete).
         session: Database session.
         record: Optional record data for rule evaluation context.
-        
+
     Returns:
-        Tuple of (allowed: bool, fields: list[str] | "*").
-        
+        RuleFilter object containing SQL fragment and allowed fields.
+
     Raises:
-        HTTPException: 403 if permission denied.
+        HTTPException: 403 if permission denied or 404 if view/update/delete 
+                      is on a record that doesn't pass the filter.
     """
     user = auth_context.user
     
-    # Superadmin bypass
+    # 1. Superadmin bypass
     if user.account_id == SYSTEM_ACCOUNT_ID:
         logger.debug(
             "Superadmin bypass: permission check skipped",
@@ -228,113 +235,128 @@ async def check_collection_permission(
             collection=collection,
             operation=operation,
         )
-        return (True, "*")
+        return RuleFilter(sql="1=1", params={}, allowed_fields="*")
+
+    # 2. Fetch collection rules
+    rule_repo = CollectionRuleRepository(session)
+    rules = await rule_repo.get_by_collection_name(collection)
     
-    # Check cache first
-    cached_result = auth_context.permission_cache.get(
-        user_id=user.user_id,
-        collection=collection,
-        operation=operation,
-    )
-    
-    if cached_result is not None:
-        logger.debug(
-            "Permission check (cached)",
-            user_id=user.user_id,
+    if not rules:
+        logger.warning(
+            "No rules found for collection - denying access by default",
             collection=collection,
             operation=operation,
-            allowed=cached_result.allowed,
         )
-        
-        if not cached_result.allowed:
-            logger.warning(
-                "Authorization denied (cached)",
-                user_id=user.user_id,
-                account_id=user.account_id,
-                collection=collection,
-                operation=operation,
-            )
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Permission denied for {operation} on {collection}",
-            )
-        
-        return (cached_result.allowed, cached_result.fields)
-    
-    # Resolve permission
-    resolver = PermissionResolver(session)
-    
-    # Build context for rule evaluation
-    context = {
-        "user": {
-            "id": user.user_id,
-            "email": user.email,
-            "role": user.role,
-            "account_id": user.account_id,
-        },
-        "account": {
-            "id": user.account_id,
-        },
-    }
-    
-    if record is not None:
-        context["record"] = record
-    
-    try:
-        result = await resolver.resolve_permission(
-            user_id=user.user_id,
-            role_id=auth_context.role_id,
-            collection=collection,
-            operation=operation,
-            context=context,
-        )
-        
-        # Cache the result
-        auth_context.permission_cache.set(
-            user_id=user.user_id,
-            collection=collection,
-            operation=operation,
-            value=result,
-        )
-        
-        logger.debug(
-            "Permission check completed",
-            user_id=user.user_id,
-            collection=collection,
-            operation=operation,
-            allowed=result.allowed,
-            fields=result.fields if result.allowed else None,
-        )
-        
-        if not result.allowed:
-            logger.warning(
-                "Authorization denied",
-                user_id=user.user_id,
-                account_id=user.account_id,
-                collection=collection,
-                operation=operation,
-            )
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Permission denied for {operation} on {collection}",
-            )
-        
-        return (result.allowed, result.fields)
-        
-    except HTTPException:
-        # Re-raise HTTP exceptions
-        raise
-    except Exception as e:
-        logger.error(
-            "Permission check failed",
-            user_id=user.user_id,
-            collection=collection,
-            operation=operation,
-            error=str(e),
-            exc_info=True,
-        )
-        # Deny by default on error
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission check failed",
+            detail=f"Permission denied for {operation} on {collection} (no rules defined)",
+        )
+
+    # 3. Resolve rule and fields based on operation
+    rule_expr = None
+    allowed_fields = "*"
+    
+    if operation == "list":
+        rule_expr = rules.list_rule
+        allowed_fields = rules.list_fields
+    elif operation == "view":
+        rule_expr = rules.view_rule
+        allowed_fields = rules.view_fields
+    elif operation == "create":
+        rule_expr = rules.create_rule
+        allowed_fields = rules.create_fields
+    elif operation == "update":
+        rule_expr = rules.update_rule
+        allowed_fields = rules.update_fields
+    elif operation == "delete":
+        rule_expr = rules.delete_rule
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid operation: {operation}",
+        )
+
+    # Parse allowed_fields if it's a JSON string representative of an array
+    if isinstance(allowed_fields, str) and allowed_fields != "*":
+        try:
+            import json
+            allowed_fields = json.loads(allowed_fields)
+        except json.JSONDecodeError:
+            allowed_fields = "*"
+
+    # 4. Handle locked state (null)
+    if rule_expr is None:
+        logger.warning(
+            "Operation is locked (null rule)",
+            collection=collection,
+            operation=operation,
+            user_id=user.user_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Access denied: {operation} is locked for this collection",
+        )
+
+    # 5. Build auth context for evaluation/compilation
+    auth_data = {
+        "id": user.user_id,
+        "email": user.email,
+        "role": user.role,
+        "account_id": user.account_id,
+    }
+
+    # 6. Operation-specific enforcement
+    
+    # For 'create', we evaluate directly in Python since there's no DB row yet
+    if operation == "create":
+        if rule_expr == "":
+            return RuleFilter(sql="1=1", params={}, allowed_fields=allowed_fields)
+            
+        # Parse and evaluate
+        try:
+            lexer = Lexer(rule_expr)
+            parser = Parser(lexer)
+            ast = parser.parse()
+            
+            # Context for evaluation
+            eval_context = {
+                "@request": {
+                    "auth": auth_data,
+                    "data": record or {} # For create, 'record' is the incoming data
+                }
+            }
+            
+            evaluator = Evaluator(eval_context)
+            is_allowed = await evaluator.evaluate(ast)
+            
+            if not is_allowed:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Record does not satisfy collection rules",
+                )
+                
+            return RuleFilter(sql="1=1", params={}, allowed_fields=allowed_fields)
+        except Exception as e:
+            if isinstance(e, HTTPException):
+                raise
+            logger.error("Rule evaluation failed for create", error=str(e))
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Rule evaluation failed",
+            )
+
+    # For other operations (list, view, update, delete), compile to SQL
+    try:
+        sql, params = compile_to_sql(rule_expr, auth_data)
+        
+        # If we have a record (view/update), we can also double check it here if desired,
+        # but the repository layer will use the WHERE clause which is more consistent.
+        
+        return RuleFilter(sql=sql, params=params, allowed_fields=allowed_fields)
+        
+    except Exception as e:
+        logger.error("Rule compilation failed", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal error: permission rule compilation failed",
         )

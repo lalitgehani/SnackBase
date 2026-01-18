@@ -6,6 +6,7 @@ from snackbase.infrastructure.api.middleware.authorization import (
     extract_collection_from_path,
     extract_operation_from_method,
     validate_request_fields,
+    RuleFilter,
 )
 from snackbase.infrastructure.api.middleware.rate_limit_middleware import RateLimitMiddleware
 
@@ -16,4 +17,5 @@ __all__ = [
     "extract_operation_from_method",
     "validate_request_fields",
     "RateLimitMiddleware",
+    "RuleFilter",
 ]

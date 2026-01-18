@@ -18,6 +18,7 @@ from snackbase.infrastructure.api.middleware import (
     check_collection_permission,
     apply_field_filter,
     validate_request_fields,
+    RuleFilter,
 )
 from snackbase.infrastructure.api.schemas import (
     RecordResponse,
@@ -122,22 +123,6 @@ async def create_record(
     if current_user.account_id == SYSTEM_ACCOUNT_ID and "account_id" in data:
         target_account_id = data.pop("account_id")
     
-    # 1. Check create permission
-    allowed, allowed_fields = await check_collection_permission(
-        auth_context=auth_context,
-        collection=collection,
-        operation="create",
-        session=session,
-    )
-    
-    # Validate request fields (reject if contains unauthorized fields)
-    validate_request_fields(data, allowed_fields, "create")
-    
-    # Filter request body to allowed fields only
-    if allowed_fields != "*":
-        data = apply_field_filter(data, allowed_fields, is_request=True)
-    
-    # 2. Look up collection by name
     collection_repo = CollectionRepository(session)
     collection_model = await collection_repo.get_by_name(collection)
 
@@ -155,7 +140,7 @@ async def create_record(
             },
         )
 
-    # 3. Parse collection schema
+    # 1.5 Parse collection schema
     try:
         schema = json.loads(collection_model.schema)
     except json.JSONDecodeError as e:
@@ -171,6 +156,26 @@ async def create_record(
                 "message": "Failed to parse collection schema",
             },
         )
+
+    # 1.6 Preliminary validation for defaults (needed for rule evaluation)
+    processed_temp, _ = RecordValidator.validate_and_apply_defaults(data, schema)
+    
+    # 2. Check create permission (now includes rule evaluation)
+    rule_result = await check_collection_permission(
+        auth_context=auth_context,
+        collection=collection,
+        operation="create",
+        session=session,
+        record=processed_temp, # Pass processed data for rule evaluation (@request.data.*)
+    )
+    allowed_fields = rule_result.allowed_fields
+    
+    # Validate request fields (reject if contains unauthorized fields)
+    validate_request_fields(data, allowed_fields, "create")
+    
+    # Filter request body to allowed fields only
+    if allowed_fields != "*":
+        data = apply_field_filter(data, allowed_fields, is_request=True)
 
     # 4. Validate reference fields (check if referenced records exist)
     record_repo = RecordRepository(session)
@@ -321,13 +326,14 @@ async def list_records(
 
     Supports pagination, sorting, and filtering.
     """
-    # 0. Check read permission
-    allowed, allowed_fields = await check_collection_permission(
+    # 0. Check read/list permission
+    rule_result = await check_collection_permission(
         auth_context=auth_context,
         collection=collection,
-        operation="read",
+        operation="list",
         session=session,
     )
+    allowed_fields = rule_result.allowed_fields
     
     # 1. Look up collection
     collection_repo = CollectionRepository(session)
@@ -391,6 +397,7 @@ async def list_records(
         sort_by=sort_by,
         descending=descending,
         filters=filters,
+        rule_filter=rule_result,
     )
 
     # 6. Apply field filtering based on permissions
@@ -482,7 +489,16 @@ async def get_record(
             content={"error": "Internal error", "message": "Invalid collection schema"},
         )
 
-    # 2. Get record
+    # 2. Get record (with view filter)
+    # First resolve permission/rule filter
+    rule_result = await check_collection_permission(
+        auth_context=auth_context,
+        collection=collection,
+        operation="view",
+        session=session,
+    )
+    allowed_fields = rule_result.allowed_fields
+
     record_repo = RecordRepository(session)
     
     # Superadmin bypass
@@ -496,6 +512,7 @@ async def get_record(
         record_id=record_id,
         account_id=repo_account_id,
         schema=schema,
+        rule_filter=rule_result,
     )
 
     if record is None:
@@ -507,16 +524,7 @@ async def get_record(
             },
         )
     
-    # 3. Check read permission with record context
-    allowed, allowed_fields = await check_collection_permission(
-        auth_context=auth_context,
-        collection=collection,
-        operation="read",
-        session=session,
-        record=record,
-    )
-    
-    # 4. Apply field filter to response
+    # 3. Apply field filter to response
     if allowed_fields != "*":
         record = apply_field_filter(record, allowed_fields)
     
@@ -639,14 +647,15 @@ async def _update_record(
             },
         )
     
-    # 4. Check update permission with record context
-    allowed, allowed_fields = await check_collection_permission(
+    # 4. Check update permission
+    rule_result = await check_collection_permission(
         auth_context=auth_context,
         collection=collection,
         operation="update",
         session=session,
         record=existing_record,
     )
+    allowed_fields = rule_result.allowed_fields
     
     # Validate request fields (reject if contains unauthorized fields)
     validate_request_fields(data, allowed_fields, "update")
@@ -722,6 +731,7 @@ async def _update_record(
             data=processed_data,
             schema=schema,
             old_values=existing_record,
+            rule_filter=rule_result,
         )
         
         if updated_record is None:
@@ -859,8 +869,8 @@ async def delete_record(
             },
         )
     
-    # 4. Check delete permission with record context
-    await check_collection_permission(
+    # 4. Check delete permission
+    rule_result = await check_collection_permission(
         auth_context=auth_context,
         collection=collection,
         operation="delete",
@@ -881,6 +891,7 @@ async def delete_record(
             record_id=record_id,
             account_id=repo_account_id,
             record_data=record,
+            rule_filter=rule_result,
         )
 
         if not deleted:

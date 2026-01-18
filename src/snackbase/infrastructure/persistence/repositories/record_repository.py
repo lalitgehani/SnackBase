@@ -6,6 +6,7 @@ since tables are created dynamically and not mapped to ORM models.
 
 import json
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
@@ -18,6 +19,14 @@ from snackbase.core.hooks.hook_events import HookEvent
 from snackbase.infrastructure.persistence.table_builder import TableBuilder
 
 logger = get_logger(__name__)
+
+
+@dataclass
+class RuleFilter:
+    """Rule results including SQL filter for row-level security."""
+    sql: str
+    params: dict[str, Any]
+    allowed_fields: list[str] | str = "*"
 
 
 class RecordRepository:
@@ -145,6 +154,7 @@ class RecordRepository:
         data: dict[str, Any],
         schema: list[dict[str, Any]],
         old_values: dict[str, Any] | None = None,
+        rule_filter: RuleFilter | None = None,
     ) -> dict[str, Any] | None:
         """Update an existing record.
         
@@ -155,6 +165,8 @@ class RecordRepository:
             updated_by: The user ID performing the update.
             data: The fields to update.
             schema: The collection schema.
+            old_values: Optional old values for audit logging.
+            rule_filter: Optional rule filter for row-level security.
             
         Returns:
             The updated record dict, or None if not found/access denied.
@@ -172,11 +184,10 @@ class RecordRepository:
                 if field_type == "json" and value is not None:
                     sql_values[key] = json.dumps(value)
                 elif field_type == "boolean":
-                    # Handle boolean explicitly
                     if isinstance(value, bool):
                         sql_values[key] = 1 if value else 0
                     else:
-                        sql_values[key] = value # let SQL handle it or it might be already int
+                        sql_values[key] = value
                 else:
                     sql_values[key] = value
                     
@@ -188,13 +199,19 @@ class RecordRepository:
         set_clauses = [f'"{k}" = :{k}' for k in sql_values.keys()]
         set_clause = ", ".join(set_clauses)
         
-        # Superadmin bypass check (account_id=None)
-        where_clause = '"id" = :record_id'
+        # Build WHERE clause
+        where_clauses = ['"id" = :record_id']
         params = {**sql_values, "record_id": record_id}
         
         if account_id:
-            where_clause += ' AND "account_id" = :account_id'
+            where_clauses.append('"account_id" = :account_id')
             params["account_id"] = account_id
+
+        if rule_filter:
+            where_clauses.append(f"({rule_filter.sql})")
+            params.update(rule_filter.params)
+        
+        where_clause = " AND ".join(where_clauses)
         
         update_sql = f'''
             UPDATE "{table_name}"
@@ -263,27 +280,35 @@ class RecordRepository:
         record_id: str,
         account_id: str,
         schema: list[dict[str, Any]],
+        rule_filter: RuleFilter | None = None,
     ) -> dict[str, Any] | None:
-        """Get a record by ID, scoped to account.
+        """Get a record by ID, scoped to account and rules.
 
         Args:
             collection_name: The collection name.
             record_id: The record ID.
             account_id: The account ID for scoping.
             schema: The collection schema for type conversion.
+            rule_filter: Optional rule filter for row-level security.
 
         Returns:
             The record dict if found, None otherwise.
         """
         table_name = TableBuilder.generate_table_name(collection_name)
 
-        # Superadmin bypass check (account_id=None)
-        where_clause = '"id" = :record_id'
+        # Build WHERE clause
+        where_clauses = ['"id" = :record_id']
         params = {"record_id": record_id}
         
         if account_id:
-            where_clause += ' AND "account_id" = :account_id'
+            where_clauses.append('"account_id" = :account_id')
             params["account_id"] = account_id
+
+        if rule_filter:
+            where_clauses.append(f"({rule_filter.sql})")
+            params.update(rule_filter.params)
+
+        where_clause = " AND ".join(where_clauses)
 
         select_sql = f'''
             SELECT * FROM "{table_name}"
@@ -373,6 +398,7 @@ class RecordRepository:
         sort_by: str = "created_at",
         descending: bool = True,
         filters: dict[str, Any] | None = None,
+        rule_filter: RuleFilter | None = None,
     ) -> tuple[list[dict[str, Any]], int]:
         """Find records in a collection with pagination, sorting, and filtering.
 
@@ -385,6 +411,7 @@ class RecordRepository:
             sort_by: Field to sort by.
             descending: Whether to sort in descending order.
             filters: Optional dictionary of filter conditions (field=value).
+            rule_filter: Optional rule filter for row-level security.
 
         Returns:
             A tuple containing (list of records, total count).
@@ -400,6 +427,10 @@ class RecordRepository:
         if account_id:
             where_clauses.append('r."account_id" = :account_id')
             params["account_id"] = account_id
+
+        if rule_filter:
+            where_clauses.append(f"({rule_filter.sql})")
+            params.update(rule_filter.params)
 
         # Validate sort field to prevent SQL injection
         # Allow system fields and schema fields
@@ -488,26 +519,35 @@ class RecordRepository:
         record_id: str,
         account_id: str,
         record_data: dict[str, Any] | None = None,
+        rule_filter: RuleFilter | None = None,
     ) -> bool:
-        """Delete a record by ID, scoped to account.
+        """Delete a record by ID, scoped to account and rules.
 
         Args:
             collection_name: The collection name.
             record_id: The record ID.
             account_id: The account ID for scoping.
+            record_data: Optional existing record data for hook.
+            rule_filter: Optional rule filter for row-level security.
 
         Returns:
             True if record was deleted, False if not found.
         """
         table_name = TableBuilder.generate_table_name(collection_name)
 
-        # Superadmin bypass check (account_id=None)
-        where_clause = '"id" = :record_id'
+        # Build WHERE clause
+        where_clauses = ['"id" = :record_id']
         params = {"record_id": record_id}
         
         if account_id:
-            where_clause += ' AND "account_id" = :account_id'
+            where_clauses.append('"account_id" = :account_id')
             params["account_id"] = account_id
+
+        if rule_filter:
+            where_clauses.append(f"({rule_filter.sql})")
+            params.update(rule_filter.params)
+
+        where_clause = " AND ".join(where_clauses)
 
         delete_sql = f'''
             DELETE FROM "{table_name}"
