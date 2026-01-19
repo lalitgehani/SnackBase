@@ -14,13 +14,15 @@ Complete guide to using the SnackBase REST API with practical examples.
 - [Accounts Management](#accounts-management)
 - [Collections](#collections)
 - [Records (CRUD)](#records-crud)
-- [Roles & Permissions](#roles--permissions)
+- [Roles](#roles)
+- [Collection Rules](#collection-rules)
 - [Groups](#groups)
 - [Users](#users)
 - [Invitations](#invitations)
 - [Macros](#macros)
 - [OAuth Authentication](#oauth-authentication)
 - [SAML Authentication](#saml-authentication)
+- [Realtime API](#realtime-api)
 - [Files](#files)
 - [Admin Configuration](#admin-configuration)
 - [Email Template Management](#email-template-management)
@@ -306,14 +308,14 @@ API keys provide an alternative authentication method for service-to-service com
 
 ### When to Use API Keys
 
-| Use Case                     | Recommended Method |
-| ---------------------------- | ------------------ |
-| Browser applications         | JWT (access/refresh tokens) |
-| Mobile apps                  | JWT (access/refresh tokens) |
-| Service-to-service calls     | **API Keys** |
-| CLI tools                    | **API Keys** |
-| Webhooks                     | **API Keys** |
-| Third-party integrations     | **API Keys** |
+| Use Case                 | Recommended Method          |
+| ------------------------ | --------------------------- |
+| Browser applications     | JWT (access/refresh tokens) |
+| Mobile apps              | JWT (access/refresh tokens) |
+| Service-to-service calls | **API Keys**                |
+| CLI tools                | **API Keys**                |
+| Webhooks                 | **API Keys**                |
+| Third-party integrations | **API Keys**                |
 
 ### API Key Format
 
@@ -324,11 +326,13 @@ sb_sk_<account_code>_<random_32_characters>
 ```
 
 Example:
+
 ```
 sb_sk_AB1234_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
 ```
 
 **Components:**
+
 - `sb_sk` - SnackBase Secret Key prefix
 - `AB1234` - Account code (human-readable identifier)
 - `a1b2c3...o5p6` - 32-character cryptographically secure random string
@@ -553,6 +557,7 @@ curl -X GET http://localhost:8000/api/v1/api-keys/ak_abc123xyz \
 ### Security Best Practices for API Keys
 
 **1. Storage**:
+
 ```bash
 # ✅ Good: Environment variable
 export SNACKBASE_API_KEY="sb_sk_..."
@@ -567,6 +572,7 @@ git add .env  # NEVER commit API keys
 ```
 
 **2. Key Rotation**:
+
 ```bash
 # Create new key
 new_key=$(curl -s -X POST http://localhost:8000/api/v1/api-keys/ \
@@ -586,6 +592,7 @@ curl -X POST http://localhost:8000/api/v1/api-keys/ak_old_key/revoke \
 ```
 
 **3. Scoping and Naming**:
+
 ```bash
 # Use descriptive names for easy identification
 {
@@ -605,6 +612,7 @@ curl -X POST http://localhost:8000/api/v1/api-keys/ak_old_key/revoke \
 ```
 
 **4. Monitoring**:
+
 ```bash
 # Regularly audit API keys
 curl -X GET http://localhost:8000/api/v1/api-keys/ \
@@ -615,6 +623,7 @@ curl -X GET http://localhost:8000/api/v1/api-keys/ \
 ```
 
 **5. Revocation on Compromise**:
+
 ```bash
 # Immediately revoke if key is leaked
 curl -X POST http://localhost:8000/api/v1/api-keys/ak_leaked_key/revoke \
@@ -631,16 +640,16 @@ curl -X POST http://localhost:8000/api/v1/api-keys/ \
 
 ### API Key vs JWT Comparison
 
-| Feature              | API Keys                          | JWT Tokens                        |
-| -------------------- | --------------------------------- | --------------------------------- |
-| **Use Case**         | Service-to-service, CLI, webhooks | Browser, mobile apps             |
-| **Lifetime**         | Indefinite (until revoked)        | Access: 1 hour, Refresh: 7 days  |
-| **Storage**          | Server-side (hash)                | Client-side (localStorage/cookie)|
-| **Visibility**       | Full key shown only at creation   | Tokens visible in responses       |
-| **Rotation**         | Manual (create new, revoke old)   | Automatic (on refresh)           |
-| **Revocation**       | Immediate                         | On refresh or logout              |
-| **User Context**     | Single user per key               | Can include user, role, account   |
-| **Security**         | SHA-256 hashed at rest            | Signed, verifiable signature      |
+| Feature          | API Keys                          | JWT Tokens                        |
+| ---------------- | --------------------------------- | --------------------------------- |
+| **Use Case**     | Service-to-service, CLI, webhooks | Browser, mobile apps              |
+| **Lifetime**     | Indefinite (until revoked)        | Access: 1 hour, Refresh: 7 days   |
+| **Storage**      | Server-side (hash)                | Client-side (localStorage/cookie) |
+| **Visibility**   | Full key shown only at creation   | Tokens visible in responses       |
+| **Rotation**     | Manual (create new, revoke old)   | Automatic (on refresh)            |
+| **Revocation**   | Immediate                         | On refresh or logout              |
+| **User Context** | Single user per key               | Can include user, role, account   |
+| **Security**     | SHA-256 hashed at rest            | Signed, verifiable signature      |
 
 ---
 
@@ -1708,60 +1717,61 @@ curl -X DELETE http://localhost:8000/api/v1/records/posts/rec_abc123 \
 
 ---
 
-## Roles & Permissions
+## Roles
 
-### Roles Endpoints
+Role management endpoints. Note that permission rules are now managed via **Collection Rules**, not purely by role.
 
-All roles endpoints require **Superadmin** access.
-
-#### 1. List Roles
+### 1. List Roles
 
 **Endpoint**: `GET /api/v1/roles`
+
+**Authentication**: Superadmin required
 
 **Request**:
 
 ```bash
-curl -X GET http://localhost:8000/api/v1/roles \
+curl -X GET "http://localhost:8000/api/v1/roles" \
   -H "Authorization: Bearer <superadmin_token>"
 ```
 
 **Response** (200 OK):
 
 ```json
-{
-  "items": [
-    {
-      "id": 1,
-      "name": "admin",
-      "description": "Administrator with full access",
-      "collections_count": 10
-    },
-    {
-      "id": 2,
-      "name": "user",
-      "description": "Regular user with limited access",
-      "collections_count": 5
-    }
-  ],
-  "total": 2
-}
+[
+  {
+    "id": 1,
+    "name": "admin",
+    "description": "Administrator",
+    "created_at": "2025-12-24T22:00:00Z",
+    "updated_at": "2025-12-24T22:00:00Z"
+  },
+  {
+    "id": 2,
+    "name": "user",
+    "description": "Regular User",
+    "created_at": "2025-12-24T22:00:00Z",
+    "updated_at": "2025-12-24T22:00:00Z"
+  }
+]
 ```
 
 ---
 
-#### 2. Create Role
+### 2. Create Role
 
 **Endpoint**: `POST /api/v1/roles`
+
+**Authentication**: Superadmin required
 
 **Request**:
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/roles \
+curl -X POST "http://localhost:8000/api/v1/roles" \
   -H "Authorization: Bearer <superadmin_token>" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "editor",
-    "description": "Can edit but not delete content"
+    "description": "Content Editor"
   }'
 ```
 
@@ -1771,324 +1781,89 @@ curl -X POST http://localhost:8000/api/v1/roles \
 {
   "id": 3,
   "name": "editor",
-  "description": "Can edit but not delete content"
+  "description": "Content Editor",
+  "created_at": "2026-01-01T10:00:00Z",
+  "updated_at": "2026-01-01T10:00:00Z"
 }
 ```
 
 ---
 
-#### 3. Get Single Role
+### 3. Get Role
 
 **Endpoint**: `GET /api/v1/roles/{role_id}`
 
+**Authentication**: Superadmin required
+
 **Request**:
 
 ```bash
-curl -X GET http://localhost:8000/api/v1/roles/3 \
+curl -X GET "http://localhost:8000/api/v1/roles/3" \
   -H "Authorization: Bearer <superadmin_token>"
 ```
 
 ---
 
-#### 4. Update Role
+### 4. Update Role
 
 **Endpoint**: `PUT /api/v1/roles/{role_id}`
 
+**Authentication**: Superadmin required
+
 **Request**:
 
 ```bash
-curl -X PUT http://localhost:8000/api/v1/roles/3 \
+curl -X PUT "http://localhost:8000/api/v1/roles/3" \
   -H "Authorization: Bearer <superadmin_token>" \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "senior_editor",
-    "description": "Senior editor with additional privileges"
+    "description": "Senior Content Editor"
   }'
 ```
 
 ---
 
-#### 5. Delete Role
+### 5. Delete Role
 
 **Endpoint**: `DELETE /api/v1/roles/{role_id}`
 
-**Note**: Default roles ("admin", "user") cannot be deleted.
-
----
-
-#### 6. Get Role Permissions
-
-**Endpoint**: `GET /api/v1/roles/{role_id}/permissions`
+**Authentication**: Superadmin required
 
 **Request**:
 
 ```bash
-curl -X GET http://localhost:8000/api/v1/roles/3/permissions \
-  -H "Authorization: Bearer <superadmin_token>"
-```
-
-**Response** (200 OK):
-
-```json
-{
-  "role_id": 3,
-  "role_name": "editor",
-  "permissions": [
-    {
-      "collection": "posts",
-      "permission_id": 10,
-      "create": { "rule": "true", "fields": ["title", "content"] },
-      "read": { "rule": "true", "fields": "*" },
-      "update": { "rule": "@owns_record()", "fields": ["title", "content"] },
-      "delete": null
-    }
-  ]
-}
-```
-
----
-
-#### 7. Get Permissions Matrix
-
-**Endpoint**: `GET /api/v1/roles/{role_id}/permissions/matrix`
-
-**Purpose**: Returns permissions for ALL collections (including those without permissions set).
-
-**Request**:
-
-```bash
-curl -X GET http://localhost:8000/api/v1/roles/3/permissions/matrix \
+curl -X DELETE "http://localhost:8000/api/v1/roles/3" \
   -H "Authorization: Bearer <superadmin_token>"
 ```
 
 ---
 
-#### 8. Bulk Update Permissions
+## Collection Rules
 
-**Endpoint**: `PUT /api/v1/roles/{role_id}/permissions/bulk`
+Manage access control rules directly on collections.
 
-**Request**:
-
-```bash
-curl -X PUT http://localhost:8000/api/v1/roles/3/permissions/bulk \
-  -H "Authorization: Bearer <superadmin_token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "updates": [
-      {
-        "collection": "posts",
-        "operation": "create",
-        "rule": "user.role == \"editor\"",
-        "fields": ["title", "content"]
-      },
-      {
-        "collection": "posts",
-        "operation": "read",
-        "rule": "true",
-        "fields": "*"
-      },
-      {
-        "collection": "posts",
-        "operation": "update",
-        "rule": "@owns_record() or @has_role(\"admin\")",
-        "fields": ["title", "content", "status"]
-      },
-      {
-        "collection": "posts",
-        "operation": "delete",
-        "rule": "@has_role(\"admin\")",
-        "fields": "*"
-      }
-    ]
-  }'
-```
-
-**Response** (200 OK):
-
-```json
-{
-  "success_count": 4,
-  "failure_count": 0,
-  "errors": []
-}
-```
-
----
-
-#### 9. Validate Rule
-
-**Endpoint**: `POST /api/v1/roles/validate-rule`
-
-**Request**:
+### Get Collection Rules
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/roles/validate-rule \
-  -H "Authorization: Bearer <superadmin_token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "rule": "@has_role(\"admin\") or @owns_record()"
-  }'
+curl -X GET "https://api.snackbase.io/api/v1/collections/posts/rules" \
+     -H "Authorization: Bearer <superadmin_token>"
 ```
 
-**Response** (200 OK):
-
-```json
-{
-  "valid": true,
-  "error": null,
-  "position": null
-}
-```
-
----
-
-#### 10. Test Rule
-
-**Endpoint**: `POST /api/v1/roles/test-rule`
-
-**Request**:
+### Update Collection Rules
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/roles/test-rule \
-  -H "Authorization: Bearer <superadmin_token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "rule": "@has_role(\"admin\") or user.id == record.created_by",
-    "context": {
-      "user": {"id": "usr_123", "role": "editor"},
-      "record": {"created_by": "usr_123"}
-    }
-  }'
+curl -X PUT "https://api.snackbase.io/api/v1/collections/posts/rules" \
+     -H "Authorization: Bearer <superadmin_token>" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "list_rule": "status = '\''published'\''",
+       "view_rule": "status = '\''published'\'' || created_by = @request.auth.id",
+       "create_rule": "@request.auth.id != '\'''\'",
+       "update_rule": "created_by = @request.auth.id",
+       "delete_rule": "created_by = @request.auth.id",
+       "list_fields": ["id", "title", "status", "created_at"]
+     }'
 ```
-
-**Response** (200 OK):
-
-```json
-{
-  "allowed": true,
-  "error": null,
-  "evaluation_details": null
-}
-```
-
----
-
-### Permission Rule Syntax
-
-SnackBase uses a custom DSL for permission rules:
-
-**Supported Syntax Examples**:
-
-```python
-# Always allow
-"true"
-
-# User-based checks
-"user.id == record.owner_id"
-"user.id == \"user_abc123\""
-
-# Role checks
-"@has_role(\"admin\")"
-
-# Group membership
-"@in_group(\"managers\")"
-
-# Record ownership
-"@owns_record()"
-
-# Field comparisons
-"status in [\"draft\", \"published\"]"
-"priority > 5"
-
-# Complex expressions
-"@has_role(\"admin\") or @owns_record()"
-"user.id == record.created_by and status != \"archived\""
-
-# Macro execution
-"@has_permission(\"read\", \"posts\")"
-"@in_time_range(9, 17)"
-```
-
-**Permission Structure**:
-
-```json
-{
-  "create": {
-    "rule": "user.role == \"admin\"",
-    "fields": ["title", "content"]
-  },
-  "read": {
-    "rule": "true",
-    "fields": "*"
-  },
-  "update": {
-    "rule": "@owns_record()",
-    "fields": ["title", "status"]
-  },
-  "delete": {
-    "rule": "@has_role(\"admin\")",
-    "fields": "*"
-  }
-}
-```
-
-**Operations**: `create`, `read`, `update`, `delete`
-**Fields**: `"*"` for all fields, or list of specific field names
-
----
-
-### Permissions Endpoints
-
-All permissions endpoints require **Superadmin** access.
-
-#### 1. Create Permission
-
-**Endpoint**: `POST /api/v1/permissions`
-
-**Request**:
-
-```bash
-curl -X POST http://localhost:8000/api/v1/permissions \
-  -H "Authorization: Bearer <superadmin_token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "role_id": 3,
-    "collection": "posts",
-    "rules": {
-      "create": {"rule": "true", "fields": ["title", "content"]},
-      "read": {"rule": "true", "fields": "*"},
-      "update": {"rule": "@owns_record()", "fields": ["title", "content"]},
-      "delete": {"rule": "false", "fields": []}
-    }
-  }'
-```
-
----
-
-#### 2. List Permissions
-
-**Endpoint**: `GET /api/v1/permissions`
-
-**Request**:
-
-```bash
-curl -X GET http://localhost:8000/api/v1/permissions \
-  -H "Authorization: Bearer <superadmin_token>"
-```
-
----
-
-#### 3. Get Single Permission
-
-**Endpoint**: `GET /api/v1/permissions/{permission_id}`
-
----
-
-#### 4. Delete Permission
-
-**Endpoint**: `DELETE /api/v1/permissions/{permission_id}`
-
----
 
 ## Groups
 
@@ -2613,139 +2388,57 @@ curl -X DELETE http://localhost:8000/api/v1/invitations/inv_xyz789 \
 
 ## Macros
 
-### 1. Create Macro
+Macros allow you to define reusable permission logic. They come in two types: **Built-in** (text fragments) and **Custom** (SQL subqueries defined in the database).
+
+### 1. Create Custom Macro
 
 **Endpoint**: `POST /api/v1/macros/`
 
-**Authentication**: Superadmin required
-
-**Request**:
-
 ```bash
-curl -X POST http://localhost:8000/api/v1/macros/ \
-  -H "Authorization: Bearer <superadmin_token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "user_post_count",
-    "sql_query": "SELECT COUNT(*) FROM col_posts WHERE created_by = :user_id",
-    "parameters": ["user_id"],
-    "description": "Count posts created by a user"
-  }'
+curl -X POST "http://localhost:8000/api/v1/macros/" \
+     -H "Authorization: Bearer <superadmin_token>" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "name": "is_project_member",
+       "description": "Check if user has access to a project",
+       "sql_query": "SELECT count(*) > 0 FROM project_members WHERE project_id = $1 AND user_id = @request.auth.id"
+     }'
 ```
-
-**Response** (201 Created):
-
-```json
-{
-  "id": 1,
-  "name": "user_post_count",
-  "description": "Count posts created by a user",
-  "sql_query": "SELECT COUNT(*) FROM col_posts WHERE created_by = :user_id",
-  "parameters": ["user_id"],
-  "created_at": "2025-12-24T22:00:00Z",
-  "updated_at": "2025-12-24T22:00:00Z",
-  "created_by": "usr_abc123"
-}
-```
-
-**SQL Validation Rules**:
-
-- Must start with `SELECT`
-- Forbidden keywords: INSERT, UPDATE, DELETE, DROP, ALTER, TRUNCATE, GRANT, REVOKE
-- Name must be valid Python identifier
 
 ---
 
 ### 2. List Macros
 
-**Endpoint**: `GET /api/v1/macros/`
-
-**Authentication**: Required (all authenticated users)
-
-**Query Parameters**:
-
-- `skip`: Default 0
-- `limit`: Default 100
-
-**Request**:
+**Endpoint**: `GET /api/v1/macros`
 
 ```bash
-curl -X GET "http://localhost:8000/api/v1/macros/?skip=0&limit=100" \
-  -H "Authorization: Bearer <token>"
+curl -X GET "http://localhost:8000/api/v1/macros" \
+     -H "Authorization: Bearer <superadmin_token>"
 ```
 
 ---
 
-### 3. Get Single Macro
+### 3. Built-in Macros
 
-**Endpoint**: `GET /api/v1/macros/{macro_id}`
+These macros are available by default and are expanded during rule compilation.
 
-**Authentication**: Required (all authenticated users)
+| Macro                 | Example               | Expansion                         |
+| :-------------------- | :-------------------- | :-------------------------------- |
+| `@owns_record()`      | `@owns_record()`      | `(created_by = @request.auth.id)` |
+| `@owns_record(field)` | `@owns_record('uid')` | `(uid = @request.auth.id)`        |
+| `@has_role(name)`     | `@has_role('editor')` | `(@request.auth.role = 'editor')` |
+| `@is_public()`        | `@is_public()`        | `(public = true)`                 |
+| `@is_creator()`       | `@is_creator()`       | `(created_by = @request.auth.id)` |
 
----
+### 4. Implementation in Rules
 
-### 4. Update Macro
+Use macros in your collection rules via the Admin UI or `collection_rules` API.
 
-**Endpoint**: `PUT /api/v1/macros/{macro_id}`
+**Example rule**:
 
-**Authentication**: Superadmin required
-
----
-
-### 5. Test Macro
-
-**Endpoint**: `POST /api/v1/macros/{macro_id}/test`
-
-**Authentication**: Superadmin required
-
-**Request**:
-
-```bash
-curl -X POST http://localhost:8000/api/v1/macros/1/test \
-  -H "Authorization: Bearer <superadmin_token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "parameters": ["usr_abc123"]
-  }'
+```python
+@has_role('admin') || @is_project_member(project_id)
 ```
-
-**Response** (200 OK):
-
-```json
-{
-  "result": "42",
-  "execution_time": 12.5,
-  "rows_affected": 0
-}
-```
-
-**Note**: Executes in a transaction that is rolled back. 5-second timeout enforced.
-
----
-
-### 6. Delete Macro
-
-**Endpoint**: `DELETE /api/v1/macros/{macro_id}`
-
-**Authentication**: Superadmin required
-
-**Note**: Fails if macro is used in any active permission rules.
-
----
-
-### Built-in Macros
-
-These macros are executed directly by the macro engine:
-
-| Macro                                  | Description                       |
-| -------------------------------------- | --------------------------------- |
-| `@has_group(group_name)`               | Check if user has a group         |
-| `@has_role(role_name)`                 | Check if user has a role          |
-| `@owns_record()` / `@is_creator()`     | Check if user owns the record     |
-| `@in_time_range(start_hour, end_hour)` | Check if current time is in range |
-| `@has_permission(action, collection)`  | Check specific permission         |
-
----
 
 ## OAuth Authentication
 
@@ -2932,6 +2625,84 @@ curl -X GET "http://localhost:8000/api/v1/auth/saml/metadata?account=acme&provid
 
 - `account` (required): Account slug or ID
 - `provider` (optional): SAML provider name (default: first configured)
+
+---
+
+## Realtime API
+
+SnackBase provides real-time updates via WebSocket and Server-Sent Events (SSE).
+
+### 1. WebSocket Connection
+
+**Endpoint**: `ws://localhost:8000/api/v1/realtime/ws`
+
+**Authentication**:
+
+1.  **Header**: `Authorization: Bearer <token>` (if supported by client)
+2.  **Query Parameter**: `?token=<token>` (browser native WebSocket)
+
+**Client Protocol**:
+
+Send JSON messages to interact with the server.
+
+**Subscribe to Collection**:
+
+```json
+{
+  "action": "subscribe",
+  "collection": "posts",
+  "operations": ["create", "update", "delete"]
+}
+```
+
+- `operations` is optional, defaults to all.
+
+**Unsubscribe**:
+
+```json
+{
+  "action": "unsubscribe",
+  "collection": "posts"
+}
+```
+
+**Keep-Alive (Ping)**:
+
+```json
+{
+  "action": "ping"
+}
+```
+
+**Server Responses**:
+
+- **Heartbeat** (every 30s): `{"type": "heartbeat", "timestamp": "..."}`
+- **Events**: `{"type": "posts.create", "data": { ...record... }}`
+- **Errors**: `{"error": "Max subscriptions reached"}`
+
+---
+
+### 2. Server-Sent Events (SSE)
+
+**Endpoint**: `GET /api/v1/realtime/subscribe`
+
+**Authentication**: Query param `?token=<token>` or Cookie.
+
+**Query Parameters**:
+
+- `collection`: Name of collection to subscribe to (can be repeated).
+
+**Request**:
+
+```bash
+curl -N "http://localhost:8000/api/v1/realtime/subscribe?collection=posts&collection=users" \
+  -H "Authorization: Bearer <token>"
+```
+
+**Events**:
+
+- `event: message`: standard data payload.
+- `event: heartbeat`: keep-alive signal.
 
 ---
 

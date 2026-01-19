@@ -12,9 +12,19 @@ async def test_expand_no_macros():
 @pytest.mark.asyncio
 async def test_expand_builtin_owns_record():
     expander = MacroExpander()
-    expr = "@owns_record"
-    result = await expander.expand(expr)
+    # Default
+    result = await expander.expand("@owns_record")
     assert result == "(created_by = @request.auth.id)"
+    # With field
+    result = await expander.expand("@owns_record(owner_id)")
+    assert result == "(owner_id = @request.auth.id)"
+
+@pytest.mark.asyncio
+async def test_expand_builtin_has_role():
+    expander = MacroExpander()
+    expr = "@has_role('admin')"
+    result = await expander.expand(expr)
+    assert result == "(@request.auth.role = 'admin')"
 
 @pytest.mark.asyncio
 async def test_expand_builtin_is_public():
@@ -26,9 +36,9 @@ async def test_expand_builtin_is_public():
 @pytest.mark.asyncio
 async def test_expand_combined_macros():
     expander = MacroExpander()
-    expr = "@owns_record || @is_public"
+    expr = "@has_role('admin') || @owns_record"
     result = await expander.expand(expr)
-    assert result == "(created_by = @request.auth.id) || (public = true)"
+    assert result == "(@request.auth.role = 'admin') || (created_by = @request.auth.id)"
 
 @pytest.mark.asyncio
 async def test_expand_db_macro():

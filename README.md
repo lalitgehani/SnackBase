@@ -48,19 +48,18 @@ SnackBase is a Python/FastAPI-based BaaS providing auto-generated REST APIs, mul
 - [x] GxP-compliant audit logging
 - [ ] Real-time subscriptions (WebSocket/SSE)
 
-**Phase 2: Security & Authorization** (90% Complete)
+**Phase 2: Security & Authorization** (100% Complete)
 
-- [x] F2.1-F2.5: Permission Data Model & Rule Engine
+- [x] F2.1-F2.5: Permission System V2 (SQL-native RLS)
 - [x] F2.6-F2.7: SQL Macros & Group-Based Permissions
-- [x] F2.8: Permission Caching (5-minute TTL)
-- [x] F2.9: Authorization Middleware
-- [x] F2.10: User-Specific Rules
-- [x] F2.11-F2.13: PII Field Tagging, Masking & Field-Level Access Control
-- [x] F2.14: Group-Based Permission Macros
+- [x] F2.8: Authorization Middleware & Repository Integration
+- [x] F2.10: Collection-centric Rule Management
+- [x] F2.11-F2.13: Field-Level Access Control
+- [x] F2.14: GxP-compliant Audit Logging for Permissions
 
 **Phase 3: Operations** (70% Complete)
 
-- [x] F3.1-F3.5: Dashboard & Management UIs (Dashboard, Accounts, Collections, Roles, Permissions)
+- [x] F3.1-F3.5: Dashboard & Management UIs (Dashboard, Accounts, Collections, Roles, Rules)
 - [x] F3.6-F3.8: Audit Log Storage, Capture & Query API
 - [x] F3.9-F3.12: Alembic Infrastructure & Migration Management UI
 
@@ -131,13 +130,13 @@ open http://localhost:8000
 
 ### Authorization & Security
 
-- **Role-Based Access Control (RBAC)** - Flexible roles and permissions system
-- **Permission System** - Granular CRUD permissions per collection
-- **Rule Engine** - Custom DSL for permission expressions (lexer, parser, AST, evaluator)
-- **Wildcard Collection Support** - `*` for all collections
-- **Field-Level Access Control** - Show/hide specific fields
-- **Permission Caching** - 5-minute TTL with invalidation
-- **PII Masking** - 6 mask types (email, ssn, phone, name, full, custom) with group-based access control
+- **Database-Centric RLS** - SQL-native row-level security inspired by Supabase/PocketBase
+- **5-Operation Model** - Granular control for `list`, `view`, `create`, `update`, and `delete`
+- **Collection-Centric Rules** - Define rules per collection instead of per role
+- **SQL-Native Rule Engine** - Rules compile directly to efficient SQL WHERE clauses
+- **Field-Level Access Control** - Operation-specific field visibility (show/hide fields per operation)
+- **PII Masking** - 6 mask types (email, ssn, phone, name, full, custom) with group-based access
+- **SQL Macros** - Reusable expression fragments (e.g., `@owns_record`, `@has_role`)
 
 ### Extensibility
 
@@ -328,8 +327,8 @@ See the [Deployment Guide](docs/deployment.md) for other platforms.
 ├── /records/{collection}/      # Dynamic collection CRUD
 ├── /accounts/                  # Account management (superadmin)
 ├── /users/                     # User management (superadmin)
-├── /roles/                     # Role management
-├── /permissions/               # Permission management
+├── /roles/                     # Role management (labels only)
+├── /collections/{name}/rules   # Collection-level access rules
 ├── /macros/                    # SQL macro management
 ├── /groups/                    # Group management
 ├── /invitations/               # User invitations
@@ -591,28 +590,31 @@ async def send_post_notification(record, context):
 - `created_by_hook` (-150 priority): Sets created_by/updated_by user
 - `audit_capture_hook` (100 priority): Captures GxP-compliant audit entries
 
-### Rule Engine
+### Rule Engine (V2)
 
-Custom DSL for permission expressions with full lexer/parser/AST implementation:
+SnackBase V2 uses a database-centric rule engine that compiles simple expressions into SQL WHERE clauses for performance and scalability.
 
 ```python
-# Simple comparisons
-user.id == "user_abc123"
+# Owner-only access (compiles to SQL WHERE created_by = :auth_id)
+created_by = @request.auth.id
 
-# Macro calls
-@has_role("admin") and @owns_record()
+# Admin or owner access
+@request.auth.role = "admin" || created_by = @request.auth.id
 
-# List membership
-status in ["draft", "published"]
+# Status-based filtering
+status = "published" && (category = "news" || category = "updates")
 
-# Time-based access
-@in_time_range(9, 17)
-
-# Complex expressions
-(@has_role("editor") and record.status in ["draft", "pending"]) or @has_role("admin")
+# Macro usage (expanded before compilation)
+@owns_record() && status = "draft"
 ```
 
-**Supported operators**: `==`, `!=`, `<`, `>`, `<=`, `>=`, `in`, `and`, `or`, `not`
+**Supported operators**: `=`, `!=`, `<`, `>`, `<=`, `>=`, `~` (LIKE), `&&`, `||`, `!`
+
+**Common Variables**:
+
+- `@request.auth.*` - id, email, role, account_id
+- `@request.data.*` - Request body fields (for create/update validation)
+- `fieldname` - Direct access to record fields
 
 **Built-in macros**:
 

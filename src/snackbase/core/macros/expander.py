@@ -31,9 +31,13 @@ class MacroExpander:
         self.macro_repo = MacroRepository(session) if session else None
         
         # Built-in macro definitions (mapping name -> substitution fragment)
+        # Fragments can use $1, $2, etc. for parameters
         self.builtin_macros = {
             "owns_record": "created_by = @request.auth.id",
+            "is_creator": "created_by = @request.auth.id",
             "is_public": "public = true",
+            "has_role": "@request.auth.role = $1",
+            "has_group": "exists(select 1 from users_groups ug join groups g on ug.group_id = g.id where ug.user_id = @request.auth.id and g.name = $1)",
         }
 
     async def expand(self, expression: str, depth: int = 0) -> str:
@@ -58,12 +62,6 @@ class MacroExpander:
 
         # Find all macro occurrences
         result = expression
-        offset = 0
-        
-        # We use finditer so we can handle matches one by one and replace them
-        # Note: we need to re-scan the result if we want recursive expansion, 
-        # or just expand the replacement and then stick it in.
-        # Expanding the replacement before insertion is cleaner for recursion.
         
         matches = list(MACRO_PATTERN.finditer(expression))
         # Process in reverse to maintain offsets
@@ -79,23 +77,27 @@ class MacroExpander:
                 # but should be enough for simple macros.
                 args = [arg.strip() for arg in macro_args_str.split(",")]
 
-            # 1. Expand built-in
-            replacement = None
+            # 1. Look for replacement template
+            replacement_template = None
             if macro_name in self.builtin_macros:
-                replacement = self.builtin_macros[macro_name]
-            
-            # 2. Expand database macro
+                replacement_template = self.builtin_macros[macro_name]
             elif self.macro_repo:
                 db_macro = await self.macro_repo.get_by_name(macro_name)
                 if db_macro:
-                    replacement = db_macro.sql_query
-                    # Handle parameters ($1, $2, etc.)
-                    if args:
-                        for i, arg in enumerate(args):
-                            placeholder = f"${i+1}"
-                            replacement = replacement.replace(placeholder, arg)
+                    replacement_template = db_macro.sql_query
 
-            if replacement is not None:
+            if replacement_template is not None:
+                # Apply parameters ($1, $2, etc.)
+                replacement = replacement_template
+                if args:
+                    for i, arg in enumerate(args):
+                        placeholder = f"${i+1}"
+                        replacement = replacement.replace(placeholder, arg)
+                
+                # Special case for @owns_record(field_name)
+                if macro_name == "owns_record" and args:
+                    replacement = f"{args[0]} = @request.auth.id"
+
                 # Recursively expand the replacement
                 expanded_replacement = await self.expand(replacement, depth + 1)
                 # Wrap in parentheses for safety
