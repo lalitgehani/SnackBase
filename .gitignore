@@ -18,6 +18,9 @@ lib/
 lib64/
 # But don't ignore the ui/src/lib/ directory (TypeScript lib folder)
 !ui/src/lib/
+!examples/to-do-app/src/lib
+!examples/to-do-app-single-tenant/src/lib
+!examples/realtime-demo-app/src/lib
 parts/
 sdist/
 var/
