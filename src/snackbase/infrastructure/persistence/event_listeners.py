@@ -145,6 +145,11 @@ def _make_listener(hook_registry: HookRegistry, op_type: str):
             # Background task or system op without context -> skip audit
             return
 
+        # NEW: Check configuration toggle (F3.7.1)
+        from snackbase.core.config import get_settings
+        if not get_settings().audit_logging_enabled:
+            return
+
         # Special casing for AccountModel to fix the missing account_id issue
         if isinstance(target, AccountModel):
             from dataclasses import replace

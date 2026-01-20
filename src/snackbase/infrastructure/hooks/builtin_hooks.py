@@ -150,6 +150,11 @@ async def audit_capture_hook(
     if data is None or context is None:
         return data
 
+    # Check configuration toggle (F3.7.1)
+    from snackbase.core.config import get_settings
+    if not get_settings().audit_logging_enabled:
+        return data
+
     # Only process model or record operation events
     if not (event.startswith("on_model_after_") or event.startswith("on_record_after_")):
         return data

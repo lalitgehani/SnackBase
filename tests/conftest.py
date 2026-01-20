@@ -124,6 +124,19 @@ def _maybe_enable_audit_hooks(request, _audit_hooks_registry):
     return _audit_hooks_registry["registry"]
 
 
+@pytest.fixture
+def with_audit_disabled(monkeypatch):
+    """Fixture to test with audit logging disabled."""
+    from snackbase.core.config import get_settings
+    # Set env var BEFORE clearing cache
+    monkeypatch.setenv("SNACKBASE_AUDIT_LOGGING_ENABLED", "false")
+    # Clear cache so next call picks up new env var
+    get_settings.cache_clear()
+    yield
+    # Cleanup: restore default settings
+    get_settings.cache_clear()
+
+
 @pytest_asyncio.fixture
 async def db_session(_maybe_enable_audit_hooks) -> AsyncGenerator[AsyncSession, None]:
     """Create a test database session.

@@ -416,6 +416,9 @@ Security:
 Logging:
   Level:        {settings.log_level}
   Format:       {settings.log_format}
+
+Audit Logging:
+  Enabled:      {settings.audit_logging_enabled}
 """)
 
 

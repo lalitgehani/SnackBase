@@ -42,6 +42,7 @@ class AuditLogListResponse(BaseModel):
     total: int = Field(..., description="Total number of entries matching filters")
     skip: int = Field(..., description="Number of entries skipped")
     limit: int = Field(..., description="Number of entries returned")
+    audit_logging_enabled: bool = Field(True, description="Whether audit logging is currently enabled")
 
 
 class AuditLogExportFormat(str, Enum):

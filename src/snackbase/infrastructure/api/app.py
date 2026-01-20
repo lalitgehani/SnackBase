@@ -50,6 +50,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             environment=settings.environment,
         )
 
+        # Log audit logging status (F3.7.1)
+        if settings.audit_logging_enabled:
+            logger.info("Audit logging: enabled")
+        else:
+            logger.warning("Audit logging: DISABLED (security consideration)")
+
         # Configure logging (redundant if already done in CLI, but safe)
         configure_logging(settings)
 
@@ -388,6 +394,7 @@ def register_health_check(app: FastAPI) -> None:
             "status": "healthy",
             "service": "SnackBase",
             "version": get_settings().app_version,
+            "audit_logging_enabled": get_settings().audit_logging_enabled,
         }
 
     @app.get("/ready", tags=["health"])
@@ -408,6 +415,7 @@ def register_health_check(app: FastAPI) -> None:
                 "service": "SnackBase",
                 "version": get_settings().app_version,
                 "database": "connected",
+                "audit_logging_enabled": get_settings().audit_logging_enabled,
             }
         else:
             return JSONResponse(

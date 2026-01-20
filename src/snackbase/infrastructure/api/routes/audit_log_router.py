@@ -14,6 +14,7 @@ from snackbase.infrastructure.api.schemas.audit_log_schemas import (
 )
 from snackbase.infrastructure.persistence.database import get_db_session
 from snackbase.domain.services.audit_log_service import AuditLogService
+from snackbase.core.config import get_settings
 
 router = APIRouter()
 
@@ -69,6 +70,7 @@ async def list_audit_logs(
         total=total,
         skip=skip,
         limit=limit,
+        audit_logging_enabled=get_settings().audit_logging_enabled,
     )
 
 

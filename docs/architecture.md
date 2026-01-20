@@ -479,6 +479,7 @@ SnackBase follows **Clean Architecture** principles with clear separation betwee
 The configuration system provides hierarchical provider configuration for external services (authentication, email, storage).
 
 **Architecture:**
+
 - **System-level configs**: Use account_id `00000000-0000-0000-0000-000000000000` for defaults
 - **Account-level configs**: Per-account overrides that take precedence
 - **Encryption at rest**: All sensitive values encrypted using Fernet symmetric encryption
@@ -486,20 +487,22 @@ The configuration system provides hierarchical provider configuration for extern
 
 **Built-in Providers (12):**
 
-| Category | Providers |
-|----------|-----------|
-| **Auth Providers** | Email/Password |
-| **Email Providers** | SMTP, AWS SES, Resend |
+| Category            | Providers                        |
+| ------------------- | -------------------------------- |
+| **Auth Providers**  | Email/Password                   |
+| **Email Providers** | SMTP, AWS SES, Resend            |
 | **OAuth Providers** | Google, GitHub, Microsoft, Apple |
-| **SAML Providers** | Okta, Azure AD, Generic SAML |
-| **System** | System Configuration |
+| **SAML Providers**  | Okta, Azure AD, Generic SAML     |
+| **System**          | System Configuration             |
 
 **Key Components:**
+
 - `ConfigurationRegistry` - Central registry with hierarchical resolution
 - `ConfigurationModel` - ORM model with encrypted `config` JSON field
 - Provider handlers in `src/snackbase/infrastructure/configuration/providers/`
 
 **API Endpoints:**
+
 - `/api/v1/admin/configurations` - CRUD for configurations
 - `/api/v1/admin/configurations/form` - Form schema for frontend
 
@@ -508,6 +511,7 @@ The configuration system provides hierarchical provider configuration for extern
 Handles email address verification with secure token-based workflow.
 
 **Components:**
+
 - `EmailVerificationTokenModel` - Stores SHA-256 hashed tokens
 - `EmailVerificationRepository` - Database operations
 - `EmailVerificationService` - Business logic for verification workflow
@@ -515,6 +519,7 @@ Handles email address verification with secure token-based workflow.
 - Single-use tokens (marked as used after verification)
 
 **Flow:**
+
 1. User registers -> `send_verification_email()` generates token
 2. Token stored as SHA-256 hash
 3. Email sent with verification URL
@@ -522,6 +527,7 @@ Handles email address verification with secure token-based workflow.
 5. User record updated: `email_verified=True`, `email_verified_at=now()`
 
 **API Endpoints:**
+
 - `POST /api/v1/auth/send-verification` - Request verification email
 - `POST /api/v1/auth/verify-email` - Submit verification token
 
@@ -530,41 +536,46 @@ Handles email address verification with secure token-based workflow.
 Multi-language email template system with Jinja2 variable support.
 
 **Components:**
+
 - `EmailTemplateModel` - ORM model with locale support
 - `EmailTemplateRepository` - Template CRUD operations
 - `TemplateRenderer` - Jinja2-based rendering
 - `EmailService` - Orchestrates sending with provider selection
 
 **Template Types:**
+
 - `email_verification` - Email verification emails
 - `password_reset` - Password reset emails (TODO)
 - `invitation` - User invitation emails (TODO)
 
 **Features:**
+
 - Account-level templates override system defaults
 - Multi-language support via `locale` field
 - System variables injected: `app_name`, `app_url`, `support_email`
 - Comprehensive logging via `EmailLogModel`
 
 **API Endpoints:**
+
 - `/api/v1/email_templates` - Template CRUD
 
 ### 4. Hook System (Stable API v1.0)
 
 **33+ Hook Events across 7 Categories:**
 
-| Category | Events |
-|----------|--------|
-| **App Lifecycle** (3) | `on_bootstrap`, `on_serve`, `on_terminate` |
-| **Model Operations** (6) | `on_model_before/after_create/update/delete` |
-| **Record Operations** (8) | `on_record_before/after_create/update/delete/query` |
-| **Collection Operations** (6) | `on_collection_before/after_create/update/delete` |
-| **Auth Operations** (8) | `on_auth_before/after_login/logout/register/password_reset` |
-| **Request Processing** (2) | `on_before_request`, `on_after_request` |
-| **Realtime** (4) | `on_realtime_connect/disconnect/message/subscribe/unsubscribe` |
-| **Mailer** (2) | `on_mailer_before/after_send` |
+| Category                      | Events                                                         |
+| ----------------------------- | -------------------------------------------------------------- |
+| **App Lifecycle** (3)         | `on_bootstrap`, `on_serve`, `on_terminate`                     |
+| **Model Operations** (6)      | `on_model_before/after_create/update/delete`                   |
+| **Record Operations** (8)     | `on_record_before/after_create/update/delete/query`            |
+| **Collection Operations** (6) | `on_collection_before/after_create/update/delete`              |
+| **Auth Operations** (8)       | `on_auth_before/after_login/logout/register/password_reset`    |
+| **Request Processing** (2)    | `on_before_request`, `on_after_request`                        |
+| **Realtime** (4)              | `on_realtime_connect/disconnect/message/subscribe/unsubscribe` |
+| **Mailer** (2)                | `on_mailer_before/after_send`                                  |
 
 **Built-in Hooks:**
+
 - `timestamp_hook` (priority: -100) - Sets `created_at`/`updated_at`
 - `account_isolation_hook` (priority: -200) - Enforces `account_id` on records
 - `created_by_hook` (priority: -150) - Sets `created_by`/`updated_by`
@@ -572,6 +583,7 @@ Multi-language email template system with Jinja2 variable support.
 - **SQLAlchemy Event Listeners** - Systemic audit logging for models
 
 **Hook Registration:**
+
 ```python
 @app.hook.on_record_after_create("posts", priority=10)
 async def send_post_notification(record, context):
@@ -583,14 +595,17 @@ async def send_post_notification(record, context):
 GxP-compliant audit logging with blockchain-style integrity chain.
 
 **Features:**
+
 - **Column-level granularity**: Each row represents a single column change
 - **Immutable**: Database triggers prevent UPDATE/DELETE operations
 - **Blockchain integrity**: `checksum` and `previous_hash` chain
 - **Electronic signature support**: CFR Part 11 compliant (`es_username`, `es_reason`, `es_timestamp`)
+- **Configurable**: Can be disabled via `SNACKBASE_AUDIT_LOGGING_ENABLED` for non-regulated environments
 - **Systemic capture**: SQLAlchemy event listeners automatically log all model changes
 - **Record capture**: Hooks automatically log all dynamic collection record changes
 
 **Audit Flow:**
+
 1. SQLAlchemy event listener detects model change OR hook detects record change
 2. `AuditLogService` creates audit entries for each changed column
 3. `AuditChecksum` computes SHA-256 hash linking to previous entry
@@ -598,6 +613,7 @@ GxP-compliant audit logging with blockchain-style integrity chain.
 5. Database triggers enforce immutability
 
 **API Endpoints:**
+
 - `/api/v1/audit-logs` - Retrieve and export audit logs
 
 ---
@@ -686,6 +702,7 @@ POST /api/v1/records/posts (create/update/delete)
 Provides real-time event broadcasting for data changes via WebSocket and Server-Sent Events.
 
 **Components:**
+
 - `ConnectionManager` - Manages active connections and subscriptions
 - `RealtimeConnection` - Represents a single client connection
 - `Subscription` - Per-collection subscription with operation filtering
@@ -693,6 +710,7 @@ Provides real-time event broadcasting for data changes via WebSocket and Server-
 - `realtime_auth` - JWT authentication for realtime connections
 
 **Features:**
+
 - **Dual Protocol Support**: WebSocket (full-duplex) and SSE (one-way)
 - **Per-Collection Subscriptions**: Subscribe to specific collections
 - **Operation Filtering**: Listen to create/update/delete selectively
@@ -702,6 +720,7 @@ Provides real-time event broadcasting for data changes via WebSocket and Server-
 - **Max 100 Subscriptions**: Per connection limit
 
 **Event Format:**
+
 ```json
 {
   "type": "posts.create",
@@ -711,10 +730,12 @@ Provides real-time event broadcasting for data changes via WebSocket and Server-
 ```
 
 **API Endpoints:**
+
 - `WS /api/v1/realtime/ws` - WebSocket endpoint for realtime subscriptions
 - `GET /api/v1/realtime/subscribe` - SSE endpoint for realtime subscriptions
 
 **Hook Events:**
+
 - `on_realtime_connect` - Client connected
 - `on_realtime_disconnect` - Client disconnected
 - `on_realtime_subscribe` - Client subscribed to collection
@@ -728,24 +749,24 @@ Realtime events are triggered automatically after record operations via the hook
 
 ### Key Files
 
-| File                                                        | Purpose                                  |
-| ----------------------------------------------------------- | ---------------------------------------- |
-| `src/snackbase/infrastructure/api/app.py`                   | FastAPI app factory                      |
-| `src/snackbase/core/config.py`                              | Pydantic Settings                        |
-| `src/snackbase/core/hooks/hook_registry.py`                 | Hook system core                         |
-| `src/snackbase/core/configuration/config_registry.py`       | Configuration registry                    |
-| `src/snackbase/core/rules/`                                 | Rule engine (lexer->parser->AST->evaluator) |
-| `src/snackbase/domain/services/permission_resolver.py`      | Permission resolution                    |
-| `src/snackbase/domain/services/email_verification_service.py` | Email verification logic               |
-| `src/snackbase/domain/services/audit_log_service.py`        | Audit logging service                    |
-| `src/snackbase/infrastructure/persistence/database.py`      | SQLAlchemy engine                        |
-| `src/snackbase/infrastructure/persistence/table_builder.py` | Dynamic table creation                   |
-| `src/snackbase/infrastructure/services/email_service.py`    | Email sending with templates             |
-| `src/snackbase/infrastructure/hooks/builtin_hooks.py`       | Built-in hook implementations            |
-| `src/snackbase/infrastructure/realtime/realtime_manager.py` | Connection and subscription management   |
-| `src/snackbase/infrastructure/realtime/event_broadcaster.py` | Event broadcasting service               |
-| `src/snackbase/infrastructure/realtime/realtime_auth.py`    | Realtime authentication                  |
-| `src/snackbase/infrastructure/api/routes/realtime_router.py`| WebSocket and SSE endpoints              |
-| `ui/src/main.tsx`                                           | React app entry                          |
-| `ui/src/App.tsx`                                            | Route configuration                      |
-| `ui/src/lib/api.ts`                                         | Axios client with token refresh          |
+| File                                                          | Purpose                                     |
+| ------------------------------------------------------------- | ------------------------------------------- |
+| `src/snackbase/infrastructure/api/app.py`                     | FastAPI app factory                         |
+| `src/snackbase/core/config.py`                                | Pydantic Settings                           |
+| `src/snackbase/core/hooks/hook_registry.py`                   | Hook system core                            |
+| `src/snackbase/core/configuration/config_registry.py`         | Configuration registry                      |
+| `src/snackbase/core/rules/`                                   | Rule engine (lexer->parser->AST->evaluator) |
+| `src/snackbase/domain/services/permission_resolver.py`        | Permission resolution                       |
+| `src/snackbase/domain/services/email_verification_service.py` | Email verification logic                    |
+| `src/snackbase/domain/services/audit_log_service.py`          | Audit logging service                       |
+| `src/snackbase/infrastructure/persistence/database.py`        | SQLAlchemy engine                           |
+| `src/snackbase/infrastructure/persistence/table_builder.py`   | Dynamic table creation                      |
+| `src/snackbase/infrastructure/services/email_service.py`      | Email sending with templates                |
+| `src/snackbase/infrastructure/hooks/builtin_hooks.py`         | Built-in hook implementations               |
+| `src/snackbase/infrastructure/realtime/realtime_manager.py`   | Connection and subscription management      |
+| `src/snackbase/infrastructure/realtime/event_broadcaster.py`  | Event broadcasting service                  |
+| `src/snackbase/infrastructure/realtime/realtime_auth.py`      | Realtime authentication                     |
+| `src/snackbase/infrastructure/api/routes/realtime_router.py`  | WebSocket and SSE endpoints                 |
+| `ui/src/main.tsx`                                             | React app entry                             |
+| `ui/src/App.tsx`                                              | Route configuration                         |
+| `ui/src/lib/api.ts`                                           | Axios client with token refresh             |

@@ -315,6 +315,7 @@ async def validate_post(event, data, context):
 The `HookDecoratorProxy` provides convenient decorator methods for common hook events:
 
 **Record Operations:**
+
 - `on_record_before_create(collection, priority=0)`
 - `on_record_after_create(collection, priority=0)`
 - `on_record_before_update(collection, priority=0)`
@@ -325,6 +326,7 @@ The `HookDecoratorProxy` provides convenient decorator methods for common hook e
 - `on_record_after_query(collection, priority=0)`
 
 **Collection Operations:**
+
 - `on_collection_before_create(priority=0)`
 - `on_collection_after_create(priority=0)`
 - `on_collection_before_update(priority=0)`
@@ -333,6 +335,7 @@ The `HookDecoratorProxy` provides convenient decorator methods for common hook e
 - `on_collection_after_delete(priority=0)`
 
 **Auth Operations:**
+
 - `on_auth_before_login(priority=0)`
 - `on_auth_after_login(priority=0)`
 - `on_auth_before_register(priority=0)`
@@ -512,6 +515,7 @@ data["updated_by"] = context.user.id
 # Includes request context (ip_address, user_agent, request_id)
 # Captures old_values for updates
 # Handles account_id isolation
+# Respects `SNACKBASE_AUDIT_LOGGING_ENABLED` configuration
 ```
 
 **Notes**:

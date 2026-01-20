@@ -161,6 +161,12 @@ class Settings(BaseSettings):
         description="Display name for single-tenant account (defaults to slug)",
     )
 
+    # Audit Logging Settings
+    audit_logging_enabled: bool = Field(
+        default=True,
+        description="Enable GxP-compliant audit logging for CREATE/UPDATE/DELETE operations",
+    )
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, v: str | list[str]) -> list[str]:

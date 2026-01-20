@@ -537,6 +537,7 @@ SNACKBASE_DB_POOL_TIMEOUT=30
 | `SNACKBASE_LOG_LEVEL`                   | `INFO`                                       | Logging level: DEBUG, INFO, WARNING, ERROR     |
 | `SNACKBASE_LOG_FORMAT`                  | `json`                                       | Log format: json, console                      |
 | `SNACKBASE_STORAGE_PATH`                | `./sb_data/files`                            | File storage directory                         |
+| `SNACKBASE_AUDIT_LOGGING_ENABLED`       | `true`                                       | Enable GxP-compliant audit logging             |
 | `SNACKBASE_SINGLE_TENANT_MODE`          | `false`                                      | Enable single-tenant mode                      |
 | `SNACKBASE_SINGLE_TENANT_ACCOUNT`       | (none)                                       | Target account slug for single-tenant mode     |
 | `SNACKBASE_SINGLE_TENANT_ACCOUNT_NAME`  | (none)                                       | Optional display name for bootstrapped account |
