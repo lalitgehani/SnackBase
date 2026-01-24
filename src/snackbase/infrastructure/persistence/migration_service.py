@@ -45,7 +45,9 @@ class MigrationService:
         if database_url:
             self.config.set_main_option("sqlalchemy.url", database_url)
         elif engine:
-            self.config.set_main_option("sqlalchemy.url", str(engine.url))
+            # BUG FIX: Use render_as_string(hide_password=False) to ensure password is included
+            # Otherwise SQLAlchemy masks it with '***' when converted to string
+            self.config.set_main_option("sqlalchemy.url", engine.url.render_as_string(hide_password=False))
 
     def generate_create_collection_migration(
         self, collection_name: str, schema: list[dict[str, Any]]

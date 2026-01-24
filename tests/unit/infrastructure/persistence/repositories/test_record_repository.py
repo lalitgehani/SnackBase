@@ -67,6 +67,8 @@ async def test_insert_record(repository, mock_session, sample_schema):
     assert params["title"] == "Test Post"
     assert params["is_active"] == 1  # Boolean converted to int
     assert params["metadata"] == '{"tags": ["a", "b"]}'  # JSON dumped
+    assert isinstance(params["created_at"], datetime)
+    assert isinstance(params["updated_at"], datetime)
 
 
 @pytest.mark.asyncio
@@ -165,6 +167,7 @@ async def test_update_record(repository, mock_session, sample_schema):
     assert params["title"] == "Updated Title"
     assert params["is_active"] == 0
     assert params["updated_by"] == updated_by
+    assert isinstance(params["updated_at"], datetime)
 
 
 @pytest.mark.asyncio

@@ -4,7 +4,7 @@ Configurations represent external service provider settings (auth, email, storag
 with support for hierarchical configuration (system-level defaults + account-level overrides).
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import (
     Boolean,
@@ -17,11 +17,10 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.types import JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.types import JSON
 
 from snackbase.infrastructure.persistence.database import Base
-from datetime import datetime, timezone
 
 
 class ConfigurationModel(Base):
@@ -112,12 +111,12 @@ class ConfigurationModel(Base):
         comment="Display order priority (lower = higher priority)",
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime,
+        DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime,
+        DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
         onupdate=func.now(),
@@ -203,12 +202,12 @@ class OAuthStateModel(Base):
         comment="Optional additional metadata for the flow",
     )
     expires_at: Mapped[datetime] = mapped_column(
-        DateTime,
+        DateTime(timezone=True),
         nullable=False,
         comment="Token expiration timestamp",
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime,
+        DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
         comment="Token creation timestamp",
@@ -222,7 +221,7 @@ class OAuthStateModel(Base):
     @property
     def is_expired(self) -> bool:
         """Check if the state token has expired."""
-        return datetime.now(timezone.utc) > self.expires_at.replace(tzinfo=timezone.utc)
+        return datetime.now(UTC) > self.expires_at.replace(tzinfo=UTC)
 
     def __repr__(self) -> str:
         return (

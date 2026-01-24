@@ -51,12 +51,12 @@ class GroupModel(Base):
         comment="Description of the group's purpose",
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime,
+        DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime,
+        DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
         onupdate=func.now(),
@@ -82,16 +82,17 @@ class GroupModel(Base):
     @property
     def account_code(self) -> str:
         """Get the account code from the related account.
-        
+
         Note: This requires the 'account' relationship to be loaded.
         """
         if hasattr(self, "account") and self.account:
             return self.account.account_code
         return None
+
     @property
     def member_count(self) -> int:
         """Get the number of users in the group.
-        
+
         Note: This requires the 'users' relationship to be loaded.
         """
         if hasattr(self, "users"):

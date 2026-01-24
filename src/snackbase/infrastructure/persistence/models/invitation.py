@@ -64,12 +64,12 @@ class InvitationModel(Base):
         comment="Foreign key to users table (inviter)",
     )
     expires_at: Mapped[datetime] = mapped_column(
-        DateTime,
+        DateTime(timezone=True),
         nullable=False,
         comment="Timestamp when the invitation expires",
     )
     accepted_at: Mapped[datetime | None] = mapped_column(
-        DateTime,
+        DateTime(timezone=True),
         nullable=True,
         comment="Timestamp when the invitation was accepted",
     )
@@ -80,12 +80,12 @@ class InvitationModel(Base):
         comment="Whether the invitation email has been sent",
     )
     email_sent_at: Mapped[datetime | None] = mapped_column(
-        DateTime,
+        DateTime(timezone=True),
         nullable=True,
         comment="Timestamp when the email was sent",
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime,
+        DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
     )
@@ -100,10 +100,7 @@ class InvitationModel(Base):
         back_populates="invitations_sent",
     )
 
-    __table_args__ = (
-        Index("ix_invitations_account_email", "account_id", "email"),
-    )
-
+    __table_args__ = (Index("ix_invitations_account_email", "account_id", "email"),)
 
     def __repr__(self) -> str:
         return f"<Invitation(id={self.id}, email={self.email}, account_id={self.account_id})>"

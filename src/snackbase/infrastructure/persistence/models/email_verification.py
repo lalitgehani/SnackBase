@@ -3,10 +3,10 @@
 Stores hashes of verification tokens sent to users to verify their email addresses.
 """
 
-from datetime import datetime
 import uuid
+from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, UniqueConstraint, func
+from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from snackbase.infrastructure.persistence.database import Base

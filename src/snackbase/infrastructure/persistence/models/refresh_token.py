@@ -72,9 +72,7 @@ class RefreshTokenModel(Base):
     account = relationship("AccountModel", back_populates="refresh_tokens")
 
     # Indexes for common queries
-    __table_args__ = (
-        Index("ix_refresh_tokens_user_account", "user_id", "account_id"),
-    )
+    __table_args__ = (Index("ix_refresh_tokens_user_account", "user_id", "account_id"),)
 
     def __repr__(self) -> str:
         return f"RefreshTokenModel(id={self.id!r}, user_id={self.user_id!r}, is_revoked={self.is_revoked!r})"

@@ -15,8 +15,8 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.types import JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.types import JSON
 
 from snackbase.infrastructure.persistence.database import Base
 
@@ -82,7 +82,7 @@ class EmailLogModel(Base):
         comment="Template variables used for rendering",
     )
     sent_at: Mapped[datetime] = mapped_column(
-        DateTime,
+        DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
         comment="Timestamp when the email was sent or attempted",

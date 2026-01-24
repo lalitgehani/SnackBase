@@ -3,10 +3,10 @@
 Stores hashes of password reset tokens sent to users.
 """
 
-from datetime import datetime
 import uuid
+from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, UniqueConstraint, func
+from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from snackbase.infrastructure.persistence.database import Base

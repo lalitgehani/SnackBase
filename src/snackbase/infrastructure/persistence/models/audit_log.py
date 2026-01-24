@@ -14,11 +14,10 @@ from sqlalchemy import (
     String,
     Text,
     event,
-    func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.types import JSON
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.types import JSON
 
 from snackbase.infrastructure.persistence.database import Base
 
@@ -139,7 +138,7 @@ class AuditLogModel(Base):
         comment="Electronic signature reason",
     )
     es_timestamp: Mapped[datetime | None] = mapped_column(
-        DateTime,
+        DateTime(timezone=True),
         nullable=True,
         comment="Electronic signature timestamp",
     )
@@ -163,7 +162,7 @@ class AuditLogModel(Base):
 
     # Timing and integrity
     occurred_at: Mapped[datetime] = mapped_column(
-        DateTime,
+        DateTime(timezone=True),
         nullable=False,
         index=True,
         comment="Timestamp when the change occurred (UTC)",

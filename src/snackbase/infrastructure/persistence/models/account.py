@@ -5,7 +5,7 @@ Accounts represent isolated tenants in the multi-tenant system.
 
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, Index, String, func
+from sqlalchemy import CheckConstraint, DateTime, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from snackbase.infrastructure.persistence.database import Base
@@ -50,12 +50,12 @@ class AccountModel(Base):
         comment="Display name for the account",
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime,
+        DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime,
+        DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
         onupdate=func.now(),
@@ -97,8 +97,6 @@ class AccountModel(Base):
         back_populates="account",
         cascade="all, delete-orphan",
     )
-
-
 
     __table_args__ = (
         # Validate slug format: 3-32 chars, alphanumeric + hyphens

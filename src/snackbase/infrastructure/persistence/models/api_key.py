@@ -4,13 +4,13 @@ API keys provide programmatic access for superadmin operations.
 Only SHA-256 hashes are stored for security.
 """
 
-from datetime import datetime
 import uuid
+from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, func
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.types import JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.types import JSON
 
 from snackbase.infrastructure.persistence.database import Base
 

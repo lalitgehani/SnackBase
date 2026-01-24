@@ -7,8 +7,8 @@ from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.types import JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.types import JSON
 
 from snackbase.infrastructure.persistence.database import Base
 
@@ -167,7 +167,7 @@ class UserModel(Base):
     @property
     def account_code(self) -> str | None:
         """Get the account code from the related account.
-        
+
         Note: This requires the 'account' relationship to be loaded.
         """
         if hasattr(self, "account") and self.account:
@@ -177,7 +177,7 @@ class UserModel(Base):
     @property
     def account_name(self) -> str | None:
         """Get the account name from the related account.
-        
+
         Note: This requires the 'account' relationship to be loaded.
         """
         if hasattr(self, "account") and self.account:
@@ -187,7 +187,7 @@ class UserModel(Base):
     @property
     def role_name(self) -> str | None:
         """Get the role name from the related role.
-        
+
         Note: This requires the 'role' relationship to be loaded.
         """
         if hasattr(self, "role") and self.role:

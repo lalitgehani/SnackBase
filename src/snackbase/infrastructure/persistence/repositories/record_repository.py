@@ -73,9 +73,9 @@ class RecordRepository:
         system_fields = {
             "id": record_id,
             "account_id": account_id,
-            "created_at": now.isoformat(),
+            "created_at": now,
             "created_by": created_by,
-            "updated_at": now.isoformat(),
+            "updated_at": now,
             "updated_by": created_by,
         }
 
@@ -192,7 +192,7 @@ class RecordRepository:
                     sql_values[key] = value
                     
         # Always update system fields
-        sql_values["updated_at"] = now.isoformat()
+        sql_values["updated_at"] = now
         sql_values["updated_by"] = updated_by
         
         # 2. Build UPDATE statement
