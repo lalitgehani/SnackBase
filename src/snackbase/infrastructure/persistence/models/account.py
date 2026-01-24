@@ -101,11 +101,6 @@ class AccountModel(Base):
 
 
     __table_args__ = (
-        # Validate account_code format: 2 uppercase letters + 4 digits
-        CheckConstraint(
-            "account_code GLOB '[A-Z][A-Z][0-9][0-9][0-9][0-9]'",
-            name="ck_accounts_code_format",
-        ),
         # Validate slug format: 3-32 chars, alphanumeric + hyphens
         CheckConstraint(
             "length(slug) >= 3 AND length(slug) <= 32",

@@ -80,8 +80,8 @@ class DatabaseManager:
                 pool_size=self.settings.db_pool_size,
             )
 
-            # Apply SQLite pragmas on connection
-            if self.settings.database_url.startswith("sqlite"):
+            # Apply SQLite pragmas on connection (only for SQLite dialect)
+            if self._engine.dialect.name == "sqlite":
                 @event.listens_for(self._engine.sync_engine, "connect")
                 def set_sqlite_pragma(dbapi_connection, connection_record):
                     cursor = dbapi_connection.cursor()

@@ -10,7 +10,8 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
-from sqlalchemy.dialects import sqlite
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.types import JSON
 
 # revision identifiers, used by Alembic.
 revision: str = "c69bf537b237"
@@ -64,11 +65,11 @@ def upgrade() -> None:
             )
         )
 
-        # Add profile_data column (nullable JSON)
+        # Add profile_data column (nullable JSON) - dialect-agnostic
         batch_op.add_column(
             sa.Column(
                 "profile_data",
-                sqlite.JSON(),
+                JSON().with_variant(JSONB(), "postgresql"),
                 nullable=True,
                 comment="Additional profile data from external provider",
             )

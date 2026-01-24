@@ -1,7 +1,7 @@
 """initial_migration
 
 Revision ID: aeef347267b5
-Revises: 
+Revises:
 Create Date: 2025-12-31 14:24:30.320018
 
 """
@@ -9,7 +9,8 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
-from sqlalchemy.dialects import sqlite
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.types import JSON
 
 # revision identifiers, used by Alembic.
 revision: str = 'aeef347267b5'
@@ -28,7 +29,6 @@ def upgrade() -> None:
     sa.Column('name', sa.String(length=255), nullable=False, comment='Display name for the account'),
     sa.Column('created_at', sa.DateTime(), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
     sa.Column('updated_at', sa.DateTime(), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
-    sa.CheckConstraint("account_code GLOB '[A-Z][A-Z][0-9][0-9][0-9][0-9]'", name='ck_accounts_code_format'),
     sa.CheckConstraint('length(slug) >= 3 AND length(slug) <= 32', name='ck_accounts_slug_length'),
     sa.PrimaryKeyConstraint('id')
     )
@@ -57,7 +57,7 @@ def upgrade() -> None:
     sa.Column('occurred_at', sa.DateTime(), nullable=False, comment='Timestamp when the change occurred (UTC)'),
     sa.Column('checksum', sa.String(length=64), nullable=True, comment='SHA-256 hash of this audit entry'),
     sa.Column('previous_hash', sa.String(length=64), nullable=True, comment='Checksum of the previous audit entry (blockchain chain)'),
-    sa.Column('extra_metadata', sqlite.JSON(), nullable=True, comment='Additional metadata as JSON'),
+    sa.Column('extra_metadata', JSON().with_variant(JSONB(), "postgresql"), nullable=True, comment='Additional metadata as JSON'),
     sa.CheckConstraint("operation IN ('CREATE', 'UPDATE', 'DELETE')", name='ck_audit_log_operation'),
     sa.PrimaryKeyConstraint('id')
     )

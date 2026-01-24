@@ -197,18 +197,10 @@ class MigrationService:
     def _generate_create_table_op_lines(self, collection_name: str, schema: list[dict[str, Any]]) -> list[str]:
         table_name = TableBuilder.generate_table_name(collection_name)
         lines = [f"    op.create_table('{table_name}',"]
-        
-        # System columns
-        from snackbase.infrastructure.persistence.table_builder import SYSTEM_COLUMNS
-        # Mapping SYSTEM_COLUMNS (Deltas of sa.Column)
-        # system_cols = [("id", "TEXT PRIMARY KEY"), ...]
-        
-        # Actually, it's easier to just use op.create_table with column definitions
-        # translated from TableBuilder.FIELD_TYPE_TO_SQL
-        
-        # Instead of reinventing the wheel, let's look at TableBuilder.SYSTEM_COLUMNS
-        # and translate to op.create_table syntax.
-        
+
+        # System columns - hardcoded for Alembic migration generation
+        # Using standard SQLAlchemy types that work across dialects
+
         lines.append("        sa.Column('id', sa.String(36), primary_key=True),")
         lines.append("        sa.Column('account_id', sa.String(36), sa.ForeignKey('accounts.id', ondelete='CASCADE'), nullable=False),")
         lines.append("        sa.Column('created_at', sa.DateTime(), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),")

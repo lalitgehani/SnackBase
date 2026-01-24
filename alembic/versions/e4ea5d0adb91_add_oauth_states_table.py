@@ -9,7 +9,8 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
-from sqlalchemy.dialects import sqlite
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.types import JSON
 
 
 # revision identifiers, used by Alembic.
@@ -56,7 +57,7 @@ def upgrade() -> None:
         ),
         sa.Column(
             "metadata",
-            sqlite.JSON(),
+            JSON().with_variant(JSONB(), "postgresql"),
             nullable=True,
             comment="Optional additional metadata for the flow",
         ),

@@ -5,7 +5,7 @@ Generates DDL and creates tables for user-defined collections.
 
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from snackbase.core.logging import get_logger
@@ -14,22 +14,51 @@ from snackbase.domain.services import FieldType, OnDeleteAction
 logger = get_logger(__name__)
 
 
-# SQL type mapping for each field type
+# SQL type mapping for each field type - dialect-specific
 FIELD_TYPE_TO_SQL = {
-    FieldType.TEXT.value: "TEXT",
-    FieldType.NUMBER.value: "REAL",
-    FieldType.BOOLEAN.value: "INTEGER",  # 0/1 for SQLite compatibility
-    FieldType.DATETIME.value: "DATETIME",
-    FieldType.EMAIL.value: "TEXT",
-    FieldType.URL.value: "TEXT",
-    FieldType.JSON.value: "TEXT",  # JSON stored as TEXT for SQLite
-    FieldType.REFERENCE.value: "TEXT",  # Reference stored as TEXT (foreign key ID)
-    FieldType.FILE.value: "TEXT",  # File metadata stored as JSON TEXT
-    FieldType.DATE.value: "DATE",
+    "sqlite": {
+        FieldType.TEXT.value: "TEXT",
+        FieldType.NUMBER.value: "REAL",
+        FieldType.BOOLEAN.value: "INTEGER",  # 0/1 for SQLite compatibility
+        FieldType.DATETIME.value: "DATETIME",
+        FieldType.EMAIL.value: "TEXT",
+        FieldType.URL.value: "TEXT",
+        FieldType.JSON.value: "TEXT",  # JSON stored as TEXT for SQLite
+        FieldType.REFERENCE.value: "TEXT",  # Reference stored as TEXT (foreign key ID)
+        FieldType.FILE.value: "TEXT",  # File metadata stored as JSON TEXT
+        FieldType.DATE.value: "DATE",
+    },
+    "postgresql": {
+        FieldType.TEXT.value: "TEXT",
+        FieldType.NUMBER.value: "DOUBLE PRECISION",
+        FieldType.BOOLEAN.value: "BOOLEAN",
+        FieldType.DATETIME.value: "TIMESTAMP WITH TIME ZONE",
+        FieldType.EMAIL.value: "TEXT",
+        FieldType.URL.value: "TEXT",
+        FieldType.JSON.value: "JSONB",  # Native JSONB for PostgreSQL
+        FieldType.REFERENCE.value: "TEXT",  # Reference stored as TEXT (foreign key ID)
+        FieldType.FILE.value: "JSONB",  # File metadata stored as JSONB
+        FieldType.DATE.value: "DATE",
+    },
 }
 
+
+def get_sql_type(field_type: str, dialect: str = "sqlite") -> str:
+    """Get SQL type for a field type based on the database dialect.
+
+    Args:
+        field_type: The field type value.
+        dialect: The database dialect ("sqlite" or "postgresql").
+
+    Returns:
+        The SQL type string for the given field type.
+    """
+    dialect_types = FIELD_TYPE_TO_SQL.get(dialect, FIELD_TYPE_TO_SQL["sqlite"])
+    return dialect_types.get(field_type, "TEXT")
+
 # System columns auto-added to every collection table
-SYSTEM_COLUMNS = [
+# Format: (column_name, column_definition) where definition is dialect-specific
+SYSTEM_COLUMNS_SQLITE = [
     ("id", "TEXT PRIMARY KEY"),
     ("account_id", "VARCHAR(36) NOT NULL REFERENCES accounts(id) ON DELETE CASCADE"),
     ("created_at", "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP"),
@@ -37,6 +66,29 @@ SYSTEM_COLUMNS = [
     ("updated_at", "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP"),
     ("updated_by", "TEXT NOT NULL"),
 ]
+
+SYSTEM_COLUMNS_POSTGRESQL = [
+    ("id", "TEXT PRIMARY KEY"),
+    ("account_id", "VARCHAR(36) NOT NULL REFERENCES accounts(id) ON DELETE CASCADE"),
+    ("created_at", "TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP"),
+    ("created_by", "TEXT NOT NULL"),
+    ("updated_at", "TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP"),
+    ("updated_by", "TEXT NOT NULL"),
+]
+
+
+def get_system_columns(dialect: str = "sqlite") -> list[tuple[str, str]]:
+    """Get system columns for the given dialect.
+
+    Args:
+        dialect: The database dialect ("sqlite" or "postgresql").
+
+    Returns:
+        List of (column_name, column_definition) tuples.
+    """
+    if dialect == "postgresql":
+        return SYSTEM_COLUMNS_POSTGRESQL
+    return SYSTEM_COLUMNS_SQLITE
 
 
 class TableBuilder:
@@ -59,19 +111,20 @@ class TableBuilder:
         return f"col_{collection_name.lower()}"
 
     @classmethod
-    def build_column_def(cls, field: dict[str, Any], table_name: str) -> tuple[str, str | None]:
+    def build_column_def(cls, field: dict[str, Any], table_name: str, dialect: str = "sqlite") -> tuple[str, str | None]:
         """Build column definition for a single field.
 
         Args:
             field: The field definition dict.
             table_name: The parent table name (for reference constraints).
+            dialect: The database dialect ("sqlite" or "postgresql").
 
         Returns:
             Tuple of (column definition, optional foreign key constraint).
         """
         name = field["name"]
         field_type = field["type"].lower()
-        sql_type = FIELD_TYPE_TO_SQL.get(field_type, "TEXT")
+        sql_type = get_sql_type(field_type, dialect)
 
         # Build column definition parts
         parts = [f'"{name}"', sql_type]
@@ -86,7 +139,11 @@ class TableBuilder:
             if isinstance(default, str):
                 parts.append(f"DEFAULT '{default}'")
             elif isinstance(default, bool):
-                parts.append(f"DEFAULT {1 if default else 0}")
+                # PostgreSQL uses TRUE/FALSE, SQLite uses 1/0
+                if dialect == "postgresql":
+                    parts.append(f"DEFAULT {str(default).upper()}")
+                else:
+                    parts.append(f"DEFAULT {1 if default else 0}")
             else:
                 parts.append(f"DEFAULT {default}")
 
@@ -117,12 +174,13 @@ class TableBuilder:
         return column_def, fk_constraint
 
     @classmethod
-    def build_create_table_ddl(cls, collection_name: str, schema: list[dict[str, Any]]) -> str:
+    def build_create_table_ddl(cls, collection_name: str, schema: list[dict[str, Any]], dialect: str = "sqlite") -> str:
         """Build complete CREATE TABLE DDL statement.
 
         Args:
             collection_name: The collection name.
             schema: List of field definitions.
+            dialect: The database dialect ("sqlite" or "postgresql").
 
         Returns:
             The DDL statement as a string.
@@ -130,12 +188,13 @@ class TableBuilder:
         table_name = cls.generate_table_name(collection_name)
 
         # Start with system columns
-        column_defs = [f'"{col}" {col_type}' for col, col_type in SYSTEM_COLUMNS]
+        system_columns = get_system_columns(dialect)
+        column_defs = [f'"{col}" {col_type}' for col, col_type in system_columns]
 
         # Build user field columns
         fk_constraints = []
         for field in schema:
-            col_def, fk_constraint = cls.build_column_def(field, table_name)
+            col_def, fk_constraint = cls.build_column_def(field, table_name, dialect)
             column_defs.append(col_def)
             if fk_constraint:
                 fk_constraints.append(fk_constraint)
@@ -196,14 +255,18 @@ class TableBuilder:
         """
         table_name = cls.generate_table_name(collection_name)
 
+        # Detect dialect from the engine
+        dialect = engine.dialect.name if hasattr(engine, "dialect") else "sqlite"
+
         # Build DDL statements
-        create_table_ddl = cls.build_create_table_ddl(collection_name, schema)
+        create_table_ddl = cls.build_create_table_ddl(collection_name, schema, dialect)
         index_ddls = cls.build_index_ddl(collection_name, schema)
 
         logger.info(
             "Creating collection table",
             table_name=table_name,
             collection_name=collection_name,
+            dialect=dialect,
         )
 
         async with engine.begin() as conn:
@@ -220,7 +283,7 @@ class TableBuilder:
 
     @classmethod
     async def table_exists(cls, engine: AsyncEngine, collection_name: str) -> bool:
-        """Check if a table already exists.
+        """Check if a table already exists using SQLAlchemy Inspector.
 
         Args:
             engine: SQLAlchemy async engine.
@@ -231,25 +294,23 @@ class TableBuilder:
         """
         table_name = cls.generate_table_name(collection_name)
 
-        # SQLite-specific query to check table existence
-        check_sql = """
-            SELECT name FROM sqlite_master
-            WHERE type='table' AND name=:table_name
-        """
+        # Use SQLAlchemy's Inspector for dialect-agnostic table existence check
+        # Need to use sync_engine for inspect
+        sync_engine = engine.sync_engine if hasattr(engine, "sync_engine") else engine
+        inspector = inspect(sync_engine)
 
-        async with engine.connect() as conn:
-            result = await conn.execute(text(check_sql), {"table_name": table_name})
-            return result.scalar_one_or_none() is not None
+        return inspector.has_table(table_name)
 
     @classmethod
     def build_add_column_ddl(
-        cls, collection_name: str, fields: list[dict[str, Any]]
+        cls, collection_name: str, fields: list[dict[str, Any]], dialect: str = "sqlite"
     ) -> list[str]:
         """Build ALTER TABLE ADD COLUMN statements for new fields.
 
         Args:
             collection_name: The collection name.
             fields: List of new field definitions to add.
+            dialect: The database dialect ("sqlite" or "postgresql").
 
         Returns:
             List of DDL statements.
@@ -260,19 +321,23 @@ class TableBuilder:
         for field in fields:
             name = field["name"]
             field_type = field["type"].lower()
-            sql_type = FIELD_TYPE_TO_SQL.get(field_type, "TEXT")
+            sql_type = get_sql_type(field_type, dialect)
 
             # Build column definition parts
             parts = [f'"{name}"', sql_type]
 
             # Note: SQLite doesn't support adding NOT NULL columns without a default
-            # So we only add NOT NULL if there's a default value
+            # PostgreSQL supports it, but we handle both consistently
             default = field.get("default")
             if default is not None:
                 if isinstance(default, str):
                     parts.append(f"DEFAULT '{default}'")
                 elif isinstance(default, bool):
-                    parts.append(f"DEFAULT {1 if default else 0}")
+                    # PostgreSQL uses TRUE/FALSE, SQLite uses 1/0
+                    if dialect == "postgresql":
+                        parts.append(f"DEFAULT {str(default).upper()}")
+                    else:
+                        parts.append(f"DEFAULT {1 if default else 0}")
                 else:
                     parts.append(f"DEFAULT {default}")
 
@@ -298,13 +363,17 @@ class TableBuilder:
             fields: List of new field definitions to add.
         """
         table_name = cls.generate_table_name(collection_name)
-        ddl_statements = cls.build_add_column_ddl(collection_name, fields)
+
+        # Detect dialect from the engine
+        dialect = engine.dialect.name if hasattr(engine, "dialect") else "sqlite"
+        ddl_statements = cls.build_add_column_ddl(collection_name, fields, dialect)
 
         logger.info(
             "Adding columns to collection table",
             table_name=table_name,
             collection_name=collection_name,
             field_count=len(fields),
+            dialect=dialect,
         )
 
         async with engine.begin() as conn:

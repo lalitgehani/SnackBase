@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.core.logging import get_logger
@@ -363,15 +363,9 @@ class RecordRepository:
         """
         table_name = TableBuilder.generate_table_name(target_collection)
 
-        # First check if table exists
-        check_table_sql = """
-            SELECT name FROM sqlite_master 
-            WHERE type='table' AND name=:table_name
-        """
-        table_result = await self.session.execute(
-            text(check_table_sql), {"table_name": table_name}
-        )
-        if table_result.scalar_one_or_none() is None:
+        # First check if table exists using dialect-agnostic Inspector
+        inspector = inspect(self.session.bind)
+        if not inspector.has_table(table_name):
             return False
 
         # Check if record exists with account scoping

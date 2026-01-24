@@ -10,7 +10,8 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
-from sqlalchemy.dialects import sqlite
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.types import JSON
 
 # revision identifiers, used by Alembic.
 revision: str = "b6a59f965907"
@@ -62,13 +63,13 @@ def upgrade() -> None:
         ),
         sa.Column(
             "config_schema",
-            sqlite.JSON(),
+            JSON().with_variant(JSONB(), "postgresql"),
             nullable=True,
             comment="JSON Schema for configuration validation",
         ),
         sa.Column(
             "config",
-            sqlite.JSON(),
+            JSON().with_variant(JSONB(), "postgresql"),
             nullable=False,
             comment="Provider configuration as encrypted JSON",
         ),

@@ -8,7 +8,8 @@ from datetime import datetime
 import uuid
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, func
-from sqlalchemy.dialects.sqlite import JSON
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.types import JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from snackbase.infrastructure.persistence.database import Base
@@ -66,7 +67,7 @@ class APIKeyModel(Base):
         comment="Foreign key to accounts table",
     )
     scopes: Mapped[list[str] | None] = mapped_column(
-        JSON,
+        JSON().with_variant(JSONB(), "postgresql"),
         nullable=True,
         comment="JSON list of permission scopes",
     )

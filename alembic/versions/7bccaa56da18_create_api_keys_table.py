@@ -9,7 +9,8 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
-from sqlalchemy.dialects import sqlite
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.types import JSON
 
 # revision identifiers, used by Alembic.
 revision: str = '7bccaa56da18'
@@ -27,7 +28,7 @@ def upgrade() -> None:
     sa.Column('name', sa.String(length=100), nullable=False, comment='Human-readable name for the API key'),
     sa.Column('user_id', sa.String(length=36), nullable=False, comment='Foreign key to users table'),
     sa.Column('account_id', sa.String(length=36), nullable=False, comment='Foreign key to accounts table'),
-    sa.Column('scopes', sqlite.JSON(), nullable=True, comment='JSON list of permission scopes'),
+    sa.Column('scopes', JSON().with_variant(JSONB(), "postgresql"), nullable=True, comment='JSON list of permission scopes'),
     sa.Column('expires_at', sa.DateTime(timezone=True), nullable=True, comment='Optional expiration timestamp'),
     sa.Column('is_active', sa.Boolean(), server_default='1', nullable=False, comment='Whether the API key is active (soft delete)'),
     sa.Column('last_used_at', sa.DateTime(timezone=True), nullable=True, comment='Timestamp of last successful usage'),

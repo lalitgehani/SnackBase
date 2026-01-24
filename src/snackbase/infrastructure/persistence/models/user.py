@@ -6,7 +6,8 @@ Users belong to accounts and are uniquely identified by (account_id, email).
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, UniqueConstraint, func
-from sqlalchemy.dialects.sqlite import JSON
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.types import JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from snackbase.infrastructure.persistence.database import Base
@@ -124,7 +125,7 @@ class UserModel(Base):
         comment="Email address from external provider (may differ from local email)",
     )
     profile_data: Mapped[dict | None] = mapped_column(
-        JSON,
+        JSON().with_variant(JSONB(), "postgresql"),
         nullable=True,
         comment="Additional profile data from external provider",
     )

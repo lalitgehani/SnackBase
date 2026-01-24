@@ -16,7 +16,8 @@ from sqlalchemy import (
     event,
     func,
 )
-from sqlalchemy.dialects.sqlite import JSON
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.types import JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
 from snackbase.infrastructure.persistence.database import Base
@@ -180,7 +181,7 @@ class AuditLogModel(Base):
 
     # Additional data
     extra_metadata: Mapped[dict | None] = mapped_column(
-        JSON,
+        JSON().with_variant(JSONB(), "postgresql"),
         nullable=True,
         comment="Additional metadata as JSON",
     )

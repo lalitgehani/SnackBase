@@ -16,7 +16,8 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.sqlite import JSON
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.types import JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from snackbase.infrastructure.persistence.database import Base
@@ -77,12 +78,12 @@ class ConfigurationModel(Base):
         comment="Path to provider logo",
     )
     config_schema: Mapped[dict | None] = mapped_column(
-        JSON,
+        JSON().with_variant(JSONB(), "postgresql"),
         nullable=True,
         comment="JSON Schema for configuration validation",
     )
     config: Mapped[dict] = mapped_column(
-        JSON,
+        JSON().with_variant(JSONB(), "postgresql"),
         nullable=False,
         comment="Provider configuration as encrypted JSON",
     )
@@ -197,7 +198,7 @@ class OAuthStateModel(Base):
     )
     metadata_: Mapped[dict | None] = mapped_column(
         "metadata",
-        JSON,
+        JSON().with_variant(JSONB(), "postgresql"),
         nullable=True,
         comment="Optional additional metadata for the flow",
     )

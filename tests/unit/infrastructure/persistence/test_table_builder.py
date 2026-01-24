@@ -3,9 +3,11 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from snackbase.infrastructure.persistence.table_builder import TableBuilder
+from snackbase.infrastructure.persistence.table_builder import TableBuilder, get_system_columns
 from snackbase.domain.services.collection_validator import FieldType, OnDeleteAction
-from snackbase.infrastructure.persistence.table_builder import SYSTEM_COLUMNS
+
+# Use SQLite system columns for tests (default behavior)
+SYSTEM_COLUMNS = get_system_columns("sqlite")
 
 def test_generate_table_name():
     """Test generating a table name from a collection name."""
@@ -77,15 +79,15 @@ def test_build_create_table_ddl():
         {"name": "title", "type": FieldType.TEXT.value, "required": True},
         {"name": "views", "type": FieldType.NUMBER.value, "default": 0}
     ]
-    
+
     ddl = TableBuilder.build_create_table_ddl(collection_name, schema)
-    
+
     assert 'CREATE TABLE "col_posts"' in ddl
-    
+
     # Check system columns
     for col, col_type in SYSTEM_COLUMNS:
         assert f'"{col}" {col_type}' in ddl
-        
+
     # Check user columns
     assert '"title" TEXT NOT NULL' in ddl
     assert '"views" REAL DEFAULT 0' in ddl
@@ -97,24 +99,24 @@ def test_build_index_ddl():
         {"name": "slug", "type": FieldType.TEXT.value, "unique": True},
         {"name": "author_id", "type": FieldType.REFERENCE.value, "collection": "authors"}
     ]
-    
+
     indexes = TableBuilder.build_index_ddl(collection_name, schema)
-    
+
     # Needs to cover account_id, unique fields, and reference fields
     # But wait, unique fields might NOT get explicit indexes if UNIQUE constraint is enough for SQLite?
     # Let's check the code: TableBuilder actually DOES create explicit indexes for reference fields AND account_id
     # And it loops through schema to index reference fields.
-    
+
     assert len(indexes) == 2 # 1 for account_id + 1 for reference field author_id. Unique slug usually handled by constraint but check code.
-    
+
     # Let's re-read TableBuilder.build_index_ddl from the previous turn...
     # It does: indexes.append(account_id)
     # Then loops schema: if field_type == REFERENCE => indexes.append(name)
     # It does NOT add index for unique fields explicitly in the loop shown in previous turn unless I misread.
-    # Re-reading step 26: 
+    # Re-reading step 26:
     # line 177: if field_type == FieldType.REFERENCE.value:
     # So it only explicitly indexes references in that loop.
-    
+
     assert any('ON "col_posts"("account_id")' in idx for idx in indexes)
     assert any('ON "col_posts"("author_id")' in idx for idx in indexes)
 
@@ -122,30 +124,40 @@ def test_build_index_ddl():
 async def test_table_exists_true():
     """Test checking if table exists (true case)."""
     engine = AsyncMock(spec=AsyncEngine)
-    mock_conn = AsyncMock()
-    engine.connect.return_value.__aenter__.return_value = mock_conn
-    
-    mock_result = MagicMock()
-    mock_result.scalar_one_or_none.return_value = "col_posts"
-    mock_conn.execute.return_value = mock_result
-    
-    exists = await TableBuilder.table_exists(engine, "posts")
-    
-    assert exists is True
-    engine.connect.assert_called_once()
-    mock_conn.execute.assert_called_once()
+    # Mock the sync_engine for Inspector
+    engine.sync_engine = MagicMock()
+    engine.dialect = MagicMock()
+    engine.dialect.name = "sqlite"
+
+    # Create a mock inspector with has_table method
+    from unittest.mock import patch
+    with patch('snackbase.infrastructure.persistence.table_builder.inspect') as mock_inspect:
+        mock_inspector = MagicMock()
+        mock_inspector.has_table.return_value = True
+        mock_inspect.return_value = mock_inspector
+
+        exists = await TableBuilder.table_exists(engine, "posts")
+
+        assert exists is True
+        mock_inspector.has_table.assert_called_once_with("col_posts")
 
 @pytest.mark.asyncio
 async def test_table_exists_false():
     """Test checking if table exists (false case)."""
     engine = AsyncMock(spec=AsyncEngine)
-    mock_conn = AsyncMock()
-    engine.connect.return_value.__aenter__.return_value = mock_conn
-    
-    mock_result = MagicMock()
-    mock_result.scalar_one_or_none.return_value = None
-    mock_conn.execute.return_value = mock_result
-    
-    exists = await TableBuilder.table_exists(engine, "new_table")
-    
-    assert exists is False
+    # Mock the sync_engine for Inspector
+    engine.sync_engine = MagicMock()
+    engine.dialect = MagicMock()
+    engine.dialect.name = "sqlite"
+
+    # Create a mock inspector with has_table method
+    from unittest.mock import patch
+    with patch('snackbase.infrastructure.persistence.table_builder.inspect') as mock_inspect:
+        mock_inspector = MagicMock()
+        mock_inspector.has_table.return_value = False
+        mock_inspect.return_value = mock_inspector
+
+        exists = await TableBuilder.table_exists(engine, "new_table")
+
+        assert exists is False
+        mock_inspector.has_table.assert_called_once_with("col_new_table")
