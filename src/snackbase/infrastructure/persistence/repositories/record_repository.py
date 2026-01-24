@@ -44,6 +44,31 @@ class RecordRepository:
         """
         self.session = session
 
+    def _get_dialect(self) -> str:
+        """Get the database dialect name.
+
+        Returns:
+            The dialect name (e.g., 'sqlite', 'postgresql').
+        """
+        if self.session.bind and hasattr(self.session.bind, 'dialect'):
+            return self.session.bind.dialect.name
+        return "sqlite"  # Default fallback
+
+    def _convert_boolean_for_db(self, value: bool) -> bool | int:
+        """Convert a boolean value for database storage.
+
+        PostgreSQL supports native booleans, SQLite uses 0/1.
+
+        Args:
+            value: The boolean value to convert.
+
+        Returns:
+            Native bool for PostgreSQL, int (0/1) for SQLite.
+        """
+        if self._get_dialect() == "postgresql":
+            return value
+        return 1 if value else 0
+
     async def insert_record(
         self,
         collection_name: str,
@@ -91,7 +116,7 @@ class RecordRepository:
                 if field_type == "json" and value is not None:
                     sql_values[key] = json.dumps(value)
                 elif field_type == "boolean" and isinstance(value, bool):
-                    sql_values[key] = 1 if value else 0
+                    sql_values[key] = self._convert_boolean_for_db(value)
                 else:
                     sql_values[key] = value
             else:
@@ -185,7 +210,7 @@ class RecordRepository:
                     sql_values[key] = json.dumps(value)
                 elif field_type == "boolean":
                     if isinstance(value, bool):
-                        sql_values[key] = 1 if value else 0
+                        sql_values[key] = self._convert_boolean_for_db(value)
                     else:
                         sql_values[key] = value
                 else:
@@ -448,9 +473,10 @@ class RecordRepository:
                     field_type = schema_field.get("type", "text").lower()
                     if field_type == "boolean":
                         if isinstance(value, str):
-                            params[param_name] = 1 if value.lower() == "true" else 0
+                            bool_value = value.lower() == "true"
                         else:
-                             params[param_name] = 1 if value else 0
+                            bool_value = bool(value)
+                        params[param_name] = self._convert_boolean_for_db(bool_value)
                     else:
                         params[param_name] = value
                 else:

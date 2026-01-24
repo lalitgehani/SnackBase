@@ -201,6 +201,14 @@ class AuditLogService:
             for column_name, new_value in new_columns.items():
                 old_value = old_values.get(column_name)
                 
+                # Convert old_value to string (old_values comes from external dict 
+                # and may contain raw Python types like bool, datetime, etc.)
+                if old_value is not None:
+                    if isinstance(old_value, datetime):
+                        old_value = old_value.isoformat()
+                    else:
+                        old_value = str(old_value)
+                
                 # Only create audit entry if value changed
                 if old_value != new_value:
                     # Only mask sensitive fields (security requirement), store everything else as-is

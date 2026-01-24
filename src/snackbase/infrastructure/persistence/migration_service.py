@@ -225,7 +225,8 @@ class MigrationService:
                 if isinstance(default, str):
                     col_part += f", server_default=sa.text(\"'{default}'\")"
                 elif isinstance(default, bool):
-                     col_part += f", server_default=sa.text('{1 if default else 0}')"
+                    # Use sa.true()/sa.false() for dialect-agnostic boolean defaults
+                    col_part += f", server_default=sa.true()" if default else f", server_default=sa.false()"
                 else:
                     col_part += f", server_default=sa.text('{default}')"
             col_part += "),"
@@ -271,7 +272,8 @@ class MigrationService:
                 if isinstance(default, str):
                     col_part += f", server_default=sa.text(\"'{default}'\")"
                 elif isinstance(default, bool):
-                     col_part += f", server_default=sa.text('{1 if default else 0}')"
+                    # Use sa.true()/sa.false() for dialect-agnostic boolean defaults
+                    col_part += f", server_default=sa.true()" if default else f", server_default=sa.false()"
                 else:
                     col_part += f", server_default=sa.text('{default}')"
             col_part += "))"
