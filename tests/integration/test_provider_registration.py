@@ -22,9 +22,14 @@ class TestProviderRegistration:
     def test_config_registry_exists_on_app_state(self, app):
         """Test that config_registry is created and stored on app.state."""
         # The lifespan context manager runs during TestClient initialization
+        # Use a fresh TestClient context to avoid event loop issues
         with TestClient(app):
             assert hasattr(app.state, "config_registry")
             assert app.state.config_registry is not None
+
+        # Explicitly clean up after test to prevent event loop leakage
+        import gc
+        gc.collect()
 
     def test_email_password_provider_registered(self, app):
         """Test that email/password provider is registered on startup."""

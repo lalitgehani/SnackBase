@@ -147,19 +147,38 @@ def upgrade() -> None:
 
     # Ensure system account (SY0000) exists
     # This is idempotent - if it already exists, this will be a no-op
-    op.execute(
-        """
-        INSERT OR IGNORE INTO accounts (id, account_code, slug, name, created_at, updated_at)
-        VALUES (
-            '00000000-0000-0000-0000-000000000000',
-            'SY0000',
-            'system',
-            'System Account',
-            CURRENT_TIMESTAMP,
-            CURRENT_TIMESTAMP
+    # Use dialect-specific syntax: SQLite uses INSERT OR IGNORE, PostgreSQL uses ON CONFLICT
+    bind = op.get_bind()
+    if bind.dialect.name == "postgresql":
+        op.execute(
+            """
+            INSERT INTO accounts (id, account_code, slug, name, created_at, updated_at)
+            VALUES (
+                '00000000-0000-0000-0000-000000000000',
+                'SY0000',
+                'system',
+                'System Account',
+                CURRENT_TIMESTAMP,
+                CURRENT_TIMESTAMP
+            )
+            ON CONFLICT (id) DO NOTHING
+            """
         )
-        """
-    )
+    else:
+        # SQLite and other databases
+        op.execute(
+            """
+            INSERT OR IGNORE INTO accounts (id, account_code, slug, name, created_at, updated_at)
+            VALUES (
+                '00000000-0000-0000-0000-000000000000',
+                'SY0000',
+                'system',
+                'System Account',
+                CURRENT_TIMESTAMP,
+                CURRENT_TIMESTAMP
+            )
+            """
+        )
 
 
 def downgrade() -> None:

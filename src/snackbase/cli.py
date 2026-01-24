@@ -250,12 +250,6 @@ def init_db(force: bool) -> None:
         await _seed_default_roles(db, RoleModel)
         click.echo("Default roles seeded.")
 
-        # Seed default permissions
-        click.echo("Seeding default permissions...")
-        from snackbase.infrastructure.persistence.database import _seed_default_permissions
-        await _seed_default_permissions(db)
-        click.echo("Default permissions seeded.")
-
         # Create superadmin from environment variables if configured
         from snackbase.infrastructure.persistence.database import _create_superadmin_from_env
         await _create_superadmin_from_env(db)

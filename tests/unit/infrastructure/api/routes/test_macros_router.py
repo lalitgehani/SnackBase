@@ -7,9 +7,11 @@ import pytest
 import pytest_asyncio
 from fastapi import status
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.infrastructure.api.app import app
 from snackbase.infrastructure.api.dependencies import get_current_user, require_superadmin
+from snackbase.infrastructure.api.routes.macros_router import get_db_session
 from snackbase.infrastructure.persistence.models.macro import MacroModel
 @pytest.fixture
 def mock_repo():
@@ -247,15 +249,19 @@ async def test_delete_macro_not_found(async_client, mock_repo):
 
 
 @pytest.mark.asyncio
-async def test_test_macro_success(async_client, mock_repo):
+async def test_test_macro_success(async_client, mock_repo, db_session: AsyncSession):
     """Test successful macro execution."""
     async def admin_override():
         user = AsyncMock()
         user.user_id = "admin"
         return user
-    
+
+    async def db_override():
+        yield db_session
+
     app.dependency_overrides[require_superadmin] = admin_override
-    
+    app.dependency_overrides[get_db_session] = db_override
+
     # Mock macro with one parameter
     mock_macro = MacroModel(
         id=1,
@@ -266,15 +272,15 @@ async def test_test_macro_success(async_client, mock_repo):
         updated_at=datetime.now(),
     )
     mock_repo.get_by_id.return_value = mock_macro
-    
+
     payload = {"parameters": ["test_value"]}
-    
+
     response = await async_client.post(
         "/api/v1/macros/1/test",
         json=payload,
         headers={"Authorization": "Bearer dummy"},
     )
-    
+
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
     assert "result" in data

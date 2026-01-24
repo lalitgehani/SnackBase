@@ -21,6 +21,34 @@ from snackbase.core.logging import get_logger
 logger = get_logger(__name__)
 
 
+@pytest_asyncio.fixture(autouse=True)
+async def _reset_global_db_manager():
+    """Reset the global database manager between tests to prevent event loop issues.
+
+    This fixture ensures that each test starts with a clean database manager state,
+    preventing "event loop is closed" and "another operation is in progress" errors
+    that occur when tests share the global _db_manager singleton.
+    """
+    from snackbase.infrastructure.persistence.database import _db_manager
+
+    # Clean up before test
+    if _db_manager is not None and _db_manager._engine is not None:
+        try:
+            await _db_manager.disconnect()
+        except Exception:
+            # Ignore errors during cleanup
+            pass
+
+    yield
+
+    # Clean up after test
+    if _db_manager is not None and _db_manager._engine is not None:
+        try:
+            await _db_manager.disconnect()
+        except Exception:
+            # Ignore errors during cleanup
+            pass
+
 
 @pytest.fixture(autouse=True)
 def _setup_config_registry():

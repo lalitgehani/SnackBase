@@ -58,6 +58,19 @@ def upgrade() -> None:
             """
         )
 
+        # Create function for DELETE trigger
+        op.execute(
+            """
+            CREATE OR REPLACE FUNCTION prevent_audit_log_delete_func()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                RAISE EXCEPTION 'Audit log entries are immutable and cannot be deleted';
+                RETURN NULL;
+            END;
+            $$ LANGUAGE plpgsql;
+            """
+        )
+
         # PostgreSQL trigger to prevent UPDATE
         op.execute(
             """
@@ -75,19 +88,6 @@ def upgrade() -> None:
             BEFORE DELETE ON audit_log
             FOR EACH ROW
             EXECUTE FUNCTION prevent_audit_log_delete_func();
-            """
-        )
-
-        # Create function for DELETE trigger
-        op.execute(
-            """
-            CREATE OR REPLACE FUNCTION prevent_audit_log_delete_func()
-            RETURNS TRIGGER AS $$
-            BEGIN
-                RAISE EXCEPTION 'Audit log entries are immutable and cannot be deleted';
-                RETURN NULL;
-            END;
-            $$ LANGUAGE plpgsql;
             """
         )
 
