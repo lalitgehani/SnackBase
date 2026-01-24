@@ -1,5 +1,5 @@
 """Unit tests for CollectionsRouter."""
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -58,8 +58,8 @@ async def test_create_collection_success(
         id="col-123",
         name="TestCollection",
         schema='[{"name": "title", "type": "text", "required": true}, {"name": "count", "type": "number", "default": 0}]',
-        created_at=datetime.now(),
-        updated_at=datetime.now(),
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
     )
     mock_service.create_collection = AsyncMock(return_value=collection)
     
@@ -161,8 +161,8 @@ async def test_create_collection_with_pii_fields(
         id="col-456",
         name="Customers",
         schema='[{"name": "email", "type": "email", "pii": true, "mask_type": "email"}, {"name": "ssn", "type": "text", "pii": true, "mask_type": "ssn"}, {"name": "name", "type": "text", "required": true, "pii": false, "mask_type": null}]',
-        created_at=datetime.now(),
-        updated_at=datetime.now(),
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
     )
     mock_service.create_collection = AsyncMock(return_value=collection)
     

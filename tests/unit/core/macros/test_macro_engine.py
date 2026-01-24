@@ -65,8 +65,8 @@ async def test_builtin_owns_record(macro_engine):
 @pytest.mark.asyncio
 async def test_builtin_in_time_range(macro_engine):
     """Test @in_time_range built-in macro."""
-    from datetime import datetime
-    current = datetime.now().hour
+    from datetime import datetime, timezone
+    current = datetime.now(timezone.utc).hour
     
     # Range covering current hour
     start = current - 1

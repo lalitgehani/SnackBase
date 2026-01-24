@@ -5,7 +5,7 @@ Users can belong to multiple groups (many-to-many relationship).
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 @dataclass
@@ -28,8 +28,8 @@ class Group:
     account_id: str
     name: str
     description: str | None = None
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def __post_init__(self) -> None:
         """Validate group data after initialization."""

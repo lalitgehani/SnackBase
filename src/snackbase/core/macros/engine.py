@@ -149,8 +149,8 @@ class MacroExecutionEngine:
         return str(user_id) == str(owner_id)
 
     def _execute_in_time_range(self, args: list[Any], context: dict[str, Any]) -> bool:
-        """Check if current time is in range."""
-        from datetime import datetime
+        """Check if current time is in range (UTC)."""
+        from datetime import datetime, timezone
         
         if len(args) != 2:
             return False
@@ -158,7 +158,7 @@ class MacroExecutionEngine:
         try:
             start_hour = float(args[0])
             end_hour = float(args[1])
-            current_hour = datetime.now().hour
+            current_hour = datetime.now(timezone.utc).hour
             return start_hour <= current_hour < end_hour
         except (ValueError, TypeError):
             return False

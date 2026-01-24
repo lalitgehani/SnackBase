@@ -5,7 +5,7 @@ defines the fields, types, and constraints for records in the collection.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 
@@ -27,8 +27,8 @@ class Collection:
     id: str
     name: str
     schema: dict[str, Any]
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def __post_init__(self) -> None:
         """Validate collection data after initialization."""

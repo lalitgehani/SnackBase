@@ -136,11 +136,11 @@ def test_register_endpoint_success(
     mock_jwt.get_expires_in.return_value = 3600
     
     # Mock session refresh to set created_at
-    from datetime import datetime
+    from datetime import datetime, timezone
     
     async def mock_refresh(instance):
-        instance.created_at = datetime.now()
-        instance.updated_at = datetime.now()
+        instance.created_at = datetime.now(timezone.utc)
+        instance.updated_at = datetime.now(timezone.utc)
 
     # We need to override the database dependency to return a mock session
     # effectively ignoring the real DB connection
@@ -249,7 +249,7 @@ def test_register_slug_conflict(mock_account_repo, mock_validator, mock_get_sett
     app.dependency_overrides = {}
 
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 @patch("snackbase.infrastructure.api.routes.auth_router.get_settings")
 @patch("snackbase.infrastructure.api.routes.auth_router.verify_password")
@@ -280,7 +280,7 @@ def test_login_success(
     account_mock.id = "XY1234"
     account_mock.slug = "test-account"
     account_mock.name = "Test Account"
-    account_mock.created_at = datetime.now()
+    account_mock.created_at = datetime.now(timezone.utc)
     account_repo.get_by_slug_or_code = AsyncMock(return_value=account_mock)
     
     user_repo = mock_user_repo.return_value
@@ -291,7 +291,7 @@ def test_login_success(
     user_mock.is_active = True
     user_mock.email_verified = True
     user_mock.role_id = "role-id"
-    user_mock.created_at = datetime.now()
+    user_mock.created_at = datetime.now(timezone.utc)
     user_mock.auth_provider = "password"
     user_mock.auth_provider_name = None
     user_repo.get_by_email_and_account = AsyncMock(return_value=user_mock)
@@ -517,7 +517,7 @@ def test_login_single_tenant_no_account(
     account_mock.id = "XY1234"
     account_mock.slug = "my-app"
     account_mock.name = "My App"
-    account_mock.created_at = datetime.now()
+    account_mock.created_at = datetime.now(timezone.utc)
     account_repo.get_by_slug_or_code = AsyncMock(return_value=account_mock)
     
     user_repo = mock_user_repo.return_value
@@ -529,7 +529,7 @@ def test_login_single_tenant_no_account(
     user_mock.email_verified = True
     user_mock.role_id = "role-id"
     user_mock.auth_provider = "password"
-    user_mock.created_at = datetime.now()
+    user_mock.created_at = datetime.now(timezone.utc)
     user_repo.get_by_email_and_account = AsyncMock(return_value=user_mock)
     user_repo.update_last_login = AsyncMock()
     

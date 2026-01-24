@@ -1,6 +1,6 @@
 """Unit tests for Macro API Router."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -56,8 +56,8 @@ async def test_create_macro_superadmin(async_client, mock_repo):
         sql_query="SELECT 1",
         parameters='["p1"]',
         created_by="admin",
-        created_at=datetime.now(),
-        updated_at=datetime.now(),
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
     )
 
     payload = {
@@ -114,8 +114,8 @@ async def test_list_macros(async_client, mock_repo):
     app.dependency_overrides[get_current_user] = user_override
 
     mock_repo.list_all.return_value = [
-        MacroModel(id=1, name="m1", sql_query="SELECT 1", parameters="[]", created_at=datetime.now(), updated_at=datetime.now()),
-        MacroModel(id=2, name="m2", sql_query="SELECT 2", parameters="[]", created_at=datetime.now(), updated_at=datetime.now()),
+        MacroModel(id=1, name="m1", sql_query="SELECT 1", parameters="[]", created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc)),
+        MacroModel(id=2, name="m2", sql_query="SELECT 2", parameters="[]", created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc)),
     ]
 
     response = await async_client.get("/api/v1/macros", headers={"Authorization": "Bearer dummy"})
@@ -135,7 +135,7 @@ async def test_get_macro(async_client, mock_repo):
     app.dependency_overrides[get_current_user] = user_override
 
     mock_repo.get_by_id.return_value = MacroModel(
-        id=1, name="m1", sql_query="SELECT 1", parameters="[]", created_at=datetime.now(), updated_at=datetime.now()
+        id=1, name="m1", sql_query="SELECT 1", parameters="[]", created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc)
     )
 
     # Debug: verify mock setup
@@ -178,7 +178,7 @@ async def test_update_macro_superadmin(async_client, mock_repo):
     app.dependency_overrides[require_superadmin] = admin_override
     
     mock_repo.update.return_value = MacroModel(
-        id=1, name="updated", sql_query="SELECT 2", parameters="[]", created_at=datetime.now(), updated_at=datetime.now()
+        id=1, name="updated", sql_query="SELECT 2", parameters="[]", created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc)
     )
 
     payload = {"name": "updated", "sql_query": "SELECT 2"}
@@ -212,8 +212,8 @@ async def test_delete_macro_superadmin(async_client, mock_repo):
         name="test_macro",
         sql_query="SELECT 1",
         parameters="[]",
-        created_at=datetime.now(),
-        updated_at=datetime.now(),
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
     )
     mock_repo.get_by_id.return_value = mock_macro
     mock_repo.delete.return_value = True
@@ -268,8 +268,8 @@ async def test_test_macro_success(async_client, mock_repo, db_session: AsyncSess
         name="test_macro",
         sql_query="SELECT :value",
         parameters='["value"]',
-        created_at=datetime.now(),
-        updated_at=datetime.now(),
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
     )
     mock_repo.get_by_id.return_value = mock_macro
 
@@ -305,8 +305,8 @@ async def test_test_macro_invalid_param_count(async_client, mock_repo):
         name="test_macro",
         sql_query="SELECT :value",
         parameters='["value"]',
-        created_at=datetime.now(),
-        updated_at=datetime.now(),
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
     )
     mock_repo.get_by_id.return_value = mock_macro
     
@@ -363,8 +363,8 @@ async def test_delete_macro_in_use(async_client, mock_repo):
         name="test_macro",
         sql_query="SELECT 1",
         parameters="[]",
-        created_at=datetime.now(),
-        updated_at=datetime.now(),
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
     )
     mock_repo.get_by_id.return_value = mock_macro
     
@@ -407,8 +407,8 @@ async def test_delete_macro_unused(async_client, mock_repo):
         name="test_macro",
         sql_query="SELECT 1",
         parameters="[]",
-        created_at=datetime.now(),
-        updated_at=datetime.now(),
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
     )
     mock_repo.get_by_id.return_value = mock_macro
     mock_repo.delete.return_value = True
