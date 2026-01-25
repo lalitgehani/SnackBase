@@ -225,16 +225,24 @@ class CollectionService:
 
         return updated_collection
 
-    async def delete_collection(self, collection_id: str) -> dict[str, Any]:
-        """Delete collection with migration.
+    async def prepare_collection_deletion(self, collection_id: str) -> dict[str, Any]:
+        """Prepare collection deletion by generating migration.
+
+        This is phase 1 of the deletion process. It fetches collection metadata
+        and generates the migration file, but does NOT delete the record or apply
+        the migration. This allows the caller to close the transaction before
+        applying the migration, avoiding deadlocks on PostgreSQL.
 
         Args:
             collection_id: The collection ID.
 
         Returns:
-            Dictionary with deletion confirmation.
+            Dictionary with collection info and migration revision.
+
+        Raises:
+            ValueError: If collection not found.
         """
-        # Get collection
+        # Get collection (read-only operation)
         collection = await self.repository.get_by_id(collection_id)
         if not collection:
             raise ValueError(f"Collection with ID '{collection_id}' not found")
@@ -244,26 +252,18 @@ class CollectionService:
         record_count = await self.repository.get_record_count(table_name)
 
         logger.info(
-            "Generating migration for collection deletion",
+            "Preparing collection deletion",
             collection_id=collection_id,
             collection_name=collection.name,
         )
 
-        # 1. Generate migration
+        # Generate migration (file creation only, no DB changes)
         rev_id = self.migration_service.generate_delete_collection_migration(collection.name)
 
-        # 2. Apply migration
-        logger.info("Applying migration", revision=rev_id)
-        await self.migration_service.apply_migrations()
-
-        # 3. Delete collection from database
-        await self.repository.delete(collection)
-
         logger.info(
-            "Collection deleted successfully",
+            "Migration generated for collection deletion",
             collection_id=collection_id,
             collection_name=collection.name,
-            records_deleted=record_count,
             revision=rev_id,
         )
 
@@ -274,6 +274,34 @@ class CollectionService:
             "records_deleted": record_count,
             "migration_revision": rev_id,
         }
+
+    async def finalize_collection_deletion(self, collection_id: str) -> None:
+        """Finalize collection deletion by removing the collection record.
+
+        This is phase 3 of the deletion process (phase 2 is applying the migration).
+        It deletes the collection record from the database. This should be called
+        after the migration has been successfully applied.
+
+        Args:
+            collection_id: The collection ID.
+
+        Raises:
+            ValueError: If collection not found.
+        """
+        # Get collection
+        collection = await self.repository.get_by_id(collection_id)
+        if not collection:
+            raise ValueError(f"Collection with ID '{collection_id}' not found")
+
+        # Delete collection record
+        await self.repository.delete(collection)
+
+        logger.info(
+            "Collection record deleted",
+            collection_id=collection_id,
+            collection_name=collection.name,
+        )
+
 
     async def get_record_count(self, collection_id: str) -> int:
         """Get count of records in a collection."""

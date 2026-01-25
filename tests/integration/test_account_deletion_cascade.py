@@ -2,7 +2,7 @@
 import pytest
 from sqlalchemy import text
 from typing import cast
-from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from snackbase.domain.services import AccountService, CollectionService
 from snackbase.infrastructure.persistence.repositories import RecordRepository, AccountRepository
@@ -49,7 +49,11 @@ async def test_records_deleted_on_account_deletion(db_session):
     # Ensure collection doesn't exist (cleanup from previous runs if any)
     existing_collection = await collection_service.repository.get_by_name(collection_name)
     if existing_collection:
-        await collection_service.delete_collection(existing_collection.id)
+        # Two-phase deletion
+        result = await collection_service.prepare_collection_deletion(existing_collection.id)
+        await collection_service.migration_service.apply_migrations()
+        await collection_service.finalize_collection_deletion(existing_collection.id)
+        await db_session.commit()
     
     # Create collection (this will create table with FK constraint if our fix works)
     collection_model = await collection_service.create_collection(
@@ -94,6 +98,14 @@ async def test_records_deleted_on_account_deletion(db_session):
     
     assert count == 0, "Record should be deleted via cascade when account is deleted"
 
-    # Cleanup: Delete collection
-    await collection_service.delete_collection(collection_id)
-    await db_session.commit()
+    # Cleanup: Delete collection (two-phase)
+    result = await collection_service.prepare_collection_deletion(collection_id)
+    await db_session.close()
+    await collection_service.migration_service.apply_migrations()
+    # Open new session for finalization using the same engine
+    from sqlalchemy.orm import sessionmaker
+    async_session_factory = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async with async_session_factory() as new_session:
+        new_collection_service = CollectionService(new_session, engine)
+        await new_collection_service.finalize_collection_deletion(collection_id)
+        await new_session.commit()

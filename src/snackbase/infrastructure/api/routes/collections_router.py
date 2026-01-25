@@ -551,15 +551,19 @@ async def delete_collection(
 ) -> JSONResponse:
     """Delete collection and drop its physical table.
 
+    Uses a two-phase approach to avoid transaction deadlocks on PostgreSQL:
+    1. Prepare deletion and generate migration (read-only)
+    2. Close session and apply migration (no locks held)
+    3. Delete collection record in new session
+
     Only superadmins (users in the system account) can delete collections.
     """
-    # Use CollectionService for business logic
+    # Phase 1: Prepare deletion and generate migration
     engine = cast(AsyncEngine, session.bind)
     collection_service = CollectionService(session, engine)
 
     try:
-        result = await collection_service.delete_collection(collection_id)
-        await session.commit()
+        result = await collection_service.prepare_collection_deletion(collection_id)
     except ValueError as e:
         logger.info(
             "Collection deletion failed: not found",
@@ -574,6 +578,50 @@ async def delete_collection(
             },
         )
 
+    # Phase 2: Close session and apply migration (no locks held)
+    await session.close()
+
+    try:
+        logger.info("Applying migration", revision=result["migration_revision"])
+        await collection_service.migration_service.apply_migrations()
+    except Exception as e:
+        logger.error(
+            "Migration failed during collection deletion",
+            collection_id=collection_id,
+            revision=result["migration_revision"],
+            error=str(e),
+        )
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "error": "Migration Failed",
+                "message": f"Failed to drop table: {str(e)}",
+            },
+        )
+
+    # Phase 3: Delete collection record in new session
+    # Create new session from the same engine to ensure we're using the correct database
+    from sqlalchemy.orm import sessionmaker
+    async_session_factory = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async with async_session_factory() as new_session:
+        new_collection_service = CollectionService(new_session, engine)
+        try:
+            await new_collection_service.finalize_collection_deletion(collection_id)
+            await new_session.commit()
+        except ValueError as e:
+            logger.error(
+                "Failed to delete collection record after migration",
+                collection_id=collection_id,
+                error=str(e),
+            )
+            return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={
+                    "error": "Deletion Failed",
+                    "message": f"Table dropped but failed to delete collection record: {str(e)}",
+                },
+            )
+
     logger.info(
         "Collection deleted successfully",
         collection_id=collection_id,
@@ -587,3 +635,4 @@ async def delete_collection(
             **result,
         },
     )
+

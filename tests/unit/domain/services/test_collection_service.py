@@ -169,40 +169,57 @@ class TestUpdateCollectionSchema:
 
 @pytest.mark.asyncio
 class TestDeleteCollection:
-    """Tests for delete_collection method."""
+    """Tests for collection deletion methods."""
 
-    async def test_delete_success(self, collection_service, sample_collection):
-        """Test successful collection deletion."""
+    async def test_prepare_deletion_success(self, collection_service, sample_collection):
+        """Test successful collection deletion preparation."""
         from unittest.mock import patch
         
         # Mock repository
         collection_service.repository.get_by_id = AsyncMock(return_value=sample_collection)
         collection_service.repository.get_record_count = AsyncMock(return_value=42)
-        collection_service.repository.delete = AsyncMock()
         
         # Mock TableBuilder
         with patch("snackbase.domain.services.collection_service.TableBuilder") as mock_tb:
             mock_tb.generate_table_name.return_value = "col_testcollection"
-            mock_tb.drop_table = AsyncMock()
             
-            result = await collection_service.delete_collection("col-123")
+            result = await collection_service.prepare_collection_deletion("col-123")
             
             # Verify result
             assert result["collection_id"] == "col-123"
             assert result["collection_name"] == "TestCollection"
             assert result["records_deleted"] == 42
+            assert "migration_revision" in result
             
-            # Verify calls
+            # Verify migration was generated but not applied
             collection_service.migration_service.generate_delete_collection_migration.assert_called_once()
-            collection_service.migration_service.apply_migrations.assert_called_once()
-            collection_service.repository.delete.assert_called_once()
+            collection_service.migration_service.apply_migrations.assert_not_called()
 
-    async def test_delete_collection_not_found(self, collection_service):
-        """Test delete when collection doesn't exist."""
+    async def test_prepare_deletion_collection_not_found(self, collection_service):
+        """Test prepare deletion when collection doesn't exist."""
         collection_service.repository.get_by_id = AsyncMock(return_value=None)
         
         with pytest.raises(ValueError, match="not found"):
-            await collection_service.delete_collection("col-999")
+            await collection_service.prepare_collection_deletion("col-999")
+
+    async def test_finalize_deletion_success(self, collection_service, sample_collection):
+        """Test successful collection deletion finalization."""
+        # Mock repository
+        collection_service.repository.get_by_id = AsyncMock(return_value=sample_collection)
+        collection_service.repository.delete = AsyncMock()
+        
+        await collection_service.finalize_collection_deletion("col-123")
+        
+        # Verify deletion was called
+        collection_service.repository.delete.assert_called_once_with(sample_collection)
+
+    async def test_finalize_deletion_collection_not_found(self, collection_service):
+        """Test finalize deletion when collection doesn't exist."""
+        collection_service.repository.get_by_id = AsyncMock(return_value=None)
+        
+        with pytest.raises(ValueError, match="not found"):
+            await collection_service.finalize_collection_deletion("col-999")
+
 
 
 @pytest.mark.asyncio
