@@ -166,6 +166,108 @@ export const updateCollectionRules = async (
   return response.data;
 };
 
+// ============================================================================
+// Collection Export/Import Types and Functions
+// ============================================================================
+
+export interface CollectionExportRules {
+  list_rule: string | null;
+  view_rule: string | null;
+  create_rule: string | null;
+  update_rule: string | null;
+  delete_rule: string | null;
+  list_fields: string;
+  view_fields: string;
+  create_fields: string;
+  update_fields: string;
+}
+
+export interface CollectionExportItem {
+  name: string;
+  schema: FieldDefinition[];
+  rules: CollectionExportRules;
+}
+
+export interface CollectionExportData {
+  version: string;
+  exported_at: string;
+  exported_by: string;
+  collections: CollectionExportItem[];
+}
+
+export type ImportStrategy = 'error' | 'skip' | 'update';
+
+export interface CollectionImportRequest {
+  data: CollectionExportData;
+  strategy: ImportStrategy;
+  generate_migrations: boolean;
+}
+
+export interface CollectionImportItemResult {
+  name: string;
+  status: 'imported' | 'skipped' | 'updated' | 'error';
+  message: string;
+}
+
+export interface CollectionImportResult {
+  success: boolean;
+  imported_count: number;
+  skipped_count: number;
+  updated_count: number;
+  failed_count: number;
+  collections: CollectionImportItemResult[];
+  migrations_created: string[];
+}
+
+/**
+ * Export collections to JSON file (triggers download)
+ */
+export const exportCollections = async (collectionIds?: string[]): Promise<void> => {
+  const params = collectionIds?.length ? { collection_ids: collectionIds.join(',') } : {};
+  
+  const response = await apiClient.get('/collections/export', {
+    params,
+    responseType: 'blob',
+  });
+
+  // Get filename from Content-Disposition header or generate one
+  const contentDisposition = response.headers['content-disposition'];
+  let filename = `collections_export_${new Date().toISOString().slice(0, 19).replace(/[:-]/g, '')}.json`;
+  if (contentDisposition) {
+    const match = contentDisposition.match(/filename=([^;]+)/);
+    if (match) {
+      filename = match[1].trim();
+    }
+  }
+
+  // Create blob and download
+  const blob = new Blob([response.data], { type: 'application/json' });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+};
+
+/**
+ * Import collections from export data
+ * Migrations are always generated to ensure database tables are created
+ */
+export const importCollections = async (
+  data: CollectionExportData,
+  strategy: ImportStrategy = 'error'
+): Promise<CollectionImportResult> => {
+  const response = await apiClient.post<CollectionImportResult>('/collections/import', {
+    data,
+    strategy,
+    generate_migrations: true,
+  });
+  return response.data;
+};
+
 /**
  * Field type options for the schema builder
  */
@@ -202,3 +304,25 @@ export const MASK_TYPE_OPTIONS = [
   { value: 'full', label: 'Full' },
   { value: 'custom', label: 'Custom' },
 ] as const;
+
+/**
+ * Import strategy options for the import dialog
+ */
+export const IMPORT_STRATEGY_OPTIONS = [
+  { 
+    value: 'error' as ImportStrategy, 
+    label: 'Error on Conflict', 
+    description: 'Fail if any collection already exists (safest)' 
+  },
+  { 
+    value: 'skip' as ImportStrategy, 
+    label: 'Skip Existing', 
+    description: 'Skip existing collections, import only new ones' 
+  },
+  { 
+    value: 'update' as ImportStrategy, 
+    label: 'Update Existing', 
+    description: 'Update existing collections with new schema (add fields only)' 
+  },
+] as const;
+

@@ -1,9 +1,10 @@
 """Pydantic schemas for collection endpoints."""
 
 from datetime import datetime
+from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class FieldDefinition(BaseModel):
@@ -290,5 +291,92 @@ class UpdateCollectionRulesRequest(BaseModel):
             raise ValueError(f"Field list must be '*' or valid JSON array: {e}") from e
         return v
 
-    model_config = {"extra": "forbid"}
+    model_config = ConfigDict(extra="forbid")
 
+
+# ============================================================================
+# Collection Export/Import Schemas
+# ============================================================================
+
+
+class CollectionExportRules(BaseModel):
+    """Rules in export format."""
+
+    list_rule: str | None = None
+    view_rule: str | None = None
+    create_rule: str | None = None
+    update_rule: str | None = None
+    delete_rule: str | None = None
+    list_fields: str = "*"
+    view_fields: str = "*"
+    create_fields: str = "*"
+    update_fields: str = "*"
+
+
+class CollectionExportFieldDefinition(BaseModel):
+    """Field definition in export format (includes all properties)."""
+
+    name: str
+    type: str
+    required: bool = False
+    default: Any = None
+    unique: bool = False
+    options: dict | None = None
+    collection: str | None = None
+    on_delete: str | None = None
+    pii: bool = False
+    mask_type: str | None = None
+
+
+class CollectionExportItem(BaseModel):
+    """Single collection in export."""
+
+    name: str
+    schema_: list[CollectionExportFieldDefinition] = Field(alias="schema")
+    rules: CollectionExportRules
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class CollectionExportData(BaseModel):
+    """Complete export structure."""
+
+    version: str = "1.0"
+    exported_at: datetime
+    exported_by: str
+    collections: list[CollectionExportItem]
+
+
+class ImportStrategy(str, Enum):
+    """Strategy for handling collection name conflicts during import."""
+
+    ERROR = "error"
+    SKIP = "skip"
+    UPDATE = "update"
+
+
+class CollectionImportRequest(BaseModel):
+    """Import request body."""
+
+    data: CollectionExportData
+    strategy: ImportStrategy = ImportStrategy.ERROR
+
+
+class CollectionImportItemResult(BaseModel):
+    """Per-collection import result."""
+
+    name: str
+    status: str  # "imported", "skipped", "updated", "error"
+    message: str
+
+
+class CollectionImportResult(BaseModel):
+    """Import response."""
+
+    success: bool
+    imported_count: int
+    skipped_count: int
+    updated_count: int
+    failed_count: int
+    collections: list[CollectionImportItemResult]
+    migrations_created: list[str]

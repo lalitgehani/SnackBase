@@ -86,6 +86,17 @@ class CollectionRepository:
         result = await self.session.execute(select(func.count(CollectionModel.id)))
         return result.scalar_one() or 0
 
+    async def list_all(self) -> list[CollectionModel]:
+        """Get all collections without pagination.
+
+        Returns:
+            List of all collection models.
+        """
+        result = await self.session.execute(
+            select(CollectionModel).order_by(CollectionModel.name)
+        )
+        return list(result.scalars().all())
+
     async def get_all(
         self,
         page: int = 1,

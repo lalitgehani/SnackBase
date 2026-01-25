@@ -8,12 +8,13 @@ import { useNavigate } from 'react-router';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Database, Plus, Search, RefreshCw } from 'lucide-react';
+import { Database, Plus, Search, RefreshCw, Download, Upload } from 'lucide-react';
 import CollectionsTable from '@/components/collections/CollectionsTable';
 import CreateCollectionDialog from '@/components/collections/CreateCollectionDialog';
 import ViewCollectionDialog from '@/components/collections/ViewCollectionDialog';
 import EditCollectionDialog from '@/components/collections/EditCollectionDialog';
 import DeleteCollectionDialog from '@/components/collections/DeleteCollectionDialog';
+import ImportCollectionsDialog from '@/components/collections/ImportCollectionsDialog';
 import {
     getCollections,
     getCollectionById,
@@ -25,11 +26,14 @@ import {
     type CollectionListResponse,
     type CreateCollectionData,
     type UpdateCollectionData,
+    exportCollections,
 } from '@/services/collections.service';
 import { handleApiError } from '@/lib/api';
+import { useToast } from '@/hooks/use-toast';
 
 export default function CollectionsPage() {
     const navigate = useNavigate();
+    const { toast } = useToast();
 
     const [data, setData] = useState<CollectionListResponse | null>(null);
     const [loading, setLoading] = useState(true);
@@ -50,6 +54,8 @@ export default function CollectionsPage() {
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [selectedCollection, setSelectedCollection] = useState<CollectionListItem | null>(null);
     const [selectedCollectionFull, setSelectedCollectionFull] = useState<Collection | null>(null);
+    const [importDialogOpen, setImportDialogOpen] = useState(false);
+    const [isExporting, setIsExporting] = useState(false);
 
     const fetchCollections = useCallback(async () => {
         setLoading(true);
@@ -134,6 +140,25 @@ export default function CollectionsPage() {
         navigate(`/admin/collections/${collection.name}/records`);
     };
 
+    const handleExport = async () => {
+        setIsExporting(true);
+        try {
+            await exportCollections();
+            toast({
+                title: 'Export successful',
+                description: 'Collections exported to JSON file',
+            });
+        } catch (err) {
+            toast({
+                variant: 'destructive',
+                title: 'Export failed',
+                description: handleApiError(err),
+            });
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
     // Get list of collection names for reference field selector
     const collectionNames = data?.items.map(c => c.name) || [];
 
@@ -145,10 +170,20 @@ export default function CollectionsPage() {
                     <h1 className="text-3xl font-bold">Collections</h1>
                     <p className="text-muted-foreground mt-2">Manage data collections and schemas</p>
                 </div>
-                <Button onClick={() => setCreateDialogOpen(true)} className="gap-2">
-                    <Plus className="h-4 w-4" />
-                    Create Collection
-                </Button>
+                <div className="flex gap-2">
+                    <Button variant="outline" onClick={handleExport} disabled={isExporting} className="gap-2">
+                        <Download className="h-4 w-4" />
+                        {isExporting ? 'Exporting...' : 'Export'}
+                    </Button>
+                    <Button variant="outline" onClick={() => setImportDialogOpen(true)} className="gap-2">
+                        <Upload className="h-4 w-4" />
+                        Import
+                    </Button>
+                    <Button onClick={() => setCreateDialogOpen(true)} className="gap-2">
+                        <Plus className="h-4 w-4" />
+                        Create Collection
+                    </Button>
+                </div>
             </div>
 
             {/* Search and Actions */}
@@ -285,6 +320,12 @@ export default function CollectionsPage() {
                 onOpenChange={setDeleteDialogOpen}
                 collection={selectedCollection}
                 onConfirm={handleDeleteCollection}
+            />
+
+            <ImportCollectionsDialog
+                open={importDialogOpen}
+                onOpenChange={setImportDialogOpen}
+                onSuccess={fetchCollections}
             />
         </div>
     );

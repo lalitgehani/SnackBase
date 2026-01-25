@@ -4,15 +4,15 @@ Provides endpoints for managing dynamic collections.
 """
 
 import json
-import uuid
+from datetime import UTC, datetime
 from typing import cast
 
 from fastapi import APIRouter, Depends, Query, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from snackbase.core.logging import get_logger
-from snackbase.domain.services import CollectionService, CollectionValidator
+from snackbase.domain.services import CollectionService
 from snackbase.infrastructure.api.dependencies import SuperadminUser
 from snackbase.infrastructure.api.schemas import (
     CollectionListItem,
@@ -22,8 +22,12 @@ from snackbase.infrastructure.api.schemas import (
     SchemaFieldResponse,
     UpdateCollectionRequest,
 )
+from snackbase.infrastructure.api.schemas.collection_schemas import (
+    CollectionImportItemResult,
+    CollectionImportRequest,
+    CollectionImportResult,
+)
 from snackbase.infrastructure.persistence.database import get_db_session
-from snackbase.infrastructure.persistence.models import CollectionModel
 from snackbase.infrastructure.persistence.repositories import CollectionRepository
 from snackbase.infrastructure.persistence.table_builder import TableBuilder
 
@@ -152,6 +156,125 @@ async def get_collection_names(
         status_code=status.HTTP_200_OK,
         content={"names": names, "total": len(names)},
     )
+
+
+@router.get(
+    "/export",
+    responses={
+        200: {
+            "content": {"application/json": {}},
+            "description": "Exported collections JSON file",
+        },
+        403: {"description": "Superadmin access required"},
+    },
+)
+async def export_collections(
+    current_user: SuperadminUser,
+    session: AsyncSession = Depends(get_db_session),
+    collection_ids: str | None = Query(
+        default=None,
+        description="Comma-separated list of collection IDs to export (all if omitted)",
+    ),
+) -> Response:
+    """Export collections to JSON format.
+
+    Exports collection schemas and rules in a portable JSON format.
+    Can be used for backups, version control, or migrating between environments.
+    Only superadmins can export collections.
+    """
+    engine = cast(AsyncEngine, session.bind)
+    collection_service = CollectionService(session, engine)
+
+    # Parse collection_ids if provided
+    ids_list: list[str] | None = None
+    if collection_ids:
+        ids_list = [cid.strip() for cid in collection_ids.split(",") if cid.strip()]
+
+    # Export collections
+    content, media_type = await collection_service.export_collections(
+        user_email=current_user.email or current_user.user_id,
+        collection_ids=ids_list,
+    )
+
+    # Generate filename
+    filename = f"collections_export_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.json"
+    headers = {"Content-Disposition": f"attachment; filename={filename}"}
+
+    logger.info(
+        "Collections exported",
+        collection_ids=ids_list,
+        exported_by=current_user.user_id,
+    )
+
+    return Response(content=content, media_type=media_type, headers=headers)
+
+
+@router.post(
+    "/import",
+    status_code=status.HTTP_200_OK,
+    response_model=CollectionImportResult,
+    responses={
+        400: {"description": "Invalid JSON or validation error"},
+        403: {"description": "Superadmin access required"},
+    },
+)
+async def import_collections(
+    request: CollectionImportRequest,
+    current_user: SuperadminUser,
+    session: AsyncSession = Depends(get_db_session),
+) -> CollectionImportResult | JSONResponse:
+    """Import collections from JSON export.
+
+    Imports collection schemas and rules from an export file.
+    Supports different strategies for handling existing collections:
+    - error: Fail if any collection already exists (safest)
+    - skip: Skip existing collections, import only new ones
+    - update: Update existing collections with new schema
+
+    Only superadmins can import collections.
+    """
+    engine = cast(AsyncEngine, session.bind)
+    collection_service = CollectionService(session, engine)
+
+    try:
+        # Convert Pydantic model to dict for processing
+        export_data = request.data.model_dump(by_alias=True)
+
+        result = await collection_service.import_collections(
+            export_data=export_data,
+            strategy=request.strategy.value,
+            user_id=current_user.user_id,
+        )
+
+        await session.commit()
+
+        logger.info(
+            "Collections imported",
+            imported=result["imported_count"],
+            skipped=result["skipped_count"],
+            updated=result["updated_count"],
+            failed=result["failed_count"],
+            imported_by=current_user.user_id,
+        )
+
+        return CollectionImportResult(
+            success=result["success"],
+            imported_count=result["imported_count"],
+            skipped_count=result["skipped_count"],
+            updated_count=result["updated_count"],
+            failed_count=result["failed_count"],
+            collections=[CollectionImportItemResult(**c) for c in result["collections"]],
+            migrations_created=result["migrations_created"],
+        )
+
+    except ValueError as e:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "error": "Validation error",
+                "message": str(e),
+            },
+        )
 
 
 @router.get(
@@ -464,4 +587,3 @@ async def delete_collection(
             **result,
         },
     )
-
