@@ -237,7 +237,7 @@ class MigrationService:
             if field["type"].lower() == "reference":
                 name = field["name"]
                 target = TableBuilder.generate_table_name(field.get("collection", ""))
-                on_delete = field.get("on_delete", "RESTRICT").upper()
+                on_delete = field.get("on_delete", "RESTRICT").upper().replace("_", " ")
                 lines.append(f"        sa.ForeignKeyConstraint(['{name}'], ['{target}.id'], ondelete='{on_delete}'),")
                 
         lines.append("    )")

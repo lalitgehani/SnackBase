@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import inspect, text
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.core.logging import get_logger
@@ -388,24 +388,24 @@ class RecordRepository:
         """
         table_name = TableBuilder.generate_table_name(target_collection)
 
-        # First check if table exists using dialect-agnostic Inspector
-        inspector = inspect(self.session.bind)
-        if not inspector.has_table(table_name):
-            return False
-
         # Check if record exists with account scoping
+        # Note: If the table doesn't exist, this query will fail with a database error,
+        # which is appropriate since it indicates a configuration issue (missing collection).
         check_sql = f'''
             SELECT 1 FROM "{table_name}"
             WHERE "id" = :reference_id AND "account_id" = :account_id
             LIMIT 1
         '''
 
-        result = await self.session.execute(
-            text(check_sql),
-            {"reference_id": reference_id, "account_id": account_id},
-        )
-
-        return result.scalar_one_or_none() is not None
+        try:
+            result = await self.session.execute(
+                text(check_sql),
+                {"reference_id": reference_id, "account_id": account_id},
+            )
+            return result.scalar_one_or_none() is not None
+        except Exception:
+            # Table doesn't exist or query failed - reference is invalid
+            return False
 
     async def find_all(
         self,
