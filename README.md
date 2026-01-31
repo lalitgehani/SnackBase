@@ -2,7 +2,7 @@
 
 # SnackBase
 
-> Open-source Backend-as-a-Service (BaaS) - A self-hosted alternative to PocketBase
+> Open-source Backend-as-a-Service (BaaS) - A self-hosted alternative to Supabase
 
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green.svg)](https://fastapi.tiangolo.com/)
@@ -17,7 +17,7 @@ SnackBase is a Python/FastAPI-based BaaS providing auto-generated REST APIs, mul
 | ----------------- | ---------- | -------- |
 | **Backend Code**  | ~350 files | ~120,000 |
 | **Frontend Code** | ~100 files | ~25,000  |
-| **Tests**         | 153 files  | ~29,600  |
+| **Tests**         | 153 files  | ~30,000  |
 | **Documentation** | 25+ files  | ~20,000  |
 | **Total**         | ~525 files | ~195,000 |
 
@@ -25,7 +25,7 @@ SnackBase is a Python/FastAPI-based BaaS providing auto-generated REST APIs, mul
 
 ## Status
 
-**Phase 1: Foundation & MVP** (92% Complete - 12/13 features)
+**Phase 1: Foundation & MVP** (100% Complete)
 
 [![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/new?template=https%3A%2F%2Fgithub.com%2Flalitgehani%2Fsnackbase&envs=SNACKBASE_SECRET_KEY%2CSNACKBASE_ENCRYPTION_KEY&optionalEnvs=SNACKBASE_SUPERADMIN_EMAIL%2CSNACKBASE_SUPERADMIN_PASSWORD)
 
@@ -46,7 +46,7 @@ SnackBase is a Python/FastAPI-based BaaS providing auto-generated REST APIs, mul
 - [x] Group Management
 - [x] User Management UI
 - [x] GxP-compliant audit logging
-- [ ] Real-time subscriptions (WebSocket/SSE)
+- [x] Real-time subscriptions (WebSocket/SSE)
 
 **Phase 2: Security & Authorization** (100% Complete)
 
@@ -57,20 +57,27 @@ SnackBase is a Python/FastAPI-based BaaS providing auto-generated REST APIs, mul
 - [x] F2.11-F2.13: Field-Level Access Control
 - [x] F2.14: GxP-compliant Audit Logging for Permissions
 
-**Phase 3: Operations** (70% Complete)
+**Phase 3: Operations** (100% Complete)
 
 - [x] F3.1-F3.5: Dashboard & Management UIs (Dashboard, Accounts, Collections, Roles, Rules)
 - [x] F3.6-F3.8: Audit Log Storage, Capture & Query API
 - [x] F3.9-F3.12: Alembic Infrastructure & Migration Management UI
 
-**Phase 4: Advanced Features** (0% Complete)
+**Phase 4: Advanced Features** (60% Complete)
 
-- [ ] F4.1-F4.4: Real-time Subscriptions (WebSocket/SSE) & PostgreSQL Support
-- [ ] F4.5-F4.7: File Storage Engine & Advanced Query Filters
+- [x] F4.1-F4.2: Real-time Subscriptions (WebSocket/SSE)
+- [x] F4.3: PostgreSQL Support (SQLite + PostgreSQL with dialect-aware queries)
+- [x] F4.5: File Storage Engine (Local filesystem with account-scoped storage)
+- [x] F4.6: Basic Query Filters (Pagination, sorting, equality filters)
+- [ ] F4.7: Advanced Query Filters (LIKE, IN, range queries, complex boolean logic)
+- [ ] Cloud Storage Providers (S3, Azure Blob, GCS)
 
-**Phase 5: Enterprise Features** (Not Started)
+**Phase 5: Enterprise Features** (40% Complete)
 
-- [ ] Rate Limiting, Advanced Monitoring
+- [x] Rate Limiting (IP-based and user-based, configurable per endpoint)
+- [x] Security Headers (HSTS, CSP, Permissions-Policy)
+- [ ] Advanced Monitoring (Prometheus metrics, distributed tracing)
+- [ ] APM Integration (DataDog, New Relic)
 
 ---
 
@@ -166,14 +173,24 @@ open http://localhost:8000
 - **Configuration Dashboard** - System/account-level provider configs (OAuth, SAML, Email)
 - **Email Templates** - Customizable email template management
 
+### Additional Features
+
+- **API Key Authentication** - Service-to-service authentication with `sb_sk_` prefixed keys, SHA-256 hashing, optional expiration, and revocation support
+- **Collection Export/Import** - Export collections with all records to JSON and import to migrate or backup data
+- **Security Headers** - Configurable HSTS, CSP, and Permissions-Policy headers for enhanced security
+- **Two-Phase Collection Deletion** - Safe deletion with confirmation to prevent accidental data loss
+- **Rate Limiting** - IP-based and user-based rate limiting, configurable per endpoint, superadmin bypass
+- **File Storage** - Local filesystem storage with account-scoped directories, UUID-based filenames, size validation (10MB default), and MIME type validation
+- **Real-time Updates** - WebSocket and SSE endpoints for live data updates on CRUD operations
+
 ### API & Testing
 
-- **19 API Routers** - Comprehensive REST API coverage with 100+ endpoints
+- **20 API Routers** - Comprehensive REST API coverage with 100+ endpoints
 - **Interactive Docs** - Swagger/OpenAPI at `/docs`
-- **Comprehensive Tests** - 1,022 tests (unit, integration, security)
-  - 705 unit tests
-  - 317 integration tests
-  - 50+ security tests with HTML reporting
+- **Comprehensive Tests** - 1,105 tests (unit, integration, security)
+  - 710+ unit tests
+  - 320+ integration tests
+  - 55+ security tests with HTML reporting
 - **Test Coverage** - ~29,600 lines of test code
 
 ---
@@ -322,8 +339,8 @@ See the [Deployment Guide](docs/deployment.md) for other platforms.
 /health, /ready, /live          # Health checks (no prefix)
 /api/v1/
 ├── /auth/                      # Register, login, refresh, me, password reset
-├── /auth/oauth/                # OAuth 2.0 flow (Google, GitHub, Microsoft, Apple)
-├── /auth/saml/                 # SAML 2.0 SSO (Okta, Azure AD, Generic)
+├── /oauth/                     # OAuth 2.0 flow (Google, GitHub, Microsoft, Apple)
+├── /saml/                      # SAML 2.0 SSO (Okta, Azure AD, Generic)
 ├── /collections/               # Collection CRUD (superadmin)
 ├── /records/{collection}/      # Dynamic collection CRUD
 ├── /accounts/                  # Account management (superadmin)
@@ -333,10 +350,12 @@ See the [Deployment Guide](docs/deployment.md) for other platforms.
 ├── /macros/                    # SQL macro management
 ├── /groups/                    # Group management
 ├── /invitations/               # User invitations
+├── /api-keys/                  # API key management (create, list, revoke)
 ├── /dashboard/                 # Dashboard statistics
 ├── /audit-logs/                # Audit log retrieval and export
 ├── /migrations/                # Alembic migration status
 ├── /files/                     # File upload/download
+├── /realtime/                  # WebSocket & SSE real-time subscriptions
 ├── /admin/                     # System/configuration management
 └── /admin/email/               # Email template management
 ```
@@ -648,11 +667,11 @@ status = "published" && (category = "news" || category = "updates")
 
 See [PRD_PHASES.md](PRD_PHASES.md) for detailed specifications.
 
-- [x] **Phase 1**: Foundation & MVP - Multi-tenancy, auth, dynamic collections, UI (92% complete)
-- [x] **Phase 2**: Security & Authorization - RBAC, permissions, rule engine, groups, PII masking (90% complete)
-- [x] **Phase 3**: Operations - GxP audit logging, migrations, dashboard UI (70% complete)
-- [ ] **Phase 4**: Advanced Features - Real-time (WebSocket/SSE), file storage, PostgreSQL support
-- [ ] **Phase 5**: Enterprise - Rate limiting, monitoring
+- [x] **Phase 1**: Foundation & MVP - Multi-tenancy, auth, dynamic collections, UI (100% complete)
+- [x] **Phase 2**: Security & Authorization - RBAC, permissions, rule engine, groups, PII masking (100% complete)
+- [x] **Phase 3**: Operations - GxP audit logging, migrations, dashboard UI (100% complete)
+- [~] **Phase 4**: Advanced Features - Real-time (WebSocket/SSE), file storage, PostgreSQL support (60% complete)
+- [~] **Phase 5**: Enterprise - Rate limiting, monitoring (40% complete)
 
 ---
 
@@ -666,8 +685,34 @@ Contributions are welcome! Please read [CLAUDE.md](CLAUDE.md) for development gu
 
 GNU Affero General Public License v3.0 (AGPLv3) - See LICENSE file for details
 
+### When can you use SnackBase?
+
+**You CAN use SnackBase for:**
+
+- **Internal tools** - Build internal dashboards, admin panels, and business tools
+- **Side projects** - Personal projects, hobbies, and learning
+- **Commercial applications** - Build and sell SaaS products, mobile apps, and web applications
+- **Client work** - Use it in projects for clients without sharing your application code
+- **Modifications** - Modify SnackBase for your own internal use
+
+**AGPL obligations ONLY apply when:**
+
+- You modify SnackBase's **source code** AND
+- You make it available to users as a **network service** (hosted BaaS)
+
+In this case, you must provide the source code of your modified SnackBase to users of the service.
+
+**What does NOT trigger AGPL:**
+
+- Using SnackBase unmodified as a backend for your application
+- Hosting your own application that uses SnackBase
+- Selling your application (your code remains yours)
+- Building closed-source applications on top of SnackBase
+
+**Summary**: AGPL is designed to prevent companies from taking SnackBase, modifying it, and selling it as a competing BaaS service without contributing back. For most users (SaaS founders, agencies, internal teams), SnackBase works like any other open-source backend.
+
 ---
 
 ## Acknowledgments
 
-Inspired by [PocketBase](https://pocketbase.io/), a self-hosted BaaS in Go.
+Inspired by modern BaaS platforms like Supabase and Firebase, bringing enterprise-grade features to self-hosted infrastructure.
