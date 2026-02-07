@@ -461,7 +461,18 @@ class RecordRepository:
             sort_by = "created_at"
 
         # Apply filters
+        # Log available filters for debugging
+        logger.debug(
+            "Applying filters",
+            requested_filters=list(filters.keys()),
+            schema_fields=list(schema_field_names),
+            system_fields=list(system_fields)
+        )
+        
         for field, value in filters.items():
+            # Clean field name just in case
+            field = field.strip()
+            
             if field in schema_field_names or field in system_fields:
                 param_name = f"filter_{field}"
                 where_clauses.append(f'r."{field}" = :{param_name}')
@@ -481,6 +492,8 @@ class RecordRepository:
                         params[param_name] = value
                 else:
                     params[param_name] = value
+            else:
+                logger.debug(f"Filter ignored: field '{field}' not found in schema or system fields")
 
         where_clause = " AND ".join(where_clauses)
         where_sql = f" WHERE {where_clause}" if where_clause else ""

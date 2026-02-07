@@ -339,7 +339,18 @@ async def check_collection_permission(
             cte_params = {}
             for k, v in request_data.items():
                 param_name = f"payload_{k}"
-                cols.append(f":{param_name} AS {k}")
+                
+                # Determine SQL type for explicit casting (required for asyncpg)
+                sql_type = "TEXT"
+                if isinstance(v, bool):
+                    sql_type = "BOOLEAN"
+                elif isinstance(v, int):
+                    sql_type = "INTEGER"
+                elif isinstance(v, float):
+                    sql_type = "NUMERIC"
+                
+                # CAST parameters to ensure correct type handling in DB driver
+                cols.append(f"CAST(:{param_name} AS {sql_type}) AS \"{k}\"")
                 cte_params[param_name] = v
                 
             # Also handle @request.data.* variables in the SQL

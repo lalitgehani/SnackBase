@@ -78,8 +78,9 @@ class MigrationService:
         # Now we need to find the file and inject the DDL
         # Alembic revision() returns the Script object in latest versions
         rev_id = rev.revision
-        filename = f"{rev_id}_{message.lower()}.py"
-        filepath = os.path.join(dynamic_dir, filename)
+        # Use the actual path from the revision object instead of constructing it
+        # This ensures we get the correct filename that Alembic generated
+        filepath = rev.path
         
         # Build DDL logic using TableBuilder
         # Note: We translate TableBuilder's DDL to alembic.op calls
@@ -115,8 +116,8 @@ class MigrationService:
         )
         
         rev_id = rev.revision
-        filename = f"{rev_id}_{message.lower()}.py"
-        filepath = os.path.join(dynamic_dir, filename)
+        # Use the actual path from the revision object
+        filepath = rev.path
         
         upgrade_lines = self._generate_add_columns_op_lines(collection_name, new_fields)
         # Downgrade for adding columns is dropping them, 
@@ -148,8 +149,8 @@ class MigrationService:
         )
         
         rev_id = rev.revision
-        filename = f"{rev_id}_{message.lower()}.py"
-        filepath = os.path.join(dynamic_dir, filename)
+        # Use the actual path from the revision object
+        filepath = rev.path
         
         upgrade_lines = self._generate_drop_table_op_lines(collection_name)
         # Downgrade for drop table is hard because we'd need the full old schema.
