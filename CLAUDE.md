@@ -32,6 +32,11 @@ uv run python -m snackbase info           # Show configuration
 uv run python -m snackbase init-db        # Initialize database (dev only)
 uv run python -m snackbase create-superadmin  # Create superadmin user
 
+# Migrations
+uv run python -m snackbase migrate upgrade    # Apply pending migrations
+uv run python -m snackbase migrate downgrade  # Rollback last migration
+uv run python -m snackbase migrate history    # Show migration history
+
 # Interactive shell
 uv run python -m snackbase shell          # IPython REPL with pre-loaded context
 
@@ -115,7 +120,8 @@ ui/                               # React + TypeScript Admin UI
 
 - Domain layer has ZERO dependencies on FastAPI or infrastructure
 - Infrastructure layer contains ALL external dependencies
-- Repository pattern abstracts data access
+- Repository pattern abstracts data access (18+ repositories)
+- SQLAlchemy event listeners trigger hooks on model changes
 
 ## Multi-Tenancy Model
 
@@ -164,14 +170,25 @@ Alternative authentication method for service-to-service communication:
 - Can be revoked via API or admin UI
 - Managed via `/api/v1/api-keys/` endpoint
 
+### Single-Tenant Mode
+
+Optional deployment mode where all users join a pre-configured account instead of creating their own:
+
+- Enabled via `SNACKBASE_SINGLE_TENANT_MODE=true`
+- `SNACKBASE_SINGLE_TENANT_ACCOUNT` defines the account slug
+- `SNACKBASE_SINGLE_TENANT_ACCOUNT_NAME` for display name
+- Account auto-created on startup if it doesn't exist
+- Useful for SaaS applications, internal tools, or dedicated deployments
+
 ## Key Technical Decisions
 
 ### Database
 
-- **Default**: SQLite (aiosqlite driver)
+- **Default**: SQLite (aiosqlite driver) - In-memory for tests, file-based for dev
 - **Production**: PostgreSQL (asyncpg driver)
-- **ORM**: SQLAlchemy 2.0 (async)
+- **ORM**: SQLAlchemy 2.0+ async with `async_session`
 - Account ID generator produces `XX####` format
+- Pooling: 5 base connections, 10 max overflow (configurable)
 
 ### Hook System (Stable API v1.0)
 
@@ -280,16 +297,39 @@ status in ["draft", "published"]
 - **Audit logs are immutable** - Once written, cannot be modified
 - **Configuration hierarchy** - System-level configs use `00000000-0000-0000-0000-000000000000` as account_id, not `SY0000`
 - **Built-in providers** - Cannot be deleted (is_builtin flag), only disabled
+- **SQLAlchemy event listeners** - Hook system triggered via ORM events (`after_insert`, `after_update`, `after_delete`) in `infrastructure/persistence/event_listeners.py`
 
 ## Environment Variables
 
 Key configuration via `.env` or environment:
 
 ```bash
+# Application
+SNACKBASE_ENVIRONMENT=development
+SNACKBASE_DEBUG=false
+
+# Database (default: SQLite)
 SNACKBASE_DATABASE_URL=sqlite+aiosqlite:///./sb_data/snackbase.db
+# For PostgreSQL:
+# SNACKBASE_DATABASE_URL=postgresql+asyncpg://user:pass@localhost/dbname
+
+# Security (generate with: openssl rand -hex 32)
 SNACKBASE_SECRET_KEY=your-secret-key
-SNACKBASE_CORS_ORIGINS=http://localhost:3000,http://localhost:8000
+SNACKBASE_ENCRYPTION_KEY=your-encryption-key
+
+# CORS
+SNACKBASE_CORS_ORIGINS=["http://localhost:3000","http://localhost:8000"]
+
+# Single-Tenant Mode (optional)
+SNACKBASE_SINGLE_TENANT_MODE=false
+# SNACKBASE_SINGLE_TENANT_ACCOUNT=my-app
+
+# Rate Limiting (optional)
+SNACKBASE_RATE_LIMIT_ENABLED=false
+SNACKBASE_RATE_LIMIT_PER_MINUTE=60
 ```
+
+See `.env.example` for complete configuration options.
 
 ## Frontend Tech Stack
 
