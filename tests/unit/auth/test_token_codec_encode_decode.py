@@ -1,6 +1,7 @@
-import secrets
-import time
+import py
 import pytest
+import time
+import secrets
 from snackbase.infrastructure.auth.token_types import TokenPayload, TokenType
 from snackbase.infrastructure.auth.token_codec import TokenCodec, AuthenticationError
 
@@ -98,6 +99,7 @@ def test_token_type_mismatch(sample_payload, secret):
     signing_input = f"{prefix}.{encoded_payload}".encode("utf-8")
     import hmac
     from hashlib import sha256
+    import base64
     signature = hmac.new(secret.encode("utf-8"), signing_input, sha256).digest()
     encoded_signature = TokenCodec._base64url_encode(signature)
     

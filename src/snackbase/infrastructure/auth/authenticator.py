@@ -121,7 +121,7 @@ class Authenticator:
                 token_type=TokenType.JWT,
                 groups=[],  # JWTs don't store groups currently, and we avoid DB hits
             )
-        except (InvalidTokenError, TokenExpiredError) as e:
+        except (InvalidTokenError, TokenExpiredError, AuthenticationError) as e:
             raise AuthenticationError(str(e)) from e
         except Exception as e:
             logger.error("JWT authentication error", error=str(e))
