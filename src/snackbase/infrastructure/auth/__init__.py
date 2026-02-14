@@ -22,6 +22,15 @@ from snackbase.infrastructure.auth.password_hasher import (
     needs_rehash,
     verify_password,
 )
+from snackbase.infrastructure.auth.token_types import (
+    TokenPayload,
+    TokenType,
+)
+from snackbase.infrastructure.auth.token_codec import (
+    AuthenticationError,
+    TokenCodec,
+)
+
 
 __all__ = [
     "DUMMY_PASSWORD_HASH",
@@ -36,5 +45,9 @@ __all__ = [
     "APIKeyService",
     "needs_rehash",
     "verify_password",
+    "TokenPayload",
+    "TokenType",
+    "AuthenticationError",
+    "TokenCodec",
 ]
 
