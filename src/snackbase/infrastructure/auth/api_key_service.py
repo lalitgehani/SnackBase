@@ -115,6 +115,7 @@ class APIKeyService:
         blacklist_entry = TokenBlacklistModel(
             id=token_id,
             token_type=TokenType.API_KEY,
+            revoked_at=int(datetime.now(timezone.utc).timestamp()),
             reason=reason,
         )
         session.add(blacklist_entry)

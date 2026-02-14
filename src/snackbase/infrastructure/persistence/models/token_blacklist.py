@@ -1,11 +1,10 @@
-"""SQLAlchemy model for token blacklist.
 
-Used for revoking JWTs, API keys, and other SnackBase tokens.
+"""SQLAlchemy model for revoked tokens.
+
+This model tracks tokens that have been revoked before their natural expiration.
 """
 
-from datetime import datetime, timezone
-
-from sqlalchemy import BigInteger, String, Text
+from sqlalchemy import Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from snackbase.infrastructure.persistence.database import Base
@@ -15,35 +14,34 @@ class TokenBlacklistModel(Base):
     """SQLAlchemy model for the token_blacklist table.
 
     Attributes:
-        id: Primary key (token_id from the token payload).
-        token_type: Type of the revoked token (e.g., api_key, jwt).
-        revoked_at: Unix timestamp when the token was revoked.
+        id: Primary key (token ID string).
+        token_type: Type of the token (e.g., 'jwt', 'api_key').
+        revoked_at: Timestamp when the token was revoked (Unix timestamp).
         reason: Optional reason for revocation.
     """
 
     __tablename__ = "token_blacklist"
 
     id: Mapped[str] = mapped_column(
-        String(255),
+        String,
         primary_key=True,
-        comment="Token ID (from payload)",
+        comment="Token ID (jti or custom ID)",
     )
     token_type: Mapped[str] = mapped_column(
-        String(50),
+        String,
         nullable=False,
         index=True,
-        comment="Type of token blacklisted",
+        comment="Type of token (jwt, api_key, etc.)",
     )
     revoked_at: Mapped[int] = mapped_column(
-        BigInteger,
+        Integer,
         nullable=False,
-        default=lambda: int(datetime.now(timezone.utc).timestamp()),
-        comment="Unix timestamp of revocation",
+        comment="Revocation timestamp (Unix epoch)",
     )
     reason: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
-        comment="Optional reason for revocation",
+        comment="Reason for revocation",
     )
 
     def __repr__(self) -> str:
