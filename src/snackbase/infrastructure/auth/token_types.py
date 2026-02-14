@@ -45,3 +45,8 @@ class AuthenticatedUser:
     role: str
     token_type: TokenType
     groups: List[str] = field(default_factory=list)
+
+    @property
+    def id(self) -> str:
+        """Alias for user_id to maintain compatibility with code expecting user.id."""
+        return self.user_id

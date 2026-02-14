@@ -620,6 +620,7 @@ def register_middleware(app: FastAPI) -> None:
         SecurityHeadersMiddleware,
     )
     from snackbase.infrastructure.api.middleware.rate_limit_middleware import RateLimitMiddleware
+    from snackbase.infrastructure.auth.middleware import AuthenticationMiddleware
 
     # Register SecurityHeadersMiddleware first (outermost layer)
     # Middleware is applied in reverse order, so this will be the last to process
@@ -634,6 +635,12 @@ def register_middleware(app: FastAPI) -> None:
 
     # Register ContextMiddleware (should be early in the stack)
     app.add_middleware(ContextMiddleware)
+
+    # Register AuthenticationMiddleware (should be before ContextMiddleware in request flow)
+    # Middleware added later runs earlier for requests.
+    # So if we want Auth -> Context -> RateLimit -> Security -> app
+    # We add them in reverse order: Security, RateLimit, Context, Auth
+    app.add_middleware(AuthenticationMiddleware)
 
     @app.middleware("http")
     async def logging_middleware(request, call_next):

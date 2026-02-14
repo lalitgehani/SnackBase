@@ -243,6 +243,14 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     from snackbase.infrastructure.api.app import app
     from snackbase.infrastructure.persistence.database import get_db_session
 
+    # Initialize dummy realtime components if missing
+    if not hasattr(app.state, "event_broadcaster"):
+        from unittest.mock import MagicMock
+        app.state.connection_manager = MagicMock()
+        app.state.event_broadcaster = MagicMock()
+        # Ensure publish_event is async if called
+        app.state.event_broadcaster.publish_event = MagicMock(side_effect=lambda **kwargs: asyncio.sleep(0))
+
     async def _get_db_session_override():
         yield db_session
 

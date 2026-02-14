@@ -56,15 +56,11 @@ async def test_authenticate_jwt_success(authenticator, mock_session):
     }
     
     with patch("snackbase.infrastructure.auth.authenticator.jwt_service.validate_access_token", return_value=payload):
-        # Mock _load_user_groups as a method of authenticator
-        with patch.object(authenticator, "_load_user_groups", new_callable=AsyncMock) as mock_load:
-            mock_load.return_value = ["group1"]
-            user = await authenticator.authenticate({"Authorization": f"Bearer {token}"}, session=mock_session)
-            
-            assert user.user_id == "usr_123"
-            assert user.token_type == TokenType.JWT
-            assert user.groups == ["group1"]
-            mock_load.assert_called_once_with("usr_123", mock_session)
+        user = await authenticator.authenticate({"Authorization": f"Bearer {token}"}, session=mock_session)
+        
+        assert user.user_id == "usr_123"
+        assert user.token_type == TokenType.JWT
+        assert user.groups == []
 
 
 @pytest.mark.asyncio

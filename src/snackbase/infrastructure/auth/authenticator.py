@@ -106,18 +106,13 @@ class Authenticator:
         try:
             payload = jwt_service.validate_access_token(token)
             
-            # For JWTs, we might still need to load groups from DB if session is available
-            groups = []
-            if session:
-                groups = await self._load_user_groups(payload["user_id"], session)
-            
             return AuthenticatedUser(
                 user_id=payload["user_id"],
                 account_id=payload["account_id"],
                 email=payload["email"],
                 role=payload["role"],
                 token_type=TokenType.JWT,
-                groups=groups,
+                groups=[],  # JWTs don't store groups currently, and we avoid DB hits
             )
         except (InvalidTokenError, TokenExpiredError) as e:
             raise AuthenticationError(str(e)) from e

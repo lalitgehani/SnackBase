@@ -11,7 +11,6 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from snackbase.core.context import clear_current_context, set_current_context
 from snackbase.core.logging import get_logger
 from snackbase.domain.entities.hook_context import HookContext
-from snackbase.infrastructure.auth.jwt_service import jwt_service
 
 logger = get_logger(__name__)
 
@@ -39,41 +38,12 @@ class ContextMiddleware(BaseHTTPMiddleware):
             user_agent=request.headers.get("user-agent"),
         )
         
-        # Try to enrich with user info from JWT
-        # We don't fail here if auth is invalid - that's for the auth dependency
-        # We just want best-effort context for logging/audit
-        auth_header = request.headers.get("Authorization")
-        if auth_header and auth_header.lower().startswith("bearer "):
-            try:
-                token = auth_header.split(" ")[1]
-                payload = jwt_service.decode_token(token)
-                
-                # Create a minimal user object for context
-                # This avoids a DB hit but gives us enough for audit logs
-                from dataclasses import dataclass
-                
-                @dataclass
-                class ContextUser:
-                    id: str
-                    email: str
-                    account_id: str
-                    role: str
-                
-                user = ContextUser(
-                    id=payload.get("user_id", ""),
-                    email=payload.get("email", ""),
-                    account_id=payload.get("account_id", ""),
-                    role=payload.get("role", ""),
-                )
-                
-                context.user = user  # type: ignore # Duck typing compatible
-                context.account_id = user.account_id
-                context.user_name = getattr(user, "name", user.email)
-                
-            except Exception as e:
-                # Log debug but continue - this might be an invalid token request
-                # that will be rejected by the endpoint anyway
-                logger.debug("Context middleware: Failed to extract user context", error=str(e))
+        # Try to enrich with user info from AuthenticationMiddleware
+        if hasattr(request.state, "authenticated_user"):
+            auth_user = request.state.authenticated_user
+            context.user = auth_user
+            context.account_id = auth_user.account_id
+            context.user_name = auth_user.email
 
         # Set globally
         set_current_context(context)
