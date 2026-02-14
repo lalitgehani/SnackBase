@@ -62,6 +62,17 @@ async def test_audit_log_record_creation(client, superadmin_token, db_session):
     # Alice -> A*** (if PII service is active)
     assert "A" in name_log._mapping["new_value"]
 
+    # Verify extra_metadata contains auth_method
+    extra_meta = name_log._mapping["extra_metadata"]
+    # SQLite might return it as a string if not automatically cast, but SQLAlchemy usually handles JSON
+    if isinstance(extra_meta, str):
+        extra_meta = json.loads(extra_meta)
+    
+    assert extra_meta is not None
+    assert "auth_method" in extra_meta
+    # Since we use superadmin_token (JWT)
+    assert extra_meta["auth_method"] == "jwt"
+
 @pytest.mark.asyncio
 async def test_audit_log_record_update(client, superadmin_token, db_session):
     """Test that audit logs are generated for dynamic collection record update."""
@@ -114,6 +125,12 @@ async def test_audit_log_record_update(client, superadmin_token, db_session):
     assert "B" in name_log._mapping["old_value"]
     assert "R" in name_log._mapping["new_value"]
 
+    # Verify extra_metadata
+    extra_meta = name_log._mapping["extra_metadata"]
+    if isinstance(extra_meta, str):
+        extra_meta = json.loads(extra_meta)
+    assert extra_meta["auth_method"] == "jwt"
+
 @pytest.mark.asyncio
 async def test_audit_log_record_deletion(client, superadmin_token, db_session):
     """Test that audit logs are generated for dynamic collection record deletion."""
@@ -163,3 +180,9 @@ async def test_audit_log_record_deletion(client, superadmin_token, db_session):
     assert name_log is not None
     assert "C" in name_log._mapping["old_value"]
     assert name_log._mapping["new_value"] is None
+
+    # Verify extra_metadata
+    extra_meta = name_log._mapping["extra_metadata"]
+    if isinstance(extra_meta, str):
+        extra_meta = json.loads(extra_meta)
+    assert extra_meta["auth_method"] == "jwt"

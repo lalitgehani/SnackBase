@@ -73,6 +73,7 @@ class AuditLogService:
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None,
         request_id: Optional[str] = None,
+        extra_metadata: Optional[dict[str, Any]] = None,
     ) -> None:
         """Capture audit log entries for a CREATE operation.
 
@@ -88,6 +89,7 @@ class AuditLogService:
             ip_address: IP address of the client.
             user_agent: User agent string from the request.
             request_id: Correlation ID for the request.
+            extra_metadata: Additional metadata to store.
         """
         try:
             table_name = model.__tablename__
@@ -130,6 +132,7 @@ class AuditLogService:
                     user_agent=user_agent,
                     request_id=request_id,
                     occurred_at=occurred_at,
+                    extra_metadata=extra_metadata,
                 )
                 audit_entries.append(audit_entry)
             
@@ -159,6 +162,7 @@ class AuditLogService:
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None,
         request_id: Optional[str] = None,
+        extra_metadata: Optional[dict[str, Any]] = None,
     ) -> None:
         """Capture audit log entries for an UPDATE operation.
 
@@ -175,6 +179,7 @@ class AuditLogService:
             ip_address: IP address of the client.
             user_agent: User agent string from the request.
             request_id: Correlation ID for the request.
+            extra_metadata: Additional metadata to store.
         """
         try:
             table_name = model.__tablename__
@@ -230,6 +235,7 @@ class AuditLogService:
                         user_agent=user_agent,
                         request_id=request_id,
                         occurred_at=occurred_at,
+                        extra_metadata=extra_metadata,
                     )
                     audit_entries.append(audit_entry)
             
@@ -258,6 +264,7 @@ class AuditLogService:
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None,
         request_id: Optional[str] = None,
+        extra_metadata: Optional[dict[str, Any]] = None,
     ) -> None:
         """Capture audit log entries for a DELETE operation.
 
@@ -273,7 +280,9 @@ class AuditLogService:
             ip_address: IP address of the client.
             user_agent: User agent string from the request.
             request_id: Correlation ID for the request.
+            extra_metadata: Additional metadata to store.
         """
+
         try:
             table_name = model.__tablename__
             
@@ -315,6 +324,7 @@ class AuditLogService:
                     user_agent=user_agent,
                     request_id=request_id,
                     occurred_at=occurred_at,
+                    extra_metadata=extra_metadata,
                 )
                 audit_entries.append(audit_entry)
             

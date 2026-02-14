@@ -213,6 +213,17 @@ async def audit_capture_hook(
 
     try:
         audit_service = AuditLogService(session)
+        
+        # Extract auth method
+        # Check for token_type attribute, default to 'unknown' if missing
+        auth_method = getattr(user, "token_type", "unknown")
+        # Ensure it's a string (token_type might be an Enum)
+        if hasattr(auth_method, "value"):
+            auth_method = auth_method.value
+        else:
+            auth_method = str(auth_method)
+            
+        extra_metadata = {"auth_method": auth_method}
 
         # Capture audit based on event type
         if event in (HookEvent.ON_MODEL_AFTER_CREATE, HookEvent.ON_RECORD_AFTER_CREATE):
@@ -225,6 +236,7 @@ async def audit_capture_hook(
                 ip_address=context.ip_address,
                 user_agent=context.user_agent,
                 request_id=context.request_id,
+                extra_metadata=extra_metadata,
             )
         elif event in (HookEvent.ON_MODEL_AFTER_UPDATE, HookEvent.ON_RECORD_AFTER_UPDATE):
             old_values = data.get("old_values", {})
@@ -238,6 +250,7 @@ async def audit_capture_hook(
                 ip_address=context.ip_address,
                 user_agent=context.user_agent,
                 request_id=context.request_id,
+                extra_metadata=extra_metadata,
             )
         elif event in (HookEvent.ON_MODEL_AFTER_DELETE, HookEvent.ON_RECORD_AFTER_DELETE):
             await audit_service.capture_delete(
@@ -249,6 +262,7 @@ async def audit_capture_hook(
                 ip_address=context.ip_address,
                 user_agent=context.user_agent,
                 request_id=context.request_id,
+                extra_metadata=extra_metadata,
             )
 
         # We DO NOT commit here. We use the passed session and let the 

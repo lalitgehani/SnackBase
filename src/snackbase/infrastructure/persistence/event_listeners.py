@@ -145,6 +145,12 @@ def _make_listener(hook_registry: HookRegistry, op_type: str):
             # Background task or system op without context -> skip audit
             return
 
+        if not context.user:
+            # Authenticated user required for audit logging
+            # Only enable debug logging to avoid noise for system ops that happen within context but without user
+            # logger.debug(f"Audit listener skipped for {table_name}: No authenticated user in context")
+            return
+
         # NEW: Check configuration toggle (F3.7.1)
         from snackbase.core.config import get_settings
         if not get_settings().audit_logging_enabled:
@@ -205,6 +211,14 @@ def _make_listener(hook_registry: HookRegistry, op_type: str):
                     sync_repo = SyncAuditLogRepository(connection)
                     audit_entries = []
                     
+                    # Extract auth method
+                    auth_method = context.user.token_type if context.user and hasattr(context.user, "token_type") else "unknown"
+                    extra_metadata = {"auth_method": auth_method}
+
+                    user_id = str(context.user.id)
+                    user_email = context.user.email
+                    user_name = context.user_name or getattr(context.user, "name", context.user.email)
+
                     if op_type == "insert":
                         # Audit all columns from snapshot
                         for column in mapper.columns:
@@ -219,12 +233,13 @@ def _make_listener(hook_registry: HookRegistry, op_type: str):
                                 "column_name": column.name,
                                 "old_value": None,
                                 "new_value": str(masked_val) if masked_val is not None else None,
-                                "user_id": str(context.user.id) if context.user else "system",
-                                "user_email": context.user.email if context.user else "system",
-                                "user_name": context.user_name or (context.user.email if context.user else "system"),
+                                "user_id": user_id,
+                                "user_email": user_email,
+                                "user_name": user_name,
                                 "ip_address": context.ip_address,
                                 "user_agent": context.user_agent,
                                 "request_id": context.request_id,
+                                "extra_metadata": extra_metadata,
                             })
                             
                     elif op_type == "update":
@@ -245,12 +260,13 @@ def _make_listener(hook_registry: HookRegistry, op_type: str):
                                     "column_name": col_name,
                                     "old_value": str(masked_old) if masked_old is not None else None,
                                     "new_value": str(masked_new) if masked_new is not None else None,
-                                    "user_id": str(context.user.id) if context.user else "system",
-                                    "user_email": context.user.email if context.user else "system",
-                                    "user_name": context.user_name or (context.user.email if context.user else "system"),
+                                    "user_id": user_id,
+                                    "user_email": user_email,
+                                    "user_name": user_name,
                                     "ip_address": context.ip_address,
                                     "user_agent": context.user_agent,
                                     "request_id": context.request_id,
+                                    "extra_metadata": extra_metadata,
                                 })
                                     
                     elif op_type == "delete":
@@ -267,12 +283,13 @@ def _make_listener(hook_registry: HookRegistry, op_type: str):
                                 "column_name": column.name,
                                 "old_value": str(masked_val) if masked_val is not None else None,
                                 "new_value": None,
-                                "user_id": str(context.user.id) if context.user else "system",
-                                "user_email": context.user.email if context.user else "system",
-                                "user_name": context.user_name or (context.user.email if context.user else "system"),
+                                "user_id": user_id,
+                                "user_email": user_email,
+                                "user_name": user_name,
                                 "ip_address": context.ip_address,
                                 "user_agent": context.user_agent,
                                 "request_id": context.request_id,
+                                "extra_metadata": extra_metadata,
                             })
 
                     # Perform sync insert
