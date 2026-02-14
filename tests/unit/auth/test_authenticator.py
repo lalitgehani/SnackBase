@@ -58,6 +58,11 @@ async def test_authenticate_jwt_success(authenticator, mock_session):
     }
     
     with patch("snackbase.infrastructure.auth.authenticator.jwt_service.validate_access_token", return_value=payload):
+        # Configure mock session to return a valid user verification result
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = True  # User exists
+        mock_session.execute.return_value = mock_result
+
         user = await authenticator.authenticate({"Authorization": f"Bearer {token}"}, session=mock_session)
         
         assert user.user_id == "usr_123"
