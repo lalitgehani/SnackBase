@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, patch
 
 from snackbase.infrastructure.api.app import app
 from snackbase.infrastructure.api.dependencies import get_db_session, get_email_service, get_current_user, CurrentUser
+from snackbase.infrastructure.auth.token_types import TokenType
 from snackbase.infrastructure.persistence.models import (
     AccountModel,
     UserModel,
@@ -65,6 +66,7 @@ async def test_invitation_email_flow(db_session, mock_email_service):
             account_id=account.id,
             email=admin_user.email,
             role="admin",
+            token_type=TokenType.JWT,
             groups=[],
         )
 
@@ -157,6 +159,7 @@ async def test_invitation_email_failure_handling(db_session):
         account_id=account.id,
         email=admin_user.email,
         role="admin",
+        token_type=TokenType.JWT,
         groups=[]
     )
 

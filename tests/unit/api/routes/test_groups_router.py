@@ -6,6 +6,7 @@ import pytest
 from fastapi import HTTPException, status
 
 from snackbase.infrastructure.api.dependencies import CurrentUser, SYSTEM_ACCOUNT_ID
+from snackbase.infrastructure.auth.token_types import TokenType
 from snackbase.infrastructure.api.routes.groups_router import (
     add_user_to_group,
     create_group,
@@ -38,6 +39,7 @@ def current_user():
         account_id="acc1",
         email="user@example.com",
         role="admin",
+        token_type=TokenType.JWT,
         groups=[],
     )
 
@@ -148,6 +150,7 @@ def superadmin_user():
         account_id=SYSTEM_ACCOUNT_ID,
         email="superadmin@example.com",
         role="superadmin",
+        token_type=TokenType.JWT,
         groups=[],
     )
 

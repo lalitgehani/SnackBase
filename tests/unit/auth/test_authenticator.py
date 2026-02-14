@@ -18,6 +18,8 @@ def mock_session():
     session = MagicMock(spec=AsyncMock)
     # Ensure execute is an async mock
     session.execute = AsyncMock()
+    session.commit = AsyncMock()
+    session.rollback = AsyncMock()
     return session
 
 
@@ -92,9 +94,10 @@ async def test_authenticate_legacy_api_key_success(authenticator, mock_session):
     """Test successful legacy API key authentication."""
     token = "sb_sk_ACC_RANDOM"
     
+    from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID
     mock_user = MagicMock()
     mock_user.id = "usr_123"
-    mock_user.account_id = "acc_456"
+    mock_user.account_id = SYSTEM_ACCOUNT_ID
     mock_user.email = "test@example.com"
     mock_user.role.name = "admin"
     # Mock groups relationship

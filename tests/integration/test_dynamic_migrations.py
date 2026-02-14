@@ -23,6 +23,12 @@ async def db_session():
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
+    
+    # REQUIRED: Update global db_manager so middleware uses THIS database
+    from snackbase.infrastructure.persistence.database import get_db_manager
+    manager = get_db_manager()
+    manager._engine = engine
+    manager._session_factory = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     # Use Alembic to initialize the database instead of Base.metadata.create_all
     # This ensures consistency with how the app runs and avoids "table exists" errors
@@ -37,12 +43,30 @@ async def db_session():
     await loop.run_in_executor(None, command.upgrade, alembic_cfg, "head")
         
     # Seed default roles (needed for superadmin)
-    from snackbase.infrastructure.persistence.models.role import RoleModel
+    from snackbase.infrastructure.persistence.models import RoleModel, AccountModel, UserModel
+    from datetime import datetime, timezone
+    
     async_session_maker = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     async with async_session_maker() as session:
-        admin_role = RoleModel(name="admin", description="Administrator")
-        user_role = RoleModel(name="user", description="Standard User")
-        session.add_all([admin_role, user_role])
+        from sqlalchemy import select
+        # 1. Seed Roles if they don't exist
+        for role_name in ["admin", "user"]:
+            res = await session.execute(select(RoleModel).where(RoleModel.name == role_name))
+            if not res.scalar_one_or_none():
+                desc = "Administrator" if role_name == "admin" else "Standard User"
+                session.add(RoleModel(name=role_name, description=desc))
+        
+        # 2. Seed System Account if it doesn't exist
+        res = await session.execute(select(AccountModel).where(AccountModel.id == "00000000-0000-0000-0000-000000000000"))
+        if not res.scalar_one_or_none():
+            system_account = AccountModel(
+                id="00000000-0000-0000-0000-000000000000",
+                account_code="SY0000",
+                name="System Account",
+                slug="system"
+            )
+            session.add(system_account)
+        
         await session.commit()
 
     async with async_session_maker() as session:

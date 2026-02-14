@@ -15,6 +15,7 @@ from snackbase.infrastructure.persistence.models import (
     RoleModel,
 )
 from snackbase.infrastructure.auth import hash_password, jwt_service
+from snackbase.infrastructure.auth.token_types import TokenType
 
 
 @pytest.mark.asyncio
@@ -333,6 +334,7 @@ async def test_superadmin_reset_password_direct(db_session):
             account_id=SYSTEM_ACCOUNT_ID,
             email="admin@snackbase.io",
             role="superadmin",
+            token_type=TokenType.JWT,
             groups=[],
         )
 
@@ -401,6 +403,7 @@ async def test_superadmin_reset_password_link(db_session):
             account_id=SYSTEM_ACCOUNT_ID,
             email="admin@snackbase.io",
             role="superadmin",
+            token_type=TokenType.JWT,
             groups=[],
         )
 

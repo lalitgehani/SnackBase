@@ -73,187 +73,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             raise
 
         # Register built-in authentication providers
-        from snackbase.core.configuration.config_registry import ConfigurationRegistry
-        from snackbase.infrastructure.configuration.providers import EmailPasswordProvider
-        from snackbase.infrastructure.configuration.providers.email.aws_ses import AWSESConfiguration
-        from snackbase.infrastructure.configuration.providers.email.resend import ResendConfiguration
-        from snackbase.infrastructure.configuration.providers.email.smtp import SMTPConfiguration
-        from snackbase.infrastructure.configuration.providers.oauth import (
-            AppleOAuthHandler,
-            GitHubOAuthHandler,
-            GoogleOAuthHandler,
-            MicrosoftOAuthHandler,
-        )
-        from snackbase.infrastructure.configuration.providers.saml import (
-            AzureADSAMLProvider,
-            GenericSAMLProvider,
-            OktaSAMLProvider,
-        )
-        from snackbase.infrastructure.configuration.providers.system import SystemConfiguration
+        await register_builtin_providers(app)
+        
+        # Ensure db_manager is available for hooks registration
         from snackbase.infrastructure.persistence.database import get_db_manager
-        from snackbase.infrastructure.security.encryption import EncryptionService
-
-        encryption_service = EncryptionService(settings.encryption_key)
-        config_registry = ConfigurationRegistry(encryption_service)
-
-        # Store registry on app state
-        app.state.config_registry = config_registry
-
-        # Use DatabaseManager directly for initialization session
         db_manager = get_db_manager()
-        async with db_manager.session() as _session:
-            # Register email/password provider
-            email_password_provider = EmailPasswordProvider()
-            config_registry.register_provider_definition(
-                category=email_password_provider.category,
-                provider_name=email_password_provider.provider_name,
-                display_name=email_password_provider.display_name,
-                logo_url=email_password_provider.logo_url,
-                config_schema=email_password_provider.config_schema,
-                is_builtin=email_password_provider.is_builtin,
-            )
-
-            # Register SMTP provider
-            smtp_provider = SMTPConfiguration()
-            config_registry.register_provider_definition(
-                category=smtp_provider.category,
-                provider_name=smtp_provider.provider_name,
-                display_name=smtp_provider.display_name,
-                logo_url=smtp_provider.logo_url,
-                config_schema=smtp_provider.config_schema,
-                is_builtin=smtp_provider.is_builtin,
-            )
-
-            # Register AWS SES provider
-            aws_ses_provider = AWSESConfiguration()
-            config_registry.register_provider_definition(
-                category=aws_ses_provider.category,
-                provider_name=aws_ses_provider.provider_name,
-                display_name=aws_ses_provider.display_name,
-                logo_url=aws_ses_provider.logo_url,
-                config_schema=aws_ses_provider.config_schema,
-                is_builtin=aws_ses_provider.is_builtin,
-            )
-
-            # Register Resend provider
-            resend_provider = ResendConfiguration()
-            config_registry.register_provider_definition(
-                category=resend_provider.category,
-                provider_name=resend_provider.provider_name,
-                display_name=resend_provider.display_name,
-                logo_url=resend_provider.logo_url,
-                config_schema=resend_provider.config_schema,
-                is_builtin=resend_provider.is_builtin,
-            )
-
-            # Register System Configuration
-            system_config = SystemConfiguration()
-            config_registry.register_provider_definition(
-                category=system_config.category,
-                provider_name=system_config.provider_name,
-                display_name=system_config.display_name,
-                logo_url=system_config.logo_url,
-                config_schema=system_config.config_schema,
-                is_builtin=system_config.is_builtin,
-            )
-
-            # Register Google OAuth provider
-            google_oauth_handler = GoogleOAuthHandler()
-            config_registry.register_provider_definition(
-                category="auth_providers",
-                provider_name=google_oauth_handler.provider_name,
-                display_name=google_oauth_handler.display_name,
-                logo_url=google_oauth_handler.logo_url,
-                config_schema=google_oauth_handler.config_schema,
-                is_builtin=True,
-            )
-
-            # Register GitHub OAuth provider
-            github_oauth_handler = GitHubOAuthHandler()
-            config_registry.register_provider_definition(
-                category="auth_providers",
-                provider_name=github_oauth_handler.provider_name,
-                display_name=github_oauth_handler.display_name,
-                logo_url=github_oauth_handler.logo_url,
-                config_schema=github_oauth_handler.config_schema,
-                is_builtin=True,
-            )
-
-            # Register Microsoft OAuth provider
-            microsoft_oauth_handler = MicrosoftOAuthHandler()
-            config_registry.register_provider_definition(
-                category="auth_providers",
-                provider_name=microsoft_oauth_handler.provider_name,
-                display_name=microsoft_oauth_handler.display_name,
-                logo_url=microsoft_oauth_handler.logo_url,
-                config_schema=microsoft_oauth_handler.config_schema,
-                is_builtin=True,
-            )
-
-            # Register Apple OAuth provider
-            apple_oauth_handler = AppleOAuthHandler()
-            config_registry.register_provider_definition(
-                category="auth_providers",
-                provider_name=apple_oauth_handler.provider_name,
-                display_name=apple_oauth_handler.display_name,
-                logo_url=apple_oauth_handler.logo_url,
-                config_schema=apple_oauth_handler.config_schema,
-                is_builtin=True,
-            )
-
-            # Register Okta SAML provider
-            okta_saml_provider = OktaSAMLProvider()
-            config_registry.register_provider_definition(
-                category="auth_providers",
-                provider_name=okta_saml_provider.provider_name,
-                display_name=okta_saml_provider.display_name,
-                logo_url=okta_saml_provider.logo_url,
-                config_schema=okta_saml_provider.config_schema,
-                is_builtin=True,
-            )
-
-            # Register Azure AD SAML provider
-            azure_ad_provider = AzureADSAMLProvider()
-            config_registry.register_provider_definition(
-                category="auth_providers",
-                provider_name=azure_ad_provider.provider_name,
-                display_name=azure_ad_provider.display_name,
-                logo_url=azure_ad_provider.logo_url,
-                config_schema=azure_ad_provider.config_schema,
-                is_builtin=True,
-            )
-
-            # Register Generic SAML provider
-            generic_saml_provider = GenericSAMLProvider()
-            config_registry.register_provider_definition(
-                category="auth_providers",
-                provider_name=generic_saml_provider.provider_name,
-                display_name=generic_saml_provider.display_name,
-                logo_url=generic_saml_provider.logo_url,
-                config_schema=generic_saml_provider.config_schema,
-                is_builtin=True,
-            )
-
-            # Store registry on app state for later use
-            app.state.config_registry = config_registry
-
-            logger.info(
-                "Built-in providers registered",
-                providers=[
-                    email_password_provider.provider_name,
-                    smtp_provider.provider_name,
-                    aws_ses_provider.provider_name,
-                    resend_provider.provider_name,
-                    system_config.provider_name,
-                    google_oauth_handler.provider_name,
-                    github_oauth_handler.provider_name,
-                    microsoft_oauth_handler.provider_name,
-                    apple_oauth_handler.provider_name,
-                    okta_saml_provider.provider_name,
-                    azure_ad_provider.provider_name,
-                    generic_saml_provider.provider_name,
-                ],
-            )
 
         # Register built-in hooks
         if hasattr(app.state, "hook_registry"):
@@ -681,5 +505,194 @@ def register_middleware(app: FastAPI) -> None:
             clear_context()
 
 
-# Create the application instance
+
+async def register_builtin_providers(app: FastAPI) -> None:
+    """Register built-in authentication and configuration providers.
+    
+    Args:
+        app: FastAPI application instance.
+    """
+    from snackbase.core.configuration.config_registry import ConfigurationRegistry
+    from snackbase.infrastructure.configuration.providers import EmailPasswordProvider
+    from snackbase.infrastructure.configuration.providers.email.aws_ses import AWSESConfiguration
+    from snackbase.infrastructure.configuration.providers.email.resend import ResendConfiguration
+    from snackbase.infrastructure.configuration.providers.email.smtp import SMTPConfiguration
+    from snackbase.infrastructure.configuration.providers.oauth import (
+        AppleOAuthHandler,
+        GitHubOAuthHandler,
+        GoogleOAuthHandler,
+        MicrosoftOAuthHandler,
+    )
+    from snackbase.infrastructure.configuration.providers.saml import (
+        AzureADSAMLProvider,
+        GenericSAMLProvider,
+        OktaSAMLProvider,
+    )
+    from snackbase.infrastructure.configuration.providers.system import SystemConfiguration
+    from snackbase.infrastructure.persistence.database import get_db_manager
+    from snackbase.infrastructure.security.encryption import EncryptionService
+    
+    settings = get_settings()
+    
+    # Initialize registry if not already present
+    if not hasattr(app.state, "config_registry"):
+        encryption_service = EncryptionService(settings.encryption_key)
+        config_registry = ConfigurationRegistry(encryption_service)
+        app.state.config_registry = config_registry
+    else:
+        config_registry = app.state.config_registry
+
+    # Use DatabaseManager directly for initialization session
+    db_manager = get_db_manager()
+    async with db_manager.session() as _session:
+        # Register email/password provider
+        email_password_provider = EmailPasswordProvider()
+        config_registry.register_provider_definition(
+            category=email_password_provider.category,
+            provider_name=email_password_provider.provider_name,
+            display_name=email_password_provider.display_name,
+            logo_url=email_password_provider.logo_url,
+            config_schema=email_password_provider.config_schema,
+            is_builtin=email_password_provider.is_builtin,
+        )
+
+        # Register SMTP provider
+        smtp_provider = SMTPConfiguration()
+        config_registry.register_provider_definition(
+            category=smtp_provider.category,
+            provider_name=smtp_provider.provider_name,
+            display_name=smtp_provider.display_name,
+            logo_url=smtp_provider.logo_url,
+            config_schema=smtp_provider.config_schema,
+            is_builtin=smtp_provider.is_builtin,
+        )
+
+        # Register AWS SES provider
+        aws_ses_provider = AWSESConfiguration()
+        config_registry.register_provider_definition(
+            category=aws_ses_provider.category,
+            provider_name=aws_ses_provider.provider_name,
+            display_name=aws_ses_provider.display_name,
+            logo_url=aws_ses_provider.logo_url,
+            config_schema=aws_ses_provider.config_schema,
+            is_builtin=aws_ses_provider.is_builtin,
+        )
+
+        # Register Resend provider
+        resend_provider = ResendConfiguration()
+        config_registry.register_provider_definition(
+            category=resend_provider.category,
+            provider_name=resend_provider.provider_name,
+            display_name=resend_provider.display_name,
+            logo_url=resend_provider.logo_url,
+            config_schema=resend_provider.config_schema,
+            is_builtin=resend_provider.is_builtin,
+        )
+
+        # Register System Configuration
+        system_config = SystemConfiguration()
+        config_registry.register_provider_definition(
+            category=system_config.category,
+            provider_name=system_config.provider_name,
+            display_name=system_config.display_name,
+            logo_url=system_config.logo_url,
+            config_schema=system_config.config_schema,
+            is_builtin=system_config.is_builtin,
+        )
+
+        # Register Google OAuth provider
+        google_oauth_handler = GoogleOAuthHandler()
+        config_registry.register_provider_definition(
+            category="auth_providers",
+            provider_name=google_oauth_handler.provider_name,
+            display_name=google_oauth_handler.display_name,
+            logo_url=google_oauth_handler.logo_url,
+            config_schema=google_oauth_handler.config_schema,
+            is_builtin=True,
+        )
+
+        # Register GitHub OAuth provider
+        github_oauth_handler = GitHubOAuthHandler()
+        config_registry.register_provider_definition(
+            category="auth_providers",
+            provider_name=github_oauth_handler.provider_name,
+            display_name=github_oauth_handler.display_name,
+            logo_url=github_oauth_handler.logo_url,
+            config_schema=github_oauth_handler.config_schema,
+            is_builtin=True,
+        )
+
+        # Register Microsoft OAuth provider
+        microsoft_oauth_handler = MicrosoftOAuthHandler()
+        config_registry.register_provider_definition(
+            category="auth_providers",
+            provider_name=microsoft_oauth_handler.provider_name,
+            display_name=microsoft_oauth_handler.display_name,
+            logo_url=microsoft_oauth_handler.logo_url,
+            config_schema=microsoft_oauth_handler.config_schema,
+            is_builtin=True,
+        )
+
+        # Register Apple OAuth provider
+        apple_oauth_handler = AppleOAuthHandler()
+        config_registry.register_provider_definition(
+            category="auth_providers",
+            provider_name=apple_oauth_handler.provider_name,
+            display_name=apple_oauth_handler.display_name,
+            logo_url=apple_oauth_handler.logo_url,
+            config_schema=apple_oauth_handler.config_schema,
+            is_builtin=True,
+        )
+
+        # Register Okta SAML provider
+        okta_saml_provider = OktaSAMLProvider()
+        config_registry.register_provider_definition(
+            category="auth_providers",
+            provider_name=okta_saml_provider.provider_name,
+            display_name=okta_saml_provider.display_name,
+            logo_url=okta_saml_provider.logo_url,
+            config_schema=okta_saml_provider.config_schema,
+            is_builtin=True,
+        )
+
+        # Register Azure AD SAML provider
+        azure_ad_provider = AzureADSAMLProvider()
+        config_registry.register_provider_definition(
+            category="auth_providers",
+            provider_name=azure_ad_provider.provider_name,
+            display_name=azure_ad_provider.display_name,
+            logo_url=azure_ad_provider.logo_url,
+            config_schema=azure_ad_provider.config_schema,
+            is_builtin=True,
+        )
+
+        # Register Generic SAML provider
+        generic_saml_provider = GenericSAMLProvider()
+        config_registry.register_provider_definition(
+            category="auth_providers",
+            provider_name=generic_saml_provider.provider_name,
+            display_name=generic_saml_provider.display_name,
+            logo_url=generic_saml_provider.logo_url,
+            config_schema=generic_saml_provider.config_schema,
+            is_builtin=True,
+        )
+
+        logger.info(
+            "Built-in providers registered",
+            providers=[
+                email_password_provider.provider_name,
+                smtp_provider.provider_name,
+                aws_ses_provider.provider_name,
+                resend_provider.provider_name,
+                system_config.provider_name,
+                google_oauth_handler.provider_name,
+                github_oauth_handler.provider_name,
+                microsoft_oauth_handler.provider_name,
+                apple_oauth_handler.provider_name,
+                okta_saml_provider.provider_name,
+                azure_ad_provider.provider_name,
+                generic_saml_provider.provider_name,
+            ],
+        )
+
 app = create_app()

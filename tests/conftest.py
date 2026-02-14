@@ -184,17 +184,31 @@ async def db_session(_maybe_enable_audit_hooks) -> AsyncGenerator[AsyncSession, 
         echo=False,
     )
     
+    # Initialize global manager with this engine
+    from snackbase.infrastructure.persistence.database import get_db_manager
+    manager = get_db_manager()
+    manager._engine = engine
+    
+    # Apply SQLite pragmas on connection
     from sqlalchemy import event
     @event.listens_for(engine.sync_engine, "connect")
     def set_sqlite_pragma(dbapi_connection, connection_record):
+        from snackbase.core.config import get_settings
+        settings = get_settings()
+        
         cursor = dbapi_connection.cursor()
-        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.execute(f"PRAGMA journal_mode={settings.db_sqlite_journal_mode}")
+        cursor.execute(f"PRAGMA synchronous={settings.db_sqlite_synchronous}")
+        cursor.execute(f"PRAGMA cache_size={settings.db_sqlite_cache_size}")
+        cursor.execute(f"PRAGMA temp_store={settings.db_sqlite_temp_store}")
+        
+        fk_status = "ON" if settings.db_sqlite_foreign_keys else "OFF"
+        cursor.execute(f"PRAGMA foreign_keys={fk_status}")
+        
         cursor.close()
     
-    # Enable WAL mode and set busy timeout for better concurrency
+    # Initialize connection and verify settings
     async with engine.connect() as conn:
-        await conn.execute(text("PRAGMA journal_mode=WAL"))
-        await conn.execute(text("PRAGMA busy_timeout=5000"))
         await conn.commit()
 
     # Apply all migrations to set up the schema
@@ -211,6 +225,7 @@ async def db_session(_maybe_enable_audit_hooks) -> AsyncGenerator[AsyncSession, 
         class_=AsyncSession,
         expire_on_commit=False,
     )
+    manager._session_factory = async_session_maker
 
     # Seed default roles
     from snackbase.infrastructure.persistence.models.role import RoleModel

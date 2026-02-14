@@ -70,8 +70,10 @@ class Authenticator:
         # 2. Try X-API-Key header
         api_key_header = request_headers.get("X-API-Key") or request_headers.get("x-api-key")
         if api_key_header:
+            logger.debug("Found X-API-Key header", key_prefix=api_key_header[:10])
             return await self._authenticate_api_key_header(api_key_header, session)
 
+        logger.debug("No valid authentication headers found", headers=list(request_headers.keys()))
         raise AuthenticationError("Missing authentication credentials")
 
     async def _authenticate_bearer(
@@ -106,6 +108,11 @@ class Authenticator:
         try:
             payload = jwt_service.validate_access_token(token)
             
+            if session:
+                await self._verify_user_account(
+                    payload["user_id"], payload["account_id"], session
+                )
+
             return AuthenticatedUser(
                 user_id=payload["user_id"],
                 account_id=payload["account_id"],
@@ -119,6 +126,29 @@ class Authenticator:
         except Exception as e:
             logger.error("JWT authentication error", error=str(e))
             raise AuthenticationError("Invalid token") from e
+
+    async def _verify_user_account(
+        self, user_id: str, account_id: str, session: AsyncSession
+    ) -> None:
+        """Verify that a user belongs to an account."""
+        # Special case: superadmins in system account
+        if account_id == SYSTEM_ACCOUNT_ID:
+            # We still want to verify the user exists and has a role, 
+            # but they might be linked to the system account.
+            pass
+
+        result = await session.execute(
+            select(UserModel.id).where(
+                UserModel.id == user_id, UserModel.account_id == account_id
+            )
+        )
+        if not result.scalar_one_or_none():
+            logger.warning(
+                "User-account mismatch detected",
+                user_id=user_id,
+                account_id=account_id
+            )
+            raise AuthenticationError("User does not belong to the specifying account")
 
     async def _authenticate_sb_token(
         self, token: str, session: Optional[AsyncSession]
@@ -141,6 +171,7 @@ class Authenticator:
             # Check revocation if session is available
             if session:
                 await self._check_revocation(payload.token_id, session)
+                await self._verify_user_account(payload.user_id, payload.account_id, session)
 
             return AuthenticatedUser(
                 user_id=payload.user_id,
@@ -180,16 +211,31 @@ class Authenticator:
         if not key_model:
             raise AuthenticationError("Invalid API key")
 
-        # Check expiration
-        if key_model.expires_at and key_model.expires_at < datetime.now(timezone.utc):
-            raise AuthenticationError("API key has expired")
+        # Check expiration (ensure comparison works even if DB returns naive datetime)
+        if key_model.expires_at:
+            expires_at = key_model.expires_at
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            
+            if expires_at < datetime.now(timezone.utc):
+                raise AuthenticationError("API key has expired")
 
         user = key_model.user
         if not user:
             raise AuthenticationError("User associated with API key not found")
 
-        # Legacy keys were restricted to superadmins in some places, 
-        # but let's just return the user context here and let dependencies handle it.
+        # Legacy keys are restricted to superadmins
+        if user.account_id != SYSTEM_ACCOUNT_ID:
+            logger.warning(
+                "Legacy API key used by non-superadmin",
+                user_id=user.id,
+                account_id=user.account_id
+            )
+            raise AuthenticationError("API keys are restricted to superadmin users")
+
+        # Update last_used_at
+        key_model.last_used_at = datetime.now(timezone.utc)
+        await session.commit()
         
         groups = [g.name for g in user.groups] if user.groups else []
         role_name = user.role.name if user.role else "admin"

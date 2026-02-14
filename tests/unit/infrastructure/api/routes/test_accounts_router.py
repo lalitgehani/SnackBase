@@ -10,6 +10,7 @@ from httpx import ASGITransport, AsyncClient
 
 from snackbase.infrastructure.api.app import app
 from snackbase.infrastructure.api.dependencies import require_superadmin
+from snackbase.infrastructure.auth.token_types import TokenType
 from snackbase.infrastructure.persistence.models import AccountModel
 
 
@@ -48,6 +49,7 @@ def create_superadmin_override():
         user.account_id = "SY0000"
         user.email = "admin@example.com"
         user.role = "admin"
+        user.token_type = TokenType.JWT
         user.groups = []
         return user
     return admin_override

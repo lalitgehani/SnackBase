@@ -4,254 +4,62 @@ Provides dependencies for extracting and validating JWT tokens from requests.
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
-from fastapi import Depends, Header, HTTPException, Request, status
+from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.core.logging import get_logger
-from snackbase.infrastructure.auth import (
-    InvalidTokenError,
-    TokenExpiredError,
-    jwt_service,
-    api_key_service,
+from snackbase.infrastructure.auth.token_types import (
+    AuthenticatedUser as AuthUser,
 )
 from snackbase.infrastructure.persistence.database import get_db_session
+
+if TYPE_CHECKING:
+    from snackbase.domain.services.email_verification_service import EmailVerificationService
+    from snackbase.domain.services.password_reset_service import PasswordResetService
+    from snackbase.infrastructure.services.email_service import EmailService
 
 logger = get_logger(__name__)
 
 
-@dataclass
-class CurrentUser:
-    """Represents the current authenticated user context.
-
-    Extracted from a valid JWT access token.
-    """
-
-    user_id: str
-    account_id: str
-    email: str
-    role: str
-    groups: list[str]  # List of group names the user belongs to
-
-
 async def get_current_user(
     request: Request,
-    authorization: Annotated[str | None, Header()] = None,
-    x_api_key: Annotated[str | None, Header(alias="X-API-Key")] = None,
-    session: Annotated[AsyncSession, Depends(get_db_session)] = None,
-) -> CurrentUser:
-    """Extract and validate the current user from the Authorization header.
+) -> AuthUser:
+    """Extract and validate the current user from the request state.
+
+    The user is populated by the AuthenticationMiddleware.
 
     Args:
-        authorization: The Authorization header value (e.g., "Bearer <token>").
-        session: Database session for loading user groups.
+        request: The incoming request.
 
     Returns:
-        CurrentUser: The authenticated user's context.
+        AuthUser: The authenticated user's context.
 
     Raises:
-        HTTPException: 401 if token is missing, invalid, or expired.
+        HTTPException: 401 if authentication failed or is missing.
     """
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-
-    if authorization is None:
-        if x_api_key:
-            return await get_current_user_from_api_key(x_api_key, request, session)
+    if not hasattr(request.state, "authenticated_user"):
+        auth_error = getattr(request.state, "auth_error", "Missing authentication credentials")
+        logger.info(f"Authentication failed: {auth_error}")
+        
+        # Specific status code for restricted API keys
+        status_code = status.HTTP_401_UNAUTHORIZED
+        if "restricted to superadmin" in auth_error:
+            status_code = status.HTTP_403_FORBIDDEN
             
-        logger.info("Authentication failed: missing Authorization and X-API-Key headers")
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing authentication credentials",
+            status_code=status_code,
+            detail=auth_error,
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Extract Bearer token
-    parts = authorization.split()
-    if len(parts) != 2 or parts[0].lower() != "bearer":
-        logger.info("Authentication failed: invalid Authorization header format")
-        raise credentials_exception
-
-    token = parts[1]
-
-    try:
-        # Validate access token (not refresh token)
-        payload = jwt_service.validate_access_token(token)
-
-        user_id = payload["user_id"]
-        
-        db_account_id = None
-        groups = []
-
-        if session is not None:
-            from snackbase.infrastructure.persistence.repositories import UserRepository
-
-            user_repo = UserRepository(session)
-            user = await user_repo.get_by_id_with_groups(user_id)
-
-            if user:
-                db_account_id = user.account_id
-                if user.groups:
-                    groups = [group.name for group in user.groups]
-            else:
-                logger.info("Authentication failed: user not found in database", user_id=user_id)
-                raise credentials_exception
-        else:
-            # Without session, we can't verify existence.
-            # We should fail to be safe.
-            logger.warning(
-                "Authentication failed: cannot verify user existence (no session)",
-                user_id=user_id,
-            )
-            raise credentials_exception
-
-        # Verify that the user actually belongs to the account specified in the token
-        if db_account_id and db_account_id != payload["account_id"]:
-            logger.warning(
-                "Authentication failed: user-account mismatch",
-                user_id=user_id,
-                token_account_id=payload["account_id"],
-                db_account_id=db_account_id,
-            )
-            # Use InvalidTokenError to trigger 401
-            raise InvalidTokenError("User does not belong to this account")
-
-        return CurrentUser(
-            user_id=user_id,
-            account_id=payload["account_id"],
-            email=payload["email"],
-            role=payload["role"],
-            groups=groups,
-        )
-    except TokenExpiredError:
-        logger.info("Authentication failed: token expired")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token has expired",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    except InvalidTokenError as e:
-        logger.info("Authentication failed: invalid token", error=str(e))
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid token: {str(e)}",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    except HTTPException:
-        # Re-raise HTTP exceptions from API key validation
-        raise
-    except KeyError as e:
-        logger.warning("Authentication failed: missing claim in token", missing_claim=str(e))
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Missing claim: {str(e)}",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-
-async def get_current_user_from_api_key(
-    api_key: str,
-    request: Request,
-    session: AsyncSession,
-) -> CurrentUser:
-    """Validate and extract the current user from an API key.
-
-    Args:
-        api_key: The plaintext API key from the X-API-Key header.
-        request: FastAPI request object.
-        session: Database session.
-
-    Returns:
-        CurrentUser: The authenticated user's context.
-
-    Raises:
-        HTTPException: 401 if key is invalid/expired, 403 if not superadmin.
-    """
-    from snackbase.infrastructure.persistence.repositories import (
-        APIKeyRepository,
-        UserRepository,
-    )
-
-    key_hash = api_key_service.hash_key(api_key)
-    api_key_repo = APIKeyRepository(session)
-    
-    key_model = await api_key_repo.get_by_hash(key_hash)
-    
-    if not key_model:
-        logger.info("API Key authentication failed: key not found or inactive")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid API key",
-        )
-        
-    # Check expiration
-    if key_model.expires_at and key_model.expires_at < datetime.now(key_model.expires_at.tzinfo):
-        logger.info("API Key authentication failed: key expired", key_id=key_model.id)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="API key has expired",
-        )
-        
-    # Load user with groups and role
-    from sqlalchemy.orm import selectinload
-    from sqlalchemy import select
-    from snackbase.infrastructure.persistence.models import UserModel
-    
-    result = await session.execute(
-        select(UserModel)
-        .where(UserModel.id == key_model.user_id)
-        .options(selectinload(UserModel.groups), selectinload(UserModel.role))
-    )
-    user = result.scalar_one_or_none()
-    
-    if not user:
-        logger.warning("API Key authentication failed: user not found", user_id=key_model.user_id)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User associated with API key not found",
-        )
-        
-    # Verify user is superadmin (system account)
-    if user.account_id != SYSTEM_ACCOUNT_ID:
-        logger.warning(
-            "API Key access denied: user is not a superadmin",
-            user_id=user.id,
-            account_id=user.account_id,
-        )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="API keys are restricted to superadmin users",
-        )
-        
-    # Update last_used_at
-    await api_key_repo.update_last_used(key_model.id)
-    
-    # Audit log the usage (simplified here, will be integrated properly)
-    logger.info(
-        "API Key used",
-        key_id=key_model.id,
-        user_id=user.id,
-        path=str(request.url.path),
-    )
-    
-    groups = [group.name for group in user.groups] if user.groups else []
-    
-    return CurrentUser(
-        user_id=user.id,
-        account_id=user.account_id,
-        email=user.email,
-        role=user.role.name if user.role else "admin",
-        groups=groups,
-    )
+    return request.state.authenticated_user
 
 
 # Type alias for dependency injection
-AuthenticatedUser = Annotated[CurrentUser, Depends(get_current_user)]
+AuthenticatedUser = Annotated[AuthUser, Depends(get_current_user)]
+CurrentUser = AuthUser  # Alias for backward compatibility as a type
 
 
 # System account ID for superadmins
@@ -261,16 +69,16 @@ SYSTEM_ACCOUNT_CODE = "SY0000"  # Human-readable code
 
 async def require_superadmin(
     current_user: AuthenticatedUser,
-) -> CurrentUser:
+) -> AuthUser:
     """Ensure the current user is a superadmin.
 
     Superadmins are users linked to the special system account (UUID: nil UUID, Code: SY0000).
 
     Args:
-        current_user: The authenticated user from the JWT token.
+        current_user: The authenticated user.
 
     Returns:
-        CurrentUser: The validated superadmin user.
+        AuthUser: The validated superadmin user.
 
     Raises:
         HTTPException: 403 if user is not a superadmin.
@@ -288,29 +96,27 @@ async def require_superadmin(
     return current_user
 
 
-
-
 async def get_user_role_id(
     current_user: AuthenticatedUser,
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> int:
     """Get the role_id for the current user.
-    
+
     Args:
         current_user: The authenticated user.
         session: Database session.
-        
+
     Returns:
         User's role_id.
-        
+
     Raises:
         HTTPException: 404 if user not found.
     """
     from snackbase.infrastructure.persistence.repositories import UserRepository
-    
+
     user_repo = UserRepository(session)
     user = await user_repo.get_by_id(current_user.user_id)
-    
+
     if user is None:
         logger.warning(
             "User not found in database",
@@ -320,19 +126,19 @@ async def get_user_role_id(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
         )
-    
-    return user.role_id
+
+    return int(user.role_id)
 
 
 @dataclass
 class AuthorizationContext:
     """Context for authorization checks.
-    
+
     Contains user information and role for
     performing authorization checks.
     """
-    
-    user: CurrentUser
+
+    user: AuthUser
     role_id: int
 
 
@@ -341,11 +147,11 @@ async def get_authorization_context(
     role_id: Annotated[int, Depends(get_user_role_id)],
 ) -> AuthorizationContext:
     """Get authorization context for the current request.
-    
+
     Args:
         current_user: The authenticated user.
         role_id: User's role_id from database.
-        
+
     Returns:
         AuthorizationContext with user and role_id.
     """
@@ -356,7 +162,7 @@ async def get_authorization_context(
 
 
 # Type alias for superadmin dependency injection
-SuperadminUser = Annotated[CurrentUser, Depends(require_superadmin)]
+SuperadminUser = Annotated[AuthUser, Depends(require_superadmin)]
 
 # Type alias for authorization context dependency injection
 AuthContext = Annotated[AuthorizationContext, Depends(get_authorization_context)]
@@ -386,7 +192,7 @@ async def get_email_service(
     template_repo = EmailTemplateRepository()
     log_repo = EmailLogRepository()
     config_repo = ConfigurationRepository(session)
-    
+
     # Get encryption service from app state
     # Fallback to creating a temporary one if registry is missing (e.g. in tests)
     registry = getattr(request.app.state, "config_registry", None)
@@ -394,6 +200,7 @@ async def get_email_service(
         encryption_service = registry.encryption_service
     else:
         from snackbase.core.config import get_settings
+
         settings = get_settings()
         encryption_service = EncryptionService(settings.secret_key)
 
@@ -466,4 +273,3 @@ async def get_password_reset_service(
         refresh_token_repo=refresh_token_repo,
         email_service=email_service,
     )
-

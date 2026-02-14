@@ -60,6 +60,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                 error=str(e), 
                 path=request.url.path
             )
+            request.state.auth_error = str(e)
         except Exception as e:
             # Handle unexpected errors gracefully
             logger.error(
