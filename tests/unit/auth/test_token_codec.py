@@ -43,6 +43,12 @@ def test_decode_invalid_signature(sample_payload, secret):
     
     with pytest.raises(AuthenticationError, match="Invalid token signature"):
         TokenCodec.decode(tampered_token, secret)
+    
+    # Also test tampering with the first character of the signature (definitely changes bytes)
+    parts[2] = ("B" if parts[2][0] == "A" else "A") + parts[2][1:]
+    tampered_token = ".".join(parts)
+    with pytest.raises(AuthenticationError, match="Invalid token signature"):
+        TokenCodec.decode(tampered_token, secret)
 
 def test_decode_wrong_secret(sample_payload, secret):
     """Test that decoding fails if the wrong secret is used."""

@@ -60,7 +60,11 @@ class Settings(BaseSettings):
     # Security Settings
     secret_key: str = Field(
         default="change-me-in-production-use-openssl-rand-hex-32",
-        description="Secret key for JWT token signing",
+        description="Secret key for JWT token signing (legacy)",
+    )
+    token_secret: str = Field(
+        default="change-me-in-production-use-openssl-rand-hex-32",
+        description="Secret key for all SnackBase tokens (JWT, API Keys, etc.)",
     )
     encryption_key: str = Field(
         default="change-me-in-production-use-openssl-rand-hex-32",

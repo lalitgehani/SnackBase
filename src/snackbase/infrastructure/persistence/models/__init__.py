@@ -24,6 +24,7 @@ from snackbase.infrastructure.persistence.models.macro import MacroModel
 from snackbase.infrastructure.persistence.models.password_reset import PasswordResetTokenModel
 from snackbase.infrastructure.persistence.models.refresh_token import RefreshTokenModel
 from snackbase.infrastructure.persistence.models.role import RoleModel
+from snackbase.infrastructure.persistence.models.token_blacklist import TokenBlacklistModel
 from snackbase.infrastructure.persistence.models.user import UserModel
 from snackbase.infrastructure.persistence.models.users_groups import UsersGroupsModel
 
@@ -44,6 +45,7 @@ __all__ = [
     "PasswordResetTokenModel",
     "RefreshTokenModel",
     "RoleModel",
+    "TokenBlacklistModel",
     "UserModel",
     "UsersGroupsModel",
 ]

@@ -130,11 +130,8 @@ class Authenticator:
     ) -> AuthenticatedUser:
         """Validate a SnackBase unified token (sb_ak, sb_pt, sb_ot)."""
         if not self.secret:
-            # TokenCodec will use default secret if None is passed? 
-            # Actually, TokenCodec.decode expects secret: str.
-            # I should get it from settings if not provided.
             from snackbase.core.config import get_settings
-            secret = get_settings().secret_key
+            secret = get_settings().token_secret
         else:
             secret = self.secret
 
@@ -223,13 +220,11 @@ class Authenticator:
         return list(result.scalars().all())
 
     async def _check_revocation(self, token_id: str, session: AsyncSession) -> None:
-        """Check if a token has been revoked. (Placeholder for Phase 3)"""
-        # In Phase 3, we will implement the token_blacklist table.
-        # For now, we skip the check or return if table doesn't exist yet.
-        try:
-            # We can't actually query it yet if the model/table doesn't exist.
-            # But let's check if there is an easy way to check if table exists.
-            # For now, I'll just leave it as a placeholder as per PRD rollout.
-            pass
-        except Exception:
-            pass
+        """Check if a token has been revoked."""
+        from snackbase.infrastructure.persistence.models import TokenBlacklistModel
+
+        result = await session.execute(
+            select(TokenBlacklistModel.id).where(TokenBlacklistModel.id == token_id)
+        )
+        if result.scalar_one_or_none():
+            raise AuthenticationError("Token has been revoked")

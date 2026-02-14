@@ -15,8 +15,8 @@ async def test_create_api_key(client: AsyncClient, superadmin_token, db_session)
     data = response.json()
     assert data["name"] == "New Automation Key"
     assert "key" in data
-    assert data["key"].startswith("sb_sk_SY0000_")
-    assert len(data["key"]) > 40
+    assert data["key"].startswith("sb_ak.")
+    assert len(data["key"]) > 100 # JWT-like keys are much longer
     
     # Verify it's stored in DB (hashed)
     key_hash = api_key_service.hash_key(data["key"])
@@ -53,7 +53,7 @@ async def test_list_api_keys(client: AsyncClient, superadmin_token, db_session):
     
     # Check masking
     item1 = next(k for k in data["items"] if k["id"] == "key-1")
-    assert item1["key"] == api_key_service.mask_key("hash1", is_hash=True)
+    assert item1["key"] == api_key_service.mask_key("hash1")
     assert item1["is_active"] is True
 
 @pytest.mark.asyncio

@@ -40,8 +40,10 @@ class TokenCodec:
     @staticmethod
     def _base64url_decode(data: str) -> bytes:
         """Decode a base64url string, adding padding if necessary."""
-        padding = "=" * (4 - (len(data) % 4))
-        return base64.urlsafe_b64decode(data + padding)
+        rem = len(data) % 4
+        if rem > 0:
+            data += "=" * (4 - rem)
+        return base64.urlsafe_b64decode(data)
 
     @classmethod
     def encode(cls, payload: TokenPayload, secret: str) -> str:
@@ -87,6 +89,11 @@ class TokenCodec:
 
         if not hmac.compare_digest(actual_signature, expected_signature):
             raise AuthenticationError("Invalid token signature")
+
+        # Canonical signature check: re-encode and compare strings
+        # This prevents tampering that preserved decoded bytes (Base64 lazy decoding)
+        if cls._base64url_encode(actual_signature) != encoded_signature:
+            raise AuthenticationError("Invalid token signature (non-canonical)")
 
         # Check prefix validity
         token_type = cls.REVERSE_PREFIX_MAP.get(prefix)

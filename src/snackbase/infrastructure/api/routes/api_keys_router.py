@@ -67,24 +67,18 @@ async def create_api_key(
             detail=f"Maximum number of API keys reached ({getattr(settings, 'api_key_max_per_user', 10)})",
         )
 
-    # Generate key
-    # For superadmins, they are linked to SYSTEM_ACCOUNT_ID, but they have a code SY0000
-    from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_CODE
-    
-    plaintext_key = await api_key_service.generate_unique_key(
-        SYSTEM_ACCOUNT_CODE, api_key_repo
-    )
-    key_hash = api_key_service.hash_key(plaintext_key)
-    
-    new_key = APIKeyModel(
-        name=data.name,
-        key_hash=key_hash,
+    # Generate and store key using the redesigned service
+    plaintext_key, created_key = await api_key_service.create_api_key(
+        session=session,
         user_id=current_user.user_id,
+        email=current_user.email,
         account_id=current_user.account_id,
+        role=current_user.role,
+        name=data.name,
         expires_at=data.expires_at,
     )
     
-    created_key = await api_key_repo.create(new_key)
+    # The service already flushes, but we need to commit (router handles it)
     await session.commit()
     
     logger.info(
@@ -121,7 +115,7 @@ async def list_api_keys(
             APIKeyListItem(
                 id=key.id,
                 name=key.name,
-                key=api_key_service.mask_key(key.key_hash, is_hash=True), # We store hash, so mask based on hash
+                key=api_key_service.mask_key(key.key_hash), # We store hash, so mask based on hash
                 last_used_at=key.last_used_at,
                 expires_at=key.expires_at,
                 is_active=key.is_active,
@@ -154,7 +148,7 @@ async def get_api_key(
     return APIKeyDetailResponse(
         id=key.id,
         name=key.name,
-        key=api_key_service.mask_key(key.key_hash, is_hash=True),
+        key=api_key_service.mask_key(key.key_hash),
         last_used_at=key.last_used_at,
         expires_at=key.expires_at,
         is_active=key.is_active,
@@ -183,6 +177,14 @@ async def revoke_api_key(
             detail="API key not found",
         )
         
+    # Add to blacklist using the service
+    await api_key_service.revoke_api_key(
+        token_id=key.id,
+        session=session,
+        reason=f"Revoked by user {current_user.user_id}",
+    )
+
+    # Also mark as inactive in the main table
     await api_key_repo.soft_delete(key_id)
     await session.commit()
     
