@@ -23,6 +23,7 @@ from snackbase.infrastructure.auth.password_hasher import (
     verify_password,
 )
 from snackbase.infrastructure.auth.token_types import (
+    AuthenticatedUser,
     TokenPayload,
     TokenType,
 )
@@ -30,6 +31,7 @@ from snackbase.infrastructure.auth.token_codec import (
     AuthenticationError,
     TokenCodec,
 )
+from snackbase.infrastructure.auth.authenticator import Authenticator
 
 
 __all__ = [
@@ -49,5 +51,7 @@ __all__ = [
     "TokenType",
     "AuthenticationError",
     "TokenCodec",
+    "Authenticator",
+    "AuthenticatedUser",
 ]
 

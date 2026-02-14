@@ -3,6 +3,7 @@
 Defines the fields and types used in SnackBase tokens (JWT, API Keys, etc.).
 """
 
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import List, Optional
 
@@ -33,3 +34,14 @@ class TokenPayload(BaseModel):
     issued_at: int = Field(..., description="Unix timestamp when the token was issued")
     expires_at: Optional[int] = Field(None, description="Unix timestamp when the token expires")
     token_id: str = Field(..., description="Unique identifier for the token (for revocation)")
+
+
+@dataclass
+class AuthenticatedUser:
+    """Represents an authenticated user in the system context."""
+    user_id: str
+    account_id: str
+    email: str
+    role: str
+    token_type: TokenType
+    groups: List[str] = field(default_factory=list)
