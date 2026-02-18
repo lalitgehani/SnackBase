@@ -15,7 +15,7 @@ from sqlalchemy.types import JSON
 # revision identifiers, used by Alembic.
 revision: str = 'aeef347267b5'
 down_revision: str | Sequence[str] | None = None
-branch_labels: str | Sequence[str] | None = None
+branch_labels: str | Sequence[str] | None = ('core',)
 depends_on: str | Sequence[str] | None = None
 
 

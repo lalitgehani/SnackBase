@@ -271,9 +271,9 @@ async def init_database() -> None:
         # Ensure we use the correct database URL
         alembic_cfg.set_main_option("sqlalchemy.url", settings.database_url)
 
-        # Run migrations to head in executor to avoid blocking
+        # Run migrations to heads (all branches) in executor to avoid blocking
         loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, command.upgrade, alembic_cfg, "head")
+        await loop.run_in_executor(None, command.upgrade, alembic_cfg, "heads")
         logger.info("Alembic migrations applied successfully")
 
         # Seed default roles after migrations

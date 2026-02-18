@@ -128,7 +128,7 @@ def shell() -> None:
     pre-imported for easy debugging and testing.
     """
     import asyncio
-    import os
+
     from snackbase.infrastructure.persistence.database import get_db_manager
 
     settings = get_settings()
@@ -203,6 +203,7 @@ def init_db(force: bool) -> None:
 
     from alembic import command
     from alembic.config import Config
+
     from snackbase.infrastructure.persistence.database import get_db_manager
     from snackbase.infrastructure.persistence.models import RoleModel
 
@@ -237,7 +238,7 @@ def init_db(force: bool) -> None:
     click.echo("Running Alembic migrations...")
     alembic_cfg = Config("alembic.ini")
     # Note: env.py will set the URL from settings if not provided
-    command.upgrade(alembic_cfg, "head")
+    command.upgrade(alembic_cfg, "heads")
     click.echo("Migrations applied successfully.")
 
     # Step 3: Seed default roles and permissions
@@ -293,7 +294,7 @@ def create_superadmin(email: str | None, password: str | None, force: bool) -> N
 
     from snackbase.core.config import get_settings
     from snackbase.core.logging import get_logger
-    from snackbase.domain.services import SuperadminService, SuperadminCreationError
+    from snackbase.domain.services import SuperadminCreationError, SuperadminService
     from snackbase.infrastructure.persistence.database import get_db_manager
 
     settings = get_settings()
@@ -426,11 +427,11 @@ def migrate() -> None:
 @click.option(
     "--revision",
     type=str,
-    default="head",
-    help="Target revision (default: head)",
+    default="heads",
+    help="Target revision (default: heads — applies all branch heads)",
 )
 def upgrade(revision: str) -> None:
-    """Apply pending migrations."""
+    """Apply pending migrations across all branches (core and dynamic)."""
     from alembic import command
     from alembic.config import Config
 
@@ -501,6 +502,114 @@ def current() -> None:
 
     alembic_cfg = Config("alembic.ini")
     command.current(alembic_cfg)
+
+
+@migrate.command()
+@click.option("--dry-run", is_flag=True, default=False, help="Preview changes without writing files.")
+def repair(dry_run: bool) -> None:
+    """Repair legacy dynamic migrations to use Alembic branch labels.
+
+    Run this once after upgrading from a SnackBase version that used a single
+    linear migration chain.  It rewrites any dynamic migration files in
+    sb_data/migrations/ so that:
+
+    \b
+    - The earliest dynamic migration gets branch_labels = ('dynamic',),
+      down_revision = None, and depends_on = (<core rev it originally chained from>)
+    - All other dynamic migrations are left untouched (they already chain within
+      the dynamic branch)
+
+    The core migration chain in alembic/versions/ is never touched.
+    """
+    import re
+    from pathlib import Path
+
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    alembic_cfg = Config("alembic.ini")
+    script_dir = ScriptDirectory.from_config(alembic_cfg)
+
+    dynamic_dir = Path("sb_data/migrations")
+    if not dynamic_dir.exists():
+        click.echo("No sb_data/migrations/ directory found — nothing to repair.")
+        return
+
+    # Collect all dynamic revision objects (by module path)
+    dynamic_revs = [
+        rev
+        for rev in script_dir.walk_revisions()
+        if rev.module and "sb_data" in (rev.module.__file__ or "")
+    ]
+
+    if not dynamic_revs:
+        click.echo("No dynamic migrations found — nothing to repair.")
+        return
+
+    # Check if already using branch labels
+    already_branched = any("dynamic" in (rev.branch_labels or set()) for rev in dynamic_revs)
+    if already_branched:
+        click.echo("Dynamic migrations already use branch labels — nothing to repair.")
+        return
+
+    # Find the root of the dynamic chain (the one whose down_revision points to a core rev)
+    # Build a set of all dynamic revision IDs
+    dynamic_ids = {rev.revision for rev in dynamic_revs}
+
+    # The root dynamic migration is the one whose down_revision is NOT another dynamic rev
+    roots = [rev for rev in dynamic_revs if rev.down_revision not in dynamic_ids]
+    if len(roots) != 1:
+        click.echo(
+            f"Expected exactly one root dynamic migration, found {len(roots)}: "
+            f"{[r.revision for r in roots]}\nAborting — manual intervention required.",
+            err=True,
+        )
+        raise SystemExit(1)
+
+    root = roots[0]
+    original_down_revision = root.down_revision
+    click.echo(
+        f"Root dynamic migration : {root.revision} ({root.doc})\n"
+        f"  Currently chains from: {original_down_revision} (core migration)\n"
+        f"  Will be rewritten to  : branch_labels=('dynamic',), "
+        f"down_revision=None, depends_on=('{original_down_revision}',)"
+    )
+
+    if dry_run:
+        click.echo("\n[dry-run] No files were modified.")
+        return
+
+    # Rewrite the root migration file
+    filepath = Path(root.path)
+    content = filepath.read_text()
+
+    # Replace down_revision value
+    content = re.sub(
+        r"^(down_revision\s*:\s*.*?=\s*).*$",
+        r"\g<1>None",
+        content,
+        flags=re.MULTILINE,
+    )
+    # Replace branch_labels value
+    content = re.sub(
+        r"^(branch_labels\s*:\s*.*?=\s*).*$",
+        r"\g<1>('dynamic',)",
+        content,
+        flags=re.MULTILINE,
+    )
+    # Replace depends_on value
+    content = re.sub(
+        r"^(depends_on\s*:\s*.*?=\s*).*$",
+        rf"\g<1>('{original_down_revision}',)",
+        content,
+        flags=re.MULTILINE,
+    )
+
+    filepath.write_text(content)
+    click.echo(f"  Rewrote: {filepath}")
+    click.echo(
+        "\nRepair complete.  Run 'migrate upgrade' to apply any pending migrations."
+    )
 
 
 def main() -> NoReturn:

@@ -3,7 +3,6 @@
 Provides programmatic access to Alembic migration status and history.
 """
 
-import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -11,7 +10,6 @@ from typing import Any
 from alembic.config import Config
 from alembic.migration import MigrationContext
 from alembic.script import ScriptDirectory
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from snackbase.core.logging import get_logger
@@ -48,8 +46,10 @@ class MigrationQueryService:
             List of revision dictionaries with metadata.
         """
         revisions = []
-        current_revision = await self.get_current_revision()
-        current_rev_id = current_revision.get("revision") if current_revision else None
+        current_rev_ids = await self.get_current_revisions()
+
+        # All branch heads (there may be two: core@head and dynamic@head)
+        all_heads = set(self.script_dir.get_heads())
 
         # Get all revisions from the script directory
         for revision in self.script_dir.walk_revisions():
@@ -61,14 +61,14 @@ class MigrationQueryService:
                 else False
             )
 
-            # Check if this revision is applied
-            is_applied = False
-            if current_rev_id:
-                # Check if this revision is in the upgrade path to current
-                is_applied = self._is_revision_applied(revision.revision, current_rev_id)
+            # Check if this revision is applied (against any of the current heads)
+            is_applied = any(
+                self._is_revision_applied(revision.revision, cur)
+                for cur in current_rev_ids
+            ) if current_rev_ids else False
 
-            # Check if this is the head revision
-            is_head = revision.revision == self.script_dir.get_current_head()
+            # A revision is a head if it is one of the branch heads
+            is_head = revision.revision in all_heads
 
             # Extract creation timestamp from the revision module
             created_at = self._extract_creation_timestamp(revision)
@@ -78,7 +78,7 @@ class MigrationQueryService:
                     "revision": revision.revision,
                     "description": revision.doc or "",
                     "down_revision": revision.down_revision,
-                    "branch_labels": revision.branch_labels,
+                    "branch_labels": list(revision.branch_labels) if revision.branch_labels else [],
                     "is_applied": is_applied,
                     "is_head": is_head,
                     "is_dynamic": is_dynamic,
@@ -92,56 +92,77 @@ class MigrationQueryService:
         logger.debug(
             "Retrieved all revisions",
             total=len(revisions),
-            current=current_rev_id,
+            current=list(current_rev_ids),
         )
 
         return revisions
 
+    async def get_current_revisions(self) -> list[str]:
+        """Get all currently applied head revision IDs (one per branch).
+
+        With the two-branch model (core + dynamic) there can be up to two
+        simultaneously applied heads stored in the ``alembic_version`` table.
+
+        Returns:
+            List of currently applied revision IDs, empty if DB not initialised.
+        """
+        if not self.engine:
+            logger.warning("No engine provided, cannot query current revisions")
+            return []
+
+        try:
+            async with self.engine.connect() as connection:
+                def get_revisions(sync_conn):
+                    context = MigrationContext.configure(sync_conn)
+                    # get_current_heads() returns all rows in alembic_version
+                    return list(context.get_current_heads())
+
+                rev_ids = await connection.run_sync(get_revisions)
+                logger.debug("Retrieved current revisions", revisions=rev_ids)
+                return rev_ids
+
+        except Exception as e:
+            logger.error("Failed to get current revisions", error=str(e))
+            return []
+
     async def get_current_revision(self) -> dict[str, Any] | None:
         """Get the current database revision.
+
+        For backwards compatibility this returns the most recently created
+        applied head.  Prefer ``get_current_revisions()`` when you need all
+        active heads (e.g. with core + dynamic branches).
 
         Returns:
             Current revision details or None if database is not initialized.
         """
-        if not self.engine:
-            logger.warning("No engine provided, cannot query current revision")
+        rev_ids = await self.get_current_revisions()
+        if not rev_ids:
+            logger.debug("No current revision found (database not initialized)")
             return None
 
-        try:
-            async with self.engine.connect() as connection:
-                # Run sync operation in the async context
-                def get_revision(sync_conn):
-                    context = MigrationContext.configure(sync_conn)
-                    return context.get_current_revision()
+        # Return the head with the most recent creation timestamp
+        candidates = []
+        for rev_id in rev_ids:
+            revision_obj = self.script_dir.get_revision(rev_id)
+            if not revision_obj:
+                logger.warning(
+                    "Current revision not found in script directory",
+                    revision=rev_id,
+                )
+                candidates.append({"revision": rev_id, "description": "", "created_at": None})
+                continue
+            created_at = self._extract_creation_timestamp(revision_obj)
+            candidates.append({
+                "revision": revision_obj.revision,
+                "description": revision_obj.doc or "",
+                "created_at": created_at,
+            })
 
-                current_rev = await connection.run_sync(get_revision)
-
-                if not current_rev:
-                    logger.debug("No current revision found (database not initialized)")
-                    return None
-
-                # Get revision details from script directory
-                revision_obj = self.script_dir.get_revision(current_rev)
-                if not revision_obj:
-                    logger.warning(
-                        "Current revision not found in script directory",
-                        revision=current_rev,
-                    )
-                    return {"revision": current_rev, "description": "", "created_at": None}
-
-                created_at = self._extract_creation_timestamp(revision_obj)
-
-                logger.debug("Retrieved current revision", revision=current_rev)
-
-                return {
-                    "revision": revision_obj.revision,
-                    "description": revision_obj.doc or "",
-                    "created_at": created_at,
-                }
-
-        except Exception as e:
-            logger.error("Failed to get current revision", error=str(e))
-            return None
+        # Sort so the most recent comes first and return it
+        candidates.sort(key=lambda x: x.get("created_at") or "", reverse=True)
+        result = candidates[0]
+        logger.debug("Retrieved current revision", revision=result["revision"])
+        return result
 
     async def get_migration_history(self) -> list[dict[str, Any]]:
         """Get full migration history in chronological order.
@@ -166,9 +187,13 @@ class MigrationQueryService:
     def _is_revision_applied(self, revision_id: str, current_revision: str) -> bool:
         """Check if a revision is applied by checking if it's in the upgrade path.
 
+        Walks from ``current_revision`` back to base via ``down_revision`` links.
+        Also follows ``depends_on`` edges so that core revisions reachable through
+        a dynamic migration's ``depends_on`` are correctly identified as applied.
+
         Args:
             revision_id: The revision to check.
-            current_revision: The current database revision.
+            current_revision: One of the currently applied head revisions.
 
         Returns:
             True if the revision is applied, False otherwise.
@@ -177,17 +202,36 @@ class MigrationQueryService:
             return True
 
         try:
-            # Walk from current revision down to base
-            current_rev_obj = self.script_dir.get_revision(current_revision)
-            if not current_rev_obj:
-                return False
+            visited: set[str] = set()
+            queue = [current_revision]
 
-            # Iterate through all down revisions
-            for rev in self.script_dir.iterate_revisions(
-                current_revision, "base", inclusive=True
-            ):
-                if rev.revision == revision_id:
+            while queue:
+                cur = queue.pop()
+                if cur in visited:
+                    continue
+                visited.add(cur)
+                if cur == revision_id:
                     return True
+
+                rev_obj = self.script_dir.get_revision(cur)
+                if rev_obj is None:
+                    continue
+
+                # Follow down_revision (may be a tuple for merge revisions)
+                down = rev_obj.down_revision
+                if down:
+                    if isinstance(down, (list, tuple)):
+                        queue.extend(down)
+                    else:
+                        queue.append(down)
+
+                # Follow depends_on (cross-branch ordering links)
+                deps = rev_obj.dependencies
+                if deps:
+                    if isinstance(deps, (list, tuple)):
+                        queue.extend(deps)
+                    else:
+                        queue.append(deps)
 
             return False
         except Exception as e:
