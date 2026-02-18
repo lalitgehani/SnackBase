@@ -1,5 +1,19 @@
+# Stage 1: Build React frontend
+FROM node:22-alpine AS frontend-builder
 
-# Use official Python runtime as a parent image
+WORKDIR /app/ui
+
+# Copy package files for layer caching
+COPY ui/package.json ui/package-lock.json* ./
+
+# Install dependencies
+RUN npm ci
+
+# Copy source files and build
+COPY ui/ .
+RUN npm run build
+
+# Stage 2: Python backend with embedded frontend
 FROM python:3.12-slim
 
 # Set environment variables
@@ -25,10 +39,13 @@ COPY src ./src
 COPY alembic ./alembic
 COPY alembic.ini ./alembic.ini
 
-# Sync dependencies
+# Sync dependencies (no dev deps)
 RUN uv sync --frozen --no-dev
 
-# Expose default port (Railway will override this)
+# Copy built frontend from stage 1 into ./static
+COPY --from=frontend-builder /app/ui/dist ./static
+
+# Expose default port
 EXPOSE 8000
 
 # Run the application

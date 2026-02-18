@@ -11,7 +11,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 
 from snackbase.core.config import get_settings
 from snackbase.core.hooks import HookDecorator, HookEvent, HookRegistry
@@ -190,6 +190,9 @@ def create_app() -> FastAPI:
 
     # Register API routes
     register_routes(app)
+
+    # Serve built React frontend (no-op if ./static directory does not exist)
+    register_frontend(app)
 
     # Register exception handlers
     register_exception_handlers(app)
@@ -405,6 +408,44 @@ def register_routes(app: FastAPI) -> None:
             "version": settings.app_version,
             "api_version": "v1",
         }
+
+
+def register_frontend(app: FastAPI) -> None:
+    """Serve the built React SPA from the ./static directory.
+
+    This is a no-op when the static directory does not exist, preserving
+    compatibility with API-only deployments.  All API and health routes are
+    registered before this function is called, so they always take priority
+    over the catch-all handler added here.
+
+    Args:
+        app: FastAPI application instance.
+    """
+    static_dir = Path("static")
+    if not static_dir.exists():
+        return
+
+    static_dir_resolved = static_dir.resolve()
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_frontend(full_path: str) -> Response:
+        # Serve index.html for the root path
+        if not full_path:
+            return FileResponse(str(static_dir / "index.html"))
+
+        candidate = (static_dir / full_path).resolve()
+
+        # Guard against path traversal
+        try:
+            candidate.relative_to(static_dir_resolved)
+        except ValueError:
+            return Response(status_code=404)
+
+        if candidate.is_file():
+            return FileResponse(str(candidate))
+
+        # SPA fallback: unknown paths are handled by React Router
+        return FileResponse(str(static_dir / "index.html"))
 
 
 def register_exception_handlers(app: FastAPI) -> None:
