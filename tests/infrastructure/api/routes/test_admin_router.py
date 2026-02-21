@@ -357,3 +357,104 @@ async def test_delete_configuration(
     repo = ConfigurationRepository(db_session)
     assert await repo.get_by_id(custom_config.id) is None
     assert await repo.get_by_id(builtin_config.id) is not None
+
+@pytest.mark.asyncio
+async def test_set_configuration_default_endpoint(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    superadmin_token: str,
+):
+    """Test setting a configuration as default via endpoint."""
+    enc_service = EncryptionService("test-key-must-be-32-bytes-long!!!!")
+    
+    config = ConfigurationModel(
+        id=str(uuid.uuid4()),
+        account_id="00000000-0000-0000-0000-000000000000",
+        category="auth_providers",
+        provider_name="test_default",
+        display_name="Test Default",
+        config=enc_service.encrypt_dict({"foo": "bar"}),
+        enabled=True,
+        is_system=True
+    )
+    db_session.add(config)
+    await db_session.commit()
+    
+    response = await client.post(
+        f"/api/v1/admin/configuration/{config.id}/set-default",
+        headers={"Authorization": f"Bearer {superadmin_token}"}
+    )
+    assert response.status_code == 200
+    assert response.json()["is_default"] is True
+    
+    await db_session.refresh(config)
+    assert config.is_default is True
+
+@pytest.mark.asyncio
+async def test_unset_configuration_default_endpoint(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    superadmin_token: str,
+):
+    """Test unsetting a configuration as default via endpoint."""
+    enc_service = EncryptionService("test-key-must-be-32-bytes-long!!!!")
+    
+    config = ConfigurationModel(
+        id=str(uuid.uuid4()),
+        account_id="00000000-0000-0000-0000-000000000000",
+        category="auth_providers",
+        provider_name="test_unset_default",
+        display_name="Test Unset Default",
+        config=enc_service.encrypt_dict({"foo": "bar"}),
+        enabled=True,
+        is_system=True,
+        is_default=True
+    )
+    db_session.add(config)
+    await db_session.commit()
+    
+    response = await client.delete(
+        f"/api/v1/admin/configuration/{config.id}/set-default",
+        headers={"Authorization": f"Bearer {superadmin_token}"}
+    )
+    assert response.status_code == 200
+    assert response.json()["is_default"] is False
+    
+    await db_session.refresh(config)
+    assert config.is_default is False
+
+@pytest.mark.asyncio
+async def test_disable_clears_default(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    superadmin_token: str,
+):
+    """Test that disabling a configuration clears its default status."""
+    enc_service = EncryptionService("test-key-must-be-32-bytes-long!!!!")
+    
+    config = ConfigurationModel(
+        id=str(uuid.uuid4()),
+        account_id="00000000-0000-0000-0000-000000000000",
+        category="auth_providers",
+        provider_name="test_disable_clears",
+        display_name="Test Disable Clears",
+        config=enc_service.encrypt_dict({"foo": "bar"}),
+        enabled=True,
+        is_system=True,
+        is_default=True
+    )
+    db_session.add(config)
+    await db_session.commit()
+    
+    response = await client.patch(
+        f"/api/v1/admin/configuration/{config.id}",
+        json={"enabled": False},
+        headers={"Authorization": f"Bearer {superadmin_token}"}
+    )
+    assert response.status_code == 200
+    assert response.json()["enabled"] is False
+    assert response.json()["is_default"] is False
+    
+    await db_session.refresh(config)
+    assert config.enabled is False
+    assert config.is_default is False

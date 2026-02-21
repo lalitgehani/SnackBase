@@ -104,6 +104,12 @@ class ConfigurationModel(Base):
         server_default="0",
         comment="True for system-level configs (SY0000), false for account-level",
     )
+    is_default: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default="0",
+        comment="Whether this is the default provider for its category and account scope",
+    )
     priority: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
@@ -142,6 +148,8 @@ class ConfigurationModel(Base):
         Index("ix_configurations_category_provider", "category", "provider_name"),
         # Index for efficient lookups by is_system flag
         Index("ix_configurations_is_system", "is_system"),
+        # Index for efficient default provider lookups
+        Index("ix_configurations_is_default", "category", "account_id", "is_default"),
     )
 
     def __repr__(self) -> str:

@@ -44,6 +44,7 @@ export interface Configuration {
   updated_at: string;
   is_system: boolean;
   is_builtin?: boolean;
+  is_default?: boolean;
   account_id: string;
   logo_url: string;
   enabled: boolean;
@@ -144,6 +145,16 @@ export const adminService = {
     config: Record<string, unknown>;
   }): Promise<{ success: boolean; message: string }> => {
     const response = await api.post('/admin/configuration/test-connection', data);
+    return response.data;
+  },
+
+  setDefaultConfig: async (configId: string): Promise<{ status: string; is_default: boolean; provider_name: string; display_name: string }> => {
+    const response = await api.post(`/admin/configuration/${configId}/set-default`);
+    return response.data;
+  },
+
+  unsetDefaultConfig: async (configId: string): Promise<{ status: string; is_default: boolean }> => {
+    const response = await api.delete(`/admin/configuration/${configId}/set-default`);
     return response.data;
   },
 };

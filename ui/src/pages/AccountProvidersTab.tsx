@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
-import { Trash2, Edit, Plus, Search } from 'lucide-react';
+import { Trash2, Edit, Plus, Search, Star, StarOff } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import {
     AlertDialog,
@@ -121,6 +121,42 @@ const AccountProvidersTab = () => {
         },
     });
 
+    const setDefaultMutation = useMutation({
+        mutationFn: (id: string) => adminService.setDefaultConfig(id),
+        onSuccess: (data) => {
+            queryClient.invalidateQueries({ queryKey: ['admin', 'config'] });
+            toast({
+                title: 'Default Updated',
+                description: `${data.display_name} is now the default provider.`,
+            });
+        },
+        onError: (error: Error) => {
+            toast({
+                title: 'Error',
+                description: error.message || 'Failed to set default provider.',
+                variant: 'destructive',
+            });
+        },
+    });
+
+    const unsetDefaultMutation = useMutation({
+        mutationFn: (id: string) => adminService.unsetDefaultConfig(id),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['admin', 'config'] });
+            toast({
+                title: 'Default Cleared',
+                description: 'Provider is no longer the default.',
+            });
+        },
+        onError: () => {
+            toast({
+                title: 'Error',
+                description: 'Failed to unset default provider.',
+                variant: 'destructive',
+            });
+        },
+    });
+
     const handleToggle = (config: Configuration) => {
         toggleMutation.mutate({ id: config.id, enabled: !config.enabled });
     };
@@ -145,6 +181,11 @@ const AccountProvidersTab = () => {
                         <span className="font-medium">{config.display_name}</span>
                         <span className="text-xs text-muted-foreground">{config.provider_name}</span>
                     </div>
+                    {config.is_default && (
+                        <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary font-medium">
+                            Default
+                        </span>
+                    )}
                 </div>
             )
         },
@@ -182,6 +223,28 @@ const AccountProvidersTab = () => {
             className: 'text-right',
             render: (config) => (
                 <div className="flex justify-end space-x-2">
+                    {config.is_default ? (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Unset as default"
+                            onClick={() => unsetDefaultMutation.mutate(config.id)}
+                            disabled={unsetDefaultMutation.isPending}
+                            className="text-primary"
+                        >
+                            <StarOff className="h-4 w-4" />
+                        </Button>
+                    ) : (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            title={config.enabled ? 'Set as default' : 'Enable this provider before setting it as default'}
+                            onClick={() => config.enabled && setDefaultMutation.mutate(config.id)}
+                            disabled={!config.enabled || setDefaultMutation.isPending}
+                        >
+                            <Star className="h-4 w-4" />
+                        </Button>
+                    )}
                     <Button
                         variant="ghost"
                         size="icon"

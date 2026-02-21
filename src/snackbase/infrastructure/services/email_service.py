@@ -177,7 +177,7 @@ class EmailService:
         Raises:
             ValueError: If no enabled email provider is configured.
         """
-        # Try account-specific provider first
+        # Try account-specific providers first
         account_configs = await self.config_repository.list_configs(
             category="email_providers",
             account_id=account_id,
@@ -185,20 +185,29 @@ class EmailService:
             enabled_only=True,
         )
 
+        config_model = None
+        if account_configs:
+            # Prefer the explicitly marked default; fall back to first by priority
+            default = next((c for c in account_configs if c.is_default), None)
+            config_model = default if default else account_configs[0]
+
         # If no account-specific config, try system-level
-        if not account_configs:
+        if config_model is None:
             logger.debug(
                 "No account-specific email provider, falling back to system",
                 account_id=account_id,
             )
-            account_configs = await self.config_repository.list_configs(
+            system_configs = await self.config_repository.list_configs(
                 category="email_providers",
                 account_id=SYSTEM_ACCOUNT_ID,
                 is_system=True,
                 enabled_only=True,
             )
+            if system_configs:
+                default = next((c for c in system_configs if c.is_default), None)
+                config_model = default if default else system_configs[0]
 
-        if not account_configs:
+        if config_model is None:
             error_msg = (
                 "No enabled email provider configured. "
                 "Please configure an email provider (SMTP, AWS SES, or Resend) "
@@ -207,8 +216,6 @@ class EmailService:
             logger.error(error_msg, account_id=account_id)
             raise ValueError(error_msg)
 
-        # Use the first enabled provider (they're ordered by priority)
-        config_model = account_configs[0]
         provider_name = config_model.provider_name
 
         # Decrypt configuration
@@ -227,6 +234,7 @@ class EmailService:
             provider=provider_name,
             account_id=account_id,
             is_system=config_model.is_system,
+            is_default=config_model.is_default,
         )
 
         return provider, from_email, from_name, reply_to

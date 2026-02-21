@@ -86,3 +86,62 @@ async def test_delete_config(repository, mock_session):
     assert result is True
     mock_session.delete.assert_called_with(mock_model)
     mock_session.flush.assert_called()
+
+@pytest.mark.asyncio
+async def test_get_default_config(repository, mock_session):
+    mock_model = MagicMock(spec=ConfigurationModel)
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = mock_model
+    mock_session.execute.return_value = mock_result
+    
+    result = await repository.get_default_config("auth", "ACC1")
+    
+    assert result == mock_model
+    mock_session.execute.assert_called()
+
+@pytest.mark.asyncio
+async def test_set_default_config_success(repository, mock_session):
+    mock_model = MagicMock(spec=ConfigurationModel)
+    mock_model.enabled = True
+    
+    # Mock get_by_id
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = mock_model
+    mock_session.execute.return_value = mock_result
+    
+    result = await repository.set_default_config("CFG1", "auth", "ACC1", False)
+    
+    assert result == mock_model
+    assert mock_model.is_default is True
+    # Verify execute was called twice (one for update, one for get_by_id)
+    assert mock_session.execute.call_count == 2
+    mock_session.flush.assert_called()
+
+@pytest.mark.asyncio
+async def test_set_default_config_disabled_error(repository, mock_session):
+    mock_model = MagicMock(spec=ConfigurationModel)
+    mock_model.enabled = False
+    mock_model.provider_name = "test_provider"
+    
+    # Mock get_by_id
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = mock_model
+    mock_session.execute.return_value = mock_result
+    
+    with pytest.raises(ValueError, match="Cannot set disabled provider 'test_provider' as default"):
+        await repository.set_default_config("CFG1", "auth", "ACC1", False)
+
+@pytest.mark.asyncio
+async def test_unset_default_config(repository, mock_session):
+    mock_model = MagicMock(spec=ConfigurationModel)
+    
+    # Mock get_by_id
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = mock_model
+    mock_session.execute.return_value = mock_result
+    
+    result = await repository.unset_default_config("CFG1")
+    
+    assert result is True
+    assert mock_model.is_default is False
+    mock_session.flush.assert_called()

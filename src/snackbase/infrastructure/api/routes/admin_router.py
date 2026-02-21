@@ -134,6 +134,7 @@ async def get_system_configurations(
                 "category": config.category,
                 "enabled": config.enabled,
                 "is_builtin": config.is_builtin,
+                "is_default": config.is_default,
                 "priority": config.priority,
                 "updated_at": config.updated_at,
                 "logo_url": config.logo_url,
@@ -194,6 +195,7 @@ async def get_account_configurations(
                 "provider_name": config.provider_name,
                 "category": config.category,
                 "enabled": config.enabled,
+                "is_default": config.is_default,
                 "priority": config.priority,
                 "updated_at": config.updated_at,
                 "logo_url": config.logo_url,
@@ -235,6 +237,17 @@ async def update_configuration_status(
             )
 
         config.enabled = enabled
+
+        # Automatically clear is_default when disabling a provider
+        if not enabled and config.is_default:
+            config.is_default = False
+            logger.info(
+                "Cleared default flag from disabled provider",
+                provider=config.provider_name,
+                category=config.category,
+                account_id=config.account_id,
+            )
+
         await repo.update(config)
         await db.commit()
 
@@ -242,7 +255,7 @@ async def update_configuration_status(
         registry = request.app.state.config_registry
         registry._invalidate_cache(config.category, config.account_id, config.provider_name)
 
-        return {"status": "success", "enabled": config.enabled}
+        return {"status": "success", "enabled": config.enabled, "is_default": config.is_default}
 
     except HTTPException:
         raise
@@ -251,6 +264,100 @@ async def update_configuration_status(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update configuration",
+        )
+
+
+@router.post("/configuration/{config_id}/set-default")
+async def set_configuration_default(
+    _admin: SuperadminUser,
+    config_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Set a configuration as the default for its category and account scope.
+
+    Atomically clears any existing default in the same scope before setting this one.
+    Only enabled providers can be set as default.
+    """
+    try:
+        repo = ConfigurationRepository(db)
+        config = await repo.get_by_id(config_id)
+
+        if not config:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Configuration not found"
+            )
+
+        if not config.enabled:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot set a disabled provider as default. Enable it first.",
+            )
+
+        updated = await repo.set_default_config(
+            config_id=config_id,
+            category=config.category,
+            account_id=config.account_id,
+            is_system=config.is_system,
+        )
+        await db.commit()
+
+        # Invalidate cache for the affected provider
+        registry = request.app.state.config_registry
+        registry._invalidate_cache(config.category, config.account_id, config.provider_name)
+
+        return {
+            "status": "success",
+            "is_default": True,
+            "provider_name": updated.provider_name,
+            "display_name": updated.display_name,
+        }
+
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error("Failed to set default configuration", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to set default configuration",
+        )
+
+
+@router.delete("/configuration/{config_id}/set-default")
+async def unset_configuration_default(
+    _admin: SuperadminUser,
+    config_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Clear the default flag from a configuration without setting a new default."""
+    try:
+        repo = ConfigurationRepository(db)
+        config = await repo.get_by_id(config_id)
+
+        if not config:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Configuration not found"
+            )
+
+        await repo.unset_default_config(config_id)
+        await db.commit()
+
+        # Invalidate cache for the affected provider
+        registry = request.app.state.config_registry
+        registry._invalidate_cache(config.category, config.account_id, config.provider_name)
+
+        return {"status": "success", "is_default": False}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to unset default configuration", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to unset default configuration",
         )
 
 
