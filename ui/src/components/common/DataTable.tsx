@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/pagination';
 import { Button } from '@/components/ui/button';
 import { ArrowUpDown, RefreshCw } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 export interface Column<T> {
     header: string;
@@ -32,6 +33,11 @@ export interface Column<T> {
     render?: (item: T) => React.ReactNode;
     sortable?: boolean;
     className?: string; // For setting width or alignment
+    frozen?: 'left' | 'right';      // Sticky column position
+    frozenOffset?: number;           // px offset for left-frozen columns (cumulative width of preceding frozen cols)
+    frozenBorderRight?: boolean;     // Show right border/shadow on last left-frozen column
+    headerSuffix?: React.ReactNode;  // Extra content rendered after header text, outside the sort button
+    style?: React.CSSProperties;     // Additional cell styles (e.g. minWidth, maxWidth)
 }
 
 export interface DispatchPagination {
@@ -71,6 +77,21 @@ export function DataTable<T>({
     noDataMessage = 'No data found',
 }: DataTableProps<T>) {
 
+    // Compute sticky style for frozen columns
+    const getCellStyle = (col: Column<T>): React.CSSProperties => {
+        const frozenStyle: React.CSSProperties =
+            col.frozen === 'left' ? { position: 'sticky', left: col.frozenOffset ?? 0, zIndex: 10 }
+                : col.frozen === 'right' ? { position: 'sticky', right: 0, zIndex: 10 }
+                    : {};
+        return { ...col.style, ...frozenStyle };
+    };
+
+    // Background + optional right border for frozen columns
+    const getFrozenClass = (col: Column<T>) =>
+        col.frozen
+            ? cn('bg-background', col.frozenBorderRight && 'border-r shadow-[1px_0_4px_0_hsl(var(--border))]')
+            : '';
+
     // Helper to resolve cell content
     const renderCell = (item: T, column: Column<T>) => {
         if (column.render) {
@@ -101,28 +122,35 @@ export function DataTable<T>({
 
     return (
         <div className="space-y-4">
-            <div className="rounded-md border">
+            <div className="rounded-md border overflow-x-auto">
                 <Table>
                     <TableHeader>
                         <TableRow>
                             {columns.map((col, index) => (
-                                <TableHead key={index} className={col.className}>
-                                    {sorting && col.sortable ? (
-                                        <Button
-                                            variant="ghost"
-                                            onClick={() => handleSort(col)}
-                                            className="-ml-4 h-8 px-4 data-[state=open]:bg-accent hover:bg-transparent hover:text-primary"
-                                        >
-                                            {col.header}
-                                            {sorting.sortBy === col.accessorKey ? (
-                                                <ArrowUpDown className={`ml-2 h-4 w-4 transform ${sorting.sortOrder === 'asc' ? 'rotate-180' : ''}`} />
-                                            ) : (
-                                                <ArrowUpDown className="ml-2 h-4 w-4 opacity-50" />
-                                            )}
-                                        </Button>
-                                    ) : (
-                                        col.header
-                                    )}
+                                <TableHead
+                                    key={index}
+                                    className={cn(col.className, getFrozenClass(col), 'group')}
+                                    style={getCellStyle(col)}
+                                >
+                                    <div className="flex items-center">
+                                        {sorting && col.sortable ? (
+                                            <Button
+                                                variant="ghost"
+                                                onClick={() => handleSort(col)}
+                                                className="-ml-4 h-8 px-4 data-[state=open]:bg-accent hover:bg-transparent hover:text-primary"
+                                            >
+                                                {col.header}
+                                                {sorting.sortBy === col.accessorKey ? (
+                                                    <ArrowUpDown className={`ml-2 h-4 w-4 transform ${sorting.sortOrder === 'asc' ? 'rotate-180' : ''}`} />
+                                                ) : (
+                                                    <ArrowUpDown className="ml-2 h-4 w-4 opacity-50" />
+                                                )}
+                                            </Button>
+                                        ) : (
+                                            col.header
+                                        )}
+                                        {col.headerSuffix}
+                                    </div>
                                 </TableHead>
                             ))}
                         </TableRow>
@@ -150,7 +178,11 @@ export function DataTable<T>({
                                     className={onRowClick ? "cursor-pointer hover:bg-muted/50" : ""}
                                 >
                                     {columns.map((col, cIndex) => (
-                                        <TableCell key={cIndex} className={col.className}>
+                                        <TableCell
+                                            key={cIndex}
+                                            className={cn(col.className, getFrozenClass(col))}
+                                            style={getCellStyle(col)}
+                                        >
                                             {renderCell(item, col)}
                                         </TableCell>
                                     ))}

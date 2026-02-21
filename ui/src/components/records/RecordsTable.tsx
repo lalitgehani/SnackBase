@@ -3,14 +3,16 @@
  * Dynamic table that renders columns based on collection schema
  */
 
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Eye, Pencil, Trash2 } from 'lucide-react';
+import { Eye, Pencil, Pin, PinOff, Trash2 } from 'lucide-react';
 import type { FieldDefinition } from '@/services/collections.service';
 import type { RecordListItem } from '@/types/records.types';
 import { shouldMaskField, maskPiiValue } from '@/lib/form-helpers';
 import { DataTable, type Column, type DispatchPagination, type DispatchSorting } from '@/components/common/DataTable';
 import { useAuthStore } from '@/stores/auth.store';
+import { cn } from '@/lib/utils';
 
 
 interface RecordsTableProps {
@@ -48,6 +50,17 @@ export default function RecordsTable({
 	onPageChange,
 	onPageSizeChange,
 }: RecordsTableProps) {
+
+	const [pinnedColumns, setPinnedColumns] = useState<Set<string>>(new Set());
+
+	const togglePin = (fieldName: string) => {
+		setPinnedColumns(prev => {
+			const next = new Set(prev);
+			if (next.has(fieldName)) next.delete(fieldName);
+			else next.add(fieldName);
+			return next;
+		});
+	};
 
 	const formatDate = (dateString: string) => {
 		return new Date(dateString).toLocaleString('en-US', {
@@ -125,21 +138,49 @@ export default function RecordsTable({
 		return <span className="text-sm">{String(value)}</span>;
 	};
 
-	// Limit number of visible columns to avoid horizontal scroll
-	// Show first 5 schema fields plus system fields
-	const MAX_SCHEMA_COLUMNS = 5;
-	const visibleSchemaFields = schema.slice(0, MAX_SCHEMA_COLUMNS);
-	const remainingFieldsCount = Math.max(0, schema.length - MAX_SCHEMA_COLUMNS);
+	// Fixed width (px) for pinned columns — required for predictable sticky offsets
+	const PINNED_COL_WIDTH = 160;
 
-	// Build dynamic columns
-	const columns: Column<RecordListItem>[] = [
-		...visibleSchemaFields.map((field) => ({
+	// Pinned fields in original schema order
+	const pinnedFields = schema.filter(f => pinnedColumns.has(f.name));
+	// Unpinned fields in original schema order
+	const unpinnedFields = schema.filter(f => !pinnedColumns.has(f.name));
+	// Render order: pinned first (original order), then unpinned
+	const orderedFields = [...pinnedFields, ...unpinnedFields];
+
+	// Build dynamic columns — all schema fields visible, pinned ones frozen left
+	const columns: Column<RecordListItem>[] = orderedFields.map((field) => {
+		const isPinned = pinnedColumns.has(field.name);
+		const pinnedIndex = pinnedFields.findIndex(f => f.name === field.name);
+		const isLastPinned = isPinned && pinnedIndex === pinnedFields.length - 1;
+
+		return {
 			header: field.name,
-			accessorKey: field.name,
+			accessorKey: field.name as keyof RecordListItem,
 			sortable: true,
+			frozen: isPinned ? 'left' : undefined,
+			frozenOffset: isPinned ? pinnedIndex * PINNED_COL_WIDTH : undefined,
+			frozenBorderRight: isLastPinned,
+			style: isPinned
+				? { minWidth: PINNED_COL_WIDTH, maxWidth: PINNED_COL_WIDTH }
+				: { minWidth: 140 },
+			headerSuffix: (
+				<button
+					onClick={(e) => { e.stopPropagation(); togglePin(field.name); }}
+					className={cn(
+						'ml-1 rounded p-0.5 transition-opacity',
+						isPinned
+							? 'text-primary opacity-100'
+							: 'text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground'
+					)}
+					title={isPinned ? 'Unpin column' : 'Pin column'}
+				>
+					{isPinned ? <PinOff className="h-3 w-3" /> : <Pin className="h-3 w-3" />}
+				</button>
+			),
 			render: (record: RecordListItem) => renderCellValue(record, field),
-		})),
-	];
+		};
+	});
 
 	const { account } = useAuthStore();
 	const isSuperadmin = account?.id === '00000000-0000-0000-0000-000000000000';
@@ -149,15 +190,6 @@ export default function RecordsTable({
 			header: 'Account',
 			accessorKey: 'account_name',
 			render: (record) => <span className="text-sm font-medium">{record.account_name || 'System'}</span>,
-		});
-	}
-
-
-	if (remainingFieldsCount > 0) {
-		columns.push({
-			header: `+${remainingFieldsCount} more`,
-			render: () => <span className="text-muted-foreground text-xs">...</span>,
-			className: 'text-muted-foreground text-xs',
 		});
 	}
 
@@ -171,6 +203,7 @@ export default function RecordsTable({
 	columns.push({
 		header: 'Actions',
 		className: 'text-right',
+		frozen: 'right',
 		render: (record) => (
 			<div className="flex justify-end gap-2">
 				<Button

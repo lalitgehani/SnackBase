@@ -37,7 +37,7 @@ export default function AdminLayout() {
                 </header>
 
                 {/* Page content */}
-                <main className="flex-1 overflow-y-auto bg-background p-6">
+                <main className="flex-1 min-w-0 overflow-y-auto bg-background p-6">
                     <Outlet />
                 </main>
             </SidebarInset>
