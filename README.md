@@ -11,6 +11,13 @@
 
 SnackBase is a Python/FastAPI-based BaaS providing auto-generated REST APIs, multi-tenancy, row-level security, authentication, enterprise OAuth/SAML, and comprehensive admin UI.
 
+## Deployment
+
+| Setup Type                | Link                                                                                                                                                                          |
+| :------------------------ | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| SnackBase with SQLite     | [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/duQK4B?referralCode=W3p73R&utm_medium=integration&utm_source=template&utm_campaign=generic) |
+| SnackBase with PostgreSQL | [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/Ob4NPC?referralCode=W3p73R&utm_medium=integration&utm_source=template&utm_campaign=generic) |
+
 ## Project Statistics
 
 | Category          | Count      | Lines    |
@@ -26,10 +33,6 @@ SnackBase is a Python/FastAPI-based BaaS providing auto-generated REST APIs, mul
 ## Status
 
 **Phase 1: Foundation & MVP** (100% Complete)
-
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/duQK4B?referralCode=W3p73R&utm_medium=integration&utm_source=template&utm_campaign=generic)
-
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/Ob4NPC?referralCode=W3p73R&utm_medium=integration&utm_source=template&utm_campaign=generic)
 
 - [x] F1.1: Project Scaffolding & Architecture Setup
 - [x] F1.2: Database Schema & Core System Tables
