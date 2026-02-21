@@ -27,9 +27,9 @@ SnackBase is a Python/FastAPI-based BaaS providing auto-generated REST APIs, mul
 
 **Phase 1: Foundation & MVP** (100% Complete)
 
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/new?template=https%3A%2F%2Fgithub.com%2Flalitgehani%2Fsnackbase&envs=SNACKBASE_SECRET_KEY%2CSNACKBASE_ENCRYPTION_KEY&optionalEnvs=SNACKBASE_SUPERADMIN_EMAIL%2CSNACKBASE_SUPERADMIN_PASSWORD)
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/duQK4B?referralCode=W3p73R&utm_medium=integration&utm_source=template&utm_campaign=generic)
 
-> **Note**: For the button above to work, you must fork this repository and update the URL in the button link to point to your fork.
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/Ob4NPC?referralCode=W3p73R&utm_medium=integration&utm_source=template&utm_campaign=generic)
 
 - [x] F1.1: Project Scaffolding & Architecture Setup
 - [x] F1.2: Database Schema & Core System Tables
