@@ -1,5 +1,5 @@
 import React from 'react';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AppDialog } from '@/components/common/AppDialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -70,80 +70,80 @@ export default function RuleTesterDialog({
     };
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-2xl">
-                <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
-                        <Play className="h-5 w-5 text-primary" />
-                        Test Rule: {collectionName}
-                    </DialogTitle>
-                    <DialogDescription>
-                        Test your expression against sample authentication context and record data.
-                    </DialogDescription>
-                </DialogHeader>
-
-                <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                        <Label>Expression</Label>
-                        <div className="p-3 bg-muted rounded-md font-mono text-sm border">
-                            {ruleExpression || '(Public)'}
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="auth-context">@request.auth</Label>
-                            <Textarea
-                                id="auth-context"
-                                value={authContext}
-                                onChange={(e) => setAuthContext(e.target.value)}
-                                className="font-mono text-xs h-[150px]"
-                                placeholder="Sample auth context JSON"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="record-data">Record (Direct fields)</Label>
-                            <Textarea
-                                id="record-data"
-                                value={recordData}
-                                onChange={(e) => setRecordData(e.target.value)}
-                                className="font-mono text-xs h-[150px]"
-                                placeholder="Sample record data JSON"
-                            />
-                        </div>
-                    </div>
-
-                    {result && (
-                        <Alert
-                            variant={result.status === 'error' ? 'destructive' : 'default'}
-                            className={cn(
-                                result.status === 'allow' && "border-green-500 bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-400",
-                                result.status === 'deny' && "border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20 text-yellow-700 dark:text-yellow-400"
-                            )}
-                        >
-                            <div className="flex items-center gap-2">
-                                {result.status === 'allow' && <CheckCircle2 className="h-4 w-4" />}
-                                {result.status === 'deny' && <AlertCircle className="h-4 w-4" />}
-                                {result.status === 'error' && <XCircle className="h-4 w-4" />}
-                                <AlertTitle className="capitalize font-bold">{result.status}</AlertTitle>
-                            </div>
-                            <AlertDescription className="mt-1">
-                                {result.message}
-                            </AlertDescription>
-                        </Alert>
-                    )}
-                </div>
-
-                <DialogFooter>
+        <AppDialog
+            open={open}
+            onOpenChange={onOpenChange}
+            title={
+                <span className="flex items-center gap-2">
+                    <Play className="h-5 w-5 text-primary" />
+                    Test Rule: {collectionName}
+                </span>
+            }
+            description="Test your expression against sample authentication context and record data."
+            className="max-w-2xl"
+            footer={
+                <>
                     <Button variant="outline" onClick={() => onOpenChange(false)}>
                         Close
                     </Button>
                     <Button onClick={handleTest} disabled={isTesting}>
                         {isTesting ? 'Testing...' : 'Run Test'}
                     </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
+                </>
+            }
+        >
+            <div className="space-y-4">
+                <div className="space-y-2">
+                    <Label>Expression</Label>
+                    <div className="p-3 bg-muted rounded-md font-mono text-sm border">
+                        {ruleExpression || '(Public)'}
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="auth-context">@request.auth</Label>
+                        <Textarea
+                            id="auth-context"
+                            value={authContext}
+                            onChange={(e) => setAuthContext(e.target.value)}
+                            className="font-mono text-xs h-[150px]"
+                            placeholder="Sample auth context JSON"
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="record-data">Record (Direct fields)</Label>
+                        <Textarea
+                            id="record-data"
+                            value={recordData}
+                            onChange={(e) => setRecordData(e.target.value)}
+                            className="font-mono text-xs h-[150px]"
+                            placeholder="Sample record data JSON"
+                        />
+                    </div>
+                </div>
+
+                {result && (
+                    <Alert
+                        variant={result.status === 'error' ? 'destructive' : 'default'}
+                        className={cn(
+                            result.status === 'allow' && "border-green-500 bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-400",
+                            result.status === 'deny' && "border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20 text-yellow-700 dark:text-yellow-400"
+                        )}
+                    >
+                        <div className="flex items-center gap-2">
+                            {result.status === 'allow' && <CheckCircle2 className="h-4 w-4" />}
+                            {result.status === 'deny' && <AlertCircle className="h-4 w-4" />}
+                            {result.status === 'error' && <XCircle className="h-4 w-4" />}
+                            <AlertTitle className="capitalize font-bold">{result.status}</AlertTitle>
+                        </div>
+                        <AlertDescription className="mt-1">
+                            {result.message}
+                        </AlertDescription>
+                    </Alert>
+                )}
+            </div>
+        </AppDialog>
     );
 }
 

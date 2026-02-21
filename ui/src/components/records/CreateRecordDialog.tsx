@@ -4,14 +4,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogFooter,
-	DialogHeader,
-	DialogTitle,
-} from '@/components/ui/dialog';
+import { AppDialog } from '@/components/common/AppDialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import {
@@ -167,92 +160,92 @@ export default function CreateRecordDialog({
 	);
 
 	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="max-w-2xl max-h-[90vh]">
-				<DialogHeader>
-					<DialogTitle>Create Record</DialogTitle>
-					<DialogDescription>
-						Add a new record to the <strong>{collectionName}</strong> collection.
-					</DialogDescription>
-				</DialogHeader>
-
-				{isReferenceLoading ? (
-					<div className="flex items-center justify-center py-8">
-						<RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
-						<span className="ml-2 text-muted-foreground">
-							Loading reference data...
-						</span>
-					</div>
-				) : (
-					<form onSubmit={handleSubmit} className="space-y-6">
-						{/* Account selector for superadmins */}
-						{isSuperadmin && (
-							<div className="space-y-2 pb-4 border-b">
-								<Label htmlFor="account-select">Account *</Label>
-								<Select
-									value={selectedAccountId}
-									onValueChange={setSelectedAccountId}
-									disabled={loadingAccounts || isSubmitting}
-								>
-									<SelectTrigger id="account-select">
-										<SelectValue placeholder="Select an account" />
-									</SelectTrigger>
-									<SelectContent>
-										{accounts.map((account) => (
-											<SelectItem key={account.id} value={account.id}>
-												{account.name} ({account.account_code})
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-								{loadingAccounts && (
-									<p className="text-sm text-muted-foreground">
-										Loading accounts...
-									</p>
-								)}
-							</div>
-						)}
-
-						<div className="max-h-[60vh] overflow-y-auto pr-4 space-y-4">
-							{schema.map((field) => (
-								<DynamicFieldInput
-									key={field.name}
-									field={field}
-									value={formState.fields[field.name]?.value}
-									onChange={(value) => handleFieldChange(field.name, value)}
-									error={formState.fields[field.name]?.error || undefined}
-									disabled={isSubmitting}
-									referenceRecords={
-										field.type === 'reference' && field.collection
-											? (referenceRecords[field.collection] || [])
-											: undefined
-									}
-								/>
-							))}
-						</div>
-
-						{error && (
-							<div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
-								<p className="text-destructive text-sm">{error}</p>
-							</div>
-						)}
-
-						<DialogFooter>
-							<Button
-								type="button"
-								variant="outline"
-								onClick={() => onOpenChange(false)}
-								disabled={isSubmitting}
+		<AppDialog
+			open={open}
+			onOpenChange={onOpenChange}
+			title="Create Record"
+			description={<>Add a new record to the <strong>{collectionName}</strong> collection.</>}
+			className="max-w-2xl"
+			footer={
+				!isReferenceLoading ? (
+					<>
+						<Button
+							type="button"
+							variant="outline"
+							onClick={() => onOpenChange(false)}
+							disabled={isSubmitting}
+						>
+							Cancel
+						</Button>
+						<Button type="submit" form="create-record-form" disabled={isSubmitting}>
+							{isSubmitting ? 'Creating...' : 'Create Record'}
+						</Button>
+					</>
+				) : undefined
+			}
+		>
+			{isReferenceLoading ? (
+				<div className="flex items-center justify-center py-8">
+					<RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+					<span className="ml-2 text-muted-foreground">
+						Loading reference data...
+					</span>
+				</div>
+			) : (
+				<form id="create-record-form" onSubmit={handleSubmit} className="space-y-6">
+					{/* Account selector for superadmins */}
+					{isSuperadmin && (
+						<div className="space-y-2 pb-4 border-b">
+							<Label htmlFor="account-select">Account *</Label>
+							<Select
+								value={selectedAccountId}
+								onValueChange={setSelectedAccountId}
+								disabled={loadingAccounts || isSubmitting}
 							>
-								Cancel
-							</Button>
-							<Button type="submit" disabled={isSubmitting}>
-								{isSubmitting ? 'Creating...' : 'Create Record'}
-							</Button>
-						</DialogFooter>
-					</form>
-				)}
-			</DialogContent>
-		</Dialog>
+								<SelectTrigger id="account-select">
+									<SelectValue placeholder="Select an account" />
+								</SelectTrigger>
+								<SelectContent>
+									{accounts.map((account) => (
+										<SelectItem key={account.id} value={account.id}>
+											{account.name} ({account.account_code})
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+							{loadingAccounts && (
+								<p className="text-sm text-muted-foreground">
+									Loading accounts...
+								</p>
+							)}
+						</div>
+					)}
+
+					<div className="max-h-[60vh] overflow-y-auto pr-4 space-y-4">
+						{schema.map((field) => (
+							<DynamicFieldInput
+								key={field.name}
+								field={field}
+								value={formState.fields[field.name]?.value}
+								onChange={(value) => handleFieldChange(field.name, value)}
+								error={formState.fields[field.name]?.error || undefined}
+								disabled={isSubmitting}
+								referenceRecords={
+									field.type === 'reference' && field.collection
+										? (referenceRecords[field.collection] || [])
+										: undefined
+								}
+							/>
+						))}
+					</div>
+
+					{error && (
+						<div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
+							<p className="text-destructive text-sm">{error}</p>
+						</div>
+					)}
+				</form>
+			)}
+		</AppDialog>
 	);
 }

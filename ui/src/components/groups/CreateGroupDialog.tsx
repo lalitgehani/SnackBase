@@ -3,14 +3,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
+import { AppDialog } from '@/components/common/AppDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -89,98 +82,94 @@ export default function CreateGroupDialog({ open, onOpenChange, onSubmit }: Crea
     const isFormValid = name.trim().length > 0 && accountId;
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-md">
-                <form onSubmit={handleSubmit}>
-                    <DialogHeader>
-                        <DialogTitle>Create Group</DialogTitle>
-                        <DialogDescription>
-                            Create a new group to organize users and manage permissions.
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    {loadingAccounts ? (
-                        <div className="flex justify-center py-8">
-                            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                        </div>
-                    ) : (
-                        <div className="space-y-4 py-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="account">Account *</Label>
-                                <Select
-                                    value={accountId}
-                                    onValueChange={setAccountId}
-                                    disabled={loading}
-                                >
-                                    <SelectTrigger id="account">
-                                        <SelectValue placeholder="Select an account" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {accounts.map((account) => (
-                                            <SelectItem key={account.id} value={account.id}>
-                                                {account.name} ({account.id})
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="name">Name *</Label>
-                                <Input
-                                    id="name"
-                                    value={name}
-                                    onChange={(e) => setName(e.target.value)}
-                                    placeholder="e.g., Managers, Developers"
-                                    required
-                                    disabled={loading}
-                                    maxLength={100}
-                                />
-                                <p className="text-xs text-muted-foreground">
-                                    1-100 characters
-                                </p>
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="description">Description</Label>
-                                <Textarea
-                                    id="description"
-                                    value={description}
-                                    onChange={(e) => setDescription(e.target.value)}
-                                    placeholder="Optional description of the group's purpose"
-                                    disabled={loading}
-                                    maxLength={500}
-                                    rows={3}
-                                />
-                                <p className="text-xs text-muted-foreground">
-                                    Optional, max 500 characters
-                                </p>
-                            </div>
-
-                            {error && (
-                                <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">
-                                    {error}
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    <DialogFooter>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => onOpenChange(false)}
+        <AppDialog
+            open={open}
+            onOpenChange={onOpenChange}
+            title="Create Group"
+            description="Create a new group to organize users and manage permissions."
+            className="max-w-md"
+            footer={
+                <>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => onOpenChange(false)}
+                        disabled={loading}
+                    >
+                        Cancel
+                    </Button>
+                    <Button type="submit" form="create-group-form" disabled={loading || !isFormValid || loadingAccounts}>
+                        {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Create Group
+                    </Button>
+                </>
+            }
+        >
+            {loadingAccounts ? (
+                <div className="flex justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+            ) : (
+                <form id="create-group-form" onSubmit={handleSubmit} className="space-y-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="account">Account *</Label>
+                        <Select
+                            value={accountId}
+                            onValueChange={setAccountId}
                             disabled={loading}
                         >
-                            Cancel
-                        </Button>
-                        <Button type="submit" disabled={loading || !isFormValid || loadingAccounts}>
-                            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Create Group
-                        </Button>
-                    </DialogFooter>
+                            <SelectTrigger id="account">
+                                <SelectValue placeholder="Select an account" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {accounts.map((account) => (
+                                    <SelectItem key={account.id} value={account.id}>
+                                        {account.name} ({account.id})
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label htmlFor="name">Name *</Label>
+                        <Input
+                            id="name"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            placeholder="e.g., Managers, Developers"
+                            required
+                            disabled={loading}
+                            maxLength={100}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                            1-100 characters
+                        </p>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label htmlFor="description">Description</Label>
+                        <Textarea
+                            id="description"
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                            placeholder="Optional description of the group's purpose"
+                            disabled={loading}
+                            maxLength={500}
+                            rows={3}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                            Optional, max 500 characters
+                        </p>
+                    </div>
+
+                    {error && (
+                        <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">
+                            {error}
+                        </div>
+                    )}
                 </form>
-            </DialogContent>
-        </Dialog>
+            )}
+        </AppDialog>
     );
 }

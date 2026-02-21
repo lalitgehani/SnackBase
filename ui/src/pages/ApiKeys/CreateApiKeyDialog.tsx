@@ -1,12 +1,5 @@
 import { useState } from 'react';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
+import { AppDialog } from '@/components/common/AppDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -69,99 +62,93 @@ export const CreateApiKeyDialog = ({
 
     if (createdKey) {
         return (
-            <Dialog open={open} onOpenChange={resetAndClose}>
-                <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                        <DialogTitle>API Key Created</DialogTitle>
-                        <DialogDescription>
-                            Copy your API key now. You won't be able to see it again!
-                        </DialogDescription>
-                    </DialogHeader>
+            <AppDialog
+                open={open}
+                onOpenChange={resetAndClose}
+                title="API Key Created"
+                description="Copy your API key now. You won't be able to see it again!"
+                className="sm:max-w-md"
+                footer={
+                    <Button onClick={resetAndClose}>I've saved my key</Button>
+                }
+            >
+                <div className="space-y-4">
+                    <Alert variant="destructive" className="bg-amber-50 border-amber-200 text-amber-900">
+                        <AlertTriangle className="h-4 w-4 text-amber-600" />
+                        <AlertTitle>Important Security Warning</AlertTitle>
+                        <AlertDescription>
+                            This key provides full superadmin access. Store it securely and never share it.
+                        </AlertDescription>
+                    </Alert>
 
-                    <div className="space-y-4 py-4">
-                        <Alert variant="destructive" className="bg-amber-50 border-amber-200 text-amber-900">
-                            <AlertTriangle className="h-4 w-4 text-amber-600" />
-                            <AlertTitle>Important Security Warning</AlertTitle>
-                            <AlertDescription>
-                                This key provides full superadmin access. Store it securely and never share it.
-                            </AlertDescription>
-                        </Alert>
-
-                        <div className="flex items-center space-x-2 bg-slate-100 p-3 rounded border font-mono text-sm break-all">
-                            <span className="flex-1 select-all">{createdKey.key}</span>
-                            <CopyToClipboardButton value={createdKey.key} label="API Key" />
-                        </div>
+                    <div className="flex items-center space-x-2 bg-slate-100 p-3 rounded border font-mono text-sm break-all">
+                        <span className="flex-1 select-all">{createdKey.key}</span>
+                        <CopyToClipboardButton value={createdKey.key} label="API Key" />
                     </div>
-
-                    <DialogFooter>
-                        <Button onClick={resetAndClose}>I've saved my key</Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+                </div>
+            </AppDialog>
         );
     }
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                    <DialogTitle>Create API Key</DialogTitle>
-                    <DialogDescription>
-                        Generate a persistent key for programmatic superadmin access.
-                    </DialogDescription>
-                </DialogHeader>
-
-                <div className="space-y-4 py-4">
-                    <Field>
-                        <FieldLabel>Key Name <span className="text-destructive">*</span></FieldLabel>
-                        <FieldContent>
-                            <Input
-                                placeholder="e.g. CI/CD Deployment Key"
-                                value={name}
-                                onChange={(e) => setName(e.target.value)}
-                            />
-                        </FieldContent>
-                    </Field>
-
-                    <div className="flex items-center space-x-2">
-                        <Checkbox
-                            id="never-expires"
-                            checked={neverExpires}
-                            onCheckedChange={(checked) => setNeverExpires(checked === true)}
-                        />
-                        <Label htmlFor="never-expires">Never expires</Label>
-                    </div>
-
-                    {!neverExpires && (
-                        <Field>
-                            <FieldLabel>Expiration Date</FieldLabel>
-                            <FieldContent>
-                                <Input
-                                    type="datetime-local"
-                                    value={expiresAt}
-                                    onChange={(e) => setExpiresAt(e.target.value)}
-                                />
-                            </FieldContent>
-                        </Field>
-                    )}
-
-                    <Alert variant="default" className="bg-blue-50 border-blue-200 text-blue-900">
-                        <Info className="h-4 w-4 text-blue-600" />
-                        <AlertDescription>
-                            API keys allow bypassing JWT authentication for automated tasks.
-                        </AlertDescription>
-                    </Alert>
-                </div>
-
-                <DialogFooter>
+        <AppDialog
+            open={open}
+            onOpenChange={onOpenChange}
+            title="Create API Key"
+            description="Generate a persistent key for programmatic superadmin access."
+            className="sm:max-w-md"
+            footer={
+                <>
                     <Button variant="ghost" onClick={() => onOpenChange(false)}>
                         Cancel
                     </Button>
                     <Button onClick={handleCreate} disabled={!name || isSubmitting}>
                         {isSubmitting ? 'Creating...' : 'Create Key'}
                     </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
+                </>
+            }
+        >
+            <div className="space-y-4">
+                <Field>
+                    <FieldLabel>Key Name <span className="text-destructive">*</span></FieldLabel>
+                    <FieldContent>
+                        <Input
+                            placeholder="e.g. CI/CD Deployment Key"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                        />
+                    </FieldContent>
+                </Field>
+
+                <div className="flex items-center space-x-2">
+                    <Checkbox
+                        id="never-expires"
+                        checked={neverExpires}
+                        onCheckedChange={(checked) => setNeverExpires(checked === true)}
+                    />
+                    <Label htmlFor="never-expires">Never expires</Label>
+                </div>
+
+                {!neverExpires && (
+                    <Field>
+                        <FieldLabel>Expiration Date</FieldLabel>
+                        <FieldContent>
+                            <Input
+                                type="datetime-local"
+                                value={expiresAt}
+                                onChange={(e) => setExpiresAt(e.target.value)}
+                            />
+                        </FieldContent>
+                    </Field>
+                )}
+
+                <Alert variant="default" className="bg-blue-50 border-blue-200 text-blue-900">
+                    <Info className="h-4 w-4 text-blue-600" />
+                    <AlertDescription>
+                        API keys allow bypassing JWT authentication for automated tasks.
+                    </AlertDescription>
+                </Alert>
+            </div>
+        </AppDialog>
     );
 };

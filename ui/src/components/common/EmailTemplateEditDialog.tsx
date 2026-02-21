@@ -1,12 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogFooter,
-} from '@/components/ui/dialog';
+import { AppDialog } from '@/components/common/AppDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -273,174 +267,13 @@ export const EmailTemplateEditDialog = ({
     const availableVariables = TEMPLATE_VARIABLES[template.template_type] || [];
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-[95vw] sm:max-w-[95vw] w-full h-[95vh] flex flex-col p-0 gap-0">
-                <DialogHeader className="p-6 pb-2">
-                    <DialogTitle>
-                        Edit Template: {template.template_type} ({template.locale})
-                    </DialogTitle>
-                </DialogHeader>
-
-                <div className="flex-1 min-h-0 flex divide-x">
-                    {/* Left Pane: Editor */}
-                    <div className="w-1/2 flex flex-col p-6 pt-2 space-y-4 overflow-y-auto">
-
-                        {/* Enabled Toggle & Vars */}
-                        <div className="flex items-center justify-between">
-                            <Label htmlFor="enabled">Enabled</Label>
-                            <Switch
-                                id="enabled"
-                                checked={formData.enabled ?? template.enabled}
-                                onCheckedChange={(checked) =>
-                                    setFormData((prev) => ({ ...prev, enabled: checked }))
-                                }
-                            />
-                        </div>
-
-                        {/* Variable Selector */}
-                        {availableVariables.length > 0 && (
-                            <div className="space-y-2">
-                                <Label>Insert Variable</Label>
-                                <Select onValueChange={insertVariable}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder={`Insert into ${focusedField || 'subject'}`} />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {availableVariables.map((variable) => (
-                                            <SelectItem key={variable} value={variable}>
-                                                {`{{${variable}}}`}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        )}
-
-                        {/* Subject */}
-                        <div className="space-y-2">
-                            <Label htmlFor="subject">Subject</Label>
-                            <Input
-                                id="subject"
-                                value={formData.subject ?? template.subject}
-                                onChange={(e) =>
-                                    setFormData((prev) => ({ ...prev, subject: e.target.value }))
-                                }
-                                onFocus={() => handleInputFocus('subject')}
-                                onSelect={handleInputSelect}
-                                placeholder="Email subject line"
-                            />
-                        </div>
-
-                        {/* HTML Body */}
-                        <div className="space-y-2 flex-1 flex flex-col">
-                            <Label htmlFor="html_body">HTML Body</Label>
-                            <Textarea
-                                id="html_body"
-                                value={formData.html_body ?? template.html_body}
-                                onChange={(e) =>
-                                    setFormData((prev) => ({ ...prev, html_body: e.target.value }))
-                                }
-                                onFocus={() => handleInputFocus('html_body')}
-                                onSelect={handleInputSelect}
-                                placeholder="HTML email body"
-                                className="font-mono text-sm flex-1 resize-none min-h-[300px]"
-                            />
-                        </div>
-
-                        {/* Text Body */}
-                        <div className="space-y-2">
-                            <Label htmlFor="text_body">Text Body</Label>
-                            <Textarea
-                                id="text_body"
-                                value={formData.text_body ?? template.text_body}
-                                onChange={(e) =>
-                                    setFormData((prev) => ({ ...prev, text_body: e.target.value }))
-                                }
-                                onFocus={() => handleInputFocus('text_body')}
-                                onSelect={handleInputSelect}
-                                placeholder="Plain text email body"
-                                className="font-mono text-sm min-h-[100px]"
-                            />
-                        </div>
-                    </div>
-
-                    {/* Right Pane: Preview */}
-                    <div className="w-1/2 flex flex-col bg-muted/20">
-                        <div className="p-4 border-b flex justify-between items-center bg-background">
-                            <h3 className="font-semibold text-sm">Preview</h3>
-                            <div className="flex gap-2">
-                                <Button size="sm" variant="secondary" onClick={() => handlePreview()} disabled={previewLoading}>
-                                    {previewLoading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
-                                    Refresh Preview
-                                </Button>
-                            </div>
-                        </div>
-                        <div className="flex-1 p-4 overflow-hidden bg-gray-50 dark:bg-gray-900 flex justify-center">
-                            {previewHtml ? (
-                                <div className="w-full h-full bg-white rounded-md shadow-sm overflow-hidden border">
-                                    <iframe
-                                        srcDoc={previewHtml}
-                                        title="Email Preview"
-                                        className="w-full h-full border-0"
-                                        sandbox="allow-same-origin"
-                                    />
-                                </div>
-                            ) : (
-                                <div className="flex items-center justify-center h-full text-muted-foreground">
-                                    Click Refresh to see preview
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Test Email (Moved to bottom of preview) */}
-                        <div className="p-4 border-t bg-background">
-                            <Label className="mb-2 block">Send Test Email</Label>
-                            <div className="grid grid-cols-[1fr,2fr,auto] gap-2 items-end">
-                                <div className="space-y-2">
-                                    <Label htmlFor="provider-select" className="text-xs text-muted-foreground">Provider</Label>
-                                    <Select value={selectedProvider} onValueChange={setSelectedProvider}>
-                                        <SelectTrigger id="provider-select">
-                                            <SelectValue placeholder="Automatic" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="auto">Automatic (Default)</SelectItem>
-                                            {providers?.map((provider) => (
-                                                <SelectItem key={provider.provider_name} value={provider.provider_name}>
-                                                    {provider.display_name || provider.provider_name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="test_email" className="text-xs text-muted-foreground">Recipient</Label>
-                                    <Input
-                                        id="test_email"
-                                        type="email"
-                                        value={testEmail}
-                                        onChange={(e) => setTestEmail(e.target.value)}
-                                        placeholder="recipient@example.com"
-                                    />
-                                </div>
-                                <Button
-                                    onClick={handleSendTest}
-                                    disabled={testEmailMutation.isPending}
-                                    variant="outline"
-                                    className="mb-0.5"
-                                >
-                                    {testEmailMutation.isPending ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                    ) : (
-                                        <Send className="h-4 w-4" />
-                                    )}
-                                    <span className="ml-2">Send</span>
-                                </Button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <DialogFooter className="p-6 pt-4 border-t">
+        <AppDialog
+            open={open}
+            onOpenChange={onOpenChange}
+            title={`Edit Template: ${template.template_type} (${template.locale})`}
+            className="max-w-2xl"
+            footer={
+                <>
                     <div className="mr-auto flex items-center">
                         {template.is_builtin && (
                             <span className="text-xs text-muted-foreground bg-secondary px-2 py-1 rounded">
@@ -458,7 +291,6 @@ export const EmailTemplateEditDialog = ({
                             </span>
                         )}
                     </div>
-
                     <Button variant="outline" onClick={() => onOpenChange(false)}>
                         Cancel
                     </Button>
@@ -472,8 +304,159 @@ export const EmailTemplateEditDialog = ({
                             'Save Changes'
                         )}
                     </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog >
+                </>
+            }
+        >
+            <div className="space-y-4">
+                {/* Enabled Toggle & Vars */}
+                <div className="flex items-center justify-between">
+                    <Label htmlFor="enabled">Enabled</Label>
+                    <Switch
+                        id="enabled"
+                        checked={formData.enabled ?? template.enabled}
+                        onCheckedChange={(checked) =>
+                            setFormData((prev) => ({ ...prev, enabled: checked }))
+                        }
+                    />
+                </div>
+
+                {/* Variable Selector */}
+                {availableVariables.length > 0 && (
+                    <div className="space-y-2">
+                        <Label>Insert Variable</Label>
+                        <Select onValueChange={insertVariable}>
+                            <SelectTrigger>
+                                <SelectValue placeholder={`Insert into ${focusedField || 'subject'}`} />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {availableVariables.map((variable) => (
+                                    <SelectItem key={variable} value={variable}>
+                                        {`{{${variable}}}`}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                )}
+
+                {/* Subject */}
+                <div className="space-y-2">
+                    <Label htmlFor="subject">Subject</Label>
+                    <Input
+                        id="subject"
+                        value={formData.subject ?? template.subject}
+                        onChange={(e) =>
+                            setFormData((prev) => ({ ...prev, subject: e.target.value }))
+                        }
+                        onFocus={() => handleInputFocus('subject')}
+                        onSelect={handleInputSelect}
+                        placeholder="Email subject line"
+                    />
+                </div>
+
+                {/* HTML Body */}
+                <div className="space-y-2">
+                    <Label htmlFor="html_body">HTML Body</Label>
+                    <Textarea
+                        id="html_body"
+                        value={formData.html_body ?? template.html_body}
+                        onChange={(e) =>
+                            setFormData((prev) => ({ ...prev, html_body: e.target.value }))
+                        }
+                        onFocus={() => handleInputFocus('html_body')}
+                        onSelect={handleInputSelect}
+                        placeholder="HTML email body"
+                        className="font-mono text-sm resize-none min-h-[200px]"
+                    />
+                </div>
+
+                {/* Text Body */}
+                <div className="space-y-2">
+                    <Label htmlFor="text_body">Text Body</Label>
+                    <Textarea
+                        id="text_body"
+                        value={formData.text_body ?? template.text_body}
+                        onChange={(e) =>
+                            setFormData((prev) => ({ ...prev, text_body: e.target.value }))
+                        }
+                        onFocus={() => handleInputFocus('text_body')}
+                        onSelect={handleInputSelect}
+                        placeholder="Plain text email body"
+                        className="font-mono text-sm min-h-[100px]"
+                    />
+                </div>
+
+                {/* Preview */}
+                <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                        <Label>Preview</Label>
+                        <Button size="sm" variant="secondary" onClick={() => handlePreview()} disabled={previewLoading}>
+                            {previewLoading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                            Refresh Preview
+                        </Button>
+                    </div>
+                    <div className="rounded-md border overflow-hidden bg-gray-50 dark:bg-gray-900" style={{ height: '300px' }}>
+                        {previewHtml ? (
+                            <iframe
+                                srcDoc={previewHtml}
+                                title="Email Preview"
+                                className="w-full h-full border-0"
+                                sandbox="allow-same-origin"
+                            />
+                        ) : (
+                            <div className="flex items-center justify-center h-full text-muted-foreground">
+                                Click Refresh to see preview
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Test Email */}
+                <div className="space-y-2 border-t pt-4">
+                    <Label>Send Test Email</Label>
+                    <div className="grid grid-cols-[1fr,2fr,auto] gap-2 items-end">
+                        <div className="space-y-2">
+                            <Label htmlFor="provider-select" className="text-xs text-muted-foreground">Provider</Label>
+                            <Select value={selectedProvider} onValueChange={setSelectedProvider}>
+                                <SelectTrigger id="provider-select">
+                                    <SelectValue placeholder="Automatic" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="auto">Automatic (Default)</SelectItem>
+                                    {providers?.map((provider) => (
+                                        <SelectItem key={provider.provider_name} value={provider.provider_name}>
+                                            {provider.display_name || provider.provider_name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="test_email" className="text-xs text-muted-foreground">Recipient</Label>
+                            <Input
+                                id="test_email"
+                                type="email"
+                                value={testEmail}
+                                onChange={(e) => setTestEmail(e.target.value)}
+                                placeholder="recipient@example.com"
+                            />
+                        </div>
+                        <Button
+                            onClick={handleSendTest}
+                            disabled={testEmailMutation.isPending}
+                            variant="outline"
+                            className="mb-0.5"
+                        >
+                            {testEmailMutation.isPending ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                                <Send className="h-4 w-4" />
+                            )}
+                            <span className="ml-2">Send</span>
+                        </Button>
+                    </div>
+                </div>
+            </div>
+        </AppDialog>
     );
 };

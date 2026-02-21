@@ -3,14 +3,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
+import { AppDialog } from '@/components/common/AppDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -64,72 +57,70 @@ export default function EditGroupDialog({ open, onOpenChange, group, onSubmit }:
     const isFormValid = name.trim().length > 0;
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-md">
-                <form onSubmit={handleSubmit}>
-                    <DialogHeader>
-                        <DialogTitle>Edit Group</DialogTitle>
-                        <DialogDescription>
-                            Update the group name and description.
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    <div className="space-y-4 py-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="edit-name">Name *</Label>
-                            <Input
-                                id="edit-name"
-                                value={name}
-                                onChange={(e) => setName(e.target.value)}
-                                placeholder="e.g., Managers, Developers"
-                                required
-                                disabled={loading}
-                                maxLength={100}
-                            />
-                            <p className="text-xs text-muted-foreground">
-                                1-100 characters
-                            </p>
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label htmlFor="edit-description">Description</Label>
-                            <Textarea
-                                id="edit-description"
-                                value={description}
-                                onChange={(e) => setDescription(e.target.value)}
-                                placeholder="Optional description of the group's purpose"
-                                disabled={loading}
-                                maxLength={500}
-                                rows={3}
-                            />
-                            <p className="text-xs text-muted-foreground">
-                                Optional, max 500 characters
-                            </p>
-                        </div>
-
-                        {error && (
-                            <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">
-                                {error}
-                            </div>
-                        )}
+        <AppDialog
+            open={open}
+            onOpenChange={onOpenChange}
+            title="Edit Group"
+            description="Update the group name and description."
+            className="max-w-md"
+            footer={
+                <>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => onOpenChange(false)}
+                        disabled={loading}
+                    >
+                        Cancel
+                    </Button>
+                    <Button type="submit" form="edit-group-form" disabled={loading || !isFormValid}>
+                        {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Save Changes
+                    </Button>
+                </>
+            }
+        >
+            <form id="edit-group-form" onSubmit={handleSubmit}>
+                <div className="space-y-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="edit-name">Name *</Label>
+                        <Input
+                            id="edit-name"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            placeholder="e.g., Managers, Developers"
+                            required
+                            disabled={loading}
+                            maxLength={100}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                            1-100 characters
+                        </p>
                     </div>
 
-                    <DialogFooter>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => onOpenChange(false)}
+                    <div className="space-y-2">
+                        <Label htmlFor="edit-description">Description</Label>
+                        <Textarea
+                            id="edit-description"
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                            placeholder="Optional description of the group's purpose"
                             disabled={loading}
-                        >
-                            Cancel
-                        </Button>
-                        <Button type="submit" disabled={loading || !isFormValid}>
-                            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Save Changes
-                        </Button>
-                    </DialogFooter>
-                </form>
-            </DialogContent>
-        </Dialog>
+                            maxLength={500}
+                            rows={3}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                            Optional, max 500 characters
+                        </p>
+                    </div>
+
+                    {error && (
+                        <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">
+                            {error}
+                        </div>
+                    )}
+                </div>
+            </form>
+        </AppDialog>
     );
 }

@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AppDialog } from '@/components/common/AppDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -105,103 +105,102 @@ export default function CreateCollectionDialog({
         }
     };
 
+    const title = isSuccess ? 'Collection Created' : 'Create Collection';
+    const description = isSuccess
+        ? 'Your collection has been created successfully with all migrations applied.'
+        : 'Create a new collection with custom schema. This will create a global database table.';
+
+    const footer = isSuccess ? (
+        <Button onClick={handleClose}>Done</Button>
+    ) : !isSubmitting ? (
+        <>
+            <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                disabled={isSubmitting}
+            >
+                Cancel
+            </Button>
+            <Button type="submit" form="create-collection-form" disabled={isSubmitting}>
+                {isSubmitting ? 'Creating...' : 'Create Collection'}
+            </Button>
+        </>
+    ) : undefined;
+
     return (
-        <Dialog open={open} onOpenChange={isSubmitting ? undefined : onOpenChange}>
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                    <DialogTitle>
-                        {isSuccess ? 'Collection Created' : 'Create Collection'}
-                    </DialogTitle>
-                    <DialogDescription>
-                        {isSuccess
-                            ? 'Your collection has been created successfully with all migrations applied.'
-                            : 'Create a new collection with custom schema. This will create a global database table.'}
-                    </DialogDescription>
-                </DialogHeader>
-
-                {isSubmitting && (
-                    <div className="flex flex-col items-center justify-center py-12 space-y-4">
-                        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-                        <div className="text-center">
-                            <p className="font-medium">Creating collection and applying migrations...</p>
-                            <p className="text-sm text-muted-foreground mt-1">
-                                Please wait while the database table is being created.
-                            </p>
-                        </div>
+        <AppDialog
+            open={open}
+            onOpenChange={isSubmitting ? undefined : onOpenChange}
+            title={title}
+            description={description}
+            className="max-w-4xl"
+            footer={footer}
+        >
+            {isSubmitting && (
+                <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                    <Loader2 className="h-12 w-12 animate-spin text-primary" />
+                    <div className="text-center">
+                        <p className="font-medium">Creating collection and applying migrations...</p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                            Please wait while the database table is being created.
+                        </p>
                     </div>
-                )}
+                </div>
+            )}
 
-                {isSuccess && !isSubmitting && (
-                    <div className="flex flex-col items-center justify-center py-8 space-y-4">
-                        <div className="rounded-full bg-green-100 dark:bg-green-900/30 p-4">
-                            <CheckCircle2 className="h-12 w-12 text-green-600 dark:text-green-400" />
-                        </div>
-                        <div className="text-center space-y-2">
-                            <p className="font-medium text-lg">
-                                Collection "{createdCollectionName}" created successfully!
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                                The database table has been created and all migrations have been applied.
-                            </p>
-                        </div>
-                        <DialogFooter className="mt-4">
-                            <Button onClick={handleClose}>Done</Button>
-                        </DialogFooter>
+            {isSuccess && !isSubmitting && (
+                <div className="flex flex-col items-center justify-center py-8 space-y-4">
+                    <div className="rounded-full bg-green-100 dark:bg-green-900/30 p-4">
+                        <CheckCircle2 className="h-12 w-12 text-green-600 dark:text-green-400" />
                     </div>
-                )}
+                    <div className="text-center space-y-2">
+                        <p className="font-medium text-lg">
+                            Collection "{createdCollectionName}" created successfully!
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                            The database table has been created and all migrations have been applied.
+                        </p>
+                    </div>
+                </div>
+            )}
 
-                {!isSuccess && !isSubmitting && (
-                    <form onSubmit={handleSubmit} className="space-y-6">
-                        <div className="space-y-2">
-                            <Label htmlFor="collection-name">Collection Name *</Label>
-                            <Input
-                                id="collection-name"
-                                value={name}
-                                onChange={(e) => setName(e.target.value)}
-                                placeholder="customers"
-                                disabled={isSubmitting}
-                            />
-                            <p className="text-xs text-muted-foreground">
-                                3-64 characters, alphanumeric and underscores only
-                            </p>
-                        </div>
-
-                        <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-lg p-4">
-                            <p className="text-sm text-amber-900 dark:text-amber-200">
-                                <strong>⚠️ Warning:</strong> This will create a global database table accessible across all accounts.
-                                System fields (id, account_id, created_at, etc.) will be added automatically.
-                            </p>
-                        </div>
-
-                        <SchemaBuilder
-                            fields={fields}
-                            onChange={setFields}
-                            collections={collections}
+            {!isSuccess && !isSubmitting && (
+                <form id="create-collection-form" onSubmit={handleSubmit} className="space-y-6">
+                    <div className="space-y-2">
+                        <Label htmlFor="collection-name">Collection Name *</Label>
+                        <Input
+                            id="collection-name"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            placeholder="customers"
+                            disabled={isSubmitting}
                         />
+                        <p className="text-xs text-muted-foreground">
+                            3-64 characters, alphanumeric and underscores only
+                        </p>
+                    </div>
 
-                        {error && (
-                            <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
-                                <p className="text-destructive text-sm">{error}</p>
-                            </div>
-                        )}
+                    <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-lg p-4">
+                        <p className="text-sm text-amber-900 dark:text-amber-200">
+                            <strong>⚠️ Warning:</strong> This will create a global database table accessible across all accounts.
+                            System fields (id, account_id, created_at, etc.) will be added automatically.
+                        </p>
+                    </div>
 
-                        <DialogFooter>
-                            <Button
-                                type="button"
-                                variant="outline"
-                                onClick={() => onOpenChange(false)}
-                                disabled={isSubmitting}
-                            >
-                                Cancel
-                            </Button>
-                            <Button type="submit" disabled={isSubmitting}>
-                                {isSubmitting ? 'Creating...' : 'Create Collection'}
-                            </Button>
-                        </DialogFooter>
-                    </form>
-                )}
-            </DialogContent>
-        </Dialog>
+                    <SchemaBuilder
+                        fields={fields}
+                        onChange={setFields}
+                        collections={collections}
+                    />
+
+                    {error && (
+                        <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
+                            <p className="text-destructive text-sm">{error}</p>
+                        </div>
+                    )}
+                </form>
+            )}
+        </AppDialog>
     );
 }
-

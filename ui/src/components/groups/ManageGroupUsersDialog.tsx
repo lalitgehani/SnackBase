@@ -4,13 +4,7 @@
  */
 
 import { useEffect, useState, useCallback } from 'react';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
+import { AppDialog } from '@/components/common/AppDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -140,126 +134,123 @@ export default function ManageGroupUsersDialog({
     );
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-                <DialogHeader>
-                    <DialogTitle>Manage Group Members</DialogTitle>
-                    <DialogDescription>
-                        Add or remove users from <strong>{group?.name}</strong>
-                    </DialogDescription>
-                </DialogHeader>
+        <AppDialog
+            open={open}
+            onOpenChange={onOpenChange}
+            title="Manage Group Members"
+            description={<>Add or remove users from <strong>{group?.name}</strong></>}
+            className="max-w-2xl"
+        >
+            {loadingUsers ? (
+                <div className="flex justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+            ) : (
+                <div className="space-y-6">
+                    {/* Current Members */}
+                    <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                            <Label className="text-base font-semibold">Current Members</Label>
+                            <Badge variant="secondary">{groupUsers.length} members</Badge>
+                        </div>
 
-                {loadingUsers ? (
-                    <div className="flex justify-center py-8">
-                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                    </div>
-                ) : (
-                    <div className="space-y-6 py-4">
-                        {/* Current Members */}
-                        <div className="space-y-3">
-                            <div className="flex items-center justify-between">
-                                <Label className="text-base font-semibold">Current Members</Label>
-                                <Badge variant="secondary">{groupUsers.length} members</Badge>
+                        {groupUsers.length === 0 ? (
+                            <div className="text-center py-6 bg-muted rounded-lg">
+                                <p className="text-sm text-muted-foreground">No members yet</p>
                             </div>
-
-                            {groupUsers.length === 0 ? (
-                                <div className="text-center py-6 bg-muted rounded-lg">
-                                    <p className="text-sm text-muted-foreground">No members yet</p>
-                                </div>
-                            ) : (
-                                <div className="space-y-2 max-h-48 overflow-y-auto border rounded-lg p-2">
-                                    {groupUsers.map((user) => (
-                                        <div
-                                            key={user.id}
-                                            className="flex items-center justify-between p-2 hover:bg-muted rounded-md"
-                                        >
-                                            <div>
-                                                <p className="font-medium">{user.email}</p>
-                                                <p className="text-xs text-muted-foreground">
-                                                    {user.role_name} • {user.is_active ? 'Active' : 'Inactive'}
-                                                </p>
-                                            </div>
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() => handleRemoveUser(user.id)}
-                                                disabled={loading}
-                                                className="text-destructive hover:text-destructive"
-                                            >
-                                                <UserMinus className="h-4 w-4 mr-1" />
-                                                Remove
-                                            </Button>
+                        ) : (
+                            <div className="space-y-2 max-h-48 overflow-y-auto border rounded-lg p-2">
+                                {groupUsers.map((user) => (
+                                    <div
+                                        key={user.id}
+                                        className="flex items-center justify-between p-2 hover:bg-muted rounded-md"
+                                    >
+                                        <div>
+                                            <p className="font-medium">{user.email}</p>
+                                            <p className="text-xs text-muted-foreground">
+                                                {user.role_name} • {user.is_active ? 'Active' : 'Inactive'}
+                                            </p>
                                         </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Add Members */}
-                        <div className="space-y-3">
-                            <Label className="text-base font-semibold">Add Members</Label>
-
-                            <div className="space-y-2">
-                                <div className="relative">
-                                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                                    <Input
-                                        placeholder="Search users by email..."
-                                        value={searchTerm}
-                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                        className="pl-8"
-                                    />
-                                </div>
-
-                                <div className="flex gap-2">
-                                    <Select
-                                        value={selectedUserId}
-                                        onValueChange={setSelectedUserId}
-                                        disabled={loading || availableUsers.length === 0}
-                                    >
-                                        <SelectTrigger className="flex-1">
-                                            <SelectValue placeholder="Select a user to add" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {availableUsers.map((user) => (
-                                                <SelectItem key={user.id} value={user.id}>
-                                                    {user.email} ({user.role_name})
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                    <Button
-                                        onClick={handleAddUser}
-                                        disabled={loading || !selectedUserId}
-                                    >
-                                        {loading ? (
-                                            <Loader2 className="h-4 w-4 animate-spin" />
-                                        ) : (
-                                            <>
-                                                <UserPlus className="h-4 w-4 mr-1" />
-                                                Add
-                                            </>
-                                        )}
-                                    </Button>
-                                </div>
-
-                                {availableUsers.length === 0 && (
-                                    <p className="text-sm text-muted-foreground">
-                                        {searchTerm
-                                            ? 'No users found matching your search'
-                                            : 'All users in this account are already members'}
-                                    </p>
-                                )}
-                            </div>
-                        </div>
-
-                        {error && (
-                            <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">
-                                {error}
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => handleRemoveUser(user.id)}
+                                            disabled={loading}
+                                            className="text-destructive hover:text-destructive"
+                                        >
+                                            <UserMinus className="h-4 w-4 mr-1" />
+                                            Remove
+                                        </Button>
+                                    </div>
+                                ))}
                             </div>
                         )}
                     </div>
-                )}
-            </DialogContent>
-        </Dialog>
+
+                    {/* Add Members */}
+                    <div className="space-y-3">
+                        <Label className="text-base font-semibold">Add Members</Label>
+
+                        <div className="space-y-2">
+                            <div className="relative">
+                                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    placeholder="Search users by email..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    className="pl-8"
+                                />
+                            </div>
+
+                            <div className="flex gap-2">
+                                <Select
+                                    value={selectedUserId}
+                                    onValueChange={setSelectedUserId}
+                                    disabled={loading || availableUsers.length === 0}
+                                >
+                                    <SelectTrigger className="flex-1">
+                                        <SelectValue placeholder="Select a user to add" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {availableUsers.map((user) => (
+                                            <SelectItem key={user.id} value={user.id}>
+                                                {user.email} ({user.role_name})
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <Button
+                                    onClick={handleAddUser}
+                                    disabled={loading || !selectedUserId}
+                                >
+                                    {loading ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                        <>
+                                            <UserPlus className="h-4 w-4 mr-1" />
+                                            Add
+                                        </>
+                                    )}
+                                </Button>
+                            </div>
+
+                            {availableUsers.length === 0 && (
+                                <p className="text-sm text-muted-foreground">
+                                    {searchTerm
+                                        ? 'No users found matching your search'
+                                        : 'All users in this account are already members'}
+                                </p>
+                            )}
+                        </div>
+                    </div>
+
+                    {error && (
+                        <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">
+                            {error}
+                        </div>
+                    )}
+                </div>
+            )}
+        </AppDialog>
     );
 }

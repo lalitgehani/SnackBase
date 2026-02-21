@@ -3,14 +3,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { AppDialog } from '@/components/common/AppDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -96,91 +89,87 @@ export default function EditUserDialog({ open, onOpenChange, user, onSubmit }: E
   const isFormValid = email && roleId;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <form onSubmit={handleSubmit}>
-          <DialogHeader>
-            <DialogTitle>Edit User</DialogTitle>
-            <DialogDescription>
-              Update user details. Account cannot be changed.
-            </DialogDescription>
-          </DialogHeader>
+    <AppDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Edit User"
+      description="Update user details. Account cannot be changed."
+      className="max-w-md"
+      footer={
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={loading}
+          >
+            Cancel
+          </Button>
+          <Button type="submit" form="edit-user-form" disabled={loading || !isFormValid || loadingData}>
+            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Update User
+          </Button>
+        </>
+      }
+    >
+      {loadingData ? (
+        <div className="flex justify-center py-8">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : (
+        <form id="edit-user-form" onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="email">Email *</Label>
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="user@example.com"
+              required
+              disabled={loading}
+            />
+          </div>
 
-          {loadingData ? (
-            <div className="flex justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : (
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email *</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="user@example.com"
-                  required
-                  disabled={loading}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="role">Role *</Label>
-                <Select
-                  value={roleId?.toString() || ''}
-                  onValueChange={(v) => setRoleId(parseInt(v))}
-                  disabled={loading}
-                >
-                  <SelectTrigger id="role">
-                    <SelectValue placeholder="Select a role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {roles.map((role) => (
-                      <SelectItem key={role.id} value={role.id.toString()}>
-                        {role.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="isActive"
-                  checked={isActive}
-                  onCheckedChange={(checked) => setIsActive(checked as boolean)}
-                  disabled={loading}
-                />
-                <Label htmlFor="isActive" className="cursor-pointer">
-                  Active (can log in)
-                </Label>
-              </div>
-
-              {error && (
-                <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">
-                  {typeof error === 'string' ? error : JSON.stringify(error)}
-                </div>
-              )}
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
+          <div className="space-y-2">
+            <Label htmlFor="role">Role *</Label>
+            <Select
+              value={roleId?.toString() || ''}
+              onValueChange={(v) => setRoleId(parseInt(v))}
               disabled={loading}
             >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={loading || !isFormValid || loadingData}>
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Update User
-            </Button>
-          </DialogFooter>
+              <SelectTrigger id="role">
+                <SelectValue placeholder="Select a role" />
+              </SelectTrigger>
+              <SelectContent>
+                {roles.map((role) => (
+                  <SelectItem key={role.id} value={role.id.toString()}>
+                    {role.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="isActive"
+              checked={isActive}
+              onCheckedChange={(checked) => setIsActive(checked as boolean)}
+              disabled={loading}
+            />
+            <Label htmlFor="isActive" className="cursor-pointer">
+              Active (can log in)
+            </Label>
+          </div>
+
+          {error && (
+            <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">
+              {typeof error === 'string' ? error : JSON.stringify(error)}
+            </div>
+          )}
         </form>
-      </DialogContent>
-    </Dialog>
+      )}
+    </AppDialog>
   );
 }

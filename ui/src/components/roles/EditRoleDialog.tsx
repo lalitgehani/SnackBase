@@ -3,14 +3,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
+import { AppDialog } from '@/components/common/AppDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -61,62 +54,57 @@ export default function EditRoleDialog({ open, onOpenChange, role, onSubmit }: E
     if (!role) return null;
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent>
-                <form onSubmit={handleSubmit}>
-                    <DialogHeader>
-                        <DialogTitle>Edit Role</DialogTitle>
-                        <DialogDescription>
-                            Update the role name and description.
-                        </DialogDescription>
-                    </DialogHeader>
+        <AppDialog
+            open={open}
+            onOpenChange={onOpenChange}
+            title="Edit Role"
+            description="Update the role name and description."
+            footer={
+                <>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => onOpenChange(false)}
+                        disabled={loading}
+                    >
+                        Cancel
+                    </Button>
+                    <Button type="submit" form="edit-role-form" disabled={loading || !name}>
+                        {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Save Changes
+                    </Button>
+                </>
+            }
+        >
+            <form id="edit-role-form" onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-2">
+                    <Label htmlFor="name">Name *</Label>
+                    <Input
+                        id="name"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        required
+                        disabled={loading}
+                    />
+                </div>
 
-                    <div className="space-y-4 py-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="name">Name *</Label>
-                            <Input
-                                id="name"
-                                value={name}
-                                onChange={(e) => setName(e.target.value)}
-                                required
-                                disabled={loading}
-                            />
-                        </div>
+                <div className="space-y-2">
+                    <Label htmlFor="description">Description (optional)</Label>
+                    <Textarea
+                        id="description"
+                        value={description}
+                        onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDescription(e.target.value)}
+                        rows={3}
+                        disabled={loading}
+                    />
+                </div>
 
-                        <div className="space-y-2">
-                            <Label htmlFor="description">Description (optional)</Label>
-                            <Textarea
-                                id="description"
-                                value={description}
-                                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDescription(e.target.value)}
-                                rows={3}
-                                disabled={loading}
-                            />
-                        </div>
-
-                        {error && (
-                            <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">
-                                {error}
-                            </div>
-                        )}
+                {error && (
+                    <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">
+                        {error}
                     </div>
-
-                    <DialogFooter>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => onOpenChange(false)}
-                            disabled={loading}
-                        >
-                            Cancel
-                        </Button>
-                        <Button type="submit" disabled={loading || !name}>
-                            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Save Changes
-                        </Button>
-                    </DialogFooter>
-                </form>
-            </DialogContent>
-        </Dialog>
+                )}
+            </form>
+        </AppDialog>
     );
 }

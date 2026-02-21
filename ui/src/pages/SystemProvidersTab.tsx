@@ -26,12 +26,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { AddProviderModal } from '@/components/common/AddProviderModal';
 import { ConfigurationForm } from '@/components/common/ConfigurationForm';
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
+import { AppDialog } from '@/components/common/AppDialog';
 import { ProviderLogo } from '@/components/common/ProviderLogo';
 
 const SystemProvidersTab = () => {
@@ -192,7 +187,7 @@ const SystemProvidersTab = () => {
                         setCategoryFilter(val);
                         setPage(1); // Reset page on filter change
                     }}>
-                        <SelectTrigger className="w-[180px]">
+                        <SelectTrigger className="w-45">
                             <SelectValue placeholder="Filter by category" />
                         </SelectTrigger>
                         <SelectContent>
@@ -259,29 +254,30 @@ const SystemProvidersTab = () => {
                 existingConfigs={allConfigs || []}
             />
 
-            <Dialog open={!!configToEdit} onOpenChange={() => setConfigToEdit(null)}>
-                <DialogContent className="sm:max-w-xl p-0 overflow-hidden flex flex-col h-162.5 max-h-[90vh]">
-                    <DialogHeader className="p-6 pb-0">
-                        <DialogTitle>Configure {configToEdit?.display_name}</DialogTitle>
-                    </DialogHeader>
-                    <div className="flex-1 overflow-hidden h-full flex flex-col">
-                        {configToEdit && (
-                            <ConfigurationForm
-                                category={configToEdit.category}
-                                providerName={configToEdit.provider_name}
-                                displayName={configToEdit.display_name}
-                                logoUrl={configToEdit.logo_url}
-                                configId={configToEdit.id}
-                                onSuccess={() => {
-                                    setConfigToEdit(null);
-                                    queryClient.invalidateQueries({ queryKey: ['admin', 'config'] });
-                                }}
-                                onCancel={() => setConfigToEdit(null)}
-                            />
-                        )}
-                    </div>
-                </DialogContent>
-            </Dialog>
+            <AppDialog
+                open={!!configToEdit}
+                onOpenChange={() => setConfigToEdit(null)}
+                title={`Configure ${configToEdit?.display_name}`}
+                className="sm:max-w-xl"
+                bodyClassName="p-0 overflow-hidden flex flex-col"
+            >
+                <div className="flex-1 overflow-hidden h-full flex flex-col">
+                    {configToEdit && (
+                        <ConfigurationForm
+                            category={configToEdit.category}
+                            providerName={configToEdit.provider_name}
+                            displayName={configToEdit.display_name}
+                            logoUrl={configToEdit.logo_url}
+                            configId={configToEdit.id}
+                            onSuccess={() => {
+                                setConfigToEdit(null);
+                                queryClient.invalidateQueries({ queryKey: ['admin', 'config'] });
+                            }}
+                            onCancel={() => setConfigToEdit(null)}
+                        />
+                    )}
+                </div>
+            </AppDialog>
         </div>
     );
 };

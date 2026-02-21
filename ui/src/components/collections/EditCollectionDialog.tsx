@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AppDialog } from '@/components/common/AppDialog';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Database, Shield, CheckCircle2, Loader2 } from 'lucide-react';
@@ -108,109 +108,108 @@ export default function EditCollectionDialog({
 
     if (!collection) return null;
 
+    const title = isSuccess ? 'Collection Updated' : `Edit Collection: ${collection.name}`;
+    const description = isSuccess
+        ? 'Your collection has been updated successfully with all migrations applied.'
+        : 'Add new fields or modify existing field properties. Type changes are not allowed for data safety.';
+
+    const footer = isSuccess ? (
+        <Button onClick={handleClose}>Done</Button>
+    ) : !isSubmitting ? (
+        <>
+            <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                disabled={isSubmitting}
+            >
+                Cancel
+            </Button>
+            <Button type="submit" form="edit-collection-form" disabled={isSubmitting}>
+                {isSubmitting ? 'Updating...' : 'Update Schema'}
+            </Button>
+        </>
+    ) : undefined;
+
     return (
-        <Dialog open={open} onOpenChange={isSubmitting ? undefined : onOpenChange}>
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                    <DialogTitle>
-                        {isSuccess ? 'Collection Updated' : `Edit Collection: ${collection.name}`}
-                    </DialogTitle>
-                    <DialogDescription>
-                        {isSuccess
-                            ? 'Your collection has been updated successfully with all migrations applied.'
-                            : 'Add new fields or modify existing field properties. Type changes are not allowed for data safety.'}
-                    </DialogDescription>
-                </DialogHeader>
-
-                {isSubmitting && (
-                    <div className="flex flex-col items-center justify-center py-12 space-y-4">
-                        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-                        <div className="text-center">
-                            <p className="font-medium">Updating schema and applying migrations...</p>
-                            <p className="text-sm text-muted-foreground mt-1">
-                                Please wait while the database changes are being applied.
-                            </p>
-                        </div>
+        <AppDialog
+            open={open}
+            onOpenChange={isSubmitting ? undefined : onOpenChange}
+            title={title}
+            description={description}
+            className="max-w-4xl"
+            footer={footer}
+        >
+            {isSubmitting && (
+                <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                    <Loader2 className="h-12 w-12 animate-spin text-primary" />
+                    <div className="text-center">
+                        <p className="font-medium">Updating schema and applying migrations...</p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                            Please wait while the database changes are being applied.
+                        </p>
                     </div>
-                )}
+                </div>
+            )}
 
-                {isSuccess && !isSubmitting && (
-                    <div className="flex flex-col items-center justify-center py-8 space-y-4">
-                        <div className="rounded-full bg-green-100 dark:bg-green-900/30 p-4">
-                            <CheckCircle2 className="h-12 w-12 text-green-600 dark:text-green-400" />
-                        </div>
-                        <div className="text-center space-y-2">
-                            <p className="font-medium text-lg">
-                                Collection "{collection.name}" updated successfully!
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                                The schema changes have been applied and all migrations are complete.
-                            </p>
-                        </div>
-                        <DialogFooter className="mt-4">
-                            <Button onClick={handleClose}>Done</Button>
-                        </DialogFooter>
+            {isSuccess && !isSubmitting && (
+                <div className="flex flex-col items-center justify-center py-8 space-y-4">
+                    <div className="rounded-full bg-green-100 dark:bg-green-900/30 p-4">
+                        <CheckCircle2 className="h-12 w-12 text-green-600 dark:text-green-400" />
                     </div>
-                )}
+                    <div className="text-center space-y-2">
+                        <p className="font-medium text-lg">
+                            Collection "{collection.name}" updated successfully!
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                            The schema changes have been applied and all migrations are complete.
+                        </p>
+                    </div>
+                </div>
+            )}
 
-                {!isSuccess && !isSubmitting && (
-                    <Tabs defaultValue="schema" className="w-full">
-                        <TabsList className="grid w-full grid-cols-2 mb-6">
-                            <TabsTrigger value="schema" className="gap-2">
-                                <Database className="h-4 w-4" />
-                                Schema
-                            </TabsTrigger>
-                            <TabsTrigger value="rules" className="gap-2">
-                                <Shield className="h-4 w-4" />
-                                Rules
-                            </TabsTrigger>
-                        </TabsList>
+            {!isSuccess && !isSubmitting && (
+                <Tabs defaultValue="schema" className="w-full">
+                    <TabsList className="grid w-full grid-cols-2 mb-6">
+                        <TabsTrigger value="schema" className="gap-2">
+                            <Database className="h-4 w-4" />
+                            Schema
+                        </TabsTrigger>
+                        <TabsTrigger value="rules" className="gap-2">
+                            <Shield className="h-4 w-4" />
+                            Rules
+                        </TabsTrigger>
+                    </TabsList>
 
-                        <TabsContent value="schema">
-                            <form onSubmit={handleSubmit} className="space-y-6">
-                                <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 rounded-lg p-4">
-                                    <p className="text-sm text-blue-900 dark:text-blue-200">
-                                        <strong>ℹ️ Note:</strong> You can add new fields and modify properties of existing fields.
-                                        However, changing field types or deleting fields is not allowed to protect existing data.
-                                    </p>
+                    <TabsContent value="schema">
+                        <form id="edit-collection-form" onSubmit={handleSubmit} className="space-y-6">
+                            <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 rounded-lg p-4">
+                                <p className="text-sm text-blue-900 dark:text-blue-200">
+                                    <strong>ℹ️ Note:</strong> You can add new fields and modify properties of existing fields.
+                                    However, changing field types or deleting fields is not allowed to protect existing data.
+                                </p>
+                            </div>
+
+                            <SchemaBuilder
+                                fields={fields}
+                                onChange={setFields}
+                                originalFieldCount={originalFieldCount}
+                                collections={collections}
+                            />
+
+                            {error && (
+                                <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
+                                    <p className="text-destructive text-sm">{error}</p>
                                 </div>
+                            )}
+                        </form>
+                    </TabsContent>
 
-                                <SchemaBuilder
-                                    fields={fields}
-                                    onChange={setFields}
-                                    originalFieldCount={originalFieldCount}
-                                    collections={collections}
-                                />
-
-                                {error && (
-                                    <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
-                                        <p className="text-destructive text-sm">{error}</p>
-                                    </div>
-                                )}
-
-                                <DialogFooter>
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        onClick={() => onOpenChange(false)}
-                                        disabled={isSubmitting}
-                                    >
-                                        Cancel
-                                    </Button>
-                                    <Button type="submit" disabled={isSubmitting}>
-                                        {isSubmitting ? 'Updating...' : 'Update Schema'}
-                                    </Button>
-                                </DialogFooter>
-                            </form>
-                        </TabsContent>
-
-                        <TabsContent value="rules">
-                            <CollectionRulesTab collection={collection} />
-                        </TabsContent>
-                    </Tabs>
-                )}
-            </DialogContent>
-        </Dialog>
+                    <TabsContent value="rules">
+                        <CollectionRulesTab collection={collection} />
+                    </TabsContent>
+                </Tabs>
+            )}
+        </AppDialog>
     );
 }
-

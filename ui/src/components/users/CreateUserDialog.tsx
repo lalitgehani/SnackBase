@@ -3,14 +3,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { AppDialog } from '@/components/common/AppDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -140,146 +133,142 @@ export default function CreateUserDialog({ open, onOpenChange, onSubmit }: Creat
   const isFormValid = email && password && confirmPassword && accountId && roleId;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <form onSubmit={handleSubmit}>
-          <DialogHeader>
-            <DialogTitle>Create User</DialogTitle>
-            <DialogDescription>
-              Create a new user in any account. The user will be able to log in immediately.
-            </DialogDescription>
-          </DialogHeader>
+    <AppDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Create User"
+      description="Create a new user in any account. The user will be able to log in immediately."
+      className="max-w-md"
+      footer={
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={loading}
+          >
+            Cancel
+          </Button>
+          <Button type="submit" form="create-user-form" disabled={loading || !isFormValid || loadingData}>
+            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Create User
+          </Button>
+        </>
+      }
+    >
+      {loadingData ? (
+        <div className="flex justify-center py-8">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : (
+        <form id="create-user-form" onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="email">Email *</Label>
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="user@example.com"
+              required
+              disabled={loading}
+            />
+          </div>
 
-          {loadingData ? (
-            <div className="flex justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : (
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email *</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="user@example.com"
-                  required
-                  disabled={loading}
-                />
-              </div>
+          <div className="space-y-2">
+            <Label htmlFor="password">Password *</Label>
+            <Input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••••••"
+              required
+              disabled={loading}
+            />
+            <p className="text-xs text-muted-foreground">
+              Min 12 chars, uppercase, lowercase, digit, special char
+            </p>
+          </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="password">Password *</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••••••"
-                  required
-                  disabled={loading}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Min 12 chars, uppercase, lowercase, digit, special char
-                </p>
-              </div>
+          <div className="space-y-2">
+            <Label htmlFor="confirmPassword">Confirm Password *</Label>
+            <Input
+              id="confirmPassword"
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="••••••••••••"
+              required
+              disabled={loading}
+            />
+          </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Confirm Password *</Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="••••••••••••"
-                  required
-                  disabled={loading}
-                />
-              </div>
+          <div className="space-y-2">
+            <Label htmlFor="account">Account *</Label>
+            <Select
+              value={accountId}
+              onValueChange={setAccountId}
+              disabled={loading}
+            >
+              <SelectTrigger id="account">
+                <SelectValue placeholder="Select an account" />
+              </SelectTrigger>
+              <SelectContent>
+                {accounts.map((account) => (
+                  <SelectItem key={account.id} value={account.id}>
+                    {account.name} ({account.account_code})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="account">Account *</Label>
-                <Select
-                  value={accountId}
-                  onValueChange={setAccountId}
-                  disabled={loading}
-                >
-                  <SelectTrigger id="account">
-                    <SelectValue placeholder="Select an account" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {accounts.map((account) => (
-                      <SelectItem key={account.id} value={account.id}>
-                        {account.name} ({account.account_code})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+          <div className="space-y-2">
+            <Label htmlFor="role">Role *</Label>
+            <Select
+              value={roleId?.toString() || ''}
+              onValueChange={(v) => setRoleId(parseInt(v))}
+              disabled={loading}
+            >
+              <SelectTrigger id="role">
+                <SelectValue placeholder="Select a role" />
+              </SelectTrigger>
+              <SelectContent>
+                {roles.map((role) => (
+                  <SelectItem key={role.id} value={role.id.toString()}>
+                    {role.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="role">Role *</Label>
-                <Select
-                  value={roleId?.toString() || ''}
-                  onValueChange={(v) => setRoleId(parseInt(v))}
-                  disabled={loading}
-                >
-                  <SelectTrigger id="role">
-                    <SelectValue placeholder="Select a role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {roles.map((role) => (
-                      <SelectItem key={role.id} value={role.id.toString()}>
-                        {role.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="isActive"
+              checked={isActive}
+              onCheckedChange={(checked) => setIsActive(checked as boolean)}
+              disabled={loading}
+            />
+            <Label htmlFor="isActive" className="cursor-pointer">
+              Active (can log in)
+            </Label>
+          </div>
 
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="isActive"
-                  checked={isActive}
-                  onCheckedChange={(checked) => setIsActive(checked as boolean)}
-                  disabled={loading}
-                />
-                <Label htmlFor="isActive" className="cursor-pointer">
-                  Active (can log in)
-                </Label>
-              </div>
-
-              {passwordError && (
-                <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">
-                  {passwordError}
-                </div>
-              )}
-
-              {error && (
-                <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">
-                  {typeof error === 'string' ? error : JSON.stringify(error)}
-                </div>
-              )}
+          {passwordError && (
+            <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">
+              {passwordError}
             </div>
           )}
 
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={loading}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={loading || !isFormValid || loadingData}>
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Create User
-            </Button>
-          </DialogFooter>
+          {error && (
+            <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">
+              {typeof error === 'string' ? error : JSON.stringify(error)}
+            </div>
+          )}
         </form>
-      </DialogContent>
-    </Dialog>
+      )}
+    </AppDialog>
   );
 }

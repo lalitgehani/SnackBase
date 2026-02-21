@@ -42,12 +42,7 @@ import { Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AddProviderModal } from '@/components/common/AddProviderModal';
 import { ConfigurationForm } from '@/components/common/ConfigurationForm';
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
+import { AppDialog } from '@/components/common/AppDialog';
 import { ProviderLogo } from '@/components/common/ProviderLogo';
 
 const AccountProvidersTab = () => {
@@ -356,30 +351,31 @@ const AccountProvidersTab = () => {
                 existingConfigs={allConfigs || []}
             />
 
-            <Dialog open={!!configToEdit} onOpenChange={() => setConfigToEdit(null)}>
-                <DialogContent className="sm:max-w-xl flex flex-col max-h-[90vh]">
-                    <DialogHeader>
-                        <DialogTitle>Configure {configToEdit?.display_name}</DialogTitle>
-                    </DialogHeader>
-                    <div className="flex-1 overflow-hidden">
-                        {configToEdit && (
-                            <ConfigurationForm
-                                category={configToEdit.category}
-                                providerName={configToEdit.provider_name}
-                                displayName={configToEdit.display_name}
-                                logoUrl={configToEdit.logo_url}
-                                configId={configToEdit.id}
-                                accountId={selectedAccountId}
-                                onSuccess={() => {
-                                    setConfigToEdit(null);
-                                    queryClient.invalidateQueries({ queryKey: ['admin', 'config'] });
-                                }}
-                                onCancel={() => setConfigToEdit(null)}
-                            />
-                        )}
-                    </div>
-                </DialogContent>
-            </Dialog>
+            <AppDialog
+                open={!!configToEdit}
+                onOpenChange={() => setConfigToEdit(null)}
+                title={`Configure ${configToEdit?.display_name}`}
+                className="sm:max-w-xl"
+                bodyClassName="p-0 overflow-hidden flex flex-col"
+            >
+                <div className="flex-1 overflow-hidden h-full flex flex-col">
+                    {configToEdit && (
+                        <ConfigurationForm
+                            category={configToEdit.category}
+                            providerName={configToEdit.provider_name}
+                            displayName={configToEdit.display_name}
+                            logoUrl={configToEdit.logo_url}
+                            configId={configToEdit.id}
+                            accountId={selectedAccountId}
+                            onSuccess={() => {
+                                setConfigToEdit(null);
+                                queryClient.invalidateQueries({ queryKey: ['admin', 'config'] });
+                            }}
+                            onCancel={() => setConfigToEdit(null)}
+                        />
+                    )}
+                </div>
+            </AppDialog>
         </div>
     );
 };

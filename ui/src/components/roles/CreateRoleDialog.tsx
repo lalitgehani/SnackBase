@@ -3,14 +3,7 @@
  */
 
 import { useState } from 'react';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
+import { AppDialog } from '@/components/common/AppDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -51,64 +44,59 @@ export default function CreateRoleDialog({ open, onOpenChange, onSubmit }: Creat
     };
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent>
-                <form onSubmit={handleSubmit}>
-                    <DialogHeader>
-                        <DialogTitle>Create Role</DialogTitle>
-                        <DialogDescription>
-                            Create a new role. You can configure permissions for this role after creation.
-                        </DialogDescription>
-                    </DialogHeader>
+        <AppDialog
+            open={open}
+            onOpenChange={onOpenChange}
+            title="Create Role"
+            description="Create a new role. You can configure permissions for this role after creation."
+            footer={
+                <>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => onOpenChange(false)}
+                        disabled={loading}
+                    >
+                        Cancel
+                    </Button>
+                    <Button type="submit" form="create-role-form" disabled={loading || !name}>
+                        {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Create Role
+                    </Button>
+                </>
+            }
+        >
+            <form id="create-role-form" onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-2">
+                    <Label htmlFor="name">Name *</Label>
+                    <Input
+                        id="name"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="editor"
+                        required
+                        disabled={loading}
+                    />
+                </div>
 
-                    <div className="space-y-4 py-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="name">Name *</Label>
-                            <Input
-                                id="name"
-                                value={name}
-                                onChange={(e) => setName(e.target.value)}
-                                placeholder="editor"
-                                required
-                                disabled={loading}
-                            />
-                        </div>
+                <div className="space-y-2">
+                    <Label htmlFor="description">Description (optional)</Label>
+                    <Textarea
+                        id="description"
+                        value={description}
+                        onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDescription(e.target.value)}
+                        placeholder="Can edit content but not publish"
+                        rows={3}
+                        disabled={loading}
+                    />
+                </div>
 
-                        <div className="space-y-2">
-                            <Label htmlFor="description">Description (optional)</Label>
-                            <Textarea
-                                id="description"
-                                value={description}
-                                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDescription(e.target.value)}
-                                placeholder="Can edit content but not publish"
-                                rows={3}
-                                disabled={loading}
-                            />
-                        </div>
-
-                        {error && (
-                            <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">
-                                {error}
-                            </div>
-                        )}
+                {error && (
+                    <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">
+                        {error}
                     </div>
-
-                    <DialogFooter>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => onOpenChange(false)}
-                            disabled={loading}
-                        >
-                            Cancel
-                        </Button>
-                        <Button type="submit" disabled={loading || !name}>
-                            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Create Role
-                        </Button>
-                    </DialogFooter>
-                </form>
-            </DialogContent>
-        </Dialog>
+                )}
+            </form>
+        </AppDialog>
     );
 }

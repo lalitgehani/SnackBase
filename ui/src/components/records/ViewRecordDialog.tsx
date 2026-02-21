@@ -3,14 +3,7 @@
  * Read-only display of a single record
  */
 
-import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogFooter,
-	DialogHeader,
-	DialogTitle,
-} from '@/components/ui/dialog';
+import { AppDialog } from '@/components/common/AppDialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import type { FieldDefinition } from '@/services/collections.service';
@@ -103,93 +96,91 @@ export default function ViewRecordDialog({
 	};
 
 	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="max-w-2xl max-h-[90vh]">
-				<DialogHeader>
-					<DialogTitle>Record Details</DialogTitle>
-					<DialogDescription>
-						Viewing record from <strong>{collectionName}</strong> collection
-						{record && (
-							<span className="ml-2 font-mono text-xs text-muted-foreground">
-								(ID: {(record.id as string)?.slice(0, 8)}...)
-							</span>
-						)}
-					</DialogDescription>
-				</DialogHeader>
-
-				{!record ? (
-					<div className="py-8 text-center text-muted-foreground">
-						No record data available
-					</div>
-				) : (
-					<div className="max-h-[60vh] overflow-y-auto">
-						{/* Schema Fields */}
-						<div className="space-y-4 pb-4">
-							{schema.map((field) => (
-								<div key={field.name} className="border-b pb-3 last:border-0">
-									<div className="flex items-center gap-2 mb-1">
-										<span className="font-medium text-sm">{field.name}</span>
-										{field.required && (
-											<span className="text-destructive text-xs">*</span>
-										)}
-										{field.unique && (
-											<Badge variant="outline" className="text-xs">
-												Unique
-											</Badge>
-										)}
-										{field.pii && (
-											<Badge variant="secondary" className="text-xs">
-												PII
-											</Badge>
-										)}
+		<AppDialog
+			open={open}
+			onOpenChange={onOpenChange}
+			title="Record Details"
+			description={
+				<>
+					Viewing record from <strong>{collectionName}</strong> collection
+					{record && (
+						<span className="ml-2 font-mono text-xs text-muted-foreground">
+							(ID: {(record.id as string)?.slice(0, 8)}...)
+						</span>
+					)}
+				</>
+			}
+			className="max-w-2xl"
+			footer={<Button onClick={() => onOpenChange(false)}>Close</Button>}
+		>
+			{!record ? (
+				<div className="py-8 text-center text-muted-foreground">
+					No record data available
+				</div>
+			) : (
+				<div className="max-h-[60vh] overflow-y-auto">
+					{/* Schema Fields */}
+					<div className="space-y-4 pb-4">
+						{schema.map((field) => (
+							<div key={field.name} className="border-b pb-3 last:border-0">
+								<div className="flex items-center gap-2 mb-1">
+									<span className="font-medium text-sm">{field.name}</span>
+									{field.required && (
+										<span className="text-destructive text-xs">*</span>
+									)}
+									{field.unique && (
 										<Badge variant="outline" className="text-xs">
-											{field.type}
+											Unique
 										</Badge>
-									</div>
-									<div className="pl-4">{renderFieldValue(field, record[field.name])}</div>
+									)}
+									{field.pii && (
+										<Badge variant="secondary" className="text-xs">
+											PII
+										</Badge>
+									)}
+									<Badge variant="outline" className="text-xs">
+										{field.type}
+									</Badge>
 								</div>
-							))}
-						</div>
+								<div className="pl-4">{renderFieldValue(field, record[field.name])}</div>
+							</div>
+						))}
+					</div>
 
-						{/* System Fields */}
-						<div className="bg-muted/50 rounded-lg p-4 space-y-2">
-							<p className="text-xs font-semibold text-muted-foreground uppercase">
-								System Fields
-							</p>
-							<div className="grid grid-cols-2 gap-4 text-sm">
-								<div>
-									<span className="text-muted-foreground">ID:</span>{' '}
-									<span className="font-mono text-xs">{record.id as React.ReactNode}</span>
-								</div>
-								<div>
-									<span className="text-muted-foreground">Account ID:</span>{' '}
-									<span className="font-mono text-xs">{record.account_id as React.ReactNode}</span>
-								</div>
-								<div>
-									<span className="text-muted-foreground">Created:</span>{' '}
-									<span>{formatDate(record.created_at as string)}</span>
-								</div>
-								<div>
-									<span className="text-muted-foreground">Updated:</span>{' '}
-									<span>{formatDate(record.updated_at as string)}</span>
-								</div>
-								<div>
-									<span className="text-muted-foreground">Created By:</span>{' '}
-									<span className="font-mono text-xs">{record.created_by as React.ReactNode}</span>
-								</div>
-								<div>
-									<span className="text-muted-foreground">Updated By:</span>{' '}
-									<span className="font-mono text-xs">{record.updated_by as React.ReactNode}</span>
-								</div>
+					{/* System Fields */}
+					<div className="bg-muted/50 rounded-lg p-4 space-y-2">
+						<p className="text-xs font-semibold text-muted-foreground uppercase">
+							System Fields
+						</p>
+						<div className="grid grid-cols-2 gap-4 text-sm">
+							<div>
+								<span className="text-muted-foreground">ID:</span>{' '}
+								<span className="font-mono text-xs">{record.id as React.ReactNode}</span>
+							</div>
+							<div>
+								<span className="text-muted-foreground">Account ID:</span>{' '}
+								<span className="font-mono text-xs">{record.account_id as React.ReactNode}</span>
+							</div>
+							<div>
+								<span className="text-muted-foreground">Created:</span>{' '}
+								<span>{formatDate(record.created_at as string)}</span>
+							</div>
+							<div>
+								<span className="text-muted-foreground">Updated:</span>{' '}
+								<span>{formatDate(record.updated_at as string)}</span>
+							</div>
+							<div>
+								<span className="text-muted-foreground">Created By:</span>{' '}
+								<span className="font-mono text-xs">{record.created_by as React.ReactNode}</span>
+							</div>
+							<div>
+								<span className="text-muted-foreground">Updated By:</span>{' '}
+								<span className="font-mono text-xs">{record.updated_by as React.ReactNode}</span>
 							</div>
 						</div>
 					</div>
-				)}
-
-				<DialogFooter>
-					<Button onClick={() => onOpenChange(false)}>Close</Button>
-				</DialogFooter>
-			</DialogContent>
-		</Dialog>
+				</div>
+			)}
+		</AppDialog>
 	);
 }

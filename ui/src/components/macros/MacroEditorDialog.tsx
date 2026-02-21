@@ -3,14 +3,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
+import { AppDialog } from '@/components/common/AppDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -104,123 +97,121 @@ export default function MacroEditorDialog({
     };
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                    <DialogTitle>{macro ? 'Edit Macro' : 'Create Macro'}</DialogTitle>
-                    <DialogDescription>
-                        Define a reusable SQL snippet for permission rules. Use :param_name for parameters.
-                    </DialogDescription>
-                </DialogHeader>
-
-                <form onSubmit={handleSubmit} className="space-y-6 py-4">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="name">Macro Name</Label>
-                            <div className="flex items-center gap-2">
-                                <span className="text-muted-foreground">@</span>
-                                <Input
-                                    id="name"
-                                    value={name}
-                                    onChange={(e) => setName(e.target.value)}
-                                    placeholder="has_department_access"
-                                    disabled={isSubmitting}
-                                />
-                            </div>
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="description">Description (Optional)</Label>
+        <AppDialog
+            open={open}
+            onOpenChange={onOpenChange}
+            title={macro ? 'Edit Macro' : 'Create Macro'}
+            description="Define a reusable SQL snippet for permission rules. Use :param_name for parameters."
+            className="max-w-2xl"
+            footer={
+                <>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => onOpenChange(false)}
+                        disabled={isSubmitting}
+                    >
+                        Cancel
+                    </Button>
+                    <Button type="submit" form="macro-editor-form" disabled={isSubmitting}>
+                        {isSubmitting ? (macro ? 'Updating...' : 'Creating...') : (macro ? 'Update Macro' : 'Create Macro')}
+                    </Button>
+                </>
+            }
+        >
+            <form id="macro-editor-form" onSubmit={handleSubmit} className="space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="name">Macro Name</Label>
+                        <div className="flex items-center gap-2">
+                            <span className="text-muted-foreground">@</span>
                             <Input
-                                id="description"
-                                value={description}
-                                onChange={(e) => setDescription(e.target.value)}
-                                placeholder="Checks if user has access to a specific department"
+                                id="name"
+                                value={name}
+                                onChange={(e) => setName(e.target.value)}
+                                placeholder="has_department_access"
                                 disabled={isSubmitting}
                             />
                         </div>
                     </div>
-
                     <div className="space-y-2">
-                        <Label htmlFor="sql">SQL Query</Label>
-                        <Textarea
-                            id="sql"
-                            value={sqlQuery}
-                            onChange={(e) => setSqlQuery(e.target.value)}
-                            placeholder="SELECT 1 FROM departments WHERE id = :dept_id AND manager_id = :user_id"
-                            className="font-mono min-h-[150px]"
+                        <Label htmlFor="description">Description (Optional)</Label>
+                        <Input
+                            id="description"
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                            placeholder="Checks if user has access to a specific department"
                             disabled={isSubmitting}
                         />
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground bg-blue-50/50 p-2 rounded">
-                            <Info className="h-3 w-3" />
-                            <span>Available variables: record.*, user.*, :your_param</span>
-                        </div>
                     </div>
+                </div>
 
-                    <div className="space-y-3">
-                        <Label>Parameters</Label>
-                        <div className="flex flex-wrap gap-2 mb-2">
-                            {parameters.map((param, index) => (
-                                <Badge key={index} variant="secondary" className="gap-1 px-2 py-1">
-                                    {param}
-                                    {!isSubmitting && (
-                                        <X
-                                            className="h-3 w-3 cursor-pointer hover:text-destructive"
-                                            onClick={() => handleRemoveParameter(index)}
-                                        />
-                                    )}
-                                </Badge>
-                            ))}
-                            {parameters.length === 0 && (
-                                <span className="text-xs text-muted-foreground italic">No parameters defined</span>
-                            )}
-                        </div>
-                        <div className="flex gap-2">
-                            <Input
-                                value={newParameter}
-                                onChange={(e) => setNewParameter(e.target.value)}
-                                placeholder="Parameter name (e.g. dept_id)"
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                        e.preventDefault();
-                                        handleAddParameter();
-                                    }
-                                }}
-                                disabled={isSubmitting}
-                            />
-                            <Button
-                                type="button"
-                                variant="outline"
-                                size="icon"
-                                onClick={handleAddParameter}
-                                disabled={isSubmitting || !newParameter}
-                            >
-                                <Plus className="h-4 w-4" />
-                            </Button>
-                        </div>
+                <div className="space-y-2">
+                    <Label htmlFor="sql">SQL Query</Label>
+                    <Textarea
+                        id="sql"
+                        value={sqlQuery}
+                        onChange={(e) => setSqlQuery(e.target.value)}
+                        placeholder="SELECT 1 FROM departments WHERE id = :dept_id AND manager_id = :user_id"
+                        className="font-mono min-h-[150px]"
+                        disabled={isSubmitting}
+                    />
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground bg-blue-50/50 p-2 rounded">
+                        <Info className="h-3 w-3" />
+                        <span>Available variables: record.*, user.*, :your_param</span>
                     </div>
+                </div>
 
-                    {error && (
-                        <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
-                            <p className="text-destructive text-sm font-medium">{error}</p>
-                        </div>
-                    )}
-
-                    <DialogFooter>
+                <div className="space-y-3">
+                    <Label>Parameters</Label>
+                    <div className="flex flex-wrap gap-2 mb-2">
+                        {parameters.map((param, index) => (
+                            <Badge key={index} variant="secondary" className="gap-1 px-2 py-1">
+                                {param}
+                                {!isSubmitting && (
+                                    <X
+                                        className="h-3 w-3 cursor-pointer hover:text-destructive"
+                                        onClick={() => handleRemoveParameter(index)}
+                                    />
+                                )}
+                            </Badge>
+                        ))}
+                        {parameters.length === 0 && (
+                            <span className="text-xs text-muted-foreground italic">No parameters defined</span>
+                        )}
+                    </div>
+                    <div className="flex gap-2">
+                        <Input
+                            value={newParameter}
+                            onChange={(e) => setNewParameter(e.target.value)}
+                            placeholder="Parameter name (e.g. dept_id)"
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleAddParameter();
+                                }
+                            }}
+                            disabled={isSubmitting}
+                        />
                         <Button
                             type="button"
                             variant="outline"
-                            onClick={() => onOpenChange(false)}
-                            disabled={isSubmitting}
+                            size="icon"
+                            onClick={handleAddParameter}
+                            disabled={isSubmitting || !newParameter}
                         >
-                            Cancel
+                            <Plus className="h-4 w-4" />
                         </Button>
-                        <Button type="submit" disabled={isSubmitting}>
-                            {isSubmitting ? (macro ? 'Updating...' : 'Creating...') : (macro ? 'Update Macro' : 'Create Macro')}
-                        </Button>
-                    </DialogFooter>
-                </form>
-            </DialogContent>
-        </Dialog>
+                    </div>
+                </div>
+
+                {error && (
+                    <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
+                        <p className="text-destructive text-sm font-medium">{error}</p>
+                    </div>
+                )}
+            </form>
+        </AppDialog>
     );
 }
 

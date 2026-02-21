@@ -4,14 +4,7 @@
  */
 
 import { useState } from 'react';
-import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogFooter,
-	DialogHeader,
-	DialogTitle,
-} from '@/components/ui/dialog';
+import { AppDialog } from '@/components/common/AppDialog';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle } from 'lucide-react';
 import type { FieldDefinition } from '@/services/collections.service';
@@ -69,40 +62,18 @@ export default function DeleteRecordDialog({
 	) : null;
 
 	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="max-w-md">
-				<DialogHeader>
-					<DialogTitle>Delete Record</DialogTitle>
-					<DialogDescription>
-						Are you sure you want to delete this record from{' '}
-						<strong>{collectionName}</strong>? This action cannot be undone.
-					</DialogDescription>
-				</DialogHeader>
-
-				<div className="space-y-4">
-					<div className="flex items-start gap-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-lg p-4">
-						<AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-500 flex-shrink-0 mt-0.5" />
-						<div className="text-sm text-amber-900 dark:text-amber-200">
-							<strong>Warning:</strong> Deleting this record will permanently remove it from the
-							database. If other records reference this record, they may be affected depending
-							on the cascade delete settings.
-						</div>
-					</div>
-
-					{recordSummary && (
-						<div className="bg-muted rounded-lg p-4">
-							<p className="text-xs text-muted-foreground mb-2 uppercase font-semibold">
-								Record to delete:
-							</p>
-							{recordSummary}
-							<div className="mt-2 text-xs text-muted-foreground font-mono">
-								ID: {recordId.slice(0, 16)}...
-							</div>
-						</div>
-					)}
-				</div>
-
-				<DialogFooter>
+		<AppDialog
+			open={open}
+			onOpenChange={onOpenChange}
+			title="Delete Record"
+			description={
+				<>
+					Are you sure you want to delete this record from{' '}
+					<strong>{collectionName}</strong>? This action cannot be undone.
+				</>
+			}
+			footer={
+				<>
 					<Button
 						type="button"
 						variant="outline"
@@ -114,8 +85,31 @@ export default function DeleteRecordDialog({
 					<Button variant="destructive" onClick={handleConfirm} disabled={isDeleting}>
 						{isDeleting ? 'Deleting...' : 'Delete Record'}
 					</Button>
-				</DialogFooter>
-			</DialogContent>
-		</Dialog>
+				</>
+			}
+		>
+			<div className="space-y-4">
+				<div className="flex items-start gap-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-lg p-4">
+					<AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-500 flex-shrink-0 mt-0.5" />
+					<div className="text-sm text-amber-900 dark:text-amber-200">
+						<strong>Warning:</strong> Deleting this record will permanently remove it from the
+						database. If other records reference this record, they may be affected depending
+						on the cascade delete settings.
+					</div>
+				</div>
+
+				{recordSummary && (
+					<div className="bg-muted rounded-lg p-4">
+						<p className="text-xs text-muted-foreground mb-2 uppercase font-semibold">
+							Record to delete:
+						</p>
+						{recordSummary}
+						<div className="mt-2 text-xs text-muted-foreground font-mono">
+							ID: {recordId.slice(0, 16)}...
+						</div>
+					</div>
+				)}
+			</div>
+		</AppDialog>
 	);
 }

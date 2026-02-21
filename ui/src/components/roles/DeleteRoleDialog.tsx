@@ -3,14 +3,7 @@
  */
 
 import { useState } from 'react';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
+import { AppDialog } from '@/components/common/AppDialog';
 import { Button } from '@/components/ui/button';
 import { Loader2, AlertTriangle } from 'lucide-react';
 import type { RoleListItem } from '@/services/roles.service';
@@ -54,56 +47,17 @@ export default function DeleteRoleDialog({
     if (!role) return null;
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Delete Role</DialogTitle>
-                    <DialogDescription>
-                        {isDefaultRole
-                            ? 'This is a default role and cannot be deleted.'
-                            : 'Are you sure you want to delete this role?'}
-                    </DialogDescription>
-                </DialogHeader>
-
-                <div className="space-y-4 py-4">
-                    {!isDefaultRole && (
-                        <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
-                            <div className="flex gap-3">
-                                <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
-                                <div className="space-y-2">
-                                    <p className="font-medium text-destructive">Warning</p>
-                                    <p className="text-sm text-muted-foreground">
-                                        Deleting role <span className="font-medium">{role.name}</span> will:
-                                    </p>
-                                    <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1">
-                                        <li>Remove all permissions associated with this role</li>
-                                        <li>Affect users currently assigned to this role</li>
-                                    </ul>
-                                    <p className="text-sm font-medium text-destructive">
-                                        This action cannot be undone.
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {isDefaultRole && (
-                        <div className="bg-muted/50 border rounded-lg p-4">
-                            <p className="text-sm text-muted-foreground">
-                                Default roles (admin, user) are required for the system to function properly
-                                and cannot be deleted.
-                            </p>
-                        </div>
-                    )}
-
-                    {error && (
-                        <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">
-                            {error}
-                        </div>
-                    )}
-                </div>
-
-                <DialogFooter>
+        <AppDialog
+            open={open}
+            onOpenChange={onOpenChange}
+            title="Delete Role"
+            description={
+                isDefaultRole
+                    ? 'This is a default role and cannot be deleted.'
+                    : 'Are you sure you want to delete this role?'
+            }
+            footer={
+                <>
                     <Button
                         type="button"
                         variant="outline"
@@ -122,8 +76,46 @@ export default function DeleteRoleDialog({
                             Delete Role
                         </Button>
                     )}
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
+                </>
+            }
+        >
+            <div className="space-y-4">
+                {!isDefaultRole && (
+                    <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
+                        <div className="flex gap-3">
+                            <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+                            <div className="space-y-2">
+                                <p className="font-medium text-destructive">Warning</p>
+                                <p className="text-sm text-muted-foreground">
+                                    Deleting role <span className="font-medium">{role.name}</span> will:
+                                </p>
+                                <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1">
+                                    <li>Remove all permissions associated with this role</li>
+                                    <li>Affect users currently assigned to this role</li>
+                                </ul>
+                                <p className="text-sm font-medium text-destructive">
+                                    This action cannot be undone.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {isDefaultRole && (
+                    <div className="bg-muted/50 border rounded-lg p-4">
+                        <p className="text-sm text-muted-foreground">
+                            Default roles (admin, user) are required for the system to function properly
+                            and cannot be deleted.
+                        </p>
+                    </div>
+                )}
+
+                {error && (
+                    <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">
+                        {error}
+                    </div>
+                )}
+            </div>
+        </AppDialog>
     );
 }

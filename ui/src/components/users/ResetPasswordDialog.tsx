@@ -1,12 +1,5 @@
 import { useState } from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { AppDialog } from '@/components/common/AppDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -112,102 +105,105 @@ export default function ResetPasswordDialog({
   const isFormValid = mode === 'link' || (password && confirmPassword);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <form onSubmit={handleSubmit}>
-          <DialogHeader>
-            <DialogTitle>Reset Password</DialogTitle>
-            <DialogDescription>
-              Choose how you want to reset the password for {user?.email}.
-            </DialogDescription>
-          </DialogHeader>
+    <AppDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Reset Password"
+      description={`Choose how you want to reset the password for ${user?.email}.`}
+      className="max-w-md"
+      footer={
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={loading}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            form="reset-password-form"
+            disabled={loading || !isFormValid}
+            variant={mode === 'password' ? 'destructive' : 'default'}
+          >
+            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {mode === 'link' ? 'Send Reset Link' : 'Reset Password'}
+          </Button>
+        </>
+      }
+    >
+      <form id="reset-password-form" onSubmit={handleSubmit}>
+        <Tabs value={mode} onValueChange={(v) => setMode(v as 'link' | 'password')}>
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="link" className="gap-2">
+              <Mail className="h-4 w-4" />
+              Send Link
+            </TabsTrigger>
+            <TabsTrigger value="password" className="gap-2">
+              <Key className="h-4 w-4" />
+              Set Directly
+            </TabsTrigger>
+          </TabsList>
 
-          <Tabs value={mode} onValueChange={(v) => setMode(v as 'link' | 'password')} className="py-4">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="link" className="gap-2">
-                <Mail className="h-4 w-4" />
-                Send Link
-              </TabsTrigger>
-              <TabsTrigger value="password" className="gap-2">
-                <Key className="h-4 w-4" />
-                Set Directly
-              </TabsTrigger>
-            </TabsList>
+          <TabsContent value="link" className="space-y-4 pt-4">
+            <div className="text-sm text-balance text-muted-foreground bg-muted p-4 rounded-lg border">
+              This will send a secure password reset link to <span className="font-semibold text-foreground">{user?.email}</span>.
+              The user can follow the link to set their own password. The link will expire in 1 hour.
+            </div>
+          </TabsContent>
 
-            <TabsContent value="link" className="space-y-4 pt-4">
-              <div className="text-sm text-balance text-muted-foreground bg-muted p-4 rounded-lg border">
-                This will send a secure password reset link to <span className="font-semibold text-foreground">{user?.email}</span>.
-                The user can follow the link to set their own password. The link will expire in 1 hour.
-              </div>
-            </TabsContent>
+          <TabsContent value="password" className="space-y-4 pt-4">
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                This will immediately change the user's password and force them to log in again on all devices.
+              </AlertDescription>
+            </Alert>
 
-            <TabsContent value="password" className="space-y-4 pt-4">
-              <Alert variant="destructive">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertDescription>
-                  This will immediately change the user's password and force them to log in again on all devices.
-                </AlertDescription>
-              </Alert>
+            <div className="space-y-2">
+              <Label htmlFor="password">New Password *</Label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••••••"
+                required={mode === 'password'}
+                disabled={loading}
+              />
+              <p className="text-xs text-muted-foreground">
+                Min 12 chars, uppercase, lowercase, digit, special char
+              </p>
+            </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="password">New Password *</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••••••"
-                  required={mode === 'password'}
-                  disabled={loading}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Min 12 chars, uppercase, lowercase, digit, special char
-                </p>
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Confirm Password *</Label>
+              <Input
+                id="confirmPassword"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="••••••••••••"
+                required={mode === 'password'}
+                disabled={loading}
+              />
+            </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Confirm Password *</Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="••••••••••••"
-                  required={mode === 'password'}
-                  disabled={loading}
-                />
-              </div>
-
-              {passwordError && (
-                <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">
-                  {passwordError}
-                </div>
-              )}
-            </TabsContent>
-
-            {error && (
-              <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md mt-4">
-                {typeof error === 'string' ? error : JSON.stringify(error)}
+            {passwordError && (
+              <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">
+                {passwordError}
               </div>
             )}
-          </Tabs>
+          </TabsContent>
 
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={loading}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={loading || !isFormValid} variant={mode === 'password' ? 'destructive' : 'default'}>
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {mode === 'link' ? 'Send Reset Link' : 'Reset Password'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+          {error && (
+            <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md mt-4">
+              {typeof error === 'string' ? error : JSON.stringify(error)}
+            </div>
+          )}
+        </Tabs>
+      </form>
+    </AppDialog>
   );
 }
