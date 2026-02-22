@@ -1,20 +1,25 @@
-"""File storage service for managing file uploads and downloads.
-
-Handles file storage operations including saving, retrieving, and deleting files.
-Files are stored in account-specific directories with UUID-based filenames.
-"""
+"""File storage service with pluggable provider support (local and S3)."""
 
 import json
 import uuid
 from dataclasses import dataclass
+from io import BytesIO
 from pathlib import Path
 from typing import BinaryIO
 
+import boto3
+from botocore.config import Config
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from snackbase.core.config import get_settings
 from snackbase.core.logging import get_logger
+from snackbase.infrastructure.persistence.models.configuration import ConfigurationModel
+from snackbase.infrastructure.security.encryption import EncryptionService
 
 logger = get_logger(__name__)
 settings = get_settings()
+SYSTEM_ACCOUNT_ID = "00000000-0000-0000-0000-000000000000"
 
 
 @dataclass
@@ -27,7 +32,6 @@ class FileMetadata:
     path: str
 
     def to_dict(self) -> dict[str, str | int]:
-        """Convert to dictionary for JSON storage."""
         return {
             "filename": self.filename,
             "size": self.size,
@@ -36,12 +40,10 @@ class FileMetadata:
         }
 
     def to_json(self) -> str:
-        """Convert to JSON string for database storage."""
         return json.dumps(self.to_dict())
 
     @classmethod
     def from_dict(cls, data: dict[str, str | int]) -> "FileMetadata":
-        """Create from dictionary."""
         return cls(
             filename=str(data["filename"]),
             size=int(data["size"]),
@@ -51,7 +53,6 @@ class FileMetadata:
 
     @classmethod
     def from_json(cls, json_str: str) -> "FileMetadata":
-        """Create from JSON string."""
         return cls.from_dict(json.loads(json_str))
 
 
@@ -59,56 +60,14 @@ class FileStorageService:
     """Service for managing file storage operations."""
 
     def __init__(self, storage_path: str | None = None):
-        """Initialize file storage service.
-
-        Args:
-            storage_path: Base path for file storage. Defaults to settings.storage_path.
-        """
         self.storage_path = Path(storage_path or settings.storage_path)
-
-    def _get_account_directory(self, account_id: str) -> Path:
-        """Get the storage directory for an account.
-
-        Args:
-            account_id: The account ID.
-
-        Returns:
-            Path to the account's storage directory.
-        """
-        return self.storage_path / account_id
-
-    def _ensure_directory_exists(self, directory: Path) -> None:
-        """Ensure a directory exists, creating it if necessary.
-
-        Args:
-            directory: The directory path.
-        """
-        directory.mkdir(parents=True, exist_ok=True)
+        self.encryption = EncryptionService(settings.encryption_key)
 
     def _generate_unique_filename(self, original_filename: str) -> str:
-        """Generate a unique filename using UUID.
-
-        Args:
-            original_filename: The original filename.
-
-        Returns:
-            A unique filename with the original extension preserved.
-        """
-        # Extract extension from original filename
         suffix = Path(original_filename).suffix
-        # Generate UUID-based filename
-        unique_name = f"{uuid.uuid4()}{suffix}"
-        return unique_name
+        return f"{uuid.uuid4()}{suffix}"
 
     def validate_file_size(self, size: int) -> None:
-        """Validate file size against configured limit.
-
-        Args:
-            size: File size in bytes.
-
-        Raises:
-            ValueError: If file size exceeds the limit.
-        """
         if size > settings.max_file_size:
             max_size_mb = settings.max_file_size / (1024 * 1024)
             actual_size_mb = size / (1024 * 1024)
@@ -118,19 +77,40 @@ class FileStorageService:
             )
 
     def validate_mime_type(self, mime_type: str) -> None:
-        """Validate MIME type against allowed types.
-
-        Args:
-            mime_type: The MIME type to validate.
-
-        Raises:
-            ValueError: If MIME type is not allowed.
-        """
         if mime_type not in settings.allowed_mime_types:
             raise ValueError(
                 f"File type '{mime_type}' is not allowed. "
                 f"Allowed types: {', '.join(settings.allowed_mime_types)}"
             )
+
+    async def _resolve_storage_provider(self, session: AsyncSession, account_id: str) -> tuple[str, dict]:
+        account_result = await session.execute(
+            select(ConfigurationModel).where(
+                ConfigurationModel.category == "storage_providers",
+                ConfigurationModel.account_id == account_id,
+                ConfigurationModel.is_system == False,
+                ConfigurationModel.enabled == True,
+            )
+        )
+        account_configs = account_result.scalars().all()
+        config_model = next((c for c in account_configs if c.is_default), None) or (account_configs[0] if account_configs else None)
+
+        if config_model is None:
+            system_result = await session.execute(
+                select(ConfigurationModel).where(
+                    ConfigurationModel.category == "storage_providers",
+                    ConfigurationModel.account_id == SYSTEM_ACCOUNT_ID,
+                    ConfigurationModel.is_system == True,
+                    ConfigurationModel.enabled == True,
+                )
+            )
+            system_configs = system_result.scalars().all()
+            config_model = next((c for c in system_configs if c.is_default), None) or (system_configs[0] if system_configs else None)
+
+        if config_model is None:
+            return "local", {}
+
+        return config_model.provider_name, self.encryption.decrypt_dict(config_model.config)
 
     async def save_file(
         self,
@@ -139,110 +119,93 @@ class FileStorageService:
         filename: str,
         mime_type: str,
         size: int,
+        session: AsyncSession | None = None,
     ) -> FileMetadata:
-        """Save a file to storage.
-
-        Args:
-            account_id: The account ID.
-            file_content: The file content as a binary stream.
-            filename: Original filename.
-            mime_type: MIME type of the file.
-            size: File size in bytes.
-
-        Returns:
-            FileMetadata object with storage information.
-
-        Raises:
-            ValueError: If file validation fails.
-        """
-        # Validate file
         self.validate_file_size(size)
         self.validate_mime_type(mime_type)
 
-        # Get account directory and ensure it exists
-        account_dir = self._get_account_directory(account_id)
-        self._ensure_directory_exists(account_dir)
-
-        # Generate unique filename
+        if session is None:
+            provider_name, provider_config = "local", {}
+        else:
+            provider_name, provider_config = await self._resolve_storage_provider(session, account_id)
         unique_filename = self._generate_unique_filename(filename)
-        file_path = account_dir / unique_filename
+        storage_key = f"{account_id}/{unique_filename}"
 
-        # Save file
+        if provider_name == "s3":
+            self._save_s3(file_content.read(), storage_key, mime_type, provider_config)
+        else:
+            self._save_local(file_content.read(), storage_key)
+
+        logger.info("File saved successfully", account_id=account_id, filename=filename, path=storage_key, provider=provider_name, size=size)
+        return FileMetadata(filename=filename, size=size, mime_type=mime_type, path=storage_key)
+
+    def _save_local(self, content: bytes, storage_key: str) -> None:
+        file_path = self.storage_path / storage_key
+        file_path.parent.mkdir(parents=True, exist_ok=True)
         with open(file_path, "wb") as f:
-            f.write(file_content.read())
+            f.write(content)
 
-        # Create relative path for storage (account_id/filename)
-        relative_path = f"{account_id}/{unique_filename}"
-
-        logger.info(
-            "File saved successfully",
-            account_id=account_id,
-            filename=filename,
-            path=relative_path,
-            size=size,
+    def _save_s3(self, content: bytes, storage_key: str, mime_type: str, config: dict) -> None:
+        s3 = boto3.client(
+            "s3",
+            region_name=config.get("region", "us-east-1"),
+            aws_access_key_id=config.get("access_key_id"),
+            aws_secret_access_key=config.get("secret_access_key"),
+            endpoint_url=config.get("endpoint_url") or None,
+            config=Config(s3={"addressing_style": "path" if config.get("use_path_style") else "virtual"}),
         )
+        prefix = config.get("object_prefix", "").strip("/")
+        object_key = f"{prefix}/{storage_key}" if prefix else storage_key
+        s3.upload_fileobj(BytesIO(content), config["bucket_name"], object_key, ExtraArgs={"ContentType": mime_type})
 
-        return FileMetadata(
-            filename=filename,
-            size=size,
-            mime_type=mime_type,
-            path=relative_path,
-        )
-
-    def get_file_path(self, account_id: str, file_path: str) -> Path:
-        """Get the absolute path to a file and validate it exists.
-
-        Args:
-            account_id: The account ID.
-            file_path: The relative file path (account_id/filename).
-
-        Returns:
-            Absolute path to the file.
-
-        Raises:
-            ValueError: If file path is invalid or file doesn't exist.
-            FileNotFoundError: If file doesn't exist.
-        """
-        # Validate that the file path starts with the account_id
+    async def get_download_info(self, session: AsyncSession, account_id: str, file_path: str) -> tuple[str, str]:
+        if session is None:
+            provider_name, provider_config = "local", {}
+        else:
+            provider_name, provider_config = await self._resolve_storage_provider(session, account_id)
         if not file_path.startswith(f"{account_id}/"):
-            raise ValueError("Invalid file path: does not belong to this account")
+            raise ValueError("Access denied: file does not belong to your account")
 
-        # Construct absolute path
-        absolute_path = self.storage_path / file_path
+        if provider_name == "s3":
+            url = self._generate_s3_download_url(file_path, provider_config)
+            return "redirect", url
 
-        # Ensure the path is within the storage directory (prevent path traversal)
-        try:
-            absolute_path = absolute_path.resolve()
-            self.storage_path.resolve()
-            if not str(absolute_path).startswith(str(self.storage_path.resolve())):
-                raise ValueError("Invalid file path: path traversal detected")
-        except Exception as e:
-            raise ValueError(f"Invalid file path: {e}")
-
-        # Check if file exists
+        absolute_path = (self.storage_path / file_path).resolve()
+        if not str(absolute_path).startswith(str(self.storage_path.resolve())):
+            raise ValueError("Invalid file path")
         if not absolute_path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
+        return "local", str(absolute_path)
 
+    def _generate_s3_download_url(self, file_path: str, config: dict) -> str:
+        s3 = boto3.client(
+            "s3",
+            region_name=config.get("region", "us-east-1"),
+            aws_access_key_id=config.get("access_key_id"),
+            aws_secret_access_key=config.get("secret_access_key"),
+            endpoint_url=config.get("endpoint_url") or None,
+            config=Config(s3={"addressing_style": "path" if config.get("use_path_style") else "virtual"}),
+        )
+        prefix = config.get("object_prefix", "").strip("/")
+        object_key = f"{prefix}/{file_path}" if prefix else file_path
+        expires = int(config.get("signed_url_expiry_seconds", 900))
+        return s3.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": config["bucket_name"], "Key": object_key},
+            ExpiresIn=expires,
+        )
+
+
+    def get_file_path(self, account_id: str, file_path: str) -> Path:
+        if not file_path.startswith(f"{account_id}/"):
+            raise ValueError("Access denied: file does not belong to your account")
+        absolute_path = (self.storage_path / file_path).resolve()
+        if not str(absolute_path).startswith(str(self.storage_path.resolve())):
+            raise ValueError("Invalid file path")
+        if not absolute_path.exists():
+            raise FileNotFoundError(f"File not found: {file_path}")
         return absolute_path
 
     def delete_file(self, account_id: str, file_path: str) -> None:
-        """Delete a file from storage.
-
-        Args:
-            account_id: The account ID.
-            file_path: The relative file path (account_id/filename).
-
-        Raises:
-            ValueError: If file path is invalid.
-            FileNotFoundError: If file doesn't exist.
-        """
         absolute_path = self.get_file_path(account_id, file_path)
-
-        # Delete the file
         absolute_path.unlink()
-
-        logger.info(
-            "File deleted successfully",
-            account_id=account_id,
-            path=file_path,
-        )

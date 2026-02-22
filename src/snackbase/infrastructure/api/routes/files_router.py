@@ -1,7 +1,8 @@
 """File storage API endpoints for uploading and downloading files."""
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.core.logging import get_logger
 from snackbase.domain.services.file_storage_service import FileStorageService
@@ -10,6 +11,7 @@ from snackbase.infrastructure.api.schemas.file_schemas import (
     FileMetadataResponse,
     FileUploadResponse,
 )
+from snackbase.infrastructure.persistence.database import get_db_session
 
 logger = get_logger(__name__)
 
@@ -26,32 +28,24 @@ router = APIRouter(tags=["files"])
 async def upload_file(
     file: UploadFile = File(..., description="File to upload"),
     current_user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
 ) -> FileUploadResponse:
-    """Upload a file to storage.
-
-    The uploaded file is stored in the account's directory with a UUID-based filename.
-    Returns metadata that should be stored in a record's file field.
-
-    Requires authentication. File size and MIME type are validated against configured limits.
-    """
+    """Upload a file to storage."""
     account_id = current_user.account_id
 
-    # Get file info
     filename = file.filename or "unnamed"
     mime_type = file.content_type or "application/octet-stream"
 
-    # Read file content
     content = await file.read()
     size = len(content)
 
-    # Create file storage service
     storage_service = FileStorageService()
 
     try:
-        # Save file (this validates size and MIME type)
         from io import BytesIO
 
         file_metadata = await storage_service.save_file(
+            session=db,
             account_id=account_id,
             file_content=BytesIO(content),
             filename=filename,
@@ -105,39 +99,36 @@ async def upload_file(
 @router.get(
     "/{file_path:path}",
     response_class=FileResponse,
+    response_model=None,
     summary="Download a file",
     description="Download a file from storage. Requires authentication and proper permissions.",
 )
 async def download_file(
     file_path: str,
     current_user: CurrentUser = Depends(get_current_user),
-) -> FileResponse:
-    """Download a file from storage.
-
-    The file path should be in the format: {account_id}/{uuid_filename}
-
-    Requires authentication. Users can only download files from their own account.
-    """
+    db: AsyncSession = Depends(get_db_session),
+) -> FileResponse | RedirectResponse:
+    """Download a file from storage."""
     account_id = current_user.account_id
-
-    # Create file storage service
     storage_service = FileStorageService()
 
     try:
-        # Get absolute file path (validates account ownership and existence)
-        absolute_path = storage_service.get_file_path(account_id, file_path)
+        mode, result = await storage_service.get_download_info(db, account_id, file_path)
 
         logger.info(
             "File downloaded",
             account_id=account_id,
             file_path=file_path,
             user_id=current_user.user_id,
+            mode=mode,
         )
 
-        # Return file
+        if mode == "redirect":
+            return RedirectResponse(url=result, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+
         return FileResponse(
-            path=str(absolute_path),
-            filename=absolute_path.name,
+            path=result,
+            filename=file_path.split("/")[-1],
         )
 
     except ValueError as e:

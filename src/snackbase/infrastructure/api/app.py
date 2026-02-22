@@ -554,7 +554,11 @@ async def register_builtin_providers(app: FastAPI) -> None:
         app: FastAPI application instance.
     """
     from snackbase.core.configuration.config_registry import ConfigurationRegistry
-    from snackbase.infrastructure.configuration.providers import EmailPasswordProvider
+    from snackbase.infrastructure.configuration.providers import (
+        EmailPasswordProvider,
+        LocalStorageConfiguration,
+        S3StorageConfiguration,
+    )
     from snackbase.infrastructure.configuration.providers.email.aws_ses import AWSESConfiguration
     from snackbase.infrastructure.configuration.providers.email.resend import ResendConfiguration
     from snackbase.infrastructure.configuration.providers.email.smtp import SMTPConfiguration
@@ -595,6 +599,28 @@ async def register_builtin_providers(app: FastAPI) -> None:
             logo_url=email_password_provider.logo_url,
             config_schema=email_password_provider.config_schema,
             is_builtin=email_password_provider.is_builtin,
+        )
+
+        # Register Local storage provider
+        local_storage_provider = LocalStorageConfiguration()
+        config_registry.register_provider_definition(
+            category=local_storage_provider.category,
+            provider_name=local_storage_provider.provider_name,
+            display_name=local_storage_provider.display_name,
+            logo_url=local_storage_provider.logo_url,
+            config_schema=local_storage_provider.config_schema,
+            is_builtin=local_storage_provider.is_builtin,
+        )
+
+        # Register S3 storage provider
+        s3_storage_provider = S3StorageConfiguration()
+        config_registry.register_provider_definition(
+            category=s3_storage_provider.category,
+            provider_name=s3_storage_provider.provider_name,
+            display_name=s3_storage_provider.display_name,
+            logo_url=s3_storage_provider.logo_url,
+            config_schema=s3_storage_provider.config_schema,
+            is_builtin=s3_storage_provider.is_builtin,
         )
 
         # Register SMTP provider
@@ -726,6 +752,8 @@ async def register_builtin_providers(app: FastAPI) -> None:
                 aws_ses_provider.provider_name,
                 resend_provider.provider_name,
                 system_config.provider_name,
+                local_storage_provider.provider_name,
+                s3_storage_provider.provider_name,
                 google_oauth_handler.provider_name,
                 github_oauth_handler.provider_name,
                 microsoft_oauth_handler.provider_name,

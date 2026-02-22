@@ -464,6 +464,9 @@ async def _seed_default_configurations(db: DatabaseManager) -> None:
     from snackbase.infrastructure.configuration.providers.auth.email_password import (
         EmailPasswordProvider,
     )
+    from snackbase.infrastructure.configuration.providers.storage.local import (
+        LocalStorageConfiguration,
+    )
     from snackbase.infrastructure.configuration.providers.system import SystemConfiguration
     from snackbase.infrastructure.persistence.models.configuration import ConfigurationModel
 
@@ -473,6 +476,7 @@ async def _seed_default_configurations(db: DatabaseManager) -> None:
     settings = get_settings()
     ep_provider = EmailPasswordProvider()
     system_config_provider = SystemConfiguration()
+    local_storage_provider = LocalStorageConfiguration()
 
     async with db.session() as session:
         # Seed email_password system config
@@ -502,6 +506,34 @@ async def _seed_default_configurations(db: DatabaseManager) -> None:
             )
             session.add(new_config)
             logger.info("Seeded default Email/Password configuration")
+
+        # Seed local storage provider configuration (default)
+        result = await session.execute(
+            select(ConfigurationModel).where(
+                ConfigurationModel.category == local_storage_provider.category,
+                ConfigurationModel.account_id == SYSTEM_ACCOUNT_ID,
+                ConfigurationModel.provider_name == local_storage_provider.provider_name,
+                ConfigurationModel.is_system == True
+            )
+        )
+        existing_local_storage = result.scalar_one_or_none()
+
+        if existing_local_storage is None:
+            new_local_storage_config = ConfigurationModel(
+                id=str(uuid.uuid4()),
+                account_id=SYSTEM_ACCOUNT_ID,
+                category=local_storage_provider.category,
+                provider_name=local_storage_provider.provider_name,
+                display_name=local_storage_provider.display_name,
+                config={},
+                enabled=True,
+                is_builtin=True,
+                is_system=True,
+                is_default=True,
+                priority=0,
+            )
+            session.add(new_local_storage_config)
+            logger.info("Seeded default local storage configuration")
 
         # Seed system settings configuration
         result = await session.execute(
