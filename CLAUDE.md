@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **SnackBase** is a Python/FastAPI-based Backend-as-a-Service (BaaS) designed as an open-source, self-hosted alternative to PocketBase. It provides auto-generated REST APIs, multi-tenancy, row-level security, authentication, and GxP-compliant audit logging.
 
-**Current State**: Phase 1 nearly complete (11/13 features). Full-stack implementation with React admin UI, comprehensive testing, and 11 API routers.
+**Current State**: Full-stack implementation with React admin UI, comprehensive testing (1,161 tests), and 18+ API routers including realtime (WebSocket/SSE), file storage, collection rules, and email templates.
 
 ## Package Management
 
@@ -104,8 +104,8 @@ src/snackbase/
     ├── hooks/                    # Built-in hooks implementation
     ├── security/                 # Encryption service
     ├── services/                 # Token service, email service
-    ├── realtime/                 # Empty (WebSocket/SSE TODO)
-    └── storage/                  # Empty (file storage TODO)
+    ├── realtime/                 # WebSocket/SSE via realtime_manager, event_broadcaster, realtime_auth
+    └── storage/                  # File storage service
 
 ui/                               # React + TypeScript Admin UI
 ├── src/
@@ -120,7 +120,7 @@ ui/                               # React + TypeScript Admin UI
 
 - Domain layer has ZERO dependencies on FastAPI or infrastructure
 - Infrastructure layer contains ALL external dependencies
-- Repository pattern abstracts data access (18+ repositories)
+- Repository pattern abstracts data access (20 repositories)
 - SQLAlchemy event listeners trigger hooks on model changes
 
 ## Multi-Tenancy Model
@@ -246,6 +246,7 @@ status in ["draft", "published"]
 - Config resolution: account-level config → system-level fallback
 - All sensitive config values encrypted at rest
 - Built-in providers marked with `is_builtin` flag (cannot be deleted)
+- `is_default` flag per (category, account_id) designates the active default provider; indexed via `ix_configurations_is_default`
 - **Verified providers**: Some providers (e.g., Google OAuth) are marked with a verified badge in the UI indicating they have been manually tested
 
 ## API Structure
@@ -269,6 +270,10 @@ status in ["draft", "published"]
 ├── /admin/                     # Admin API (system/config management)
 ├── /oauth/                     # OAuth flow endpoints
 ├── /saml/                      # SAML flow endpoints
+├── /collection-rules/          # Collection-level access rule management
+├── /email-templates/           # Email template management
+├── /files/                     # File upload/download
+├── /realtime/                  # WebSocket (/ws) and SSE (/events) endpoints
 └── /{collection}/              # Dynamic collection CRUD (records_router)
 ```
 
@@ -277,6 +282,8 @@ status in ["draft", "published"]
 ## Testing
 
 **Tools**: pytest, pytest-asyncio, httpx AsyncClient with ASGITransport
+
+**Test directories**: `tests/unit/`, `tests/integration/`, `tests/security/`, `tests/infrastructure/`, `tests/verification/`
 
 **Fixtures** (in `tests/conftest.py`):
 

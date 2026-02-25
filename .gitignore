@@ -101,6 +101,7 @@ tests/security-reports/
 !docs/*
 !README.md
 !CLAUDE.md
+!AGENTS.md
 
 *.pdf
 
