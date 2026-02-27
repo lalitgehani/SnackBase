@@ -155,6 +155,42 @@ class TestProviderRegistration:
         assert email_password.is_builtin is True
 
     @pytest.mark.asyncio
+    async def test_local_storage_provider_registered(self, client):
+        """Test that local storage provider is registered on startup."""
+        from snackbase.infrastructure.api.app import app as main_app
+        config_registry = main_app.state.config_registry
+
+        provider_def = config_registry.get_provider_definition(
+            category="storage_providers",
+            provider_name="local",
+        )
+
+        assert provider_def is not None
+        assert provider_def.category == "storage_providers"
+        assert provider_def.provider_name == "local"
+        assert provider_def.display_name == "Local Filesystem"
+        assert provider_def.is_builtin is True
+
+    @pytest.mark.asyncio
+    async def test_s3_storage_provider_registered(self, client):
+        """Test that S3 storage provider is registered on startup."""
+        from snackbase.infrastructure.api.app import app as main_app
+        config_registry = main_app.state.config_registry
+
+        provider_def = config_registry.get_provider_definition(
+            category="storage_providers",
+            provider_name="s3",
+        )
+
+        assert provider_def is not None
+        assert provider_def.category == "storage_providers"
+        assert provider_def.provider_name == "s3"
+        assert provider_def.display_name == "Amazon S3"
+        assert provider_def.is_builtin is True
+        assert "bucket" in provider_def.config_schema["properties"]
+        assert "region" in provider_def.config_schema["properties"]
+
+    @pytest.mark.asyncio
     async def test_builtin_provider_cannot_be_deleted(self, db_session):
         """Test that attempting to delete a built-in provider raises ValueError."""
         # This test verifies the logic without needing the full app context
@@ -212,6 +248,5 @@ class TestProviderRegistration:
             except Exception:
                 await session.rollback()
                 raise
-
 
 

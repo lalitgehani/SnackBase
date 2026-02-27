@@ -569,6 +569,10 @@ async def register_builtin_providers(app: FastAPI) -> None:
         GenericSAMLProvider,
         OktaSAMLProvider,
     )
+    from snackbase.infrastructure.configuration.providers.storage import (
+        LocalStorageConfiguration,
+        S3StorageConfiguration,
+    )
     from snackbase.infrastructure.configuration.providers.system import SystemConfiguration
     from snackbase.infrastructure.persistence.database import get_db_manager
     from snackbase.infrastructure.security.encryption import EncryptionService
@@ -639,6 +643,28 @@ async def register_builtin_providers(app: FastAPI) -> None:
             logo_url=system_config.logo_url,
             config_schema=system_config.config_schema,
             is_builtin=system_config.is_builtin,
+        )
+
+        # Register Local Storage provider
+        local_storage_provider = LocalStorageConfiguration()
+        config_registry.register_provider_definition(
+            category=local_storage_provider.category,
+            provider_name=local_storage_provider.provider_name,
+            display_name=local_storage_provider.display_name,
+            logo_url=local_storage_provider.logo_url,
+            config_schema=local_storage_provider.config_schema,
+            is_builtin=local_storage_provider.is_builtin,
+        )
+
+        # Register S3 Storage provider
+        s3_storage_provider = S3StorageConfiguration()
+        config_registry.register_provider_definition(
+            category=s3_storage_provider.category,
+            provider_name=s3_storage_provider.provider_name,
+            display_name=s3_storage_provider.display_name,
+            logo_url=s3_storage_provider.logo_url,
+            config_schema=s3_storage_provider.config_schema,
+            is_builtin=s3_storage_provider.is_builtin,
         )
 
         # Register Google OAuth provider
@@ -726,6 +752,8 @@ async def register_builtin_providers(app: FastAPI) -> None:
                 aws_ses_provider.provider_name,
                 resend_provider.provider_name,
                 system_config.provider_name,
+                local_storage_provider.provider_name,
+                s3_storage_provider.provider_name,
                 google_oauth_handler.provider_name,
                 github_oauth_handler.provider_name,
                 microsoft_oauth_handler.provider_name,

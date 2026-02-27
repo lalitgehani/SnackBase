@@ -1,11 +1,18 @@
 """Integration tests for file storage functionality."""
 
 import json
+import uuid
 from io import BytesIO
+from unittest import mock
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from snackbase.core.config import get_settings
+from snackbase.infrastructure.persistence.models.configuration import ConfigurationModel
+from snackbase.infrastructure.security.encryption import EncryptionService
 
 
 @pytest.mark.asyncio
@@ -250,3 +257,109 @@ async def test_file_field_validation_invalid_metadata(
     # Check that validation error is present in details field
     assert "details" in response_data
     assert any("missing required fields" in err["message"].lower() for err in response_data["details"])
+
+
+@pytest.mark.asyncio
+async def test_upload_and_download_file_with_s3_default(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    superadmin_token: str,
+):
+    """Test upload/download flow when S3 is configured as system default provider."""
+    system_account_id = "00000000-0000-0000-0000-000000000000"
+    settings = get_settings()
+    encryption_service = EncryptionService(settings.encryption_key)
+
+    # Clear existing storage defaults so S3 can be set as default.
+    existing_storage_configs_result = await db_session.execute(
+        select(ConfigurationModel).where(
+            ConfigurationModel.category == "storage_providers",
+            ConfigurationModel.account_id == system_account_id,
+            ConfigurationModel.is_system == True,  # noqa: E712
+        )
+    )
+    for config_model in existing_storage_configs_result.scalars().all():
+        config_model.is_default = False
+
+    s3_config_result = await db_session.execute(
+        select(ConfigurationModel).where(
+            ConfigurationModel.category == "storage_providers",
+            ConfigurationModel.account_id == system_account_id,
+            ConfigurationModel.provider_name == "s3",
+            ConfigurationModel.is_system == True,  # noqa: E712
+        )
+    )
+    s3_config = s3_config_result.scalar_one_or_none()
+    encrypted_config = encryption_service.encrypt_dict(
+        {
+            "bucket": "test-bucket",
+            "region": "us-east-1",
+            "access_key_id": "AKIATEST",
+            "secret_access_key": "secret",
+        }
+    )
+    if s3_config is None:
+        s3_config = ConfigurationModel(
+            id=str(uuid.uuid4()),
+            account_id=system_account_id,
+            category="storage_providers",
+            provider_name="s3",
+            display_name="Amazon S3",
+            config=encrypted_config,
+            enabled=True,
+            is_system=True,
+            is_default=True,
+        )
+        db_session.add(s3_config)
+    else:
+        s3_config.config = encrypted_config
+        s3_config.enabled = True
+        s3_config.is_default = True
+
+    await db_session.commit()
+
+    stored_objects: dict[tuple[str, str], tuple[bytes, str]] = {}
+
+    class FakeS3Client:
+        def put_object(self, Bucket: str, Key: str, Body: bytes, ContentType: str) -> None:
+            stored_objects[(Bucket, Key)] = (Body, ContentType)
+
+        def get_object(self, Bucket: str, Key: str) -> dict:
+            if (Bucket, Key) not in stored_objects:
+                from botocore.exceptions import ClientError
+
+                raise ClientError(
+                    {"Error": {"Code": "NoSuchKey", "Message": "Not found"}},
+                    "GetObject",
+                )
+
+            payload, content_type = stored_objects[(Bucket, Key)]
+            return {"Body": BytesIO(payload), "ContentType": content_type}
+
+        def head_bucket(self, Bucket: str) -> None:
+            del Bucket
+
+    fake_client = FakeS3Client()
+
+    with mock.patch(
+        "snackbase.infrastructure.storage.s3_storage_provider.boto3.client",
+        return_value=fake_client,
+    ):
+        file_content = b"s3 file content"
+        files = {"file": ("cloud.txt", BytesIO(file_content), "text/plain")}
+        upload_response = await client.post(
+            "/api/v1/files/upload",
+            headers={"Authorization": f"Bearer {superadmin_token}"},
+            files=files,
+        )
+
+        assert upload_response.status_code == 201
+        uploaded_path = upload_response.json()["file"]["path"]
+        assert uploaded_path.startswith("s3/00000000-0000-0000-0000-000000000000/")
+
+        download_response = await client.get(
+            f"/api/v1/files/{uploaded_path}",
+            headers={"Authorization": f"Bearer {superadmin_token}"},
+        )
+        assert download_response.status_code == 200
+        assert download_response.content == file_content

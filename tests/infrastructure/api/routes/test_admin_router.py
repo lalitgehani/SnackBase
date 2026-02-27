@@ -458,3 +458,139 @@ async def test_disable_clears_default(
     await db_session.refresh(config)
     assert config.enabled is False
     assert config.is_default is False
+
+
+@pytest.mark.asyncio
+async def test_create_storage_configuration_rejects_account_scope(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    superadmin_token: str,
+):
+    """Storage providers are system-level only and cannot be created for accounts."""
+    account = AccountModel(
+        id="acc_storage_scope",
+        account_code="ST0001",
+        name="Storage Scope Account",
+        slug="storage-scope-account",
+    )
+    db_session.add(await db_session.merge(account))
+    await db_session.commit()
+
+    response = await client.post(
+        "/api/v1/admin/configuration",
+        json={
+            "category": "storage_providers",
+            "provider_name": "s3",
+            "display_name": "S3 Account Storage",
+            "account_id": account.id,
+            "config": {
+                "bucket": "bucket",
+                "region": "us-east-1",
+                "access_key_id": "key",
+                "secret_access_key": "secret",
+            },
+        },
+        headers={"Authorization": f"Bearer {superadmin_token}"},
+    )
+
+    assert response.status_code == 400
+    assert "system level" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_update_account_level_storage_configuration_rejected(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    superadmin_token: str,
+):
+    """Account-level storage configs cannot be updated via admin endpoints."""
+    enc_service = EncryptionService("test-key-must-be-32-bytes-long!!!!")
+    account = AccountModel(
+        id="acc_storage_update",
+        account_code="ST0002",
+        name="Storage Update Account",
+        slug="storage-update-account",
+    )
+    db_session.add(await db_session.merge(account))
+    await db_session.flush()
+
+    config = ConfigurationModel(
+        id=str(uuid.uuid4()),
+        account_id=account.id,
+        category="storage_providers",
+        provider_name="s3",
+        display_name="S3 Account Storage",
+        config=enc_service.encrypt_dict(
+            {
+                "bucket": "bucket",
+                "region": "us-east-1",
+                "access_key_id": "key",
+                "secret_access_key": "secret",
+            }
+        ),
+        enabled=True,
+        is_system=False,
+    )
+    db_session.add(config)
+    await db_session.commit()
+
+    response = await client.patch(
+        f"/api/v1/admin/configuration/{config.id}",
+        json={"enabled": False},
+        headers={"Authorization": f"Bearer {superadmin_token}"},
+    )
+    assert response.status_code == 400
+    assert "system level" in response.json()["detail"].lower()
+
+    response = await client.patch(
+        f"/api/v1/admin/configuration/{config.id}/values",
+        json={"bucket": "new-bucket"},
+        headers={"Authorization": f"Bearer {superadmin_token}"},
+    )
+    assert response.status_code == 400
+    assert "system level" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_set_default_account_level_storage_configuration_rejected(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    superadmin_token: str,
+):
+    """Account-level storage configs cannot be marked default."""
+    enc_service = EncryptionService("test-key-must-be-32-bytes-long!!!!")
+    account = AccountModel(
+        id="acc_storage_default",
+        account_code="ST0003",
+        name="Storage Default Account",
+        slug="storage-default-account",
+    )
+    db_session.add(await db_session.merge(account))
+    await db_session.flush()
+
+    config = ConfigurationModel(
+        id=str(uuid.uuid4()),
+        account_id=account.id,
+        category="storage_providers",
+        provider_name="s3",
+        display_name="S3 Account Storage",
+        config=enc_service.encrypt_dict(
+            {
+                "bucket": "bucket",
+                "region": "us-east-1",
+                "access_key_id": "key",
+                "secret_access_key": "secret",
+            }
+        ),
+        enabled=True,
+        is_system=False,
+    )
+    db_session.add(config)
+    await db_session.commit()
+
+    response = await client.post(
+        f"/api/v1/admin/configuration/{config.id}/set-default",
+        headers={"Authorization": f"Bearer {superadmin_token}"},
+    )
+    assert response.status_code == 400
+    assert "system level" in response.json()["detail"].lower()

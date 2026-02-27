@@ -236,6 +236,12 @@ async def update_configuration_status(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Configuration not found"
             )
 
+        if config.category == "storage_providers" and not config.is_system:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Storage providers can only be configured at system level.",
+            )
+
         config.enabled = enabled
 
         # Automatically clear is_default when disabling a provider
@@ -294,6 +300,12 @@ async def set_configuration_default(
                 detail="Cannot set a disabled provider as default. Enable it first.",
             )
 
+        if config.category == "storage_providers" and not config.is_system:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Storage providers can only be configured at system level.",
+            )
+
         updated = await repo.set_default_config(
             config_id=config_id,
             category=config.category,
@@ -340,6 +352,12 @@ async def unset_configuration_default(
         if not config:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Configuration not found"
+            )
+
+        if config.category == "storage_providers" and not config.is_system:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Storage providers can only be configured at system level.",
             )
 
         await repo.unset_default_config(config_id)
@@ -471,6 +489,12 @@ async def get_configuration_values(
         if not config_model:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Configuration not found")
 
+        if config_model.category == "storage_providers" and not config_model.is_system:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Storage providers can only be configured at system level.",
+            )
+
         registry = request.app.state.config_registry
         values = registry.encryption_service.decrypt_dict(config_model.config)
 
@@ -509,6 +533,12 @@ async def update_configuration_values(
         if not config_model:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Configuration not found")
 
+        if config_model.category == "storage_providers" and not config_model.is_system:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Storage providers can only be configured at system level.",
+            )
+
         registry = request.app.state.config_registry
         
         # Merge values, preserving masked secrets if not updated
@@ -530,6 +560,8 @@ async def update_configuration_values(
         registry._invalidate_cache(config_model.category, config_model.account_id, config_model.provider_name)
 
         return {"status": "success"}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Failed to update configuration values", error=str(e))
         raise HTTPException(
@@ -558,6 +590,12 @@ async def create_configuration(
         # Account ID defaults to system account if not provided
         account_id = data.get("account_id", registry.SYSTEM_ACCOUNT_ID)
         is_system = account_id == registry.SYSTEM_ACCOUNT_ID
+
+        if data["category"] == "storage_providers" and not is_system:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Storage providers can only be configured at system level.",
+            )
 
         repo = ConfigurationRepository(db)
         new_config = await registry.create_config(
@@ -639,6 +677,51 @@ async def test_provider_connection(
             ResendProvider,
             ResendSettings,
         )
+        from snackbase.infrastructure.storage.local_storage_provider import (
+            LocalStorageProvider,
+        )
+        from snackbase.infrastructure.storage.s3_storage_provider import (
+            S3StorageProvider,
+            S3StorageSettings,
+        )
+
+        # Handle storage providers
+        if category == "storage_providers":
+            if provider_name == "local":
+                try:
+                    local_provider = LocalStorageProvider()
+                    success, message = await asyncio.wait_for(
+                        local_provider.test_connection(),
+                        timeout=10.0
+                    )
+                    return {"success": success, "message": message or "Local storage is available"}
+                except asyncio.TimeoutError:
+                    return {
+                        "success": False,
+                        "message": "Local storage connection test timed out after 10 seconds.",
+                    }
+                except Exception as e:
+                    return {"success": False, "message": f"Local storage test failed: {str(e)}"}
+
+            elif provider_name == "s3":
+                try:
+                    s3_settings = S3StorageSettings(**config_values)
+                    s3_provider = S3StorageProvider(s3_settings)
+                    success, message = await asyncio.wait_for(
+                        s3_provider.test_connection(),
+                        timeout=10.0
+                    )
+                    return {"success": success, "message": message or "S3 connection successful"}
+                except asyncio.TimeoutError:
+                    return {
+                        "success": False,
+                        "message": (
+                            "Connection test timed out after 10 seconds. "
+                            "Check your network or AWS credentials."
+                        ),
+                    }
+                except Exception as e:
+                    return {"success": False, "message": f"S3 storage test failed: {str(e)}"}
         
         # Handle email providers
         if category == "email_providers":

@@ -46,7 +46,9 @@ export const AddProviderModal = ({
                             p.provider_name !== "email_password" &&
                             !existingConfigs.some((ec) => ec.provider_name === p.provider_name) &&
                             // System settings are only applicable to system level (no accountId)
-                            !(p.category === 'system_settings' && accountId)
+                            !(p.category === 'system_settings' && accountId) &&
+                            // Storage providers are system-level only
+                            !(p.category === 'storage_providers' && accountId)
                     );
 
                     setAvailableProviders(filtered);
@@ -64,7 +66,7 @@ export const AddProviderModal = ({
             loadProviders();
             setSelectedProvider(null);
         }
-    }, [open, category, existingConfigs, toast]);
+    }, [open, category, accountId, existingConfigs, toast]);
 
     const handleSuccess = () => {
         onConfigCreated();

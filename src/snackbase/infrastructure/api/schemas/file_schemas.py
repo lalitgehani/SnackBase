@@ -9,7 +9,13 @@ class FileMetadataResponse(BaseModel):
     filename: str = Field(..., description="Original filename")
     size: int = Field(..., description="File size in bytes")
     mime_type: str = Field(..., description="MIME type of the file")
-    path: str = Field(..., description="Relative path to the file (account_id/uuid_filename)")
+    path: str = Field(
+        ...,
+        description=(
+            "Relative storage path. Local files use account_id/uuid_filename. "
+            "S3 files use s3/account_id/uuid_filename."
+        ),
+    )
 
 
 class FileUploadResponse(BaseModel):

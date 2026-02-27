@@ -1,15 +1,17 @@
 """File storage API endpoints for uploading and downloading files."""
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.core.logging import get_logger
-from snackbase.domain.services.file_storage_service import FileStorageService
 from snackbase.infrastructure.api.dependencies import CurrentUser, get_current_user
 from snackbase.infrastructure.api.schemas.file_schemas import (
     FileMetadataResponse,
     FileUploadResponse,
 )
+from snackbase.infrastructure.persistence.database import get_db_session
+from snackbase.infrastructure.storage.storage_service import StorageService
 
 logger = get_logger(__name__)
 
@@ -26,6 +28,7 @@ router = APIRouter(tags=["files"])
 async def upload_file(
     file: UploadFile = File(..., description="File to upload"),
     current_user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
 ) -> FileUploadResponse:
     """Upload a file to storage.
 
@@ -44,8 +47,8 @@ async def upload_file(
     content = await file.read()
     size = len(content)
 
-    # Create file storage service
-    storage_service = FileStorageService()
+    # Create storage service (resolves active configured provider)
+    storage_service = StorageService(db)
 
     try:
         # Save file (this validates size and MIME type)
@@ -104,14 +107,14 @@ async def upload_file(
 
 @router.get(
     "/{file_path:path}",
-    response_class=FileResponse,
     summary="Download a file",
     description="Download a file from storage. Requires authentication and proper permissions.",
 )
 async def download_file(
     file_path: str,
     current_user: CurrentUser = Depends(get_current_user),
-) -> FileResponse:
+    db: AsyncSession = Depends(get_db_session),
+) -> Response:
     """Download a file from storage.
 
     The file path should be in the format: {account_id}/{uuid_filename}
@@ -120,12 +123,11 @@ async def download_file(
     """
     account_id = current_user.account_id
 
-    # Create file storage service
-    storage_service = FileStorageService()
+    # Create storage service (routes by file path/provider)
+    storage_service = StorageService(db)
 
     try:
-        # Get absolute file path (validates account ownership and existence)
-        absolute_path = storage_service.get_file_path(account_id, file_path)
+        stored_file = await storage_service.get_file(account_id, file_path)
 
         logger.info(
             "File downloaded",
@@ -134,10 +136,22 @@ async def download_file(
             user_id=current_user.user_id,
         )
 
-        # Return file
-        return FileResponse(
-            path=str(absolute_path),
-            filename=absolute_path.name,
+        if stored_file.local_path is not None:
+            return FileResponse(
+                path=str(stored_file.local_path),
+                filename=stored_file.filename or stored_file.local_path.name,
+                media_type=stored_file.mime_type,
+            )
+
+        if stored_file.content is None:
+            raise RuntimeError("Storage provider returned an empty file response")
+
+        download_name = stored_file.filename or "download"
+        headers = {"Content-Disposition": f'attachment; filename="{download_name}"'}
+        return Response(
+            content=stored_file.content,
+            media_type=stored_file.mime_type or "application/octet-stream",
+            headers=headers,
         )
 
     except ValueError as e:

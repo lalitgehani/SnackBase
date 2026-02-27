@@ -1,9 +1,8 @@
 import pytest
-import respx
 import httpx
+import respx
 from httpx import AsyncClient
-from snackbase.infrastructure.api.app import app
-from snackbase.infrastructure.configuration.providers.oauth.google import GoogleOAuthHandler
+from unittest import mock
 
 @pytest.mark.asyncio
 @respx.mock
@@ -159,3 +158,86 @@ async def test_saml_connection_metadata_generation(client: AsyncClient, superadm
     result = response.json()
     assert result["success"] is True
     assert "SAML configuration is valid" in result["message"]
+
+
+@pytest.mark.asyncio
+async def test_storage_connection_local_success(client: AsyncClient, superadmin_token: str):
+    data = {
+        "category": "storage_providers",
+        "provider_name": "local",
+        "config": {},
+    }
+
+    response = await client.post(
+        "/api/v1/admin/configuration/test-connection",
+        json=data,
+        headers={"Authorization": f"Bearer {superadmin_token}"},
+    )
+
+    assert response.status_code == 200
+    result = response.json()
+    assert result["success"] is True
+    assert "local storage" in result["message"].lower()
+
+
+@pytest.mark.asyncio
+async def test_storage_connection_s3_success(client: AsyncClient, superadmin_token: str):
+    data = {
+        "category": "storage_providers",
+        "provider_name": "s3",
+        "config": {
+            "bucket": "test-bucket",
+            "region": "us-east-1",
+            "access_key_id": "AKIATEST",
+            "secret_access_key": "secret",
+        },
+    }
+
+    with mock.patch("snackbase.infrastructure.storage.s3_storage_provider.boto3.client") as mock_client:
+        client_instance = mock.MagicMock()
+        mock_client.return_value = client_instance
+
+        response = await client.post(
+            "/api/v1/admin/configuration/test-connection",
+            json=data,
+            headers={"Authorization": f"Bearer {superadmin_token}"},
+        )
+
+    assert response.status_code == 200
+    result = response.json()
+    assert result["success"] is True
+    assert "bucket 'test-bucket'" in result["message"].lower()
+
+
+@pytest.mark.asyncio
+async def test_storage_connection_s3_success_with_endpoint_url(
+    client: AsyncClient, superadmin_token: str
+):
+    data = {
+        "category": "storage_providers",
+        "provider_name": "s3",
+        "config": {
+            "bucket": "test-bucket",
+            "region": "us-east-1",
+            "access_key_id": "AKIATEST",
+            "secret_access_key": "secret",
+            "endpoint_url": "http://localhost:4566",
+        },
+    }
+
+    with mock.patch("snackbase.infrastructure.storage.s3_storage_provider.boto3.client") as mock_client:
+        client_instance = mock.MagicMock()
+        mock_client.return_value = client_instance
+
+        response = await client.post(
+            "/api/v1/admin/configuration/test-connection",
+            json=data,
+            headers={"Authorization": f"Bearer {superadmin_token}"},
+        )
+
+    assert response.status_code == 200
+    result = response.json()
+    assert result["success"] is True
+    assert "bucket 'test-bucket'" in result["message"].lower()
+    _args, kwargs = mock_client.call_args
+    assert kwargs.get("endpoint_url") == "http://localhost:4566"

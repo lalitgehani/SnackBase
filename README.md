@@ -73,7 +73,7 @@ SnackBase is a Python/FastAPI-based BaaS providing auto-generated REST APIs, mul
 - [x] F4.5: File Storage Engine (Local filesystem with account-scoped storage)
 - [x] F4.6: Basic Query Filters (Pagination, sorting, equality filters)
 - [ ] F4.7: Advanced Query Filters (LIKE, IN, range queries, complex boolean logic)
-- [ ] Cloud Storage Providers (S3, Azure Blob, GCS)
+- [~] Cloud Storage Providers (Local + Amazon S3 implemented, Azure Blob/GCS planned)
 
 **Phase 5: Enterprise Features** (40% Complete)
 
@@ -173,7 +173,7 @@ open http://localhost:8000
 - **Macros Management** - SQL macro editor with test execution
 - **Migrations Viewer** - Alembic revision history and status
 - **Audit Logs** - Filterable, exportable audit trail with PII masking
-- **Configuration Dashboard** - System/account-level provider configs (OAuth, SAML, Email)
+- **Configuration Dashboard** - System/account-level provider configs (OAuth, SAML, Email, Storage)
 - **Email Templates** - Customizable email template management
 
 ### Additional Features
@@ -183,8 +183,17 @@ open http://localhost:8000
 - **Security Headers** - Configurable HSTS, CSP, and Permissions-Policy headers for enhanced security
 - **Two-Phase Collection Deletion** - Safe deletion with confirmation to prevent accidental data loss
 - **Rate Limiting** - IP-based and user-based rate limiting, configurable per endpoint, superadmin bypass
-- **File Storage** - Local filesystem storage with account-scoped directories, UUID-based filenames, size validation (10MB default), and MIME type validation
+- **File Storage** - Configurable system-level storage provider with local filesystem (default) or Amazon S3, account-scoped paths, UUID-based filenames, size validation (10MB default), and MIME type validation
 - **Real-time Updates** - WebSocket and SSE endpoints for live data updates on CRUD operations
+
+### Storage Providers
+
+- **System-level only** - Storage provider selection is managed at system scope from the Configuration Dashboard
+- **Built-in providers** - `local` (default) and `s3` (Amazon S3)
+- **Hybrid file paths**:
+  - Local files: `account_id/uuid_filename`
+  - S3 files: `s3/account_id/uuid_filename`
+- **Compatibility** - Existing local file paths remain valid after switching the system default provider
 
 ### API & Testing
 
