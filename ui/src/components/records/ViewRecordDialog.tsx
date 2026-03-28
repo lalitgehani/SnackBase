@@ -6,6 +6,7 @@
 import { AppDialog } from '@/components/common/AppDialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { ExternalLink } from 'lucide-react';
 import type { FieldDefinition } from '@/services/collections.service';
 import type { RecordData } from '@/types/records.types';
 import { shouldMaskField, maskPiiValue } from '@/lib/form-helpers';
@@ -17,6 +18,27 @@ interface ViewRecordDialogProps {
 	collectionName: string;
 	record: RecordData | null;
 	hasPiiAccess?: boolean;
+	referenceRecords?: Record<string, RecordData[]>;
+	onNavigateToRecord?: (collection: string) => void;
+}
+
+/** Best display value for a referenced record. */
+function getRefDisplayValue(record: RecordData): string {
+	if (typeof record['name'] === 'string' && record['name']) return record['name'];
+	const systemKeys = ['id', 'account_id', 'created_at', 'updated_at', 'created_by', 'updated_by'];
+	const key = Object.keys(record).find(
+		(k) => !systemKeys.includes(k) && typeof record[k] === 'string' && record[k],
+	);
+	if (key) return String(record[key]);
+	return String(record.id ?? '').slice(0, 12) + '…';
+}
+
+/** Non-system fields, up to `limit`. */
+function getUserFields(record: RecordData, limit = 3): [string, unknown][] {
+	const systemKeys = ['id', 'account_id', 'created_at', 'updated_at', 'created_by', 'updated_by'];
+	return Object.entries(record)
+		.filter(([key]) => !systemKeys.includes(key))
+		.slice(0, limit);
 }
 
 export default function ViewRecordDialog({
@@ -26,6 +48,8 @@ export default function ViewRecordDialog({
 	collectionName,
 	record,
 	hasPiiAccess = false,
+	referenceRecords = {},
+	onNavigateToRecord,
 }: ViewRecordDialogProps) {
 	const formatDate = (dateString: string) => {
 		return new Date(dateString).toLocaleString('en-US', {
@@ -36,6 +60,75 @@ export default function ViewRecordDialog({
 			minute: '2-digit',
 			second: '2-digit',
 		});
+	};
+
+	const renderReferenceField = (field: FieldDefinition, value: unknown) => {
+		const id = String(value);
+		const collectionCache = referenceRecords[field.collection || ''] ?? [];
+		const refRecord = collectionCache.find((r) => r.id === id) ?? null;
+
+		if (!refRecord) {
+			// Not in cache — show ID with a "Deleted?" hint
+			return (
+				<div className="flex items-center gap-2">
+					<span className="font-mono text-xs text-muted-foreground break-all">{id}</span>
+					<Badge variant="secondary" className="text-xs shrink-0">Deleted?</Badge>
+				</div>
+			);
+		}
+
+		const displayValue = getRefDisplayValue(refRecord);
+		const userFields = getUserFields(refRecord);
+
+		return (
+			<div className="border rounded-lg p-3 bg-muted/30 space-y-2">
+				{/* Header row */}
+				<div className="flex items-center justify-between gap-2">
+					<div className="flex items-center gap-2 min-w-0">
+						<span className="font-medium text-sm truncate">{displayValue}</span>
+						{field.collection && (
+							<Badge variant="outline" className="text-xs shrink-0">{field.collection}</Badge>
+						)}
+					</div>
+					{onNavigateToRecord && field.collection && (
+						<Button
+							variant="ghost"
+							size="sm"
+							className="h-7 gap-1 shrink-0"
+							onClick={() => {
+								onOpenChange(false);
+								onNavigateToRecord(field.collection!);
+							}}
+							title={`Open ${field.collection} records`}
+						>
+							<ExternalLink className="h-3 w-3" />
+							Open
+						</Button>
+					)}
+				</div>
+
+				{/* ID */}
+				<p className="font-mono text-xs text-muted-foreground break-all">{id}</p>
+
+				{/* Key fields */}
+				{userFields.length > 0 && (
+					<div className="space-y-1 pt-1 border-t border-border/50">
+						{userFields.map(([key, val]) => (
+							<div key={key} className="flex justify-between gap-2 text-sm">
+								<span className="text-muted-foreground">{key}:</span>
+								<span className="font-medium truncate max-w-[200px]">
+									{val === null || val === undefined ? (
+										<span className="italic text-muted-foreground">null</span>
+									) : (
+										String(val)
+									)}
+								</span>
+							</div>
+						))}
+					</div>
+				)}
+			</div>
+		);
 	};
 
 	const renderFieldValue = (field: FieldDefinition, value: unknown) => {
@@ -62,13 +155,9 @@ export default function ViewRecordDialog({
 			);
 		}
 
-		// Handle reference fields
+		// Handle reference fields — mini-card
 		if (field.type === 'reference') {
-			return (
-				<Badge variant="outline" className="font-mono text-xs">
-					{String(value)}
-				</Badge>
-			);
+			return renderReferenceField(field, value);
 		}
 
 		// Handle JSON

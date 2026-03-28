@@ -6,9 +6,10 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Eye, Pencil, Pin, PinOff, Trash2 } from 'lucide-react';
 import type { FieldDefinition } from '@/services/collections.service';
-import type { RecordListItem } from '@/types/records.types';
+import type { RecordData, RecordListItem } from '@/types/records.types';
 import { shouldMaskField, maskPiiValue } from '@/lib/form-helpers';
 import { DataTable, type Column, type DispatchPagination, type DispatchSorting } from '@/components/common/DataTable';
 import { useAuthStore } from '@/stores/auth.store';
@@ -25,6 +26,7 @@ interface RecordsTableProps {
 	onEdit: (record: RecordListItem) => void;
 	onDelete: (record: RecordListItem) => void;
 	hasPiiAccess?: boolean;
+	referenceRecords?: Record<string, RecordData[]>;
 
 	// Pagination props
 	totalItems: number;
@@ -33,6 +35,88 @@ interface RecordsTableProps {
 	onPageChange: (page: number) => void;
 	onPageSizeChange: (pageSize: number) => void;
 }
+
+/** Returns the best display value for a referenced record. */
+function getRefDisplayValue(record: RecordData): string {
+	if (typeof record['name'] === 'string' && record['name']) return record['name'];
+	const systemKeys = ['id', 'account_id', 'created_at', 'updated_at', 'created_by', 'updated_by'];
+	const key = Object.keys(record).find(
+		(k) => !systemKeys.includes(k) && typeof record[k] === 'string' && record[k],
+	);
+	if (key) return String(record[key]);
+	return String(record.id ?? '').slice(0, 8) + '…';
+}
+
+/** Non-system fields of a record, up to `limit`. */
+function getUserFields(record: RecordData, limit = 4): [string, unknown][] {
+	const systemKeys = ['id', 'account_id', 'created_at', 'updated_at', 'created_by', 'updated_by'];
+	return Object.entries(record)
+		.filter(([key]) => !systemKeys.includes(key))
+		.slice(0, limit);
+}
+
+// ---------------------------------------------------------------------------
+// ReferenceCell — renders a single reference field cell
+// ---------------------------------------------------------------------------
+
+interface ReferenceCellProps {
+	id: string;
+	refRecord: RecordData | null;
+}
+
+function ReferenceCell({ id, refRecord }: ReferenceCellProps) {
+	const [open, setOpen] = useState(false);
+
+	if (!refRecord) {
+		return (
+			<div className="flex items-center gap-1">
+				<span className="text-muted-foreground font-mono text-xs">{id.slice(0, 8)}…</span>
+				<Badge variant="secondary" className="text-xs">Deleted</Badge>
+			</div>
+		);
+	}
+
+	const displayValue = getRefDisplayValue(refRecord);
+
+	return (
+		<Popover open={open} onOpenChange={setOpen}>
+			<PopoverTrigger asChild>
+				<button
+					className="text-sm text-primary underline-offset-2 hover:underline cursor-pointer truncate max-w-[160px] text-left"
+					title={displayValue}
+				>
+					{displayValue}
+				</button>
+			</PopoverTrigger>
+			<PopoverContent className="w-64" align="start">
+				<div className="space-y-2">
+					<p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+						Referenced Record
+					</p>
+					<p className="font-mono text-xs text-muted-foreground break-all">{refRecord.id as string}</p>
+					<div className="space-y-1 pt-1 border-t">
+						{getUserFields(refRecord).map(([key, val]) => (
+							<div key={key} className="flex justify-between gap-2 text-sm">
+								<span className="text-muted-foreground shrink-0">{key}:</span>
+								<span className="font-medium truncate max-w-[130px]">
+									{val === null || val === undefined ? (
+										<span className="italic text-muted-foreground">null</span>
+									) : (
+										String(val)
+									)}
+								</span>
+							</div>
+						))}
+					</div>
+				</div>
+			</PopoverContent>
+		</Popover>
+	);
+}
+
+// ---------------------------------------------------------------------------
+// RecordsTable
+// ---------------------------------------------------------------------------
 
 export default function RecordsTable({
 	records,
@@ -44,6 +128,7 @@ export default function RecordsTable({
 	onEdit,
 	onDelete,
 	hasPiiAccess = false,
+	referenceRecords = {},
 	totalItems,
 	page,
 	pageSize,
@@ -99,13 +184,12 @@ export default function RecordsTable({
 			);
 		}
 
-		// Handle reference fields
+		// Handle reference fields — show display value from cache
 		if (field.type === 'reference') {
-			return (
-				<Badge variant="outline" className="font-mono text-xs">
-					{String(value).slice(0, 8)}...
-				</Badge>
-			);
+			const id = String(value);
+			const collectionCache = referenceRecords[field.collection || ''] ?? [];
+			const refRecord = collectionCache.find((r) => r.id === id) ?? null;
+			return <ReferenceCell id={id} refRecord={refRecord} />;
 		}
 
 		// Handle JSON

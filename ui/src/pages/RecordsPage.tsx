@@ -122,6 +122,16 @@ export default function RecordsPage() {
         }
     }, [collection, fetchRecords]);
 
+    // Pre-fetch reference records for all reference fields so the table and view dialog
+    // can display display values without waiting for a dialog to open.
+    useEffect(() => {
+        if (!collection?.schema) return;
+        collection.schema
+            .filter((f) => f.type === 'reference' && f.collection)
+            .forEach((f) => handleFetchReferenceRecords(f.collection!));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [collection?.name]);
+
     const handleSort = (column: string) => {
         if (sortBy === column) {
             setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -201,6 +211,10 @@ export default function RecordsPage() {
         if (!collectionName) throw new Error('Collection name is required');
         await deleteRecord(collectionName, recordId);
         await fetchRecords();
+    };
+
+    const handleNavigateToRecord = (refCollection: string) => {
+        navigate(`/admin/collections/${refCollection}/records`);
     };
 
     const handleApplyFilters = (expression: string, rows: FilterRow[]) => {
@@ -354,6 +368,7 @@ export default function RecordsPage() {
                             onEdit={handleEdit}
                             onDelete={handleDelete}
                             hasPiiAccess={hasPiiAccess}
+                            referenceRecords={referenceRecords}
                             totalItems={total}
                             page={page}
                             pageSize={pageSize}
@@ -416,6 +431,8 @@ export default function RecordsPage() {
                         collectionName={collection.name}
                         record={selectedRecordFull}
                         hasPiiAccess={hasPiiAccess}
+                        referenceRecords={referenceRecords}
+                        onNavigateToRecord={handleNavigateToRecord}
                     />
 
                     <EditRecordDialog
