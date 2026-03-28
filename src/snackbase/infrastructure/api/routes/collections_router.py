@@ -29,6 +29,7 @@ from snackbase.infrastructure.api.schemas.collection_schemas import (
 )
 from snackbase.infrastructure.persistence.database import get_db_session
 from snackbase.infrastructure.persistence.repositories import CollectionRepository
+from snackbase.infrastructure.persistence.repositories.collection_rule_repository import CollectionRuleRepository
 from snackbase.infrastructure.persistence.table_builder import TableBuilder
 
 logger = get_logger(__name__)
@@ -58,6 +59,10 @@ async def list_collections(
     Only superadmins (users in the system account) can list collections.
     """
     collection_repo = CollectionRepository(session)
+    rule_repo = CollectionRuleRepository(session)
+
+    # Fetch public collection IDs in a single query (avoids N+1)
+    public_ids = await rule_repo.get_public_collection_ids()
 
     # Get collections with pagination
     collections, total = await collection_repo.get_all(
@@ -93,6 +98,7 @@ async def list_collections(
                 table_name=table_name,
                 fields_count=len(schema),
                 records_count=records_count,
+                has_public_access=collection.id in public_ids,
                 created_at=collection.created_at,
             )
         )

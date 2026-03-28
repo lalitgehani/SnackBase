@@ -34,6 +34,7 @@ export interface DashboardStats {
   recent_registrations: RecentRegistration[];
   system_health: SystemHealthStats;
   active_sessions: number;
+  public_collections_count: number;
   recent_audit_logs: AuditLogItem[];
 }
 

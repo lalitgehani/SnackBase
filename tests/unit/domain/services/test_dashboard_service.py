@@ -38,6 +38,8 @@ async def test_get_dashboard_stats_with_data(dashboard_service, mock_session):
     ), patch.object(
         dashboard_service.refresh_token_repo, "count_active_sessions", return_value=8
     ), patch.object(
+        dashboard_service.collection_rule_repo, "count_public_collections", return_value=1
+    ), patch.object(
         dashboard_service, "_count_total_records", return_value=100
     ), patch.object(
         dashboard_service, "_get_system_health"
@@ -82,6 +84,7 @@ async def test_get_dashboard_stats_with_data(dashboard_service, mock_session):
         assert result.new_accounts_7d == 2
         assert result.new_users_7d == 3
         assert result.active_sessions == 8
+        assert result.public_collections_count == 1
         assert len(result.recent_registrations) == 1
         assert result.recent_registrations[0].email == "user1@example.com"
         assert result.system_health.database_status == "connected"
@@ -107,6 +110,8 @@ async def test_get_dashboard_stats_empty_database(dashboard_service):
         dashboard_service.collection_repo, "count_all", return_value=0
     ), patch.object(
         dashboard_service.refresh_token_repo, "count_active_sessions", return_value=0
+    ), patch.object(
+        dashboard_service.collection_rule_repo, "count_public_collections", return_value=0
     ), patch.object(
         dashboard_service.audit_log_service, "list_logs", return_value=([], 0)
     ), patch.object(

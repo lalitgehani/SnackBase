@@ -25,6 +25,7 @@ import {
     Plus,
     Activity,
     HardDrive,
+    Globe,
 } from 'lucide-react';
 import AuditLogsTable from '@/components/audit-logs/AuditLogsTable';
 import { DataTable, type Column } from '@/components/common/DataTable';
@@ -188,7 +189,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Metrics Grid - Total Counts */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Total Accounts</CardTitle>
@@ -226,6 +227,20 @@ export default function DashboardPage() {
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold">{stats?.total_records || 0}</div>
+                    </CardContent>
+                </Card>
+
+                <Card
+                    className="cursor-pointer hover:bg-muted/50 transition-colors"
+                    onClick={() => navigate('/admin/collections')}
+                >
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Public Collections</CardTitle>
+                        <Globe className="h-4 w-4 text-green-600" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold text-green-600">{stats?.public_collections_count || 0}</div>
+                        <p className="text-xs text-muted-foreground mt-1">With unauthenticated access</p>
                     </CardContent>
                 </Card>
             </div>

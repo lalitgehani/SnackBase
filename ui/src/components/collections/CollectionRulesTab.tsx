@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { RefreshCw, Save, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Globe, RefreshCw, Save, ShieldAlert, ShieldCheck } from 'lucide-react';
 import RuleEditor from './RuleEditor';
 import FieldPermissionSelector from './FieldPermissionSelector';
 import RuleTesterDialog from './RuleTesterDialog';
@@ -113,6 +114,16 @@ export default function CollectionRulesTab({ collection }: CollectionRulesTabPro
 
     const allFieldNames = collection.schema.map(f => f.name).concat(['id', 'created_at', 'updated_at', 'created_by', 'account_id']);
 
+    const publicOps = (
+        [
+            rules.list_rule === '' && 'List',
+            rules.view_rule === '' && 'View',
+            rules.create_rule === '' && 'Create',
+            rules.update_rule === '' && 'Update',
+            rules.delete_rule === '' && 'Delete',
+        ] as (string | false)[]
+    ).filter((op): op is string => op !== false);
+
     return (
         <div className="space-y-6 pb-20">
             <header className="flex items-center justify-between">
@@ -138,6 +149,16 @@ export default function CollectionRulesTab({ collection }: CollectionRulesTabPro
                 <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-destructive text-sm">
                     {error}
                 </div>
+            )}
+
+            {publicOps.length > 0 && (
+                <Alert className="border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800">
+                    <Globe className="h-4 w-4 text-amber-600" />
+                    <AlertTitle className="text-amber-800 dark:text-amber-400">Public Access Enabled</AlertTitle>
+                    <AlertDescription className="text-amber-700 dark:text-amber-500">
+                        This collection allows unauthenticated access for: <strong>{publicOps.join(', ')}</strong>. Rate limiting applies.
+                    </AlertDescription>
+                </Alert>
             )}
 
             <div className="grid gap-6">

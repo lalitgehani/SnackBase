@@ -55,6 +55,9 @@ class DashboardStats(BaseModel):
     # Active sessions
     active_sessions: int
 
+    # Public collections count
+    public_collections_count: int = Field(default=0, description="Collections with at least one public rule")
+
     # Audit logs
     recent_audit_logs: list[AuditLogResponse]
 

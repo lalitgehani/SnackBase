@@ -353,5 +353,6 @@ See `.env.example` for complete configuration options.
 
 ## General Note
 
-- Run cleanup before running any test using uv run python cleanup_dev.py -y
-- Run all tests using uv run pytest -v
+- Always run cleanup before running any test using uv run python cleanup_dev.py -y
+- Always run all tests to ensure no other feature is breaking using uv run pytest -v
+- Always run cleanup even in between running tests.

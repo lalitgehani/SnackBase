@@ -160,6 +160,7 @@ class CollectionListItem(BaseModel):
     table_name: str = Field(..., description="Physical table name in database")
     fields_count: int = Field(..., description="Number of fields in the schema")
     records_count: int = Field(default=0, description="Number of records in the collection")
+    has_public_access: bool = Field(default=False, description="True if any rule is public (empty string)")
     created_at: datetime = Field(..., description="When the collection was created")
 
     model_config = {"from_attributes": True}

@@ -25,6 +25,7 @@ from snackbase.infrastructure.persistence.repositories import (
     RefreshTokenRepository,
     UserRepository,
 )
+from snackbase.infrastructure.persistence.repositories.collection_rule_repository import CollectionRuleRepository
 
 
 class DashboardService:
@@ -40,6 +41,7 @@ class DashboardService:
         self.account_repo = AccountRepository(session)
         self.user_repo = UserRepository(session)
         self.collection_repo = CollectionRepository(session)
+        self.collection_rule_repo = CollectionRuleRepository(session)
         self.refresh_token_repo = RefreshTokenRepository(session)
         self.audit_log_service = AuditLogService(session)
 
@@ -85,6 +87,9 @@ class DashboardService:
         # Get system health
         system_health = await self._get_system_health()
 
+        # Get public collections count
+        public_collections_count = await self.collection_rule_repo.count_public_collections()
+
         # Get active sessions count
         active_sessions = await self.refresh_token_repo.count_active_sessions()
 
@@ -106,6 +111,7 @@ class DashboardService:
             recent_registrations=recent_registrations,
             system_health=system_health,
             active_sessions=active_sessions,
+            public_collections_count=public_collections_count,
             recent_audit_logs=recent_audit_logs,
         )
 

@@ -33,6 +33,7 @@ export interface CollectionListItem {
   table_name: string;
   fields_count: number;
   records_count: number;
+  has_public_access: boolean;
   created_at: string;
 }
 

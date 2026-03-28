@@ -4,6 +4,7 @@
  */
 
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Eye, Pencil, Trash2, Database } from 'lucide-react';
 import type { CollectionListItem } from '@/services/collections.service';
 import { DataTable, type Column, type DispatchPagination, type DispatchSorting } from '@/components/common/DataTable';
@@ -56,6 +57,16 @@ export default function CollectionsTable({
             accessorKey: 'name',
             sortable: true,
             className: 'font-medium',
+            render: (collection) => (
+                <span className="flex items-center gap-2">
+                    <span className="font-medium">{collection.name}</span>
+                    {collection.has_public_access && (
+                        <Badge variant="outline" className="text-xs border-green-500 text-green-600">
+                            Public
+                        </Badge>
+                    )}
+                </span>
+            ),
         },
         {
             header: 'ID',

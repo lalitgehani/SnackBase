@@ -88,6 +88,48 @@ class CollectionRuleRepository:
         """
         await self.session.delete(rule)
         await self.session.flush()
+    async def count_public_collections(self) -> int:
+        """Count collections with at least one public (empty string) rule.
+
+        Returns:
+            Number of collections with at least one public rule.
+        """
+        from sqlalchemy import func, or_
+
+        result = await self.session.execute(
+            select(func.count(CollectionRuleModel.id)).where(
+                or_(
+                    CollectionRuleModel.list_rule == "",
+                    CollectionRuleModel.view_rule == "",
+                    CollectionRuleModel.create_rule == "",
+                    CollectionRuleModel.update_rule == "",
+                    CollectionRuleModel.delete_rule == "",
+                )
+            )
+        )
+        return result.scalar_one() or 0
+
+    async def get_public_collection_ids(self) -> set[str]:
+        """Return set of collection IDs with at least one public (empty string) rule.
+
+        Returns:
+            Set of collection ID strings.
+        """
+        from sqlalchemy import or_
+
+        result = await self.session.execute(
+            select(CollectionRuleModel.collection_id).where(
+                or_(
+                    CollectionRuleModel.list_rule == "",
+                    CollectionRuleModel.view_rule == "",
+                    CollectionRuleModel.create_rule == "",
+                    CollectionRuleModel.update_rule == "",
+                    CollectionRuleModel.delete_rule == "",
+                )
+            )
+        )
+        return {row[0] for row in result.fetchall()}
+
     async def find_rules_using_macro(self, macro_name: str) -> list[CollectionRuleModel]:
         """Find all collection rules that use a specific macro.
 
