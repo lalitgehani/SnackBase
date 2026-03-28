@@ -234,6 +234,7 @@ status in ["draft", "published"]
 2. **Account-level** - Per-account overrides that take precedence over system defaults
 
 **Key Components**:
+
 - `ConfigurationRegistry` (src/snackbase/core/configuration/config_registry.py) - Central registry for provider definitions and hierarchical resolution with 5-minute cache
 - `ConfigurationModel` - ORM model with encrypted `config` JSON field
 - Provider handlers in `src/snackbase/infrastructure/configuration/providers/`:
@@ -242,6 +243,7 @@ status in ["draft", "published"]
   - `saml/` - SAML providers (Azure AD, Okta, generic)
 
 **Architecture Pattern**:
+
 - Provider definitions registered via `config_registry.register_provider_definition()`
 - Config resolution: account-level config → system-level fallback
 - All sensitive config values encrypted at rest
@@ -348,3 +350,8 @@ See `.env.example` for complete configuration options.
 - **ShadCN**: Use existing components in `ui/src/components/ui/`.
 - Intall new ShadCN components using npx shadcn@latest add {component name}
 - Never create ShadCN component file. Always install using CLI.
+
+## General Note
+
+- Run cleanup before running any test using uv run python cleanup_dev.py -y
+- Run all tests using uv run pytest -v
