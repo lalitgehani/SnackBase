@@ -31,6 +31,10 @@ class TokenType(Enum):
     OR = auto()  # ||
     NOT = auto()  # !
 
+    # Keywords
+    IN = auto()   # IN keyword
+    IS = auto()   # IS keyword
+
     # Punctuation
     LPAREN = auto()
     RPAREN = auto()
@@ -135,12 +139,19 @@ class Lexer:
             result += self.current_char
             self.advance()
 
-        # Check for boolean keywords
-        if result == "true":
+        # Check for keywords (case-insensitive for SQL feel)
+        upper_result = result.upper()
+        if upper_result == "IN":
+            return Token(TokenType.IN, "IN", start_pos)
+        if upper_result == "IS":
+            return Token(TokenType.IS, "IS", start_pos)
+
+        # Check for boolean and null keywords (case-insensitive)
+        if upper_result == "TRUE":
             return Token(TokenType.BOOLEAN, True, start_pos)
-        if result == "false":
+        if upper_result == "FALSE":
             return Token(TokenType.BOOLEAN, False, start_pos)
-        if result == "null":
+        if upper_result == "NULL":
             return Token(TokenType.NULL, None, start_pos)
 
         return Token(TokenType.IDENTIFIER, result, start_pos)

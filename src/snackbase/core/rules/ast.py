@@ -1,6 +1,6 @@
 """Abstract Syntax Tree nodes for rule expressions."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 
@@ -40,4 +40,20 @@ class UnaryOp(Node):
 
     operator: str
     operand: Node
+
+
+@dataclass
+class InOp(Node):
+    """Represents an IN operation (e.g., status IN ('active', 'pending'))."""
+
+    operand: Node
+    values: list[Node] = field(default_factory=list)
+
+
+@dataclass
+class IsNullOp(Node):
+    """Represents IS NULL or IS NOT NULL (e.g., deleted_at IS NULL)."""
+
+    operand: Node
+    is_null: bool  # True = IS NULL, False = IS NOT NULL
 

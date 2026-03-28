@@ -1,6 +1,6 @@
 """Parser for rule expressions - SQL-centric syntax."""
 
-from .ast import BinaryOp, Literal, Node, UnaryOp, Variable
+from .ast import BinaryOp, InOp, IsNullOp, Literal, Node, UnaryOp, Variable
 from .exceptions import RuleSyntaxError
 from .lexer import Lexer, Token, TokenType
 
@@ -62,8 +62,32 @@ class Parser:
         return self.comparison()
 
     def comparison(self) -> Node:
-        """Parse comparison expressions (=, !=, <, >, <=, >=, ~)."""
+        """Parse comparison expressions (=, !=, <, >, <=, >=, ~, IN, IS NULL, IS NOT NULL)."""
         node = self.atom()
+
+        # Handle IN operator: field IN (val1, val2, ...)
+        if self.current_token.type == TokenType.IN:
+            self.consume(TokenType.IN)
+            self.consume(TokenType.LPAREN)
+            values: list[Node] = [self.atom()]
+            while self.current_token.type == TokenType.COMMA:
+                self.consume(TokenType.COMMA)
+                values.append(self.atom())
+            self.consume(TokenType.RPAREN)
+            return InOp(operand=node, values=values)
+
+        # Handle IS NULL / IS NOT NULL
+        if self.current_token.type == TokenType.IS:
+            self.consume(TokenType.IS)
+            if (
+                self.current_token.type == TokenType.IDENTIFIER
+                and str(self.current_token.value).upper() == "NOT"
+            ):
+                self.consume(TokenType.IDENTIFIER)  # consume "NOT"
+                self.consume(TokenType.NULL)
+                return IsNullOp(operand=node, is_null=False)
+            self.consume(TokenType.NULL)
+            return IsNullOp(operand=node, is_null=True)
 
         if self.current_token.type in (
             TokenType.EQ,

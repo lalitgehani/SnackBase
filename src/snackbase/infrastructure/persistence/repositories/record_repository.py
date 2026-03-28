@@ -416,7 +416,7 @@ class RecordRepository:
         limit: int = 30,
         sort_by: str = "created_at",
         descending: bool = True,
-        filters: dict[str, Any] | None = None,
+        user_filter: RuleFilter | None = None,
         rule_filter: RuleFilter | None = None,
     ) -> tuple[list[dict[str, Any]], int]:
         """Find records in a collection with pagination, sorting, and filtering.
@@ -429,19 +429,18 @@ class RecordRepository:
             limit: Maximum number of records to return.
             sort_by: Field to sort by.
             descending: Whether to sort in descending order.
-            filters: Optional dictionary of filter conditions (field=value).
+            user_filter: Optional compiled filter from ?filter= query param.
             rule_filter: Optional rule filter for row-level security.
 
         Returns:
             A tuple containing (list of records, total count).
         """
         table_name = TableBuilder.generate_table_name(collection_name)
-        filters = filters or {}
 
         # 1. Build base query components
         where_clauses = []
-        params = {}
-        
+        params: dict[str, Any] = {}
+
         # Superadmin bypass check (account_id=None)
         if account_id:
             where_clauses.append('r."account_id" = :account_id')
@@ -451,49 +450,18 @@ class RecordRepository:
             where_clauses.append(f"({rule_filter.sql})")
             params.update(rule_filter.params)
 
+        if user_filter:
+            where_clauses.append(f"({user_filter.sql})")
+            params.update(user_filter.params)
+
         # Validate sort field to prevent SQL injection
         # Allow system fields and schema fields
         schema_field_names = {f["name"] for f in schema}
         system_fields = {"id", "created_at", "created_by", "updated_at", "updated_by"}
-        
+
         if sort_by not in schema_field_names and sort_by not in system_fields:
             # Fallback to default if invalid sort field
             sort_by = "created_at"
-
-        # Apply filters
-        # Log available filters for debugging
-        logger.debug(
-            "Applying filters",
-            requested_filters=list(filters.keys()),
-            schema_fields=list(schema_field_names),
-            system_fields=list(system_fields)
-        )
-        
-        for field, value in filters.items():
-            # Clean field name just in case
-            field = field.strip()
-            
-            if field in schema_field_names or field in system_fields:
-                param_name = f"filter_{field}"
-                where_clauses.append(f'r."{field}" = :{param_name}')
-                
-                # specific handling for boolean or json
-                 # Check schema type if it's a schema field
-                schema_field = next((f for f in schema if f["name"] == field), None)
-                if schema_field:
-                    field_type = schema_field.get("type", "text").lower()
-                    if field_type == "boolean":
-                        if isinstance(value, str):
-                            bool_value = value.lower() == "true"
-                        else:
-                            bool_value = bool(value)
-                        params[param_name] = self._convert_boolean_for_db(bool_value)
-                    else:
-                        params[param_name] = value
-                else:
-                    params[param_name] = value
-            else:
-                logger.debug(f"Filter ignored: field '{field}' not found in schema or system fields")
 
         where_clause = " AND ".join(where_clauses)
         where_sql = f" WHERE {where_clause}" if where_clause else ""

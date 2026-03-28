@@ -234,28 +234,30 @@ async def test_iso_ac_008_filter_bypass_attempt(
     isolation_test_data, 
     isolation_collection
 ):
-    """ISO-AC-008: Attempt to bypass isolation via account_id query param."""
+    """ISO-AC-008: Attempt to bypass isolation via account_id filter param."""
     headers_a = {"Authorization": f"Bearer {isolation_test_data['user_a_token']}"}
     acc_b_id = isolation_test_data["account_b"].id
-    
+
     # 1. Create record as B
     h_b = {"Authorization": f"Bearer {isolation_test_data['user_b_token']}"}
     await attack_client.post(
-        f"/api/v1/records/{isolation_collection}", 
-        json={"title": "B's Filter Secret", "secret_data": "hidden"}, 
+        f"/api/v1/records/{isolation_collection}",
+        json={"title": "B's Filter Secret", "secret_data": "hidden"},
         headers=h_b
     )
-    
-    # 2. List as A with account_id filter targeting B
+
+    # 2. List as A with account_id filter targeting B via the new ?filter= param
+    # The filter is valid syntax but tenant isolation should still prevent cross-account access
     list_resp = await attack_client.get(
-        f"/api/v1/records/{isolation_collection}?account_id={acc_b_id}", 
+        f"/api/v1/records/{isolation_collection}",
+        params={"filter": f'account_id = "{acc_b_id}"'},
         headers=headers_a,
-        description="User A attempts filter bypass via ?account_id=B"
+        description="User A attempts filter bypass via ?filter=account_id=B"
     )
-    
+
     assert list_resp.status_code == 200
     data = list_resp.json()
-    
+
     # Verify User A doesn't see User B's record even with the filter
     titles = [item["title"] for item in data["items"]]
     assert "B's Filter Secret" not in titles

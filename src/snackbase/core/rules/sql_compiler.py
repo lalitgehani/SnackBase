@@ -5,7 +5,7 @@ Compiles AST nodes to SQL WHERE clause fragments with parameterized queries.
 
 from typing import Any
 
-from .ast import BinaryOp, Literal, Node, UnaryOp, Variable
+from .ast import BinaryOp, InOp, IsNullOp, Literal, Node, UnaryOp, Variable
 from .exceptions import RuleEvaluationError
 
 
@@ -56,6 +56,12 @@ class SQLCompiler:
 
         if isinstance(node, UnaryOp):
             return self._compile_unary_op(node, auth_context)
+
+        if isinstance(node, InOp):
+            return self._compile_in_op(node, auth_context)
+
+        if isinstance(node, IsNullOp):
+            return self._compile_is_null_op(node, auth_context)
 
         raise RuleEvaluationError(f"Unknown node type: {type(node)}")
 
@@ -142,6 +148,24 @@ class SQLCompiler:
             return f"NOT ({operand})"
 
         raise RuleEvaluationError(f"Unknown unary operator: {node.operator}")
+
+    def _compile_in_op(self, node: InOp, auth_context: dict[str, Any]) -> str:
+        """Compile IN operation to SQL."""
+        left = self._compile_node(node.operand, auth_context)
+        placeholders = []
+        for value_node in node.values:
+            param_name = f"param_{self.param_counter}"
+            self.param_counter += 1
+            self.params[param_name] = value_node.value  # type: ignore[attr-defined]
+            placeholders.append(f":{param_name}")
+        return f"{left} IN ({', '.join(placeholders)})"
+
+    def _compile_is_null_op(self, node: IsNullOp, auth_context: dict[str, Any]) -> str:
+        """Compile IS NULL / IS NOT NULL to SQL."""
+        operand = self._compile_node(node.operand, auth_context)
+        if node.is_null:
+            return f"{operand} IS NULL"
+        return f"{operand} IS NOT NULL"
 
 
 def compile_to_sql(

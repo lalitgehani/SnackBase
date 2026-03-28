@@ -3,7 +3,7 @@
 Validates rule expressions before saving to database.
 """
 
-from .ast import BinaryOp, Literal, Node, UnaryOp, Variable
+from .ast import BinaryOp, InOp, IsNullOp, Literal, Node, UnaryOp, Variable
 from .exceptions import RuleSyntaxError
 from .lexer import Lexer
 from .parser import Parser
@@ -75,6 +75,16 @@ class RuleValidator:
             return
 
         if isinstance(node, UnaryOp):
+            self._validate_node(node.operand)
+            return
+
+        if isinstance(node, InOp):
+            self._validate_node(node.operand)
+            for v in node.values:
+                self._validate_node(v)
+            return
+
+        if isinstance(node, IsNullOp):
             self._validate_node(node.operand)
             return
 

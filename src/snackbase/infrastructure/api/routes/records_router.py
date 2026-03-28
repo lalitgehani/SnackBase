@@ -12,6 +12,12 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.core.logging import get_logger
+from snackbase.core.rules import (
+    FilterCompilationError,
+    RuleSyntaxError,
+    compile_filter_to_sql,
+    validate_filter_expression,
+)
 from snackbase.domain.services import FieldType, RecordValidator, PIIMaskingService
 from snackbase.infrastructure.api.dependencies import AuthenticatedUser, AuthContext
 from snackbase.infrastructure.api.middleware import (
@@ -321,6 +327,7 @@ async def list_records(
     limit: int = Query(30, ge=1, le=100),
     sort: str = Query("-created_at"),
     fields: str | None = Query(None),
+    filter_expr: str | None = Query(None, alias="filter"),
     session: AsyncSession = Depends(get_db_session),
 ) -> RecordListResponse | JSONResponse:
     """List records in a collection.
@@ -372,23 +379,54 @@ async def list_records(
         # Default behavior or handle bare field name
         sort_by = sort
 
-    # 4. Extract filters from query params
-    # Exclude reserved params
-    reserved_params = {"skip", "limit", "sort", "fields"}
-    filters = {
-        k: v for k, v in request.query_params.items() 
-        if k not in reserved_params
-    }
+    # 4. Reject old-style query param filters and parse the new filter expression
+    reserved_params = {"skip", "limit", "sort", "fields", "filter"}
+    legacy_params = [k for k in request.query_params if k not in reserved_params]
+    if legacy_params:
+        example_field = legacy_params[0]
+        example_value = request.query_params[example_field]
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "error": "Unsupported query parameter",
+                "message": (
+                    f"Direct query parameter filtering (e.g., ?{example_field}={example_value}) "
+                    "is no longer supported. "
+                    f'Use the \'filter\' parameter instead: ?filter={example_field} = "{example_value}"'
+                ),
+            },
+        )
+
+    # Normalize filter_expr: when called directly (e.g., in unit tests), FastAPI
+    # Query defaults aren't resolved by dependency injection, so guard against it.
+    if not isinstance(filter_expr, str):
+        filter_expr = None
+
+    user_filter: RuleFilter | None = None
+    if filter_expr:
+        try:
+            validate_filter_expression(filter_expr, schema)
+            filter_sql, filter_params = compile_filter_to_sql(filter_expr)
+            if filter_sql != "1=1":
+                user_filter = RuleFilter(sql=filter_sql, params=filter_params)
+        except (RuleSyntaxError, FilterCompilationError) as exc:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={
+                    "error": "Invalid filter expression",
+                    "message": str(exc),
+                },
+            )
 
     # 5. Query records
     record_repo = RecordRepository(session)
-    
+
     # Superadmin bypass: pass None for account_id to see all records
     repo_account_id = current_user.account_id
     from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID
     if repo_account_id == SYSTEM_ACCOUNT_ID:
         repo_account_id = None
-        
+
     records, total = await record_repo.find_all(
         collection_name=collection,
         account_id=repo_account_id,
@@ -397,7 +435,7 @@ async def list_records(
         limit=limit,
         sort_by=sort_by,
         descending=descending,
-        filters=filters,
+        user_filter=user_filter,
         rule_filter=rule_result,
     )
 
