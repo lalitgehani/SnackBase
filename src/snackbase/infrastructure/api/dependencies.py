@@ -42,12 +42,12 @@ async def get_current_user(
     if not hasattr(request.state, "authenticated_user"):
         auth_error = getattr(request.state, "auth_error", "Missing authentication credentials")
         logger.info(f"Authentication failed: {auth_error}")
-        
+
         # Specific status code for restricted API keys
         status_code = status.HTTP_401_UNAUTHORIZED
         if "restricted to superadmin" in auth_error:
             status_code = status.HTTP_403_FORBIDDEN
-            
+
         raise HTTPException(
             status_code=status_code,
             detail=auth_error,
@@ -65,6 +65,11 @@ CurrentUser = AuthUser  # Alias for backward compatibility as a type
 # System account ID for superadmins
 SYSTEM_ACCOUNT_ID = "00000000-0000-0000-0000-000000000000"  # Nil UUID
 SYSTEM_ACCOUNT_CODE = "SY0000"  # Human-readable code
+
+# Sentinel value stored in created_by / updated_by for anonymous (unauthenticated) requests.
+# Using a named string instead of NULL keeps the NOT NULL constraint intact while still
+# being a clear, queryable provenance marker.
+ANONYMOUS_USER_ID = "anonymous"
 
 
 async def require_superadmin(
@@ -138,8 +143,8 @@ class AuthorizationContext:
     performing authorization checks.
     """
 
-    user: AuthUser
-    role_id: int
+    user: AuthUser | None
+    role_id: int | None
 
 
 async def get_authorization_context(
@@ -161,11 +166,86 @@ async def get_authorization_context(
     )
 
 
+def get_optional_user(request: Request) -> AuthUser | None:
+    """Return the authenticated user or None for anonymous requests.
+
+    Unlike get_current_user, this dependency never raises 401.
+    Anonymous access is then gated by collection rules.
+
+    Args:
+        request: The incoming request.
+
+    Returns:
+        AuthUser if authenticated, None otherwise.
+    """
+    return getattr(request.state, "authenticated_user", None)
+
+
+# Type alias for optional authentication dependency injection
+OptionalUser = Annotated[AuthUser | None, Depends(get_optional_user)]
+
+
+async def get_optional_user_role_id(
+    current_user: OptionalUser,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> int | None:
+    """Get the role_id for the current user, or None for anonymous.
+
+    Args:
+        current_user: The authenticated user, or None.
+        session: Database session.
+
+    Returns:
+        User's role_id, or None for anonymous requests.
+    """
+    if current_user is None:
+        return None
+
+    from snackbase.infrastructure.persistence.repositories import UserRepository
+
+    user_repo = UserRepository(session)
+    user = await user_repo.get_by_id(current_user.user_id)
+
+    if user is None:
+        logger.warning(
+            "User not found in database",
+            user_id=current_user.user_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    return int(user.role_id)
+
+
+async def get_optional_auth_context(
+    current_user: OptionalUser,
+    role_id: Annotated[int | None, Depends(get_optional_user_role_id)],
+) -> AuthorizationContext:
+    """Get authorization context, supporting both authenticated and anonymous requests.
+
+    Args:
+        current_user: The authenticated user, or None for anonymous.
+        role_id: User's role_id from database, or None for anonymous.
+
+    Returns:
+        AuthorizationContext with user and role_id (either may be None for anonymous).
+    """
+    return AuthorizationContext(
+        user=current_user,
+        role_id=role_id,
+    )
+
+
 # Type alias for superadmin dependency injection
 SuperadminUser = Annotated[AuthUser, Depends(require_superadmin)]
 
-# Type alias for authorization context dependency injection
+# Type alias for authorization context dependency injection (requires authentication)
 AuthContext = Annotated[AuthorizationContext, Depends(get_authorization_context)]
+
+# Type alias for optional auth context (supports anonymous access)
+OptionalAuthContext = Annotated[AuthorizationContext, Depends(get_optional_auth_context)]
 
 
 async def get_email_service(

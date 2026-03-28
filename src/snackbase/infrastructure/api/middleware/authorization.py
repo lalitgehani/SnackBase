@@ -5,23 +5,21 @@ apply field-level filtering, and enforce row-level security.
 """
 
 import re
-from dataclasses import dataclass
 from typing import Any
 
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.core.logging import get_logger
-from snackbase.core.rules.sql_compiler import compile_to_sql
-from snackbase.core.rules.lexer import Lexer
-from snackbase.core.rules.parser import Parser
 from snackbase.core.macros.expander import MacroExpander
+from snackbase.core.rules.sql_compiler import compile_to_sql
 from snackbase.infrastructure.api.dependencies import (
     SYSTEM_ACCOUNT_ID,
     AuthorizationContext,
-    CurrentUser,
 )
-from snackbase.infrastructure.persistence.repositories import CollectionRuleRepository, RecordRepository
+from snackbase.infrastructure.persistence.repositories import (
+    CollectionRuleRepository,
+)
 from snackbase.infrastructure.persistence.repositories.record_repository import RuleFilter
 
 logger = get_logger(__name__)
@@ -76,16 +74,16 @@ def extract_collection_from_path(path: str) -> str | None:
         "ready",
         "live",
     }
-    
+
     # Match /api/v1/{collection} or /api/v1/{collection}/{anything}
     pattern = r"^/api/v\d+/([^/]+)(?:/.*)?$"
     match = re.match(pattern, path)
-    
+
     if match:
         collection = match.group(1)
         if collection not in excluded_routes:
             return collection
-    
+
     return None
 
 
@@ -125,11 +123,11 @@ def validate_request_fields(
                 },
             )
         return
-    
+
     if isinstance(allowed_fields, str):
         # Should not happen, but handle gracefully
         return
-    
+
     # Check for system fields in request
     system_fields_in_request = set(data.keys()) & SYSTEM_FIELDS
     if system_fields_in_request:
@@ -145,12 +143,12 @@ def validate_request_fields(
                 "field_type": "system",
             },
         )
-    
+
     # Check for fields not in allowed list
     request_fields = set(data.keys())
     allowed_set = set(allowed_fields)
     unauthorized_fields = request_fields - allowed_set
-    
+
     if unauthorized_fields:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -185,11 +183,11 @@ def apply_field_filter(
     """
     if allowed_fields == "*":
         return data
-    
+
     if isinstance(allowed_fields, str):
         # Should not happen, but handle gracefully
         return data
-    
+
     # Filter to only allowed fields
     if is_request:
         # For requests: only allow the specified fields (no system fields)
@@ -197,7 +195,7 @@ def apply_field_filter(
     else:
         # For responses: always include system fields
         all_allowed = set(allowed_fields) | SYSTEM_FIELDS
-    
+
     return {k: v for k, v in data.items() if k in all_allowed}
 
 
@@ -226,7 +224,64 @@ async def check_collection_permission(
                       is on a record that doesn't pass the filter.
     """
     user = auth_context.user
-    
+
+    # 0. Anonymous path — handle before any attribute access on user
+    if user is None:
+        rule_repo = CollectionRuleRepository(session)
+        rules = await rule_repo.get_by_collection_name(collection)
+
+        if not rules:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Permission denied for {operation} on {collection} (no rules defined)",
+            )
+
+        rule_expr = None
+        allowed_fields: list | str = "*"
+
+        if operation == "list":
+            rule_expr = rules.list_rule
+            allowed_fields = rules.list_fields
+        elif operation == "view":
+            rule_expr = rules.view_rule
+            allowed_fields = rules.view_fields
+        elif operation == "create":
+            rule_expr = rules.create_rule
+            allowed_fields = rules.create_fields
+        elif operation == "update":
+            rule_expr = rules.update_rule
+            allowed_fields = rules.update_fields
+        elif operation == "delete":
+            rule_expr = rules.delete_rule
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid operation: {operation}",
+            )
+
+        if isinstance(allowed_fields, str) and allowed_fields != "*":
+            try:
+                import json as _json
+                allowed_fields = _json.loads(allowed_fields)
+            except Exception:
+                allowed_fields = "*"
+
+        if rule_expr is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Access denied: {operation} is locked for this collection",
+            )
+
+        if rule_expr == "":
+            return RuleFilter(sql="1=1", params={}, allowed_fields=allowed_fields)
+
+        # Non-empty rule expression requires auth context — cannot evaluate for anonymous
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required to access this resource",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     # 1. Superadmin bypass
     if user.account_id == SYSTEM_ACCOUNT_ID:
         logger.debug(
@@ -240,7 +295,7 @@ async def check_collection_permission(
     # 2. Fetch collection rules
     rule_repo = CollectionRuleRepository(session)
     rules = await rule_repo.get_by_collection_name(collection)
-    
+
     if not rules:
         logger.warning(
             "No rules found for collection - denying access by default",
@@ -255,7 +310,7 @@ async def check_collection_permission(
     # 3. Resolve rule and fields based on operation
     rule_expr = None
     allowed_fields = "*"
-    
+
     if operation == "list":
         rule_expr = rules.list_rule
         allowed_fields = rules.list_fields
@@ -317,29 +372,29 @@ async def check_collection_permission(
         )
 
     # 7. Operation-specific enforcement
-    
+
     # For 'create', we should ideally validate against the DB
     # but for now we'll rely on the fact that any subsequent read would fail
     # or we can implement a simple SQL check in the future.
     if operation == "create":
         if rule_expr == "":
             return RuleFilter(sql="1=1", params={}, allowed_fields=allowed_fields)
-            
+
         # Compile to SQL to validate syntax and get params
         try:
             sql, params = compile_to_sql(rule_expr, auth_data)
-            
+
             # For 'create', we validate by running a dummy select with payload data
             # Use CTE to provide mock record values for the WHERE clause
             # Only include fields present in request_data
             if not request_data:
                 request_data = {}
-                
+
             cols = []
             cte_params = {}
             for k, v in request_data.items():
                 param_name = f"payload_{k}"
-                
+
                 # Determine SQL type for explicit casting (required for asyncpg)
                 sql_type = "TEXT"
                 if isinstance(v, bool):
@@ -348,26 +403,26 @@ async def check_collection_permission(
                     sql_type = "INTEGER"
                 elif isinstance(v, float):
                     sql_type = "NUMERIC"
-                
+
                 # CAST parameters to ensure correct type handling in DB driver
                 cols.append(f"CAST(:{param_name} AS {sql_type}) AS \"{k}\"")
                 cte_params[param_name] = v
-                
+
             # Also handle @request.data.* variables in the SQL
             for p_name in list(params.keys()):
                 if p_name.startswith("data_"):
                     field = p_name[len("data_"):]
                     params[p_name] = request_data.get(field)
-            
+
             if not cols:
                 # If no data, just run the check directly (might only use @request.auth or constants)
                 check_sql = f"SELECT 1 WHERE {sql}"
             else:
                 check_sql = f"WITH payload AS (SELECT {', '.join(cols)}) SELECT 1 FROM payload WHERE {sql}"
-            
+
             # Use same params for both CTE and original SQL
             all_params = {**params, **cte_params}
-            
+
             from sqlalchemy import text
             res = await session.execute(text(check_sql), all_params)
             val = res.scalar()
@@ -376,7 +431,7 @@ async def check_collection_permission(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Record does not satisfy collection rules",
                 )
-                
+
             return RuleFilter(sql="1=1", params={}, allowed_fields=allowed_fields)
         except HTTPException:
             raise
@@ -390,12 +445,12 @@ async def check_collection_permission(
     # For other operations (list, view, update, delete), compile to SQL
     try:
         sql, params = compile_to_sql(rule_expr, auth_data)
-        
+
         # If we have a record (view/update), we can also double check it here if desired,
         # but the repository layer will use the WHERE clause which is more consistent.
-        
+
         return RuleFilter(sql=sql, params=params, allowed_fields=allowed_fields)
-        
+
     except Exception as e:
         logger.error("Rule compilation failed", error=str(e))
         raise HTTPException(

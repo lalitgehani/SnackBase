@@ -7,7 +7,7 @@ import json
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, status, Request, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,19 +18,25 @@ from snackbase.core.rules import (
     compile_filter_to_sql,
     validate_filter_expression,
 )
-from snackbase.domain.services import FieldType, RecordValidator, PIIMaskingService
-from snackbase.infrastructure.api.dependencies import AuthenticatedUser, AuthContext
+from snackbase.domain.services import FieldType, PIIMaskingService, RecordValidator
+from snackbase.infrastructure.api.dependencies import (
+    ANONYMOUS_USER_ID,
+    AuthenticatedUser,
+    AuthorizationContext,
+    OptionalAuthContext,
+    OptionalUser,
+)
 from snackbase.infrastructure.api.middleware import (
-    check_collection_permission,
-    apply_field_filter,
-    validate_request_fields,
     RuleFilter,
+    apply_field_filter,
+    check_collection_permission,
+    validate_request_fields,
 )
 from snackbase.infrastructure.api.schemas import (
+    RecordListResponse,
     RecordResponse,
     RecordValidationErrorDetail,
     RecordValidationErrorResponse,
-    RecordListResponse,
 )
 from snackbase.infrastructure.persistence.database import get_db_session
 from snackbase.infrastructure.persistence.repositories import (
@@ -64,27 +70,27 @@ def _mask_record_pii(
     if not PIIMaskingService.should_mask_for_user(user_groups, account_id):
         # User has pii_access or is superadmin, return unmasked data
         return record
-    
+
     # User doesn't have pii_access, mask PII fields
     masked_record = record.copy()
-    
+
     for field in schema:
         field_name = field.get("name")
         is_pii = field.get("pii", False)
         mask_type = field.get("mask_type")
-        
+
         if is_pii and field_name in masked_record and masked_record[field_name] is not None:
             # Determine mask type (use default if not specified)
             if not mask_type:
                 # Default to 'full' masking if no mask_type specified
                 mask_type = "full"
-            
+
             # Apply masking
             masked_record[field_name] = PIIMaskingService.mask_value(
                 masked_record[field_name],
                 mask_type,
             )
-    
+
     return masked_record
 
 
@@ -116,6 +122,47 @@ def _parse_expand_param(
             return [], root
         paths.append(parts)
     return paths, None
+
+
+async def _resolve_account_id(
+    current_user: AuthenticatedUser | None,
+    request: Request,
+    session: AsyncSession,
+) -> str:
+    """Resolve account_id from JWT (authenticated) or X-Account-ID header (anonymous).
+
+    Args:
+        current_user: The authenticated user, or None for anonymous.
+        request: The incoming request (used to read X-Account-ID header).
+        session: Database session (used to validate the account from header).
+
+    Returns:
+        The account_id string to scope the request to.
+
+    Raises:
+        HTTPException: 400 if anonymous and X-Account-ID header is missing.
+        HTTPException: 404 if the account from the header doesn't exist.
+    """
+    if current_user is not None:
+        return current_user.account_id
+
+    header_val = request.headers.get("X-Account-ID")
+    if not header_val:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="X-Account-ID header is required for unauthenticated requests",
+        )
+
+    from snackbase.infrastructure.persistence.repositories import AccountRepository
+
+    account_repo = AccountRepository(session)
+    account = await account_repo.get_by_slug_or_code(header_val)
+    if account is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Account '{header_val}' not found",
+        )
+    return str(account.id)
 
 
 async def _expand_records(
@@ -233,8 +280,8 @@ async def create_record(
     collection: str,
     request: Request,
     data: dict[str, Any],
-    current_user: AuthenticatedUser,
-    auth_context: AuthContext,
+    current_user: OptionalUser,
+    auth_context: OptionalAuthContext,
     session: AsyncSession = Depends(get_db_session),
 ) -> RecordResponse | JSONResponse:
     """Create a new record in a collection.
@@ -245,20 +292,20 @@ async def create_record(
     Args:
         collection: The collection name (from URL path).
         data: The record data (request body). May include 'account_id' for superadmins.
-        current_user: The authenticated user.
+        current_user: The authenticated user, or None for anonymous.
         auth_context: Authorization context for permission checking.
         session: Database session.
 
     Returns:
         The created record with all fields including system fields.
     """
-    # 0. Determine target account_id: use provided account_id if superadmin, otherwise use current user's account
+    # 0. Determine target account_id
     from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID
-    
-    target_account_id = current_user.account_id
-    if current_user.account_id == SYSTEM_ACCOUNT_ID and "account_id" in data:
+
+    target_account_id = await _resolve_account_id(current_user, request, session)
+    if current_user is not None and current_user.account_id == SYSTEM_ACCOUNT_ID and "account_id" in data:
         target_account_id = data.pop("account_id")
-    
+
     collection_repo = CollectionRepository(session)
     collection_model = await collection_repo.get_by_name(collection)
 
@@ -266,7 +313,7 @@ async def create_record(
         logger.info(
             "Record creation failed: collection not found",
             collection=collection,
-            user_id=current_user.user_id,
+            user_id=current_user.user_id if current_user else None,
         )
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -295,7 +342,7 @@ async def create_record(
 
     # 1.6 Preliminary validation for defaults (needed for rule evaluation)
     processed_temp, _ = RecordValidator.validate_and_apply_defaults(data, schema)
-    
+
     # 2. Check create permission (now includes rule evaluation)
     rule_result = await check_collection_permission(
         auth_context=auth_context,
@@ -306,10 +353,10 @@ async def create_record(
         request_data=data,
     )
     allowed_fields = rule_result.allowed_fields
-    
+
     # Validate request fields (reject if contains unauthorized fields)
     validate_request_fields(data, allowed_fields, "create")
-    
+
     # Filter request body to allowed fields only
     if allowed_fields != "*":
         data = apply_field_filter(data, allowed_fields, is_request=True)
@@ -359,7 +406,7 @@ async def create_record(
             "Record creation failed: validation errors",
             collection=collection,
             error_count=len(all_errors),
-            user_id=current_user.user_id,
+            user_id=current_user.user_id if current_user else None,
         )
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -378,7 +425,7 @@ async def create_record(
             collection_name=collection,
             record_id=record_id,
             account_id=target_account_id,
-            created_by=current_user.user_id,
+            created_by=current_user.user_id if current_user else ANONYMOUS_USER_ID,
             data=processed_data,
             schema=schema,
         )
@@ -412,8 +459,8 @@ async def create_record(
         "Record created successfully",
         collection=collection,
         record_id=record_id,
-        account_id=current_user.account_id,
-        created_by=current_user.user_id,
+        account_id=target_account_id,
+        created_by=current_user.user_id if current_user else None,
     )
 
     # 7.5 Broadcast create event
@@ -432,10 +479,14 @@ async def create_record(
     # 8. Apply field filter to response
     if allowed_fields != "*":
         created_record = apply_field_filter(created_record, allowed_fields)
-    
+
     # 9. Apply PII masking to response
-    created_record = _mask_record_pii(created_record, schema, current_user.groups, current_user.account_id)
-    
+    created_record = _mask_record_pii(
+        created_record, schema,
+        current_user.groups if current_user else [],
+        current_user.account_id if current_user else None,
+    )
+
     return RecordResponse.from_record(created_record)
 
 
@@ -451,8 +502,8 @@ async def create_record(
 async def list_records(
     collection: str,
     request: Request,
-    current_user: AuthenticatedUser,
-    auth_context: AuthContext,
+    current_user: OptionalUser,
+    auth_context: OptionalAuthContext,
     skip: int = Query(0, ge=0),
     limit: int = Query(30, ge=1, le=100),
     sort: str = Query("-created_at"),
@@ -473,7 +524,7 @@ async def list_records(
         session=session,
     )
     allowed_fields = rule_result.allowed_fields
-    
+
     # 1. Look up collection
     collection_repo = CollectionRepository(session)
     collection_model = await collection_repo.get_by_name(collection)
@@ -499,7 +550,7 @@ async def list_records(
     # 3. Parse sort parameter
     descending = True
     sort_by = "created_at"
-    
+
     if sort.startswith("-"):
         descending = True
         sort_by = sort[1:]
@@ -554,11 +605,10 @@ async def list_records(
     # 5. Query records
     record_repo = RecordRepository(session)
 
-    # Superadmin bypass: pass None for account_id to see all records
-    repo_account_id = current_user.account_id
+    # Resolve account; superadmin passes None to see all records across accounts
     from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID
-    if repo_account_id == SYSTEM_ACCOUNT_ID:
-        repo_account_id = None
+    target_account_id = await _resolve_account_id(current_user, request, session)
+    repo_account_id = None if (current_user is not None and current_user.account_id == SYSTEM_ACCOUNT_ID) else target_account_id
 
     records, total = await record_repo.find_all(
         collection_name=collection,
@@ -579,14 +629,18 @@ async def list_records(
             filtered_record = apply_field_filter(record, allowed_fields)
             filtered_records.append(filtered_record)
         records = filtered_records
-    
+
     # 7. Apply PII masking to all records
     masked_records = []
     for record in records:
-        masked_record = _mask_record_pii(record, schema, current_user.groups, current_user.account_id)
+        masked_record = _mask_record_pii(
+            record, schema,
+            current_user.groups if current_user else [],
+            current_user.account_id if current_user else None,
+        )
         masked_records.append(masked_record)
     records = masked_records
-    
+
     # 7b. Expand reference fields if requested
     if expand:
         expand_paths, invalid_field = _parse_expand_param(expand, schema)
@@ -660,8 +714,9 @@ async def list_records(
 async def get_record(
     collection: str,
     record_id: str,
-    current_user: AuthenticatedUser,
-    auth_context: AuthContext,
+    request: Request,
+    current_user: OptionalUser,
+    auth_context: OptionalAuthContext,
     expand: str | None = Query(None),
     session: AsyncSession = Depends(get_db_session),
 ) -> RecordResponse | JSONResponse:
@@ -698,13 +753,11 @@ async def get_record(
     allowed_fields = rule_result.allowed_fields
 
     record_repo = RecordRepository(session)
-    
-    # Superadmin bypass
-    repo_account_id = current_user.account_id
+
     from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID
-    if repo_account_id == SYSTEM_ACCOUNT_ID:
-        repo_account_id = None
-        
+    target_account_id = await _resolve_account_id(current_user, request, session)
+    repo_account_id = None if (current_user is not None and current_user.account_id == SYSTEM_ACCOUNT_ID) else target_account_id
+
     record = await record_repo.get_by_id(
         collection_name=collection,
         record_id=record_id,
@@ -721,13 +774,17 @@ async def get_record(
                 "message": "Record not found",
             },
         )
-    
+
     # 3. Apply field filter to response
     if allowed_fields != "*":
         record = apply_field_filter(record, allowed_fields)
-    
+
     # 5. Apply PII masking to response
-    record = _mask_record_pii(record, schema, current_user.groups, current_user.account_id)
+    record = _mask_record_pii(
+        record, schema,
+        current_user.groups if current_user else [],
+        current_user.account_id if current_user else None,
+    )
 
     # 6. Expand reference fields if requested
     if not isinstance(expand, str):
@@ -775,12 +832,12 @@ async def update_record_full(
     record_id: str,
     request: Request,
     data: dict[str, Any],
-    current_user: AuthenticatedUser,
-    auth_context: AuthContext,
+    current_user: OptionalUser,
+    auth_context: OptionalAuthContext,
     session: AsyncSession = Depends(get_db_session),
 ) -> RecordResponse | JSONResponse:
     """Update a record (full replacement).
-    
+
     Replaces the entire record with the provided data (except system fields).
     """
     return await _update_record(collection, record_id, request, data, current_user, auth_context, session, partial=False)
@@ -801,12 +858,12 @@ async def update_record_partial(
     record_id: str,
     request: Request,
     data: dict[str, Any],
-    current_user: AuthenticatedUser,
-    auth_context: AuthContext,
+    current_user: OptionalUser,
+    auth_context: OptionalAuthContext,
     session: AsyncSession = Depends(get_db_session),
 ) -> RecordResponse | JSONResponse:
     """Update a record (partial update).
-    
+
     Updates only the provided fields.
     """
     return await _update_record(collection, record_id, request, data, current_user, auth_context, session, partial=True)
@@ -817,8 +874,8 @@ async def _update_record(
     record_id: str,
     request: Request,
     data: dict[str, Any],
-    current_user: AuthenticatedUser,
-    auth_context: AuthContext,
+    current_user: AuthenticatedUser | None,
+    auth_context: AuthorizationContext,
     session: AsyncSession,
     partial: bool,
 ) -> RecordResponse | JSONResponse:
@@ -847,23 +904,21 @@ async def _update_record(
                 "message": "Failed to parse collection schema",
             },
         )
-    
+
     # 3. Fetch existing record for permission check context
     record_repo = RecordRepository(session)
-    
-    # Superadmin bypass
-    repo_account_id = current_user.account_id
+
     from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID
-    if repo_account_id == SYSTEM_ACCOUNT_ID:
-        repo_account_id = None
-        
+    target_account_id = await _resolve_account_id(current_user, request, session)
+    repo_account_id = None if (current_user is not None and current_user.account_id == SYSTEM_ACCOUNT_ID) else target_account_id
+
     existing_record = await record_repo.get_by_id(
         collection_name=collection,
         record_id=record_id,
         account_id=repo_account_id,
         schema=schema,
     )
-    
+
     if existing_record is None:
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -872,7 +927,7 @@ async def _update_record(
                 "message": "Record not found",
             },
         )
-    
+
     # 4. Check update permission
     rule_result = await check_collection_permission(
         auth_context=auth_context,
@@ -883,17 +938,17 @@ async def _update_record(
         request_data=data,
     )
     allowed_fields = rule_result.allowed_fields
-    
+
     # Validate request fields (reject if contains unauthorized fields)
     validate_request_fields(data, allowed_fields, "update")
-    
+
     # Filter request body to allowed fields only
     if allowed_fields != "*":
         data = apply_field_filter(data, allowed_fields, is_request=True)
 
     # 5. Validate reference fields
     reference_errors = []
-    
+
     # Check references only for fields present in data
     # (if full update, this covers all refs; if partial, only updated refs)
     for field in schema:
@@ -907,7 +962,7 @@ async def _update_record(
                 exists = await record_repo.check_reference_exists(
                     target_collection,
                     ref_value,
-                    current_user.account_id,
+                    target_account_id,
                 )
                 if not exists:
                     reference_errors.append({
@@ -944,23 +999,17 @@ async def _update_record(
 
     # 7. Update record
     try:
-        # Superadmin bypass
-        repo_account_id = current_user.account_id
-        from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID
-        if repo_account_id == SYSTEM_ACCOUNT_ID:
-            repo_account_id = None
-            
         updated_record = await record_repo.update_record(
             collection_name=collection,
             record_id=record_id,
             account_id=repo_account_id,
-            updated_by=current_user.user_id,
+            updated_by=current_user.user_id if current_user else ANONYMOUS_USER_ID,
             data=processed_data,
             schema=schema,
             old_values=existing_record,
             rule_filter=rule_result,
         )
-        
+
         if updated_record is None:
             # Either record doesn't exist or doesn't belong to account
             return JSONResponse(
@@ -970,7 +1019,7 @@ async def _update_record(
                     "message": "Record not found",
                 },
             )
-            
+
         await session.commit()
     except Exception as e:
         logger.error(
@@ -1001,16 +1050,15 @@ async def _update_record(
         "Record updated successfully",
         collection=collection,
         record_id=record_id,
-        account_id=current_user.account_id,
-        updated_by=current_user.user_id,
+        account_id=target_account_id,
+        updated_by=current_user.user_id if current_user else None,
     )
 
     # 7.5 Broadcast update event
     try:
         broadcaster = request.app.state.event_broadcaster
-        # Use full updated record for broadcast
         await broadcaster.publish_event(
-            account_id=current_user.account_id,
+            account_id=target_account_id,
             collection=collection,
             operation="update",
             data=updated_record
@@ -1021,9 +1069,13 @@ async def _update_record(
     # 8. Apply field filter to response
     if allowed_fields != "*":
         updated_record = apply_field_filter(updated_record, allowed_fields)
-    
+
     # 9. Apply PII masking to response
-    updated_record = _mask_record_pii(updated_record, schema, current_user.groups, current_user.account_id)
+    updated_record = _mask_record_pii(
+        updated_record, schema,
+        current_user.groups if current_user else [],
+        current_user.account_id if current_user else None,
+    )
 
     return RecordResponse.from_record(updated_record)
 
@@ -1042,13 +1094,13 @@ async def delete_record(
     collection: str,
     record_id: str,
     request: Request,
-    current_user: AuthenticatedUser,
-    auth_context: AuthContext,
+    current_user: OptionalUser,
+    auth_context: OptionalAuthContext,
     session: AsyncSession = Depends(get_db_session),
 ):
     """Delete a record by ID."""
     from fastapi import Response
-    
+
     # 1. Look up collection
     collection_repo = CollectionRepository(session)
     collection_model = await collection_repo.get_by_name(collection)
@@ -1061,7 +1113,7 @@ async def delete_record(
                 "message": f"Collection '{collection}' not found",
             },
         )
-    
+
     # 2. Parse schema
     try:
         schema = json.loads(collection_model.schema)
@@ -1070,23 +1122,21 @@ async def delete_record(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"error": "Internal error", "message": "Invalid collection schema"},
         )
-    
+
     # 3. Fetch record for permission check context
     record_repo = RecordRepository(session)
-    
-    # Superadmin bypass
-    repo_account_id = current_user.account_id
+
     from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID
-    if repo_account_id == SYSTEM_ACCOUNT_ID:
-        repo_account_id = None
-        
+    target_account_id = await _resolve_account_id(current_user, request, session)
+    repo_account_id = None if (current_user is not None and current_user.account_id == SYSTEM_ACCOUNT_ID) else target_account_id
+
     record = await record_repo.get_by_id(
         collection_name=collection,
         record_id=record_id,
         account_id=repo_account_id,
         schema=schema,
     )
-    
+
     if record is None:
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -1095,7 +1145,7 @@ async def delete_record(
                 "message": "Record not found",
             },
         )
-    
+
     # 4. Check delete permission
     rule_result = await check_collection_permission(
         auth_context=auth_context,
@@ -1107,12 +1157,6 @@ async def delete_record(
 
     # 5. Delete record
     try:
-        # Superadmin bypass
-        repo_account_id = current_user.account_id
-        from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID
-        if repo_account_id == SYSTEM_ACCOUNT_ID:
-            repo_account_id = None
-            
         deleted = await record_repo.delete_record(
             collection_name=collection,
             record_id=record_id,
@@ -1131,20 +1175,20 @@ async def delete_record(
             )
 
         await session.commit()
-        
+
         logger.info(
             "Record deleted successfully",
             collection=collection,
             record_id=record_id,
-            account_id=current_user.account_id,
-            deleted_by=current_user.user_id,
+            account_id=target_account_id,
+            deleted_by=current_user.user_id if current_user else None,
         )
-        
+
         # Broadcast delete event
         try:
             broadcaster = request.app.state.event_broadcaster
             await broadcaster.publish_event(
-                account_id=current_user.account_id,
+                account_id=target_account_id,
                 collection=collection,
                 operation="delete",
                 data={"id": record_id}
@@ -1154,7 +1198,7 @@ async def delete_record(
 
         # Return 204 No Content
         return Response(status_code=status.HTTP_204_NO_CONTENT)
-        
+
     except Exception as e:
         logger.error(
             "Record deletion failed",

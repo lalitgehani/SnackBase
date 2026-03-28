@@ -5,17 +5,16 @@ since tables are created dynamically and not mapped to ORM models.
 """
 
 import json
-import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from snackbase.core.logging import get_logger
 from snackbase.core.context import get_current_context
 from snackbase.core.hooks.hook_events import HookEvent
+from snackbase.core.logging import get_logger
 from snackbase.infrastructure.persistence.table_builder import TableBuilder
 
 logger = get_logger(__name__)
@@ -92,7 +91,7 @@ class RecordRepository:
             The complete record dict including system fields.
         """
         table_name = TableBuilder.generate_table_name(collection_name)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Build system fields
         system_fields = {
@@ -197,12 +196,12 @@ class RecordRepository:
             The updated record dict, or None if not found/access denied.
         """
         table_name = TableBuilder.generate_table_name(collection_name)
-        now = datetime.now(timezone.utc)
-        
+        now = datetime.now(UTC)
+
         # 1. Prepare update values
         schema_lookup = {f["name"]: f for f in schema}
         sql_values = {}
-        
+
         for key, value in data.items():
             if key in schema_lookup:
                 field_type = schema_lookup[key].get("type", "text").lower()
@@ -215,19 +214,19 @@ class RecordRepository:
                         sql_values[key] = value
                 else:
                     sql_values[key] = value
-                    
+
         # Always update system fields
         sql_values["updated_at"] = now
         sql_values["updated_by"] = updated_by
-        
+
         # 2. Build UPDATE statement
         set_clauses = [f'"{k}" = :{k}' for k in sql_values.keys()]
         set_clause = ", ".join(set_clauses)
-        
+
         # Build WHERE clause
         where_clauses = ['"id" = :record_id']
         params = {**sql_values, "record_id": record_id}
-        
+
         if account_id:
             where_clauses.append('"account_id" = :account_id')
             params["account_id"] = account_id
@@ -235,23 +234,23 @@ class RecordRepository:
         if rule_filter:
             where_clauses.append(f"({rule_filter.sql})")
             params.update(rule_filter.params)
-        
+
         where_clause = " AND ".join(where_clauses)
-        
+
         update_sql = f'''
             UPDATE "{table_name}"
             SET {set_clause}
             WHERE {where_clause}
             RETURNING *
         '''
-        
+
         # 3. Execute
         result = await self.session.execute(text(update_sql), params)
         row = result.fetchone()
-        
+
         if row is None:
             return None
-            
+
         # Convert back to dict
         record = dict(row._mapping)
 
@@ -275,21 +274,21 @@ class RecordRepository:
         if context and hasattr(context, "app") and hasattr(context.app.state, "hook_registry"):
             registry = context.app.state.hook_registry
             # For updates, we pass the new record and optionally old_values.
-            # RecordRepository doesn't keep track of old_values easily, 
-            # but AuditLogService will compare. 
+            # RecordRepository doesn't keep track of old_values easily,
+            # but AuditLogService will compare.
             # Wait, AuditLogService needs old_values to compare!
             # If we don't pass them, it won't see changes.
             # But the 'data' passed to update_record ARE the changes.
-            
+
             # TODO: If we want full audit, we might need to pass old_values here too.
-            # Let's see if we can get them from the RETURNING row? 
+            # Let's see if we can get them from the RETURNING row?
             # SQLite RETURNING only returns NEW values.
-            
+
             await registry.trigger(
                 HookEvent.ON_RECORD_AFTER_UPDATE,
                 {
-                    "record": record, 
-                    "collection": collection_name, 
+                    "record": record,
+                    "collection": collection_name,
                     "data": data,
                     "old_values": old_values,
                     "session": self.session,
@@ -324,7 +323,7 @@ class RecordRepository:
         # Build WHERE clause
         where_clauses = ['"id" = :record_id']
         params = {"record_id": record_id}
-        
+
         if account_id:
             where_clauses.append('"account_id" = :account_id')
             params["account_id"] = account_id
@@ -534,7 +533,7 @@ class RecordRepository:
 
         # 3. Get paginated records
         sort_order = "DESC" if descending else "ASC"
-        
+
         select_sql = f'''
             SELECT r.*, a.name as account_name FROM "{table_name}" r
             LEFT JOIN accounts a ON r.account_id = a.id
@@ -542,7 +541,7 @@ class RecordRepository:
             ORDER BY r."{sort_by}" {sort_order}
             LIMIT :limit OFFSET :skip
         '''
-        
+
         params["limit"] = limit
         params["skip"] = skip
 
@@ -600,7 +599,7 @@ class RecordRepository:
         # Build WHERE clause
         where_clauses = ['"id" = :record_id']
         params = {"record_id": record_id}
-        
+
         if account_id:
             where_clauses.append('"account_id" = :account_id')
             params["account_id"] = account_id
@@ -622,7 +621,7 @@ class RecordRepository:
         )
 
         success = result.rowcount > 0
-        
+
         if success and record_data:
             # Trigger audit hook if context is available
             context = get_current_context()
