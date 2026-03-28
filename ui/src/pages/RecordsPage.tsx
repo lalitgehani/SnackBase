@@ -8,12 +8,16 @@ import { useParams, useNavigate } from 'react-router';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Database, Plus, Search, RefreshCw, ArrowLeft } from 'lucide-react';
+import { Database, Plus, Search, RefreshCw, ArrowLeft, Filter } from 'lucide-react';
 import RecordsTable from '@/components/records/RecordsTable';
 import CreateRecordDialog from '@/components/records/CreateRecordDialog';
 import ViewRecordDialog from '@/components/records/ViewRecordDialog';
 import EditRecordDialog from '@/components/records/EditRecordDialog';
 import DeleteRecordDialog from '@/components/records/DeleteRecordDialog';
+import FilterBuilderPanel, {
+    type FilterRow,
+    compileFilterExpression,
+} from '@/components/records/FilterBuilderPanel';
 import {
     getCollectionByName,
     type Collection,
@@ -48,6 +52,10 @@ export default function RecordsPage() {
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
     const [search, setSearch] = useState('');
     const [searchInput, setSearchInput] = useState('');
+
+    // Filter state
+    const [filterExpression, setFilterExpression] = useState('');
+    const [appliedFilterRows, setAppliedFilterRows] = useState<FilterRow[]>([]);
 
     // Reference records state
     const [referenceRecords, setReferenceRecords] = useState<Record<string, RecordData[]>>({});
@@ -84,13 +92,17 @@ export default function RecordsPage() {
         setError(null);
 
         try {
-            const response = await getRecords({
+            const params: Parameters<typeof getRecords>[0] = {
                 collection: collectionName,
                 skip: (page - 1) * pageSize,
                 limit: pageSize,
                 sort: `${sortOrder === 'asc' ? '' : '-'}${sortBy}`,
                 fields: '*',
-            });
+            };
+            if (filterExpression) {
+                params.filter = filterExpression;
+            }
+            const response = await getRecords(params);
             setData(response.items);
             setTotal(response.total);
         } catch (err) {
@@ -98,7 +110,7 @@ export default function RecordsPage() {
         } finally {
             setLoading(false);
         }
-    }, [collectionName, page, pageSize, sortBy, sortOrder]);
+    }, [collectionName, page, pageSize, sortBy, sortOrder, filterExpression]);
 
     useEffect(() => {
         fetchCollection();
@@ -191,6 +203,29 @@ export default function RecordsPage() {
         await fetchRecords();
     };
 
+    const handleApplyFilters = (expression: string, rows: FilterRow[]) => {
+        setFilterExpression(expression);
+        setAppliedFilterRows(rows);
+        setPage(1);
+    };
+
+    const handleClearFilters = () => {
+        setFilterExpression('');
+        setAppliedFilterRows([]);
+        setPage(1);
+    };
+
+    const handleRemoveFilterPill = (id: string) => {
+        if (!collection) return;
+        const remaining = appliedFilterRows.filter((r) => r.id !== id);
+        const expression = compileFilterExpression(remaining, [
+            ...(collection.schema ?? []),
+        ]);
+        setAppliedFilterRows(remaining);
+        setFilterExpression(expression);
+        setPage(1);
+    };
+
     return (
         <div className="space-y-6">
             {/* Header */}
@@ -232,7 +267,7 @@ export default function RecordsPage() {
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    {/* Search Bar */}
+                    {/* Search Bar + Refresh */}
                     <form onSubmit={handleSearch} className="flex gap-2">
                         <div className="relative flex-1">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -269,6 +304,17 @@ export default function RecordsPage() {
                             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
                         </Button>
                     </form>
+
+                    {/* Filter Builder Panel */}
+                    {collection && collection.schema && collection.schema.length > 0 && (
+                        <FilterBuilderPanel
+                            schema={collection.schema}
+                            appliedRows={appliedFilterRows}
+                            onApply={handleApplyFilters}
+                            onClear={handleClearFilters}
+                            onRemovePill={handleRemoveFilterPill}
+                        />
+                    )}
 
                     {/* Collection not found */}
                     {error && !collection && (
@@ -319,8 +365,22 @@ export default function RecordsPage() {
                         />
                     )}
 
-                    {/* Empty State */}
-                    {!loading && data && data.length === 0 && !search && collection && collection.schema && collection.schema.length > 0 && (
+                    {/* Empty State — filters active, no results */}
+                    {!loading && data && data.length === 0 && filterExpression && collection && collection.schema && collection.schema.length > 0 && (
+                        <div className="text-center py-12">
+                            <Filter className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+                            <h3 className="text-lg font-medium mb-2">No records match your filters</h3>
+                            <p className="text-muted-foreground mb-4">
+                                Try adjusting or removing your filters to see more records.
+                            </p>
+                            <Button variant="outline" onClick={handleClearFilters}>
+                                Clear Filters
+                            </Button>
+                        </div>
+                    )}
+
+                    {/* Empty State — no filters, no records */}
+                    {!loading && data && data.length === 0 && !filterExpression && !search && collection && collection.schema && collection.schema.length > 0 && (
                         <div className="text-center py-12">
                             <Database className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
                             <h3 className="text-lg font-medium mb-2">No records yet</h3>

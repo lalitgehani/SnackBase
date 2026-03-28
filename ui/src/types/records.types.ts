@@ -47,7 +47,8 @@ export interface GetRecordsParams {
 	limit?: number;
 	sort?: string;
 	fields?: string;
-	[key: string]: unknown; // For filter params
+	filter?: string;
+	[key: string]: unknown; // For additional params
 }
 
 // Backend validation error format
