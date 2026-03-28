@@ -407,6 +407,67 @@ class RecordRepository:
             # Table doesn't exist or query failed - reference is invalid
             return False
 
+    async def get_by_ids(
+        self,
+        collection_name: str,
+        ids: list[str],
+        account_id: str | None,
+        schema: list[dict[str, Any]],
+    ) -> dict[str, dict[str, Any]]:
+        """Batch-fetch records by a list of IDs, scoped to account.
+
+        Args:
+            collection_name: The collection name.
+            ids: List of record IDs to fetch.
+            account_id: The account ID for scoping (None for superadmin bypass).
+            schema: The collection schema for type conversion.
+
+        Returns:
+            Dict mapping record ID to record dict for found records.
+        """
+        if not ids:
+            return {}
+
+        table_name = TableBuilder.generate_table_name(collection_name)
+        id_params = {f"id_{i}": v for i, v in enumerate(ids)}
+        placeholders = ", ".join(f":{k}" for k in id_params)
+        where_clauses = [f'"id" IN ({placeholders})']
+        params: dict[str, Any] = {**id_params}
+
+        if account_id:
+            where_clauses.append('"account_id" = :account_id')
+            params["account_id"] = account_id
+
+        where_clause = " AND ".join(where_clauses)
+        select_sql = f'SELECT * FROM "{table_name}" WHERE {where_clause}'
+
+        try:
+            result = await self.session.execute(text(select_sql), params)
+            rows = result.fetchall()
+        except Exception:
+            return {}
+
+        schema_lookup = {f["name"]: f for f in schema}
+        records: dict[str, dict[str, Any]] = {}
+
+        for row in rows:
+            record = dict(row._mapping)
+            for key, value in list(record.items()):
+                if key in ("created_at", "updated_at") and isinstance(value, datetime):
+                    record[key] = value.isoformat()
+                elif key in schema_lookup:
+                    field_type = schema_lookup[key].get("type", "text").lower()
+                    if field_type == "json" and value is not None:
+                        try:
+                            record[key] = json.loads(value)
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+                    elif field_type == "boolean":
+                        record[key] = bool(value)
+            records[record["id"]] = record
+
+        return records
+
     async def find_all(
         self,
         collection_name: str,

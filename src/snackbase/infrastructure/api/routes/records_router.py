@@ -88,6 +88,136 @@ def _mask_record_pii(
     return masked_record
 
 
+def _parse_expand_param(
+    expand: str, schema: list[dict]
+) -> tuple[list[list[str]], str | None]:
+    """Parse and validate the ?expand= query parameter.
+
+    Args:
+        expand: Comma-separated expand paths, e.g. "company,team.industry"
+        schema: The collection schema to validate reference fields.
+
+    Returns:
+        Tuple of (parsed paths, invalid_field_name). If invalid_field_name is not None,
+        it means that field is not a reference type and should return a 400 error.
+    """
+    schema_lookup = {f["name"]: f for f in schema}
+    paths: list[list[str]] = []
+    for raw in expand.split(","):
+        raw = raw.strip()
+        if not raw:
+            continue
+        parts = [p.strip() for p in raw.split(".") if p.strip()]
+        if not parts:
+            continue
+        root = parts[0]
+        field_def = schema_lookup.get(root)
+        if not field_def or field_def.get("type") != "reference":
+            return [], root
+        paths.append(parts)
+    return paths, None
+
+
+async def _expand_records(
+    records: list[dict[str, Any]],
+    expand_paths: list[list[str]],
+    schema: list[dict[str, Any]],
+    account_id: str | None,
+    collection_repo: CollectionRepository,
+    record_repo: RecordRepository,
+    depth: int,
+    max_depth: int,
+) -> list[dict[str, Any]]:
+    """Recursively expand reference fields in records using batch loading.
+
+    Args:
+        records: List of record dicts to expand.
+        expand_paths: List of field path lists, e.g. [["company", "industry"], ["team"]].
+        schema: Schema of the current collection.
+        account_id: Account ID for scoping (None for superadmin).
+        collection_repo: CollectionRepository instance.
+        record_repo: RecordRepository instance.
+        depth: Current recursion depth.
+        max_depth: Maximum allowed depth.
+
+    Returns:
+        Records with reference fields replaced by full record objects.
+    """
+    if depth >= max_depth or not expand_paths or not records:
+        return records
+
+    # Group sub-paths by root field name
+    root_groups: dict[str, list[list[str]]] = {}
+    for path in expand_paths:
+        if path:
+            root = path[0]
+            if root not in root_groups:
+                root_groups[root] = []
+            if len(path) > 1:
+                root_groups[root].append(path[1:])
+
+    schema_lookup = {f["name"]: f for f in schema}
+
+    for field_name, sub_paths in root_groups.items():
+        field_def = schema_lookup.get(field_name)
+        if not field_def or field_def.get("type") != "reference":
+            continue
+        target_collection = field_def.get("collection")
+        if not target_collection:
+            continue
+
+        # Collect unique non-null reference IDs
+        ids = {
+            r[field_name]
+            for r in records
+            if r.get(field_name) and isinstance(r[field_name], str)
+        }
+        if not ids:
+            continue
+
+        # Fetch target collection schema
+        target_model = await collection_repo.get_by_name(target_collection)
+        if not target_model:
+            for r in records:
+                if r.get(field_name):
+                    r[field_name] = None
+            continue
+        try:
+            target_schema = json.loads(target_model.schema)
+        except json.JSONDecodeError:
+            continue
+
+        # Batch fetch all referenced records
+        fetched = await record_repo.get_by_ids(
+            collection_name=target_collection,
+            ids=list(ids),
+            account_id=account_id,
+            schema=target_schema,
+        )
+
+        # Recurse for nested expansion paths
+        if sub_paths and depth + 1 < max_depth and fetched:
+            expanded = await _expand_records(
+                records=list(fetched.values()),
+                expand_paths=sub_paths,
+                schema=target_schema,
+                account_id=account_id,
+                collection_repo=collection_repo,
+                record_repo=record_repo,
+                depth=depth + 1,
+                max_depth=max_depth,
+            )
+            fetched = {r["id"]: r for r in expanded}
+
+        # Replace ID with full object (None if deleted or cross-account)
+        for record in records:
+            val = record.get(field_name)
+            if val and isinstance(val, str):
+                record[field_name] = fetched.get(val)
+
+    return records
+
+
 @router.post(
     "/{collection}",
     status_code=status.HTTP_201_CREATED,
@@ -328,6 +458,7 @@ async def list_records(
     sort: str = Query("-created_at"),
     fields: str | None = Query(None),
     filter_expr: str | None = Query(None, alias="filter"),
+    expand: str | None = Query(None),
     session: AsyncSession = Depends(get_db_session),
 ) -> RecordListResponse | JSONResponse:
     """List records in a collection.
@@ -380,7 +511,7 @@ async def list_records(
         sort_by = sort
 
     # 4. Reject old-style query param filters and parse the new filter expression
-    reserved_params = {"skip", "limit", "sort", "fields", "filter"}
+    reserved_params = {"skip", "limit", "sort", "fields", "filter", "expand"}
     legacy_params = [k for k in request.query_params if k not in reserved_params]
     if legacy_params:
         example_field = legacy_params[0]
@@ -397,10 +528,12 @@ async def list_records(
             },
         )
 
-    # Normalize filter_expr: when called directly (e.g., in unit tests), FastAPI
+    # Normalize filter_expr and expand: when called directly (e.g., in unit tests), FastAPI
     # Query defaults aren't resolved by dependency injection, so guard against it.
     if not isinstance(filter_expr, str):
         filter_expr = None
+    if not isinstance(expand, str):
+        expand = None
 
     user_filter: RuleFilter | None = None
     if filter_expr:
@@ -454,6 +587,31 @@ async def list_records(
         masked_records.append(masked_record)
     records = masked_records
     
+    # 7b. Expand reference fields if requested
+    if expand:
+        expand_paths, invalid_field = _parse_expand_param(expand, schema)
+        if invalid_field is not None:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={
+                    "error": "Invalid expand field",
+                    "message": f"Field '{invalid_field}' is not a reference field and cannot be expanded",
+                },
+            )
+        if expand_paths:
+            from snackbase.core.config import get_settings
+            max_depth = get_settings().max_expand_depth
+            records = await _expand_records(
+                records=records,
+                expand_paths=expand_paths,
+                schema=schema,
+                account_id=repo_account_id,
+                collection_repo=collection_repo,
+                record_repo=record_repo,
+                depth=0,
+                max_depth=max_depth,
+            )
+
     # 8. Apply additional field limiting if requested via query param
     # Note: '*' means all fields, skip filtering in that case
     if fields and fields.strip() != "*":
@@ -504,6 +662,7 @@ async def get_record(
     record_id: str,
     current_user: AuthenticatedUser,
     auth_context: AuthContext,
+    expand: str | None = Query(None),
     session: AsyncSession = Depends(get_db_session),
 ) -> RecordResponse | JSONResponse:
     """Get a single record by ID."""
@@ -569,6 +728,34 @@ async def get_record(
     
     # 5. Apply PII masking to response
     record = _mask_record_pii(record, schema, current_user.groups, current_user.account_id)
+
+    # 6. Expand reference fields if requested
+    if not isinstance(expand, str):
+        expand = None
+    if expand:
+        expand_paths, invalid_field = _parse_expand_param(expand, schema)
+        if invalid_field is not None:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={
+                    "error": "Invalid expand field",
+                    "message": f"Field '{invalid_field}' is not a reference field and cannot be expanded",
+                },
+            )
+        if expand_paths:
+            from snackbase.core.config import get_settings
+            max_depth = get_settings().max_expand_depth
+            expanded = await _expand_records(
+                records=[record],
+                expand_paths=expand_paths,
+                schema=schema,
+                account_id=repo_account_id,
+                collection_repo=collection_repo,
+                record_repo=record_repo,
+                depth=0,
+                max_depth=max_depth,
+            )
+            record = expanded[0]
 
     return RecordResponse.from_record(record)
 

@@ -171,6 +171,12 @@ class Settings(BaseSettings):
         description="Enable GxP-compliant audit logging for CREATE/UPDATE/DELETE operations",
     )
 
+    # Reference Expansion Settings
+    max_expand_depth: int = Field(
+        default=3,
+        description="Maximum nesting depth for ?expand= reference expansion",
+    )
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, v: str | list[str]) -> list[str]:
