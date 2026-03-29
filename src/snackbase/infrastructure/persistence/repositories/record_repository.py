@@ -574,6 +574,122 @@ class RecordRepository:
 
         return records, total_count
 
+    async def aggregate_records(
+        self,
+        collection_name: str,
+        account_id: str | None,
+        agg_functions: list[Any],
+        group_by_fields: list[str],
+        user_filter: "RuleFilter | None" = None,
+        rule_filter: "RuleFilter | None" = None,
+        having_sql: str | None = None,
+        having_params: dict[str, Any] | None = None,
+        schema: list[dict[str, Any]] | None = None,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Run a database-level aggregation query against a collection.
+
+        Args:
+            collection_name: The collection name.
+            account_id: The account ID for scoping (None for superadmin bypass).
+            agg_functions: Validated AggFunction instances from aggregation_parser.
+            group_by_fields: Validated field names to group by.
+            user_filter: Optional compiled filter from ?filter= query param.
+            rule_filter: Optional rule filter for row-level security.
+            having_sql: Optional HAVING SQL fragment (already substituted with sql_expr).
+            having_params: Optional params for the HAVING clause (hp_ prefix).
+            schema: Optional collection schema for type conversion of group-by fields.
+
+        Returns:
+            A tuple of (result_rows, total_groups).
+        """
+        table_name = TableBuilder.generate_table_name(collection_name)
+
+        # 1. Build SELECT clause
+        select_parts: list[str] = []
+        for agg in agg_functions:
+            select_parts.append(f'{agg.sql_expr} AS "{agg.alias}"')
+        for field in group_by_fields:
+            select_parts.append(f'r."{field}"')
+        select_clause = ", ".join(select_parts)
+
+        # 2. Build WHERE clause (same pattern as find_all)
+        where_clauses: list[str] = []
+        params: dict[str, Any] = {}
+
+        if rule_filter:
+            where_clauses.append(f"({rule_filter.sql})")
+            params.update(rule_filter.params)
+
+        if user_filter:
+            where_clauses.append(f"({user_filter.sql})")
+            params.update(user_filter.params)
+
+        # Set account_id after other params to prevent overwrite
+        if account_id:
+            where_clauses.append('r."account_id" = :account_id')
+            params["account_id"] = account_id
+
+        where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+
+        # 3. Build GROUP BY clause
+        group_by_sql = ""
+        if group_by_fields:
+            group_by_parts = [f'r."{f}"' for f in group_by_fields]
+            group_by_sql = f"GROUP BY {', '.join(group_by_parts)}"
+
+        # 4. Build HAVING clause
+        having_sql_clause = ""
+        if having_sql:
+            having_sql_clause = f"HAVING {having_sql}"
+            if having_params:
+                params.update(having_params)
+
+        # 5. Execute main query
+        query_sql = f"""
+            SELECT {select_clause}
+            FROM "{table_name}" r
+            {where_sql}
+            {group_by_sql}
+            {having_sql_clause}
+        """
+        result = await self.session.execute(text(query_sql), params)
+        rows = result.fetchall()
+
+        # 6. Determine total_groups
+        if group_by_fields:
+            count_sql = f"""
+                SELECT COUNT(*) FROM (
+                    SELECT 1
+                    FROM "{table_name}" r
+                    {where_sql}
+                    {group_by_sql}
+                    {having_sql_clause}
+                ) _agg_count
+            """
+            count_result = await self.session.execute(text(count_sql), params)
+            total_groups = count_result.scalar_one()
+        else:
+            # Global aggregate always produces at most one row
+            total_groups = len(rows)
+
+        # 7. Convert rows to dicts with optional type conversion for group-by datetime fields
+        schema_lookup = {f["name"]: f for f in (schema or [])}
+        results: list[dict[str, Any]] = []
+        for row in rows:
+            row_dict = dict(row._mapping)
+            for field in group_by_fields:
+                val = row_dict.get(field)
+                if val is None:
+                    continue
+                field_def = schema_lookup.get(field)
+                if field_def:
+                    field_type = field_def.get("type", "text").lower()
+                    if field_type in ("date", "datetime") and isinstance(val, datetime):
+                        row_dict[field] = val.isoformat()
+            results.append(row_dict)
+
+        return results, total_groups
+
     async def delete_record(
         self,
         collection_name: str,

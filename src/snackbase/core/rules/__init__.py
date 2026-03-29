@@ -1,5 +1,6 @@
 """Rule Expression Parser API."""
 
+from .aggregation_parser import AggFunction, AggregationParseError, parse_agg_functions, parse_having, validate_group_by
 from .ast import InOp, IsNullOp, Node
 from .exceptions import RuleError, RuleEvaluationError, RuleSyntaxError
 from .filter_compiler import FilterCompilationError, compile_filter_to_sql
@@ -23,6 +24,11 @@ __all__ = [
     "compile_filter_to_sql",
     "validate_rule_expression",
     "validate_filter_expression",
+    "AggFunction",
+    "AggregationParseError",
+    "parse_agg_functions",
+    "parse_having",
+    "validate_group_by",
     "Node",
     "InOp",
     "IsNullOp",

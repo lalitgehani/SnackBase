@@ -14,10 +14,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from snackbase.core.config import get_settings
 from snackbase.core.logging import get_logger
 from snackbase.core.rules import (
+    AggregationParseError,
     FilterCompilationError,
     RuleSyntaxError,
     compile_filter_to_sql,
+    parse_agg_functions,
+    parse_having,
     validate_filter_expression,
+    validate_group_by,
 )
 from snackbase.domain.services import FieldType, PIIMaskingService, RecordValidator
 from snackbase.infrastructure.api.dependencies import (
@@ -34,6 +38,7 @@ from snackbase.infrastructure.api.middleware import (
     validate_request_fields,
 )
 from snackbase.infrastructure.api.schemas import (
+    AggregationResponse,
     BatchCreateRequest,
     BatchCreateResponse,
     BatchDeleteRequest,
@@ -708,6 +713,131 @@ async def list_records(
         skip=skip,
         limit=limit,
     )
+
+
+# ── Aggregate endpoint — MUST be registered before /{collection}/{record_id} ──
+# Starlette matches routes in registration order. "aggregate" must appear as a
+# literal path segment before the parameterized {record_id} catch-all.
+
+
+@router.get(
+    "/{collection}/aggregate",
+    response_model=AggregationResponse,
+    responses={
+        400: {"description": "Invalid aggregation expression, unknown field, or type mismatch"},
+        401: {"description": "Authentication required"},
+        403: {"description": "Permission denied"},
+        404: {"description": "Collection not found"},
+    },
+)
+async def aggregate_collection(
+    collection: str,
+    request: Request,
+    current_user: OptionalUser,
+    auth_context: OptionalAuthContext,
+    functions: str = Query(..., description='Comma-separated aggregation functions, e.g. "count(),sum(price)"'),
+    group_by: str | None = Query(None, description='Comma-separated group-by fields, e.g. "status,category"'),
+    filter_expr: str | None = Query(None, alias="filter", description="Pre-aggregation filter expression"),
+    having: str | None = Query(None, description="Post-aggregation filter on aggregate aliases, e.g. count() > 5"),
+    session: AsyncSession = Depends(get_db_session),
+) -> AggregationResponse | JSONResponse:
+    """Run aggregation queries (COUNT, SUM, AVG, MIN, MAX) on a collection.
+
+    Supports GROUP BY, HAVING, and pre-aggregation filtering. Respects account
+    isolation and collection list_rule permissions.
+    """
+    # 1. Permission check — same as list_records
+    rule_result = await check_collection_permission(
+        auth_context=auth_context,
+        collection=collection,
+        operation="list",
+        session=session,
+    )
+
+    # 2. Collection lookup
+    collection_repo = CollectionRepository(session)
+    collection_model = await collection_repo.get_by_name(collection)
+    if collection_model is None:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"error": "Collection not found", "message": f"Collection '{collection}' does not exist"},
+        )
+
+    # 3. Parse schema
+    schema = json.loads(collection_model.schema)
+    schema_lookup = {f["name"]: f for f in schema}
+
+    # 4. Parse and validate aggregation functions
+    try:
+        agg_functions = parse_agg_functions(functions, schema_lookup)
+    except AggregationParseError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"error": "Invalid aggregation functions", "message": str(exc)},
+        )
+
+    # 5. Parse and validate group_by
+    group_by_fields: list[str] = []
+    if group_by:
+        try:
+            group_by_fields = validate_group_by(group_by, schema_lookup)
+        except AggregationParseError as exc:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"error": "Invalid group_by", "message": str(exc)},
+            )
+
+    # 6. Compile pre-aggregation filter
+    user_filter: RuleFilter | None = None
+    if filter_expr:
+        try:
+            validate_filter_expression(filter_expr, schema)
+            filter_sql, filter_params = compile_filter_to_sql(filter_expr)
+            if filter_sql != "1=1":
+                user_filter = RuleFilter(sql=filter_sql, params=filter_params)
+        except (RuleSyntaxError, FilterCompilationError) as exc:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"error": "Invalid filter expression", "message": str(exc)},
+            )
+
+    # 7. Parse HAVING clause
+    having_sql: str | None = None
+    having_params: dict[str, Any] = {}
+    if having:
+        alias_to_sql = {agg.alias: agg.sql_expr for agg in agg_functions}
+        try:
+            having_sql, having_params = parse_having(having, alias_to_sql)
+        except AggregationParseError as exc:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"error": "Invalid having expression", "message": str(exc)},
+            )
+
+    # 8. Resolve account ID (superadmin sees all accounts)
+    from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID
+    target_account_id = await _resolve_account_id(current_user, request, session)
+    repo_account_id = (
+        None
+        if (current_user is not None and current_user.account_id == SYSTEM_ACCOUNT_ID)
+        else target_account_id
+    )
+
+    # 9. Run aggregation
+    record_repo = RecordRepository(session)
+    results, total_groups = await record_repo.aggregate_records(
+        collection_name=collection,
+        account_id=repo_account_id,
+        agg_functions=agg_functions,
+        group_by_fields=group_by_fields,
+        user_filter=user_filter,
+        rule_filter=rule_result,
+        having_sql=having_sql,
+        having_params=having_params,
+        schema=schema,
+    )
+
+    return AggregationResponse(results=results, total_groups=total_groups)
 
 
 # ── Batch endpoints — MUST be registered before /{collection}/{record_id} ────

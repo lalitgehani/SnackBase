@@ -132,3 +132,22 @@ class BatchDeleteResponse(BaseModel):
 
     deleted: list[str] = Field(..., description="IDs of deleted records")
     count: int = Field(..., description="Number of records deleted")
+
+
+# ── Aggregation ───────────────────────────────────────────────────────────────
+
+
+class AggregationResponse(BaseModel):
+    """Response for GET /{collection}/aggregate."""
+
+    results: list[dict[str, Any]] = Field(
+        ...,
+        description=(
+            "List of aggregation result rows. Each row contains group-by field values "
+            "and computed aggregate values keyed by their alias (e.g. 'count', 'sum_price')."
+        ),
+    )
+    total_groups: int = Field(
+        ...,
+        description="Total number of groups (or 1 if no group_by was specified).",
+    )

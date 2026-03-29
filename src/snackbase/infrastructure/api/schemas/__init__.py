@@ -72,6 +72,7 @@ from snackbase.infrastructure.api.schemas.migration_query_schemas import (
     MigrationRevisionResponse,
 )
 from snackbase.infrastructure.api.schemas.record_schemas import (
+    AggregationResponse,
     BatchCreateRequest,
     BatchCreateResponse,
     BatchDeleteRequest,
@@ -95,6 +96,7 @@ from snackbase.infrastructure.api.schemas.role_schemas import (
 
 __all__ = [
     "AccountDetailResponse",
+    "AggregationResponse",
     "BatchCreateRequest",
     "BatchCreateResponse",
     "BatchDeleteRequest",
