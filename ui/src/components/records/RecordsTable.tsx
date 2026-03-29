@@ -6,6 +6,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Eye, Pencil, Pin, PinOff, Trash2 } from 'lucide-react';
 import type { FieldDefinition } from '@/services/collections.service';
@@ -27,6 +28,10 @@ interface RecordsTableProps {
 	onDelete: (record: RecordListItem) => void;
 	hasPiiAccess?: boolean;
 	referenceRecords?: Record<string, RecordData[]>;
+
+	// Multi-select
+	selectedIds?: Set<string>;
+	onSelectionChange?: (ids: Set<string>) => void;
 
 	// Pagination props
 	totalItems: number;
@@ -129,6 +134,8 @@ export default function RecordsTable({
 	onDelete,
 	hasPiiAccess = false,
 	referenceRecords = {},
+	selectedIds,
+	onSelectionChange,
 	totalItems,
 	page,
 	pageSize,
@@ -224,6 +231,12 @@ export default function RecordsTable({
 
 	// Fixed width (px) for pinned columns — required for predictable sticky offsets
 	const PINNED_COL_WIDTH = 160;
+	// Width of the checkbox column when multi-select is active
+	const CHECKBOX_COL_WIDTH = 44;
+
+	// Multi-select derived state
+	const isAllSelected = records.length > 0 && selectedIds !== undefined && selectedIds.size === records.length;
+	const isIndeterminate = (selectedIds?.size ?? 0) > 0 && !isAllSelected;
 
 	// Pinned fields in original schema order
 	const pinnedFields = schema.filter(f => pinnedColumns.has(f.name));
@@ -231,6 +244,9 @@ export default function RecordsTable({
 	const unpinnedFields = schema.filter(f => !pinnedColumns.has(f.name));
 	// Render order: pinned first (original order), then unpinned
 	const orderedFields = [...pinnedFields, ...unpinnedFields];
+
+	// Extra left offset for pinned schema columns when the checkbox column is present
+	const checkboxOffset = onSelectionChange ? CHECKBOX_COL_WIDTH : 0;
 
 	// Build dynamic columns — all schema fields visible, pinned ones frozen left
 	const columns: Column<RecordListItem>[] = orderedFields.map((field) => {
@@ -243,7 +259,7 @@ export default function RecordsTable({
 			accessorKey: field.name as keyof RecordListItem,
 			sortable: true,
 			frozen: isPinned ? 'left' : undefined,
-			frozenOffset: isPinned ? pinnedIndex * PINNED_COL_WIDTH : undefined,
+			frozenOffset: isPinned ? checkboxOffset + pinnedIndex * PINNED_COL_WIDTH : undefined,
 			frozenBorderRight: isLastPinned,
 			style: isPinned
 				? { minWidth: PINNED_COL_WIDTH, maxWidth: PINNED_COL_WIDTH }
@@ -274,6 +290,38 @@ export default function RecordsTable({
 			header: 'Account',
 			accessorKey: 'account_name',
 			render: (record) => <span className="text-sm font-medium">{record.account_name || 'System'}</span>,
+		});
+	}
+
+	// Multi-select checkbox column — prepended as the very first column
+	if (onSelectionChange) {
+		columns.unshift({
+			header: (
+				<Checkbox
+					checked={isIndeterminate ? 'indeterminate' : isAllSelected}
+					onCheckedChange={(checked) => {
+						onSelectionChange(checked ? new Set(records.map(r => r.id)) : new Set());
+					}}
+					aria-label="Select all"
+				/>
+			),
+			frozen: 'left',
+			frozenOffset: 0,
+			frozenBorderRight: false,
+			style: { minWidth: CHECKBOX_COL_WIDTH, maxWidth: CHECKBOX_COL_WIDTH, padding: '0 8px' },
+			render: (record) => (
+				<Checkbox
+					checked={selectedIds?.has(record.id) ?? false}
+					onCheckedChange={(checked) => {
+						const next = new Set(selectedIds);
+						if (checked) next.add(record.id);
+						else next.delete(record.id);
+						onSelectionChange(next);
+					}}
+					onClick={(e) => e.stopPropagation()}
+					aria-label={`Select record ${record.id}`}
+				/>
+			),
 		});
 	}
 

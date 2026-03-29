@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from snackbase.core.config import get_settings
 from snackbase.core.logging import get_logger
 from snackbase.core.rules import (
     FilterCompilationError,
@@ -33,6 +34,13 @@ from snackbase.infrastructure.api.middleware import (
     validate_request_fields,
 )
 from snackbase.infrastructure.api.schemas import (
+    BatchCreateRequest,
+    BatchCreateResponse,
+    BatchDeleteRequest,
+    BatchDeleteResponse,
+    BatchUpdateRequest,
+    BatchUpdateResponse,
+    BatchValidationError,
     RecordListResponse,
     RecordResponse,
     RecordValidationErrorDetail,
@@ -700,6 +708,458 @@ async def list_records(
         skip=skip,
         limit=limit,
     )
+
+
+# ── Batch endpoints — MUST be registered before /{collection}/{record_id} ────
+# Starlette matches routes in registration order. Placing POST/PATCH/DELETE
+# /{collection}/batch here (before the parameterized /{record_id} routes below)
+# ensures "batch" is matched as a literal path segment, not as a record ID.
+
+
+@router.post(
+    "/{collection}/batch",
+    status_code=status.HTTP_201_CREATED,
+    response_model=BatchCreateResponse,
+    responses={
+        400: {"model": BatchValidationError, "description": "Validation error on one record"},
+        401: {"description": "Authentication required"},
+        403: {"description": "Permission denied"},
+        404: {"description": "Collection not found"},
+    },
+)
+async def batch_create_records(
+    collection: str,
+    request: Request,
+    body: BatchCreateRequest,
+    current_user: OptionalUser,
+    auth_context: OptionalAuthContext,
+    session: AsyncSession = Depends(get_db_session),
+) -> BatchCreateResponse | JSONResponse:
+    """Batch create records in a collection (atomic — all succeed or all fail).
+
+    Validates all records upfront before writing any. Returns the index of the
+    first failing record if validation fails.
+    """
+    settings = get_settings()
+    if len(body.records) > settings.batch_max_size:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "error": "batch_too_large",
+                "message": f"Batch size {len(body.records)} exceeds maximum of {settings.batch_max_size}",
+            },
+        )
+
+    target_account_id = await _resolve_account_id(current_user, request, session)
+
+    collection_repo = CollectionRepository(session)
+    collection_model = await collection_repo.get_by_name(collection)
+    if collection_model is None:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"error": "Not found", "message": f"Collection '{collection}' not found"},
+        )
+
+    try:
+        schema = json.loads(collection_model.schema)
+    except json.JSONDecodeError:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"error": "Internal error", "message": "Failed to parse collection schema"},
+        )
+
+    # Check permission once per collection
+    rule_result = await check_collection_permission(
+        auth_context=auth_context,
+        collection=collection,
+        operation="create",
+        session=session,
+    )
+    allowed_fields = rule_result.allowed_fields
+
+    record_repo = RecordRepository(session)
+    validated_records: list[dict[str, Any]] = []
+
+    # Validate ALL records upfront before writing any
+    for i, raw in enumerate(body.records):
+        data = dict(raw)
+
+        validate_request_fields(data, allowed_fields, "create")
+        if allowed_fields != "*":
+            data = apply_field_filter(data, allowed_fields, is_request=True)
+
+        # Validate reference fields
+        reference_errors = []
+        for field in schema:
+            field_name = field["name"]
+            field_type = field.get("type", "text").lower()
+            if field_type == FieldType.REFERENCE.value and field_name in data:
+                ref_value = data[field_name]
+                if ref_value is not None:
+                    target_col = field.get("collection", "")
+                    exists = await record_repo.check_reference_exists(
+                        target_col, ref_value, target_account_id
+                    )
+                    if not exists:
+                        reference_errors.append({
+                            "field": field_name,
+                            "message": f"Referenced record '{ref_value}' not found in collection '{target_col}'",
+                            "code": "invalid_reference",
+                        })
+
+        processed_data, validation_errors = RecordValidator.validate_and_apply_defaults(data, schema)
+
+        all_errors = [
+            RecordValidationErrorDetail(field=e.field, message=e.message, code=e.code)
+            for e in validation_errors
+        ] + [RecordValidationErrorDetail(**e) for e in reference_errors]
+
+        if all_errors:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content=BatchValidationError(
+                    error="validation_error",
+                    index=i,
+                    details=all_errors,
+                ).model_dump(),
+            )
+
+        validated_records.append(processed_data)
+
+    # All valid — write atomically
+    try:
+        created = await record_repo.batch_insert_records(
+            collection_name=collection,
+            account_id=target_account_id,
+            created_by=current_user.user_id if current_user else ANONYMOUS_USER_ID,
+            records_data=validated_records,
+            schema=schema,
+        )
+        await session.commit()
+    except Exception as e:
+        await session.rollback()
+        logger.error("Batch create failed", collection=collection, error=str(e))
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"error": "Internal error", "message": "Batch create failed"},
+        )
+
+    # Broadcast a create event for each record
+    try:
+        broadcaster = request.app.state.event_broadcaster
+        for r in created:
+            await broadcaster.publish_event(
+                account_id=target_account_id,
+                collection=collection,
+                operation="create",
+                data=r,
+            )
+    except Exception as e:
+        logger.error("Failed to broadcast batch create events", error=str(e))
+
+    # Build response — apply field filter + PII masking
+    response_records = []
+    for r in created:
+        if allowed_fields != "*":
+            r = apply_field_filter(r, allowed_fields)
+        r = _mask_record_pii(
+            r, schema,
+            current_user.groups if current_user else [],
+            current_user.account_id if current_user else None,
+        )
+        response_records.append(RecordResponse.from_record(r))
+
+    return BatchCreateResponse(created=response_records, count=len(response_records))
+
+
+@router.patch(
+    "/{collection}/batch",
+    response_model=BatchUpdateResponse,
+    responses={
+        400: {"model": BatchValidationError, "description": "Validation error on one record"},
+        401: {"description": "Authentication required"},
+        403: {"description": "Permission denied"},
+        404: {"description": "One or more record IDs not found"},
+    },
+)
+async def batch_update_records(
+    collection: str,
+    request: Request,
+    body: BatchUpdateRequest,
+    current_user: OptionalUser,
+    auth_context: OptionalAuthContext,
+    session: AsyncSession = Depends(get_db_session),
+) -> BatchUpdateResponse | JSONResponse:
+    """Batch patch records (atomic — all succeed or all fail).
+
+    Returns 404 if any record ID does not exist. The entire batch fails in
+    that case so no records are modified.
+    """
+    from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID
+
+    settings = get_settings()
+    if len(body.records) > settings.batch_max_size:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "error": "batch_too_large",
+                "message": f"Batch size {len(body.records)} exceeds maximum of {settings.batch_max_size}",
+            },
+        )
+
+    target_account_id = await _resolve_account_id(current_user, request, session)
+    repo_account_id = (
+        None
+        if (current_user is not None and current_user.account_id == SYSTEM_ACCOUNT_ID)
+        else target_account_id
+    )
+
+    collection_repo = CollectionRepository(session)
+    collection_model = await collection_repo.get_by_name(collection)
+    if collection_model is None:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"error": "Not found", "message": f"Collection '{collection}' not found"},
+        )
+
+    try:
+        schema = json.loads(collection_model.schema)
+    except json.JSONDecodeError:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"error": "Internal error", "message": "Failed to parse collection schema"},
+        )
+
+    record_repo = RecordRepository(session)
+
+    # Pre-fetch all existing records in one query for 404 checking and audit data
+    all_ids = [item.id for item in body.records]
+    existing_map = await record_repo.get_by_ids(
+        collection_name=collection,
+        ids=all_ids,
+        account_id=repo_account_id,
+        schema=schema,
+    )
+
+    # Return 404 if any record is missing (spec: entire batch fails)
+    for i, item in enumerate(body.records):
+        if item.id not in existing_map:
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={
+                    "error": "not_found",
+                    "message": f"Record '{item.id}' not found (index {i})",
+                },
+            )
+
+    # Check update permission
+    rule_result = await check_collection_permission(
+        auth_context=auth_context,
+        collection=collection,
+        operation="update",
+        session=session,
+    )
+    allowed_fields = rule_result.allowed_fields
+
+    # Validate all updates upfront
+    validated_updates: list[dict[str, Any]] = []
+    for i, item in enumerate(body.records):
+        data = dict(item.data)
+
+        validate_request_fields(data, allowed_fields, "update")
+        if allowed_fields != "*":
+            data = apply_field_filter(data, allowed_fields, is_request=True)
+
+        processed_data, validation_errors = RecordValidator.validate_and_apply_defaults(
+            data, schema, partial=True
+        )
+
+        all_errors = [
+            RecordValidationErrorDetail(field=e.field, message=e.message, code=e.code)
+            for e in validation_errors
+        ]
+
+        if all_errors:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content=BatchValidationError(
+                    error="validation_error",
+                    index=i,
+                    details=all_errors,
+                ).model_dump(),
+            )
+
+        validated_updates.append({
+            "id": item.id,
+            "data": processed_data,
+            "old_values": existing_map[item.id],
+        })
+
+    # Atomic write
+    try:
+        updated = await record_repo.batch_update_records(
+            collection_name=collection,
+            account_id=repo_account_id,
+            updated_by=current_user.user_id if current_user else ANONYMOUS_USER_ID,
+            updates=validated_updates,
+            schema=schema,
+            rule_filter=rule_result if rule_result.sql else None,
+        )
+        await session.commit()
+    except Exception as e:
+        await session.rollback()
+        logger.error("Batch update failed", collection=collection, error=str(e))
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"error": "Internal error", "message": "Batch update failed"},
+        )
+
+    # Broadcast update events
+    try:
+        broadcaster = request.app.state.event_broadcaster
+        for r in updated:
+            await broadcaster.publish_event(
+                account_id=target_account_id,
+                collection=collection,
+                operation="update",
+                data=r,
+            )
+    except Exception as e:
+        logger.error("Failed to broadcast batch update events", error=str(e))
+
+    # Build response
+    response_records = []
+    for r in updated:
+        if allowed_fields != "*":
+            r = apply_field_filter(r, allowed_fields)
+        r = _mask_record_pii(
+            r, schema,
+            current_user.groups if current_user else [],
+            current_user.account_id if current_user else None,
+        )
+        response_records.append(RecordResponse.from_record(r))
+
+    return BatchUpdateResponse(updated=response_records, count=len(response_records))
+
+
+@router.delete(
+    "/{collection}/batch",
+    response_model=BatchDeleteResponse,
+    responses={
+        401: {"description": "Authentication required"},
+        403: {"description": "Permission denied"},
+        404: {"description": "One or more record IDs not found"},
+    },
+)
+async def batch_delete_records(
+    collection: str,
+    request: Request,
+    body: BatchDeleteRequest,
+    current_user: OptionalUser,
+    auth_context: OptionalAuthContext,
+    session: AsyncSession = Depends(get_db_session),
+) -> BatchDeleteResponse | JSONResponse:
+    """Batch delete records (atomic — all succeed or all fail).
+
+    Returns 404 if any record ID does not exist. The entire batch fails in
+    that case so no records are deleted.
+    """
+    from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID
+
+    settings = get_settings()
+    if len(body.ids) > settings.batch_max_size:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "error": "batch_too_large",
+                "message": f"Batch size {len(body.ids)} exceeds maximum of {settings.batch_max_size}",
+            },
+        )
+
+    target_account_id = await _resolve_account_id(current_user, request, session)
+    repo_account_id = (
+        None
+        if (current_user is not None and current_user.account_id == SYSTEM_ACCOUNT_ID)
+        else target_account_id
+    )
+
+    collection_repo = CollectionRepository(session)
+    collection_model = await collection_repo.get_by_name(collection)
+    if collection_model is None:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"error": "Not found", "message": f"Collection '{collection}' not found"},
+        )
+
+    try:
+        schema = json.loads(collection_model.schema)
+    except json.JSONDecodeError:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"error": "Internal error", "message": "Failed to parse collection schema"},
+        )
+
+    record_repo = RecordRepository(session)
+
+    # Pre-fetch all existing records for 404 checking and hook/audit data
+    existing_map = await record_repo.get_by_ids(
+        collection_name=collection,
+        ids=body.ids,
+        account_id=repo_account_id,
+        schema=schema,
+    )
+
+    # Return 404 if any record is missing (spec: entire batch fails)
+    for i, rid in enumerate(body.ids):
+        if rid not in existing_map:
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={
+                    "error": "not_found",
+                    "message": f"Record '{rid}' not found (index {i})",
+                },
+            )
+
+    # Check delete permission
+    rule_result = await check_collection_permission(
+        auth_context=auth_context,
+        collection=collection,
+        operation="delete",
+        session=session,
+    )
+
+    # Atomic delete
+    try:
+        deleted_ids = await record_repo.batch_delete_records(
+            collection_name=collection,
+            account_id=repo_account_id,
+            record_ids=body.ids,
+            records_data=existing_map,
+            rule_filter=rule_result if rule_result.sql else None,
+        )
+        await session.commit()
+    except Exception as e:
+        await session.rollback()
+        logger.error("Batch delete failed", collection=collection, error=str(e))
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"error": "Internal error", "message": "Batch delete failed"},
+        )
+
+    # Broadcast delete events
+    try:
+        broadcaster = request.app.state.event_broadcaster
+        for rid in deleted_ids:
+            await broadcaster.publish_event(
+                account_id=target_account_id,
+                collection=collection,
+                operation="delete",
+                data={"id": rid},
+            )
+    except Exception as e:
+        logger.error("Failed to broadcast batch delete events", error=str(e))
+
+    return BatchDeleteResponse(deleted=deleted_ids, count=len(deleted_ids))
 
 
 @router.get(

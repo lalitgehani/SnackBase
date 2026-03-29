@@ -9,6 +9,10 @@ import type {
 	RecordData,
 	RecordListResponse,
 	GetRecordsParams,
+	BatchUpdateItem,
+	BatchCreateResponse,
+	BatchUpdateResponse,
+	BatchDeleteResponse,
 } from '@/types/records.types';
 
 // Re-export commonly used types
@@ -70,4 +74,49 @@ export const patchRecord = async (
  */
 export const deleteRecord = async (collection: string, recordId: string): Promise<void> => {
 	await apiClient.delete(`/records/${collection}/${recordId}`);
+};
+
+/**
+ * Batch create records (all succeed or all fail atomically)
+ */
+export const batchCreateRecords = async (
+	collection: string,
+	records: RecordData[],
+): Promise<BatchCreateResponse> => {
+	const response = await apiClient.post<BatchCreateResponse>(
+		`/records/${collection}/batch`,
+		{ records },
+	);
+	return response.data;
+};
+
+/**
+ * Batch patch records (all succeed or all fail atomically)
+ * Returns 404 if any ID does not exist — entire batch fails.
+ */
+export const batchUpdateRecords = async (
+	collection: string,
+	updates: BatchUpdateItem[],
+): Promise<BatchUpdateResponse> => {
+	const response = await apiClient.patch<BatchUpdateResponse>(
+		`/records/${collection}/batch`,
+		{ records: updates },
+	);
+	return response.data;
+};
+
+/**
+ * Batch delete records (all succeed or all fail atomically)
+ * Returns 404 if any ID does not exist — entire batch fails.
+ */
+export const batchDeleteRecords = async (
+	collection: string,
+	ids: string[],
+): Promise<BatchDeleteResponse> => {
+	// Axios requires { data: body } to send a body with DELETE
+	const response = await apiClient.delete<BatchDeleteResponse>(
+		`/records/${collection}/batch`,
+		{ data: { ids } },
+	);
+	return response.data;
 };

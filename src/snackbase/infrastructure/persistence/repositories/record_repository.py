@@ -181,7 +181,7 @@ class RecordRepository:
         rule_filter: RuleFilter | None = None,
     ) -> dict[str, Any] | None:
         """Update an existing record.
-        
+
         Args:
             collection_name: The collection name.
             record_id: The record ID.
@@ -191,7 +191,7 @@ class RecordRepository:
             schema: The collection schema.
             old_values: Optional old values for audit logging.
             rule_filter: Optional rule filter for row-level security.
-            
+
         Returns:
             The updated record dict, or None if not found/access denied.
         """
@@ -634,3 +634,123 @@ class RecordRepository:
                 )
 
         return success
+
+    async def batch_insert_records(
+        self,
+        collection_name: str,
+        account_id: str,
+        created_by: str,
+        records_data: list[dict[str, Any]],
+        schema: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Insert multiple records within a single transaction.
+
+        Each record is inserted via the existing insert_record() method so that
+        hooks, audit events, and type handling are reused per record.
+        The caller is responsible for committing or rolling back the transaction.
+
+        Args:
+            collection_name: The collection name.
+            account_id: The account ID for scoping.
+            created_by: The user ID who is creating the records.
+            records_data: List of validated record data dicts.
+            schema: The collection schema for type handling.
+
+        Returns:
+            List of created record dicts in insertion order.
+
+        Raises:
+            ValueError: With message "index={i}" on failure, so the caller can roll back.
+        """
+        import uuid as _uuid
+        created = []
+        for i, data in enumerate(records_data):
+            try:
+                record = await self.insert_record(
+                    collection_name=collection_name,
+                    record_id=str(_uuid.uuid4()),
+                    account_id=account_id,
+                    created_by=created_by,
+                    data=data,
+                    schema=schema,
+                )
+                created.append(record)
+            except Exception as exc:
+                raise ValueError(f"index={i}") from exc
+        return created
+
+    async def batch_update_records(
+        self,
+        collection_name: str,
+        account_id: str | None,
+        updated_by: str,
+        updates: list[dict[str, Any]],
+        schema: list[dict[str, Any]],
+        rule_filter: RuleFilter | None = None,
+    ) -> list[dict[str, Any]]:
+        """Patch multiple records within a single transaction.
+
+        Each update dict must have keys: "id", "data", and optionally "old_values".
+        The caller is responsible for committing or rolling back the transaction.
+
+        Returns:
+            List of updated record dicts in request order.
+
+        Raises:
+            ValueError: With message "index={i}:not_found" if any record is not found.
+        """
+        updated = []
+        for i, item in enumerate(updates):
+            record = await self.update_record(
+                collection_name=collection_name,
+                record_id=item["id"],
+                account_id=account_id,
+                updated_by=updated_by,
+                data=item["data"],
+                schema=schema,
+                old_values=item.get("old_values"),
+                rule_filter=rule_filter,
+            )
+            if record is None:
+                raise ValueError(f"index={i}:not_found")
+            updated.append(record)
+        return updated
+
+    async def batch_delete_records(
+        self,
+        collection_name: str,
+        account_id: str | None,
+        record_ids: list[str],
+        records_data: dict[str, dict[str, Any]],
+        rule_filter: RuleFilter | None = None,
+    ) -> list[str]:
+        """Delete multiple records within a single transaction.
+
+        The caller is responsible for committing or rolling back the transaction.
+
+        Args:
+            collection_name: The collection name.
+            account_id: The account ID for scoping (None for superadmin bypass).
+            record_ids: List of record IDs to delete.
+            records_data: Mapping of record_id → record dict for hook/audit data.
+            rule_filter: Optional rule filter for row-level security.
+
+        Returns:
+            List of deleted record IDs.
+
+        Raises:
+            ValueError: With message "index={i}:not_found:{rid}" if any record is not found.
+        """
+        deleted_ids = []
+        for i, record_id in enumerate(record_ids):
+            success = await self.delete_record(
+                collection_name=collection_name,
+                record_id=record_id,
+                account_id=account_id,
+                record_data=records_data.get(record_id),
+                rule_filter=rule_filter,
+            )
+            if not success:
+                raise ValueError(f"index={i}:not_found:{record_id}")
+            deleted_ids.append(record_id)
+        return deleted_ids

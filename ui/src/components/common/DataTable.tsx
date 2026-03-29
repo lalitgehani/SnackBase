@@ -28,7 +28,7 @@ import { ArrowUpDown, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export interface Column<T> {
-    header: string;
+    header: string | React.ReactNode;
     accessorKey?: keyof T;
     render?: (item: T) => React.ReactNode;
     sortable?: boolean;

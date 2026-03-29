@@ -69,6 +69,34 @@ export interface PiiMaskConfig {
 	maskFn: (value: string) => string;
 }
 
+// ── Batch operation types ────────────────────────────────────────────────────
+
+export interface BatchUpdateItem {
+	id: string;
+	data: Partial<RecordData>;
+}
+
+export interface BatchCreateResponse {
+	created: RecordDetail[];
+	count: number;
+}
+
+export interface BatchUpdateResponse {
+	updated: RecordDetail[];
+	count: number;
+}
+
+export interface BatchDeleteResponse {
+	deleted: string[];
+	count: number;
+}
+
+export interface BatchValidationError {
+	error: string;
+	index: number;
+	details: ValidationErrorDetail[];
+}
+
 export const PII_MASK_FUNCTIONS: Record<string, (value: string) => string> = {
 	email: (value: string) => {
 		const [local, domain] = value.split('@');

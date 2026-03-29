@@ -8,12 +8,15 @@ import { useParams, useNavigate } from 'react-router';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Database, Plus, Search, RefreshCw, ArrowLeft, Filter } from 'lucide-react';
+import { Database, Download, Plus, Search, RefreshCw, ArrowLeft, Filter, Trash2, Upload } from 'lucide-react';
 import RecordsTable from '@/components/records/RecordsTable';
 import CreateRecordDialog from '@/components/records/CreateRecordDialog';
 import ViewRecordDialog from '@/components/records/ViewRecordDialog';
 import EditRecordDialog from '@/components/records/EditRecordDialog';
 import DeleteRecordDialog from '@/components/records/DeleteRecordDialog';
+import BulkDeleteConfirmDialog from '@/components/records/BulkDeleteConfirmDialog';
+import ImportDialog from '@/components/records/ImportDialog';
+import ExportDialog from '@/components/records/ExportDialog';
 import FilterBuilderPanel, {
     type FilterRow,
     compileFilterExpression,
@@ -28,6 +31,7 @@ import {
     createRecord,
     updateRecord,
     deleteRecord,
+    batchDeleteRecords,
     type RecordData,
     type RecordListItem,
 } from '@/services/records.service';
@@ -65,8 +69,14 @@ export default function RecordsPage() {
     const [viewDialogOpen, setViewDialogOpen] = useState(false);
     const [editDialogOpen, setEditDialogOpen] = useState(false);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
+    const [importDialogOpen, setImportDialogOpen] = useState(false);
+    const [exportDialogOpen, setExportDialogOpen] = useState(false);
     const [selectedRecord, setSelectedRecord] = useState<RecordListItem | null>(null);
     const [selectedRecordFull, setSelectedRecordFull] = useState<RecordData | null>(null);
+
+    // Multi-select state
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
     // Check if user has PII access (admin or superadmin role)
     const hasPiiAccess = user?.role === 'admin' || user?.role === 'superadmin';
@@ -105,6 +115,8 @@ export default function RecordsPage() {
             const response = await getRecords(params);
             setData(response.items);
             setTotal(response.total);
+            // Clear selection when records are refreshed
+            setSelectedIds(new Set());
         } catch (err) {
             setError(handleApiError(err));
         } finally {
@@ -213,6 +225,13 @@ export default function RecordsPage() {
         await fetchRecords();
     };
 
+    const handleBulkDelete = async () => {
+        if (!collectionName || selectedIds.size === 0) return;
+        await batchDeleteRecords(collectionName, Array.from(selectedIds));
+        setSelectedIds(new Set());
+        await fetchRecords();
+    };
+
     const handleNavigateToRecord = (refCollection: string) => {
         navigate(`/admin/collections/${refCollection}/records`);
     };
@@ -261,12 +280,32 @@ export default function RecordsPage() {
                         Manage records in the <strong>{collectionName}</strong> collection
                     </p>
                 </div>
-                {collection && collection.schema && collection.schema.length > 0 && (
-                    <Button onClick={() => setCreateDialogOpen(true)} className="gap-2">
-                        <Plus className="h-4 w-4" />
-                        Create Record
-                    </Button>
-                )}
+                <div className="flex items-center gap-2">
+                    {collection && collection.schema && collection.schema.length > 0 && (
+                        <>
+                            <Button
+                                variant="outline"
+                                onClick={() => setExportDialogOpen(true)}
+                                className="gap-2"
+                            >
+                                <Download className="h-4 w-4" />
+                                Export
+                            </Button>
+                            <Button
+                                variant="outline"
+                                onClick={() => setImportDialogOpen(true)}
+                                className="gap-2"
+                            >
+                                <Upload className="h-4 w-4" />
+                                Import
+                            </Button>
+                            <Button onClick={() => setCreateDialogOpen(true)} className="gap-2">
+                                <Plus className="h-4 w-4" />
+                                Create Record
+                            </Button>
+                        </>
+                    )}
+                </div>
             </div>
 
             {/* Search and Actions */}
@@ -356,6 +395,31 @@ export default function RecordsPage() {
                         </div>
                     )}
 
+                    {/* Floating bulk action bar — shown when records are selected */}
+                    {selectedIds.size > 0 && (
+                        <div className="flex items-center gap-3 bg-muted border rounded-lg px-4 py-2">
+                            <span className="text-sm font-medium">
+                                {selectedIds.size} record{selectedIds.size === 1 ? '' : 's'} selected
+                            </span>
+                            <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => setBulkDeleteDialogOpen(true)}
+                                className="gap-1"
+                            >
+                                <Trash2 className="h-4 w-4" />
+                                Delete
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setSelectedIds(new Set())}
+                            >
+                                Deselect all
+                            </Button>
+                        </div>
+                    )}
+
                     {/* Table */}
                     {!loading && data && data.length > 0 && collection && collection.schema && collection.schema.length > 0 && (
                         <RecordsTable
@@ -369,6 +433,8 @@ export default function RecordsPage() {
                             onDelete={handleDelete}
                             hasPiiAccess={hasPiiAccess}
                             referenceRecords={referenceRecords}
+                            selectedIds={selectedIds}
+                            onSelectionChange={setSelectedIds}
                             totalItems={total}
                             page={page}
                             pageSize={pageSize}
@@ -455,6 +521,30 @@ export default function RecordsPage() {
                         collectionName={collection.name}
                         record={selectedRecordFull}
                         recordId={selectedRecord?.id || ''}
+                    />
+
+                    <BulkDeleteConfirmDialog
+                        open={bulkDeleteDialogOpen}
+                        onOpenChange={setBulkDeleteDialogOpen}
+                        onConfirm={handleBulkDelete}
+                        count={selectedIds.size}
+                        collectionName={collection.name}
+                    />
+
+                    <ImportDialog
+                        open={importDialogOpen}
+                        onOpenChange={setImportDialogOpen}
+                        collection={collection.name}
+                        schema={collection.schema}
+                        onSuccess={() => fetchRecords()}
+                    />
+
+                    <ExportDialog
+                        open={exportDialogOpen}
+                        onOpenChange={setExportDialogOpen}
+                        collection={collection.name}
+                        filterExpression={filterExpression}
+                        total={total}
                     />
                 </>
             )}

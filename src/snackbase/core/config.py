@@ -177,6 +177,12 @@ class Settings(BaseSettings):
         description="Maximum nesting depth for ?expand= reference expansion",
     )
 
+    # Batch Operations Settings
+    batch_max_size: int = Field(
+        default=100,
+        description="Maximum records per batch create/update/delete (SNACKBASE_BATCH_MAX_SIZE)",
+    )
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, v: str | list[str]) -> list[str]:
