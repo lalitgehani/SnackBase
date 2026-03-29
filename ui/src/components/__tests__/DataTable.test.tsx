@@ -544,6 +544,335 @@ describe('DataTable – pagination', () => {
 })
 
 // ---------------------------------------------------------------------------
+// Null cell rendering
+// ---------------------------------------------------------------------------
+
+describe('DataTable – null cell rendering', () => {
+  it('renders an empty cell when column has neither render nor accessorKey', () => {
+    const cols: Column<TestItem>[] = [
+      { header: 'Actions' }, // no render, no accessorKey → renderCell returns null
+    ]
+
+    const { container } = render(
+      <DataTable
+        data={[makeItem(1)]}
+        columns={cols}
+        keyExtractor={(item) => item.id}
+      />,
+    )
+
+    const cells = container.querySelectorAll('td')
+    expect(cells).toHaveLength(1)
+    expect(cells[0].textContent).toBe('')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Page number navigation
+// ---------------------------------------------------------------------------
+
+describe('DataTable – page number navigation', () => {
+  it('calls onPageChange with the clicked page number', () => {
+    const onPageChange = vi.fn()
+    const pagination = defaultPagination({ page: 1, pageSize: 10, onPageChange })
+
+    render(
+      <DataTable
+        data={SAMPLE_DATA}
+        columns={COLUMNS}
+        keyExtractor={(item) => item.id}
+        pagination={pagination}
+        totalItems={30}
+      />,
+    )
+
+    const nav = screen.getByRole('navigation', { name: /pagination/i })
+    fireEvent.click(within(nav).getByText('2'))
+    expect(onPageChange).toHaveBeenCalledWith(2)
+  })
+
+  it('calls onPageSizeChange when rows-per-page value changes', async () => {
+    const onPageSizeChange = vi.fn()
+    const pagination = defaultPagination({ page: 1, pageSize: 10, onPageSizeChange })
+
+    render(
+      <DataTable
+        data={SAMPLE_DATA}
+        columns={COLUMNS}
+        keyExtractor={(item) => item.id}
+        pagination={pagination}
+        totalItems={30}
+      />,
+    )
+
+    // The Rows per page Select trigger shows the current page size
+    const trigger = screen.getByRole('combobox')
+    fireEvent.click(trigger)
+  })
+
+  it('renders showModeToggle buttons in page mode when showModeToggle is true', () => {
+    const onPaginationModeChange = vi.fn()
+    const pagination = defaultPagination()
+
+    render(
+      <DataTable
+        data={SAMPLE_DATA}
+        columns={COLUMNS}
+        keyExtractor={(item) => item.id}
+        pagination={pagination}
+        totalItems={30}
+        showModeToggle
+        onPaginationModeChange={onPaginationModeChange}
+      />,
+    )
+
+    expect(screen.getByRole('button', { name: 'Page' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Scroll' })).toBeInTheDocument()
+  })
+
+  it('calls onPaginationModeChange when Scroll button is clicked in page mode', () => {
+    const onPaginationModeChange = vi.fn()
+    const pagination = defaultPagination()
+
+    render(
+      <DataTable
+        data={SAMPLE_DATA}
+        columns={COLUMNS}
+        keyExtractor={(item) => item.id}
+        pagination={pagination}
+        totalItems={30}
+        showModeToggle
+        onPaginationModeChange={onPaginationModeChange}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Scroll' }))
+    expect(onPaginationModeChange).toHaveBeenCalledWith('scroll')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Scroll mode
+// ---------------------------------------------------------------------------
+
+describe('DataTable – scroll mode', () => {
+  it('renders scroll mode controls when paginationMode is scroll and data exists', () => {
+    render(
+      <DataTable
+        data={SAMPLE_DATA}
+        columns={COLUMNS}
+        keyExtractor={(item) => item.id}
+        paginationMode="scroll"
+        hasMore={false}
+      />,
+    )
+
+    expect(screen.getByText(/loaded 3 records/i)).toBeInTheDocument()
+  })
+
+  it('shows "(more available)" text when hasMore is true', () => {
+    render(
+      <DataTable
+        data={SAMPLE_DATA}
+        columns={COLUMNS}
+        keyExtractor={(item) => item.id}
+        paginationMode="scroll"
+        hasMore
+      />,
+    )
+
+    expect(screen.getByText(/more available/i)).toBeInTheDocument()
+  })
+
+  it('shows "(all loaded)" text when hasMore is false', () => {
+    render(
+      <DataTable
+        data={SAMPLE_DATA}
+        columns={COLUMNS}
+        keyExtractor={(item) => item.id}
+        paginationMode="scroll"
+        hasMore={false}
+      />,
+    )
+
+    expect(screen.getByText(/all loaded/i)).toBeInTheDocument()
+  })
+
+  it('renders Load More button when hasMore is true', () => {
+    render(
+      <DataTable
+        data={SAMPLE_DATA}
+        columns={COLUMNS}
+        keyExtractor={(item) => item.id}
+        paginationMode="scroll"
+        hasMore
+        onLoadMore={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByRole('button', { name: /load more/i })).toBeInTheDocument()
+  })
+
+  it('calls onLoadMore when Load More button is clicked', () => {
+    const onLoadMore = vi.fn()
+
+    render(
+      <DataTable
+        data={SAMPLE_DATA}
+        columns={COLUMNS}
+        keyExtractor={(item) => item.id}
+        paginationMode="scroll"
+        hasMore
+        onLoadMore={onLoadMore}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /load more/i }))
+    expect(onLoadMore).toHaveBeenCalled()
+  })
+
+  it('shows loading indicator in Load More button when isLoadingMore is true', () => {
+    render(
+      <DataTable
+        data={SAMPLE_DATA}
+        columns={COLUMNS}
+        keyExtractor={(item) => item.id}
+        paginationMode="scroll"
+        hasMore
+        isLoadingMore
+        onLoadMore={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText('Loading...')).toBeInTheDocument()
+  })
+
+  it('does not render Load More button when hasMore is false', () => {
+    render(
+      <DataTable
+        data={SAMPLE_DATA}
+        columns={COLUMNS}
+        keyExtractor={(item) => item.id}
+        paginationMode="scroll"
+        hasMore={false}
+      />,
+    )
+
+    expect(screen.queryByRole('button', { name: /load more/i })).not.toBeInTheDocument()
+  })
+
+  it('renders mode toggle buttons in scroll mode when showModeToggle is true', () => {
+    const onPaginationModeChange = vi.fn()
+
+    render(
+      <DataTable
+        data={SAMPLE_DATA}
+        columns={COLUMNS}
+        keyExtractor={(item) => item.id}
+        paginationMode="scroll"
+        showModeToggle
+        onPaginationModeChange={onPaginationModeChange}
+      />,
+    )
+
+    expect(screen.getByRole('button', { name: 'Page' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Scroll' })).toBeInTheDocument()
+  })
+
+  it('calls onPaginationModeChange when Page button is clicked in scroll mode', () => {
+    const onPaginationModeChange = vi.fn()
+
+    render(
+      <DataTable
+        data={SAMPLE_DATA}
+        columns={COLUMNS}
+        keyExtractor={(item) => item.id}
+        paginationMode="scroll"
+        showModeToggle
+        onPaginationModeChange={onPaginationModeChange}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Page' }))
+    expect(onPaginationModeChange).toHaveBeenCalledWith('page')
+  })
+
+  it('does not render scroll controls when data is empty', () => {
+    render(
+      <DataTable
+        data={[]}
+        columns={COLUMNS}
+        keyExtractor={(item) => item.id}
+        paginationMode="scroll"
+        hasMore={false}
+      />,
+    )
+
+    expect(screen.queryByText(/loaded/i)).not.toBeInTheDocument()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Frozen columns
+// ---------------------------------------------------------------------------
+
+describe('DataTable – frozen columns', () => {
+  it('applies sticky positioning style for a left-frozen column', () => {
+    const cols: Column<TestItem>[] = [
+      { header: 'Name', accessorKey: 'name', frozen: 'left', frozenOffset: 0 },
+      { header: 'Status', accessorKey: 'status' },
+    ]
+
+    const { container } = render(
+      <DataTable
+        data={SAMPLE_DATA}
+        columns={cols}
+        keyExtractor={(item) => item.id}
+      />,
+    )
+
+    // The first header cell should have position:sticky style
+    const headerCells = container.querySelectorAll('th')
+    expect(headerCells[0].style.position).toBe('sticky')
+  })
+
+  it('applies sticky positioning style for a right-frozen column', () => {
+    const cols: Column<TestItem>[] = [
+      { header: 'Name', accessorKey: 'name' },
+      { header: 'Actions', frozen: 'right' },
+    ]
+
+    const { container } = render(
+      <DataTable
+        data={SAMPLE_DATA}
+        columns={cols}
+        keyExtractor={(item) => item.id}
+      />,
+    )
+
+    const headerCells = container.querySelectorAll('th')
+    expect(headerCells[1].style.position).toBe('sticky')
+  })
+
+  it('applies border class to left-frozen column with frozenBorderRight', () => {
+    const cols: Column<TestItem>[] = [
+      { header: 'Name', accessorKey: 'name', frozen: 'left', frozenBorderRight: true },
+    ]
+
+    const { container } = render(
+      <DataTable
+        data={SAMPLE_DATA}
+        columns={cols}
+        keyExtractor={(item) => item.id}
+      />,
+    )
+
+    const firstHeader = container.querySelector('th')
+    expect(firstHeader?.className).toContain('border-r')
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Large datasets
 // ---------------------------------------------------------------------------
 

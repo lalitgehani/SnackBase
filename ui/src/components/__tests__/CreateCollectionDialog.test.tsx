@@ -98,6 +98,31 @@ describe('CreateCollectionDialog', () => {
       expect(onSubmit).not.toHaveBeenCalled()
     })
 
+    it('shows error for duplicate field names', async () => {
+      const user = userEvent.setup()
+      const onSubmit = vi.fn()
+      renderDialog({ onSubmit })
+
+      await user.type(screen.getByLabelText(/collection name \*/i), 'orders')
+
+      // Add first field named "email"
+      await user.click(screen.getByRole('button', { name: /add field/i }))
+      const [firstNameInput] = screen.getAllByLabelText('Name *')
+      await user.type(firstNameInput, 'email')
+
+      // Add second field with the same name
+      await user.click(screen.getByRole('button', { name: /add field/i }))
+      const nameInputs = screen.getAllByLabelText('Name *')
+      await user.type(nameInputs[1], 'email')
+
+      await user.click(screen.getByRole('button', { name: /create collection/i }))
+
+      await waitFor(() => {
+        expect(screen.getByText(/duplicate field name/i)).toBeInTheDocument()
+      })
+      expect(onSubmit).not.toHaveBeenCalled()
+    })
+
     it('shows error when a field has no name', async () => {
       const user = userEvent.setup()
       const onSubmit = vi.fn()
@@ -110,6 +135,49 @@ describe('CreateCollectionDialog', () => {
 
       await waitFor(() => {
         expect(screen.getByText('All fields must have a name')).toBeInTheDocument()
+      })
+      expect(onSubmit).not.toHaveBeenCalled()
+    })
+
+    it('shows error when a reference field has no target collection', async () => {
+      const user = userEvent.setup()
+      const onSubmit = vi.fn()
+      renderDialog({ onSubmit, collections: ['users', 'accounts'] })
+
+      await user.type(screen.getByLabelText(/collection name \*/i), 'orders')
+      await user.click(screen.getByRole('button', { name: /add field/i }))
+      await user.type(screen.getByLabelText('Name *'), 'customer_ref')
+
+      // Change field type to "reference" — the first combobox is the field type selector
+      await user.click(screen.getByRole('combobox'))
+      await user.click(screen.getByRole('option', { name: /reference/i }))
+
+      // Do not select a target collection; submit immediately
+      await user.click(screen.getByRole('button', { name: /create collection/i }))
+
+      await waitFor(() => {
+        expect(screen.getByText(/is a reference but has no target collection/i)).toBeInTheDocument()
+      })
+      expect(onSubmit).not.toHaveBeenCalled()
+    })
+
+    it('shows error when a PII field has no mask type selected', async () => {
+      const user = userEvent.setup()
+      const onSubmit = vi.fn()
+      renderDialog({ onSubmit })
+
+      await user.type(screen.getByLabelText(/collection name \*/i), 'users')
+      await user.click(screen.getByRole('button', { name: /add field/i }))
+      await user.type(screen.getByLabelText('Name *'), 'ssn')
+
+      // Check the PII checkbox — SchemaBuilder shows Mask Type selector but no value selected
+      await user.click(screen.getByRole('checkbox', { name: /pii/i }))
+
+      // Submit without selecting a mask type
+      await user.click(screen.getByRole('button', { name: /create collection/i }))
+
+      await waitFor(() => {
+        expect(screen.getByText(/is marked as PII but has no mask type/i)).toBeInTheDocument()
       })
       expect(onSubmit).not.toHaveBeenCalled()
     })
