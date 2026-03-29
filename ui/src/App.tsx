@@ -8,6 +8,7 @@ import InvitationsPage from '@/pages/InvitationsPage';
 import GroupsPage from '@/pages/GroupsPage';
 import CollectionsPage from '@/pages/CollectionsPage';
 import RecordsPage from '@/pages/RecordsPage';
+import AnalyticsPage from '@/pages/AnalyticsPage';
 import RolesPage from '@/pages/RolesPage';
 import AuditLogsPage from '@/pages/AuditLogsPage';
 import MigrationsPage from '@/pages/MigrationsPage';
@@ -50,6 +51,7 @@ function App() {
           <Route path="groups" element={<GroupsPage />} />
           <Route path="collections" element={<CollectionsPage />} />
           <Route path="collections/:collectionName/records" element={<RecordsPage />} />
+          <Route path="collections/:collectionName/analytics" element={<AnalyticsPage />} />
           <Route path="roles" element={<RolesPage />} />
           <Route path="audit-logs" element={<AuditLogsPage />} />
           <Route path="migrations" element={<MigrationsPage />} />

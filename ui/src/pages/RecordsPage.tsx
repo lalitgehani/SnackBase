@@ -8,7 +8,7 @@ import { useParams, useNavigate } from 'react-router';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Database, Download, Plus, Search, RefreshCw, ArrowLeft, Filter, Trash2, Upload } from 'lucide-react';
+import { Database, Download, Plus, Search, RefreshCw, ArrowLeft, Filter, Trash2, Upload, BarChart2 } from 'lucide-react';
 import RecordsTable from '@/components/records/RecordsTable';
 import CreateRecordDialog from '@/components/records/CreateRecordDialog';
 import ViewRecordDialog from '@/components/records/ViewRecordDialog';
@@ -21,6 +21,7 @@ import FilterBuilderPanel, {
     type FilterRow,
     compileFilterExpression,
 } from '@/components/records/FilterBuilderPanel';
+import AggregationSummaryBar from '@/components/records/AggregationSummaryBar';
 import {
     getCollectionByName,
     type Collection,
@@ -285,6 +286,14 @@ export default function RecordsPage() {
                         <>
                             <Button
                                 variant="outline"
+                                onClick={() => navigate(`/admin/collections/${collectionName}/analytics`)}
+                                className="gap-2"
+                            >
+                                <BarChart2 className="h-4 w-4" />
+                                Analytics
+                            </Button>
+                            <Button
+                                variant="outline"
                                 onClick={() => setExportDialogOpen(true)}
                                 className="gap-2"
                             >
@@ -366,6 +375,14 @@ export default function RecordsPage() {
                             onApply={handleApplyFilters}
                             onClear={handleClearFilters}
                             onRemovePill={handleRemoveFilterPill}
+                        />
+                    )}
+
+                    {/* Aggregation Summary Bar */}
+                    {collection && collection.schema && collection.schema.length > 0 && (
+                        <AggregationSummaryBar
+                            collection={collection}
+                            filterExpression={filterExpression}
                         />
                     )}
 

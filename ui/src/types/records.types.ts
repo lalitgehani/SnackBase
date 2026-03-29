@@ -97,6 +97,22 @@ export interface BatchValidationError {
 	details: ValidationErrorDetail[];
 }
 
+// ── Aggregation types ────────────────────────────────────────────────────────
+
+export type AggregationResult = Record<string, unknown>;
+
+export interface AggregationResponse {
+	results: AggregationResult[];
+	total_groups: number;
+}
+
+export interface AggregationRequest {
+	functions: string; // e.g. "count(),sum(price),avg(price)"
+	group_by?: string; // e.g. "status,category"
+	filter?: string;
+	having?: string;
+}
+
 export const PII_MASK_FUNCTIONS: Record<string, (value: string) => string> = {
 	email: (value: string) => {
 		const [local, domain] = value.split('@');

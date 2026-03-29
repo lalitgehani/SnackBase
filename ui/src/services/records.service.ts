@@ -13,6 +13,8 @@ import type {
 	BatchCreateResponse,
 	BatchUpdateResponse,
 	BatchDeleteResponse,
+	AggregationRequest,
+	AggregationResponse,
 } from '@/types/records.types';
 
 // Re-export commonly used types
@@ -117,6 +119,20 @@ export const batchDeleteRecords = async (
 	const response = await apiClient.delete<BatchDeleteResponse>(
 		`/records/${collection}/batch`,
 		{ data: { ids } },
+	);
+	return response.data;
+};
+
+/**
+ * Run aggregation query on a collection
+ */
+export const aggregateRecords = async (
+	collection: string,
+	params: AggregationRequest,
+): Promise<AggregationResponse> => {
+	const response = await apiClient.get<AggregationResponse>(
+		`/records/${collection}/aggregate`,
+		{ params },
 	);
 	return response.data;
 };
