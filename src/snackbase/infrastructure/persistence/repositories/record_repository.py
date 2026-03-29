@@ -13,6 +13,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.core.context import get_current_context
+from snackbase.core.cursor import encode_cursor
 from snackbase.core.hooks.hook_events import HookEvent
 from snackbase.core.logging import get_logger
 from snackbase.infrastructure.persistence.table_builder import TableBuilder
@@ -573,6 +574,155 @@ class RecordRepository:
             records.append(record)
 
         return records, total_count
+
+    async def find_all_cursor(
+        self,
+        collection_name: str,
+        account_id: str | None,
+        schema: list[dict[str, Any]],
+        limit: int = 30,
+        sort_by: str = "created_at",
+        descending: bool = True,
+        user_filter: RuleFilter | None = None,
+        rule_filter: RuleFilter | None = None,
+        cursor_sort_value: Any = None,
+        cursor_record_id: str | None = None,
+        is_backward: bool = False,
+        include_count: bool = False,
+    ) -> tuple[list[dict[str, Any]], str | None, str | None, bool, int | None]:
+        """Find records using cursor-based pagination.
+
+        Args:
+            collection_name: The collection name.
+            account_id: The account ID for scoping (None for superadmin bypass).
+            schema: The collection schema for type conversion.
+            limit: Maximum number of records to return.
+            sort_by: Field to sort by.
+            descending: Whether to sort in descending order.
+            user_filter: Optional compiled filter from ?filter= query param.
+            rule_filter: Optional rule filter for row-level security.
+            cursor_sort_value: Sort value from cursor (for keyset pagination).
+            cursor_record_id: Record ID from cursor (tie-breaker).
+            is_backward: Whether this is a backward navigation request.
+            include_count: Whether to include total count (expensive).
+
+        Returns:
+            A tuple containing (records, next_cursor, prev_cursor, has_more, total).
+        """
+        table_name = TableBuilder.generate_table_name(collection_name)
+
+        # 1. Build base query components
+        where_clauses = []
+        params: dict[str, Any] = {}
+
+        # Account scoping
+        if account_id:
+            where_clauses.append('r."account_id" = :account_id')
+            params["account_id"] = account_id
+
+        if rule_filter:
+            where_clauses.append(f"({rule_filter.sql})")
+            params.update(rule_filter.params)
+
+        if user_filter:
+            where_clauses.append(f"({user_filter.sql})")
+            params.update(user_filter.params)
+
+        # Validate sort field
+        schema_field_names = {f["name"] for f in schema}
+        system_fields = {"id", "created_at", "created_by", "updated_at", "updated_by"}
+        if sort_by not in schema_field_names and sort_by not in system_fields:
+            sort_by = "created_at"
+
+        # 2. Build cursor condition for keyset pagination
+        cursor_condition = ""
+        if cursor_sort_value is not None and cursor_record_id is not None:
+            sort_order = "DESC" if descending else "ASC"
+            opposite_order = "ASC" if descending else "DESC"
+
+            if is_backward:
+                # For backward navigation, we want records BEFORE the cursor
+                # Since we're sorting DESC, "before" means higher values
+                if descending:
+                    cursor_condition = f'AND ((r."{sort_by}" > :cursor_sort_value) OR (r."{sort_by}" = :cursor_sort_value AND r."id" > :cursor_record_id))'
+                else:
+                    cursor_condition = f'AND ((r."{sort_by}" < :cursor_sort_value) OR (r."{sort_by}" = :cursor_sort_value AND r."id" < :cursor_record_id))'
+            else:
+                # For forward navigation, we want records AFTER the cursor
+                if descending:
+                    cursor_condition = f'AND ((r."{sort_by}" < :cursor_sort_value) OR (r."{sort_by}" = :cursor_sort_value AND r."id" < :cursor_record_id))'
+                else:
+                    cursor_condition = f'AND ((r."{sort_by}" > :cursor_sort_value) OR (r."{sort_by}" = :cursor_sort_value AND r."id" > :cursor_record_id))'
+
+            params["cursor_sort_value"] = cursor_sort_value
+            params["cursor_record_id"] = cursor_record_id
+
+        where_clause = " AND ".join(where_clauses)
+        where_sql = f" WHERE {where_clause}" if where_clause else ""
+
+        # 3. Get total count if requested (expensive)
+        total_count = None
+        if include_count:
+            count_sql = f'SELECT COUNT(*) FROM "{table_name}" r {where_sql}'
+            count_result = await self.session.execute(text(count_sql), params)
+            total_count = count_result.scalar_one()
+
+        # 4. Get records with cursor pagination
+        sort_order = "DESC" if descending else "ASC"
+
+        select_sql = f'''
+            SELECT r.*, a.name as account_name FROM "{table_name}" r
+            LEFT JOIN accounts a ON r.account_id = a.id
+            {where_sql} {cursor_condition}
+            ORDER BY r."{sort_by}" {sort_order}, r."id" {sort_order}
+            LIMIT :limit
+        '''
+
+        params["limit"] = limit + 1  # Get one extra to determine has_more
+
+        result = await self.session.execute(text(select_sql), params)
+        rows = result.fetchall()
+
+        # 5. Process results
+        records = []
+        schema_lookup = {f["name"]: f for f in schema}
+
+        has_more = len(rows) > limit
+        actual_rows = rows[:limit]  # Trim to requested limit
+
+        for row in actual_rows:
+            record = dict(row._mapping)
+
+            # Type conversion
+            for key, value in list(record.items()):
+                if key in ("created_at", "updated_at") and isinstance(value, datetime):
+                    record[key] = value.isoformat()
+                elif key in schema_lookup:
+                    field_type = schema_lookup[key].get("type", "text").lower()
+                    if field_type == "json" and value is not None:
+                        try:
+                            record[key] = json.loads(value)
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+                    elif field_type == "boolean":
+                        record[key] = bool(value)
+
+            records.append(record)
+
+        # 6. Generate cursors
+        next_cursor = None
+        prev_cursor = None
+
+        if records:
+            # Next cursor: from the last record
+            last_record = records[-1]
+            next_cursor = encode_cursor(last_record[sort_by], last_record["id"])
+
+            # Prev cursor: from the first record (for backward navigation)
+            first_record = records[0]
+            prev_cursor = encode_cursor(first_record[sort_by], first_record["id"])
+
+        return records, next_cursor, prev_cursor, has_more, total_count
 
     async def aggregate_records(
         self,

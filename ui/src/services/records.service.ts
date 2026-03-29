@@ -9,6 +9,7 @@ import type {
 	RecordData,
 	RecordListResponse,
 	GetRecordsParams,
+	ListResponse,
 	BatchUpdateItem,
 	BatchCreateResponse,
 	BatchUpdateResponse,
@@ -22,10 +23,11 @@ export type { RecordData, RecordListItem } from '@/types/records.types';
 
 /**
  * Get list of records for a collection
+ * Supports both offset-based pagination (paginated response) and cursor-based pagination (cursor response)
  */
-export const getRecords = async (params: GetRecordsParams): Promise<RecordListResponse> => {
+export const getRecords = async (params: GetRecordsParams): Promise<ListResponse> => {
 	const { collection, ...queryParams } = params;
-	const response = await apiClient.get<RecordListResponse>(`/records/${collection}`, {
+	const response = await apiClient.get<ListResponse>(`/records/${collection}`, {
 		params: queryParams,
 	});
 	return response.data;

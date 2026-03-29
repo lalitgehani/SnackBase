@@ -39,6 +39,16 @@ interface RecordsTableProps {
 	pageSize: number;
 	onPageChange: (page: number) => void;
 	onPageSizeChange: (pageSize: number) => void;
+
+	// Cursor pagination props
+	paginationMode?: 'page' | 'scroll';
+	onPaginationModeChange?: (mode: 'page' | 'scroll') => void;
+	hasMore?: boolean;
+	onLoadMore?: () => void;
+	isLoadingMore?: boolean;
+	autoLoad?: boolean;
+	onAutoLoadChange?: (enabled: boolean) => void;
+	maxTableHeight?: string;
 }
 
 /** Returns the best display value for a referenced record. */
@@ -141,6 +151,14 @@ export default function RecordsTable({
 	pageSize,
 	onPageChange,
 	onPageSizeChange,
+	paginationMode = 'page',
+	onPaginationModeChange,
+	hasMore = false,
+	onLoadMore,
+	isLoadingMore = false,
+	autoLoad = false,
+	onAutoLoadChange,
+	maxTableHeight = 'calc(100vh - 280px)',
 }: RecordsTableProps) {
 
 	const [pinnedColumns, setPinnedColumns] = useState<Set<string>>(new Set());
@@ -388,6 +406,15 @@ export default function RecordsTable({
 			sorting={sorting}
 			totalItems={totalItems}
 			noDataMessage="No records found. Create your first record to get started."
+			paginationMode={paginationMode}
+			onPaginationModeChange={onPaginationModeChange}
+			hasMore={hasMore}
+			onLoadMore={onLoadMore}
+			isLoadingMore={isLoadingMore}
+			autoLoad={autoLoad}
+			onAutoLoadChange={onAutoLoadChange}
+			showModeToggle={true}
+			maxTableHeight={maxTableHeight}
 		/>
 	);
 }

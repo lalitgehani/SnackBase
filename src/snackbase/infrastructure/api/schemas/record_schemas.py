@@ -62,6 +62,16 @@ class RecordListResponse(BaseModel):
     limit: int = Field(..., description="Number of records returned")
 
 
+class CursorListResponse(BaseModel):
+    """Response for cursor-based pagination."""
+
+    items: list[RecordResponse] = Field(..., description="List of records")
+    next_cursor: str | None = Field(None, description="Cursor for next page (null if no more records)")
+    prev_cursor: str | None = Field(None, description="Cursor for previous page (null if first page)")
+    has_more: bool = Field(..., description="Whether there are more records after this page")
+    total: int | None = Field(None, description="Total count (only included if include_count=true)")
+
+
 # ── Batch request bodies ──────────────────────────────────────────────────────
 
 

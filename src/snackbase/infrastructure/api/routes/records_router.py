@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.core.config import get_settings
+from snackbase.core.cursor import CursorError, decode_cursor
 from snackbase.core.logging import get_logger
 from snackbase.core.rules import (
     AggregationParseError,
@@ -46,6 +47,7 @@ from snackbase.infrastructure.api.schemas import (
     BatchUpdateRequest,
     BatchUpdateResponse,
     BatchValidationError,
+    CursorListResponse,
     RecordListResponse,
     RecordResponse,
     RecordValidationErrorDetail,
@@ -505,7 +507,7 @@ async def create_record(
 
 @router.get(
     "/{collection}",
-    response_model=RecordListResponse,
+    response_model=RecordListResponse | CursorListResponse,
     responses={
         401: {"description": "Authentication required"},
         403: {"description": "Permission denied"},
@@ -523,8 +525,11 @@ async def list_records(
     fields: str | None = Query(None),
     filter_expr: str | None = Query(None, alias="filter"),
     expand: str | None = Query(None),
+    cursor: str | None = Query(None),
+    cursor_before: str | None = Query(None),
+    include_count: bool = Query(False),
     session: AsyncSession = Depends(get_db_session),
-) -> RecordListResponse | JSONResponse:
+) -> RecordListResponse | CursorListResponse | JSONResponse:
     """List records in a collection.
 
     Supports pagination, sorting, and filtering.
@@ -575,7 +580,7 @@ async def list_records(
         sort_by = sort
 
     # 4. Reject old-style query param filters and parse the new filter expression
-    reserved_params = {"skip", "limit", "sort", "fields", "filter", "expand"}
+    reserved_params = {"skip", "limit", "sort", "fields", "filter", "expand", "cursor", "cursor_before", "include_count"}
     legacy_params = [k for k in request.query_params if k not in reserved_params]
     if legacy_params:
         example_field = legacy_params[0]
@@ -591,6 +596,50 @@ async def list_records(
                 ),
             },
         )
+
+    # 4b. Determine pagination mode
+    is_cursor_mode = cursor is not None or cursor_before is not None
+    if is_cursor_mode and (skip != 0):
+        # In cursor mode, skip is ignored
+        skip = 0
+
+    # 4c. Validate cursor parameters
+    if cursor and cursor_before:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "error": "Invalid pagination parameters",
+                "message": "Cannot specify both 'cursor' and 'cursor_before'",
+            },
+        )
+
+    cursor_sort_value = None
+    cursor_record_id = None
+    is_backward = False
+
+    if cursor:
+        try:
+            cursor_sort_value, cursor_record_id = decode_cursor(cursor)
+        except CursorError as e:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={
+                    "error": "Invalid cursor",
+                    "message": str(e),
+                },
+            )
+    elif cursor_before:
+        try:
+            cursor_sort_value, cursor_record_id = decode_cursor(cursor_before)
+            is_backward = True
+        except CursorError as e:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={
+                    "error": "Invalid cursor_before",
+                    "message": str(e),
+                },
+            )
 
     # Normalize filter_expr and expand: when called directly (e.g., in unit tests), FastAPI
     # Query defaults aren't resolved by dependency injection, so guard against it.
@@ -623,17 +672,36 @@ async def list_records(
     target_account_id = await _resolve_account_id(current_user, request, session)
     repo_account_id = None if (current_user is not None and current_user.account_id == SYSTEM_ACCOUNT_ID) else target_account_id
 
-    records, total = await record_repo.find_all(
-        collection_name=collection,
-        account_id=repo_account_id,
-        schema=schema,
-        skip=skip,
-        limit=limit,
-        sort_by=sort_by,
-        descending=descending,
-        user_filter=user_filter,
-        rule_filter=rule_result,
-    )
+    if is_cursor_mode:
+        records, next_cursor, prev_cursor, has_more, total = await record_repo.find_all_cursor(
+            collection_name=collection,
+            account_id=repo_account_id,
+            schema=schema,
+            limit=limit,
+            sort_by=sort_by,
+            descending=descending,
+            user_filter=user_filter,
+            rule_filter=rule_result,
+            cursor_sort_value=cursor_sort_value,
+            cursor_record_id=cursor_record_id,
+            is_backward=is_backward,
+            include_count=include_count,
+        )
+    else:
+        records, total = await record_repo.find_all(
+            collection_name=collection,
+            account_id=repo_account_id,
+            schema=schema,
+            skip=skip,
+            limit=limit,
+            sort_by=sort_by,
+            descending=descending,
+            user_filter=user_filter,
+            rule_filter=rule_result,
+        )
+        next_cursor = None
+        prev_cursor = None
+        has_more = False
 
     # 6. Apply field filtering based on permissions
     if allowed_fields != "*":
@@ -707,12 +775,21 @@ async def list_records(
             logger.error(f"Failed to create RecordResponse for record: {r}", error=str(e))
             raise
 
-    return RecordListResponse(
-        items=response_items,
-        total=total,
-        skip=skip,
-        limit=limit,
-    )
+    if is_cursor_mode:
+        return CursorListResponse(
+            items=response_items,
+            next_cursor=next_cursor,
+            prev_cursor=prev_cursor,
+            has_more=has_more,
+            total=total if include_count else None,
+        )
+    else:
+        return RecordListResponse(
+            items=response_items,
+            total=total,
+            skip=skip,
+            limit=limit,
+        )
 
 
 # ── Aggregate endpoint — MUST be registered before /{collection}/{record_id} ──

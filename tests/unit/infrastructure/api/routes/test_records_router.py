@@ -14,7 +14,7 @@ from snackbase.infrastructure.api.routes.records_router import (
     update_record_partial,
     delete_record,
 )
-from snackbase.infrastructure.api.schemas import RecordValidationErrorDetail
+from snackbase.infrastructure.api.schemas import CursorListResponse, RecordValidationErrorDetail
 from snackbase.infrastructure.api.middleware import RuleFilter
 
 
@@ -221,15 +221,167 @@ async def test_list_records_success(
     # Mock permission check
     mock_check_permission.return_value = RuleFilter(sql="1=1", params={}, allowed_fields="*")
 
+    # Set up request query params
+    mock_request.query_params = {}
+
     response = await list_records(
-        "posts", mock_request, mock_user, mock_auth_context, skip=0, limit=10, sort="-created_at", fields=None, session=mock_session
+        collection="posts",
+        request=mock_request,
+        current_user=mock_user,
+        auth_context=mock_auth_context,
+        skip=0,
+        limit=10,
+        sort="-created_at",
+        fields=None,
+        filter_expr=None,
+        expand=None,
+        cursor=None,
+        cursor_before=None,
+        include_count=False,
+        session=mock_session,
     )
 
-    assert response.total == 2
+@patch("snackbase.infrastructure.api.routes.records_router.decode_cursor")
+@patch("snackbase.infrastructure.api.routes.records_router.check_collection_permission")
+@patch("snackbase.infrastructure.api.routes.records_router.RecordRepository")
+@patch("snackbase.infrastructure.api.routes.records_router.CollectionRepository")
+@pytest.mark.asyncio
+async def test_list_records_cursor_success(
+    mock_col_repo_cls,
+    mock_rec_repo_cls,
+    mock_check_permission,
+    mock_decode_cursor,
+    mock_session,
+    mock_user,
+    mock_auth_context,
+    mock_request,
+    sample_collection,
+):
+    mock_col_repo = mock_col_repo_cls.return_value
+    mock_col_repo.get_by_name = AsyncMock(return_value=sample_collection)
+
+    mock_rec_repo = mock_rec_repo_cls.return_value
+    records = [
+        {
+            "id": "1", 
+            "title": "A", 
+            "created_at": "2023-01-01T00:00:00",
+            "account_id": "acc-1", 
+            "created_by": "user-1", 
+            "updated_at": "2023-01-01T00:00:00", 
+            "updated_by": "user-1"
+        },
+        {
+            "id": "2", 
+            "title": "B", 
+            "created_at": "2023-01-02T00:00:00",
+            "account_id": "acc-1", 
+            "created_by": "user-1", 
+            "updated_at": "2023-01-02T00:00:00", 
+            "updated_by": "user-1"
+        },
+    ]
+    next_cursor = "eyJzb3J0X3ZhbHVlIjoiMjAyMy0wMS0wMlQwMDowMDowMCIsImlkIjoiMiJ9"
+    prev_cursor = "eyJzb3J0X3ZhbHVlIjoiMjAyMy0wMS0wMVQwMDowMDowMCIsImlkIjoiMSJ9"
+    mock_rec_repo.find_all_cursor = AsyncMock(return_value=(records, next_cursor, prev_cursor, False, None))
+    
+    # Mock decode_cursor
+    mock_decode_cursor.return_value = ("2023-01-01T00:00:00", "cursor_id")
+    
+    # Mock permission check
+    mock_check_permission.return_value = RuleFilter(sql="1=1", params={}, allowed_fields="*")
+
+    # Set up request query params
+    mock_request.query_params = {}
+
+    response = await list_records(
+        collection="posts",
+        request=mock_request,
+        current_user=mock_user,
+        auth_context=mock_auth_context,
+        skip=0,
+        limit=10,
+        sort="-created_at",
+        fields=None,
+        filter_expr=None,
+        expand=None,
+        cursor="some_cursor",
+        cursor_before=None,
+        include_count=False,
+        session=mock_session,
+    )
+
+    assert isinstance(response, CursorListResponse)
+    assert response.next_cursor == next_cursor
+    assert response.prev_cursor == prev_cursor
+    assert response.has_more is False
+    assert response.total is None
     assert len(response.items) == 2
     assert response.items[0].title == "A"
 
 
+@patch("snackbase.infrastructure.api.routes.records_router.decode_cursor")
+@patch("snackbase.infrastructure.api.routes.records_router.check_collection_permission")
+@patch("snackbase.infrastructure.api.routes.records_router.RecordRepository")
+@patch("snackbase.infrastructure.api.routes.records_router.CollectionRepository")
+@pytest.mark.asyncio
+async def test_list_records_cursor_with_count(
+    mock_col_repo_cls,
+    mock_rec_repo_cls,
+    mock_check_permission,
+    mock_decode_cursor,
+    mock_session,
+    mock_user,
+    mock_auth_context,
+    mock_request,
+    sample_collection,
+):
+    mock_col_repo = mock_col_repo_cls.return_value
+    mock_col_repo.get_by_name = AsyncMock(return_value=sample_collection)
+
+    mock_rec_repo = mock_rec_repo_cls.return_value
+    records = [
+        {
+            "id": "1", 
+            "title": "A", 
+            "created_at": "2023-01-01T00:00:00",
+            "account_id": "acc-1", 
+            "created_by": "user-1", 
+            "updated_at": "2023-01-01T00:00:00", 
+            "updated_by": "user-1"
+        },
+    ]
+    mock_rec_repo.find_all_cursor = AsyncMock(return_value=(records, None, None, False, 150))
+    
+    # Mock decode_cursor
+    mock_decode_cursor.return_value = ("2023-01-01T00:00:00", "cursor_id")
+    
+    # Mock permission check
+    mock_check_permission.return_value = RuleFilter(sql="1=1", params={}, allowed_fields="*")
+
+    # Set up request query params
+    mock_request.query_params = {}
+
+    response = await list_records(
+        collection="posts",
+        request=mock_request,
+        current_user=mock_user,
+        auth_context=mock_auth_context,
+        skip=0,
+        limit=10,
+        sort="-created_at",
+        fields=None,
+        filter_expr=None,
+        expand=None,
+        cursor="some_cursor",
+        cursor_before=None,
+        include_count=True,
+        session=mock_session,
+    )
+
+    assert isinstance(response, CursorListResponse)
+    assert response.total == 150
+    assert len(response.items) == 1
 @patch("snackbase.infrastructure.api.routes.records_router.check_collection_permission")
 @patch("snackbase.infrastructure.api.routes.records_router.CollectionRepository")
 @pytest.mark.asyncio
@@ -247,7 +399,22 @@ async def test_list_records_collection_not_found(
     # Mock permission check
     mock_check_permission.return_value = RuleFilter(sql="1=1", params={}, allowed_fields="*")
 
-    response = await list_records("unknown", mock_request, mock_user, mock_auth_context, session=mock_session)
+    response = await list_records(
+        collection="unknown",
+        request=mock_request,
+        current_user=mock_user,
+        auth_context=mock_auth_context,
+        skip=0,
+        limit=30,
+        sort="-created_at",
+        fields=None,
+        filter_expr=None,
+        expand=None,
+        cursor=None,
+        cursor_before=None,
+        include_count=False,
+        session=mock_session,
+    )
 
     assert isinstance(response, JSONResponse)
     assert response.status_code == status.HTTP_404_NOT_FOUND

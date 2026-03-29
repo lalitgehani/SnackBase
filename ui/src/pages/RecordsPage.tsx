@@ -65,6 +65,27 @@ export default function RecordsPage() {
     // Reference records state
     const [referenceRecords, setReferenceRecords] = useState<Record<string, RecordData[]>>({});
 
+    // Pagination mode state (with localStorage persistence)
+    const [paginationMode, setPaginationModeState] = useState<'page' | 'scroll'>(() => {
+        if (!collectionName) return 'page';
+        const stored = localStorage.getItem(`pagination_mode_${collectionName}`);
+        return (stored as 'page' | 'scroll') || 'page';
+    });
+
+    // Cursor pagination state
+    const [cursor, setCursor] = useState<string | null>(null);
+    const [hasMore, setHasMore] = useState(true);
+    const [isLoadingMore, setIsLoadingMore] = useState(false);
+    const [autoLoad, setAutoLoad] = useState(false);
+
+    // Helper to set pagination mode with localStorage persistence
+    const setPaginationMode = (mode: 'page' | 'scroll') => {
+        setPaginationModeState(mode);
+        if (collectionName) {
+            localStorage.setItem(`pagination_mode_${collectionName}`, mode);
+        }
+    };
+
     // Dialog state
     const [createDialogOpen, setCreateDialogOpen] = useState(false);
     const [viewDialogOpen, setViewDialogOpen] = useState(false);
@@ -99,31 +120,65 @@ export default function RecordsPage() {
 
     const fetchRecords = useCallback(async () => {
         if (!collectionName) return;
-        setLoading(true);
-        setError(null);
 
-        try {
-            const params: Parameters<typeof getRecords>[0] = {
-                collection: collectionName,
-                skip: (page - 1) * pageSize,
-                limit: pageSize,
-                sort: `${sortOrder === 'asc' ? '' : '-'}${sortBy}`,
-                fields: '*',
-            };
-            if (filterExpression) {
-                params.filter = filterExpression;
+        if (paginationMode === 'page') {
+            // Offset-based pagination mode
+            setLoading(true);
+            setError(null);
+
+            try {
+                const params: Parameters<typeof getRecords>[0] = {
+                    collection: collectionName,
+                    skip: (page - 1) * pageSize,
+                    limit: pageSize,
+                    sort: `${sortOrder === 'asc' ? '' : '-'}${sortBy}`,
+                    fields: '*',
+                };
+                if (filterExpression) {
+                    params.filter = filterExpression;
+                }
+                const response = await getRecords(params);
+                setData(response.items);
+                setTotal(response.total);
+                // Clear selection when records are refreshed
+                setSelectedIds(new Set());
+            } catch (err) {
+                setError(handleApiError(err));
+            } finally {
+                setLoading(false);
             }
-            const response = await getRecords(params);
-            setData(response.items);
-            setTotal(response.total);
-            // Clear selection when records are refreshed
-            setSelectedIds(new Set());
-        } catch (err) {
-            setError(handleApiError(err));
-        } finally {
-            setLoading(false);
+        } else {
+            // Cursor-based pagination mode - initial load
+            // Pass cursor="" so the backend activates cursor mode and returns has_more/next_cursor
+            setLoading(true);
+            setError(null);
+
+            try {
+                const params: Parameters<typeof getRecords>[0] = {
+                    collection: collectionName,
+                    cursor: '',
+                    limit: pageSize,
+                    sort: `${sortOrder === 'asc' ? '' : '-'}${sortBy}`,
+                    fields: '*',
+                };
+                if (filterExpression) {
+                    params.filter = filterExpression;
+                }
+                const response = await getRecords(params);
+                setData(response.items);
+                // response is CursorListResponse when cursor param is passed
+                const cursorResponse = response as { items: typeof response.items; next_cursor: string | null; has_more: boolean };
+                setCursor(cursorResponse.next_cursor || null);
+                setHasMore(cursorResponse.has_more || false);
+                // Clear selection when records are refreshed
+                setSelectedIds(new Set());
+            } catch (err) {
+                setError(handleApiError(err));
+            } finally {
+                setLoading(false);
+            }
         }
-    }, [collectionName, page, pageSize, sortBy, sortOrder, filterExpression]);
+    }, [collectionName, paginationMode, page, pageSize, sortBy, sortOrder, filterExpression]);
 
     useEffect(() => {
         fetchCollection();
@@ -134,6 +189,47 @@ export default function RecordsPage() {
             fetchRecords();
         }
     }, [collection, fetchRecords]);
+
+    // Handle pagination mode changes
+    useEffect(() => {
+        if (collection && paginationMode) {
+            // Reset pagination state when mode changes
+            setPage(1);
+            setCursor(null);
+            setAutoLoad(false);
+            setHasMore(true);
+            fetchRecords();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [paginationMode, collectionName]);
+
+    // Load more records in cursor scroll mode
+    const loadMoreRecords = useCallback(async () => {
+        if (!collectionName || !cursor || isLoadingMore) return;
+        setIsLoadingMore(true);
+        setError(null);
+
+        try {
+            const params: Parameters<typeof getRecords>[0] = {
+                collection: collectionName,
+                cursor: cursor,
+                limit: pageSize,
+                sort: `${sortOrder === 'asc' ? '' : '-'}${sortBy}`,
+                fields: '*',
+            };
+            if (filterExpression) {
+                params.filter = filterExpression;
+            }
+            const response = await getRecords(params);
+            setData((prev) => [...(prev || []), ...response.items]);
+            setCursor(response.next_cursor || null);
+            setHasMore(response.has_more || false);
+        } catch (err) {
+            setError(handleApiError(err));
+        } finally {
+            setIsLoadingMore(false);
+        }
+    }, [collectionName, cursor, pageSize, sortBy, sortOrder, filterExpression, isLoadingMore]);
 
     // Pre-fetch reference records for all reference fields so the table and view dialog
     // can display display values without waiting for a dialog to open.
@@ -241,12 +337,16 @@ export default function RecordsPage() {
         setFilterExpression(expression);
         setAppliedFilterRows(rows);
         setPage(1);
+        setCursor(null);
+        setHasMore(true);
     };
 
     const handleClearFilters = () => {
         setFilterExpression('');
         setAppliedFilterRows([]);
         setPage(1);
+        setCursor(null);
+        setHasMore(true);
     };
 
     const handleRemoveFilterPill = (id: string) => {
@@ -258,6 +358,8 @@ export default function RecordsPage() {
         setAppliedFilterRows(remaining);
         setFilterExpression(expression);
         setPage(1);
+        setCursor(null);
+        setHasMore(true);
     };
 
     return (
@@ -460,6 +562,14 @@ export default function RecordsPage() {
                                 setPageSize(size);
                                 setPage(1);
                             }}
+                            // Cursor pagination props
+                            paginationMode={paginationMode}
+                            onPaginationModeChange={setPaginationMode}
+                            hasMore={hasMore}
+                            onLoadMore={loadMoreRecords}
+                            isLoadingMore={isLoadingMore}
+                            autoLoad={autoLoad}
+                            onAutoLoadChange={setAutoLoad}
                         />
                     )}
 

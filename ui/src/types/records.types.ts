@@ -30,6 +30,25 @@ export interface RecordListResponse {
 	limit: number;
 }
 
+// ── Cursor-based pagination types ────────────────────────────────────────────
+
+export interface CursorListResponse {
+	items: RecordListItem[];
+	next_cursor: string | null;
+	prev_cursor: string | null;
+	has_more: boolean;
+	total?: number; // Only included if include_count=true
+}
+
+/** Union type for flexible response handling */
+export type ListResponse<T = RecordListItem> = 
+	| (RecordListResponse & { items: T[] })
+	| (CursorListResponse & { items: T[] });
+
+export function isCursorResponse(response: ListResponse): response is CursorListResponse {
+	return 'next_cursor' in response && 'has_more' in response;
+}
+
 export interface FormFieldState {
 	value: unknown;
 	error: string | null;
@@ -45,6 +64,9 @@ export interface GetRecordsParams {
 	collection: string;
 	skip?: number;
 	limit?: number;
+	cursor?: string;
+	cursor_before?: string;
+	include_count?: boolean;
 	sort?: string;
 	fields?: string;
 	filter?: string;

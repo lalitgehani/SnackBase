@@ -24,8 +24,10 @@ import {
     PaginationPrevious,
 } from '@/components/ui/pagination';
 import { Button } from '@/components/ui/button';
-import { ArrowUpDown, RefreshCw } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { ArrowUpDown, RefreshCw, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useEffect, useRef } from 'react';
 
 export interface Column<T> {
     header: string | React.ReactNode;
@@ -63,6 +65,17 @@ interface DataTableProps<T> {
     sorting?: DispatchSorting;
     onRowClick?: (item: T) => void;
     noDataMessage?: string;
+    // Cursor pagination props
+    paginationMode?: 'page' | 'scroll';
+    hasMore?: boolean;
+    onLoadMore?: () => void;
+    isLoadingMore?: boolean;
+    onPaginationModeChange?: (mode: 'page' | 'scroll') => void;
+    autoLoad?: boolean;
+    onAutoLoadChange?: (enabled: boolean) => void;
+    showModeToggle?: boolean; // Show Page/Scroll toggle (default: false)
+    maxTableHeight?: string; // Max height before scroll kicks in (default: '600px')
+    minTableHeight?: string; // Min height when data is empty/sparse (default: '180px')
 }
 
 export function DataTable<T>({
@@ -75,7 +88,42 @@ export function DataTable<T>({
     sorting,
     onRowClick,
     noDataMessage = 'No data found',
+    paginationMode = 'page',
+    hasMore = false,
+    onLoadMore,
+    isLoadingMore = false,
+    onPaginationModeChange,
+    autoLoad = false,
+    onAutoLoadChange,
+    showModeToggle = false,
+    maxTableHeight = '600px',
+    minTableHeight = '180px',
 }: DataTableProps<T>) {
+    const sentinelRef = useRef<HTMLDivElement>(null);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+    // Stable callback ref so the observer doesn't re-register on every render
+    const onLoadMoreRef = useRef(onLoadMore);
+    useEffect(() => { onLoadMoreRef.current = onLoadMore; }, [onLoadMore]);
+
+    // Infinite scroll IntersectionObserver — sentinel lives inside the scroll container
+    useEffect(() => {
+        if (paginationMode !== 'scroll' || !autoLoad || !hasMore || !sentinelRef.current || !scrollContainerRef.current) {
+            return;
+        }
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries[0].isIntersecting && hasMore && !isLoadingMore && onLoadMoreRef.current) {
+                    onLoadMoreRef.current();
+                }
+            },
+            { threshold: 0.1, root: scrollContainerRef.current }
+        );
+
+        observer.observe(sentinelRef.current);
+        return () => observer.disconnect();
+    }, [paginationMode, autoLoad, hasMore, isLoadingMore]);
 
     // Compute sticky style for frozen columns
     const getCellStyle = (col: Column<T>): React.CSSProperties => {
@@ -122,79 +170,86 @@ export function DataTable<T>({
 
     return (
         <div className="space-y-4">
-            <div className="rounded-md border overflow-x-auto">
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            {columns.map((col, index) => (
-                                <TableHead
-                                    key={index}
-                                    className={cn(col.className, getFrozenClass(col), 'group')}
-                                    style={getCellStyle(col)}
-                                >
-                                    <div className="flex items-center">
-                                        {sorting && col.sortable ? (
-                                            <Button
-                                                variant="ghost"
-                                                onClick={() => handleSort(col)}
-                                                className="-ml-4 h-8 px-4 data-[state=open]:bg-accent hover:bg-transparent hover:text-primary"
-                                            >
-                                                {col.header}
-                                                {sorting.sortBy === col.accessorKey ? (
-                                                    <ArrowUpDown className={`ml-2 h-4 w-4 transform ${sorting.sortOrder === 'asc' ? 'rotate-180' : ''}`} />
-                                                ) : (
-                                                    <ArrowUpDown className="ml-2 h-4 w-4 opacity-50" />
-                                                )}
-                                            </Button>
-                                        ) : (
-                                            col.header
-                                        )}
-                                        {col.headerSuffix}
-                                    </div>
-                                </TableHead>
-                            ))}
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {isLoading ? (
+            {/* Table container: grows with content up to maxTableHeight, scrollable beyond that */}
+            <div className="rounded-md border overflow-hidden flex flex-col" style={{ minHeight: minTableHeight, maxHeight: maxTableHeight }}>
+                <div ref={scrollContainerRef} className="overflow-x-auto overflow-y-auto flex-1">
+                    <Table>
+                        <TableHeader className="sticky top-0 z-20 bg-background">
                             <TableRow>
-                                <TableCell colSpan={columns.length} className="h-24 text-center">
-                                    <div className="flex items-center justify-center py-4">
-                                        <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
-                                    </div>
-                                </TableCell>
+                                {columns.map((col, index) => (
+                                    <TableHead
+                                        key={index}
+                                        className={cn(col.className, getFrozenClass(col), 'group')}
+                                        style={getCellStyle(col)}
+                                    >
+                                        <div className="flex items-center">
+                                            {sorting && col.sortable ? (
+                                                <Button
+                                                    variant="ghost"
+                                                    onClick={() => handleSort(col)}
+                                                    className="-ml-4 h-8 px-4 data-[state=open]:bg-accent hover:bg-transparent hover:text-primary"
+                                                >
+                                                    {col.header}
+                                                    {sorting.sortBy === col.accessorKey ? (
+                                                        <ArrowUpDown className={`ml-2 h-4 w-4 transform ${sorting.sortOrder === 'asc' ? 'rotate-180' : ''}`} />
+                                                    ) : (
+                                                        <ArrowUpDown className="ml-2 h-4 w-4 opacity-50" />
+                                                    )}
+                                                </Button>
+                                            ) : (
+                                                col.header
+                                            )}
+                                            {col.headerSuffix}
+                                        </div>
+                                    </TableHead>
+                                ))}
                             </TableRow>
-                        ) : data.length === 0 ? (
-                            <TableRow>
-                                <TableCell colSpan={columns.length} className="h-24 text-center text-muted-foreground">
-                                    {noDataMessage}
-                                </TableCell>
-                            </TableRow>
-                        ) : (
-                            data.map((item) => (
-                                <TableRow
-                                    key={keyExtractor(item)}
-                                    onClick={() => onRowClick && onRowClick(item)}
-                                    className={onRowClick ? "cursor-pointer hover:bg-muted/50" : ""}
-                                >
-                                    {columns.map((col, cIndex) => (
-                                        <TableCell
-                                            key={cIndex}
-                                            className={cn(col.className, getFrozenClass(col))}
-                                            style={getCellStyle(col)}
-                                        >
-                                            {renderCell(item, col)}
-                                        </TableCell>
-                                    ))}
+                        </TableHeader>
+                        <TableBody>
+                            {isLoading ? (
+                                <TableRow>
+                                    <TableCell colSpan={columns.length} className="h-24 text-center">
+                                        <div className="flex items-center justify-center py-4">
+                                            <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+                                        </div>
+                                    </TableCell>
                                 </TableRow>
-                            ))
-                        )}
-                    </TableBody>
-                </Table>
+                            ) : data.length === 0 ? (
+                                <TableRow>
+                                    <TableCell colSpan={columns.length} className="h-24 text-center text-muted-foreground">
+                                        {noDataMessage}
+                                    </TableCell>
+                                </TableRow>
+                            ) : (
+                                data.map((item) => (
+                                    <TableRow
+                                        key={keyExtractor(item)}
+                                        onClick={() => onRowClick && onRowClick(item)}
+                                        className={onRowClick ? "cursor-pointer hover:bg-muted/50" : ""}
+                                    >
+                                        {columns.map((col, cIndex) => (
+                                            <TableCell
+                                                key={cIndex}
+                                                className={cn(col.className, getFrozenClass(col))}
+                                                style={getCellStyle(col)}
+                                            >
+                                                {renderCell(item, col)}
+                                            </TableCell>
+                                        ))}
+                                    </TableRow>
+                                ))
+                            )}
+                        </TableBody>
+                    </Table>
+                    {/* Infinite scroll sentinel — inside the scroll container so it's observed on table scroll */}
+                    {paginationMode === 'scroll' && (
+                        <div ref={sentinelRef} className="h-1" />
+                    )}
+                </div>
             </div>
 
             {/* Pagination Controls */}
-            {pagination && totalItems > 0 && (
+            {pagination && totalItems > 0 && paginationMode === 'page' && (
                 <div className="flex flex-col-reverse gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-center space-x-2 text-sm text-muted-foreground">
                         <span>Rows per page</span>
@@ -215,6 +270,29 @@ export function DataTable<T>({
                                 ))}
                             </SelectContent>
                         </Select>
+
+                        {/* Pagination Mode Toggle - only show if explicitly enabled */}
+                        {showModeToggle && (
+                            <div className="flex items-center border rounded-md ml-4">
+                                <Button
+                                    variant={paginationMode === 'page' ? 'default' : 'ghost'}
+                                    size="sm"
+                                    onClick={() => onPaginationModeChange?.('page')}
+                                    className="rounded-none border-r"
+                                >
+                                    Page
+                                </Button>
+                                <Button
+                                    variant={paginationMode === 'scroll' ? 'default' : 'ghost'}
+                                    size="sm"
+                                    onClick={() => onPaginationModeChange?.('scroll')}
+                                    className="rounded-none"
+                                >
+                                    Scroll
+                                </Button>
+                            </div>
+                        )}
+
                         <span className="hidden md:inline-block ml-4">
                             Showing {showingStart} to {showingEnd} of {totalItems} entries
                         </span>
@@ -305,6 +383,69 @@ export function DataTable<T>({
                     </div>
                 </div>
             )}
+
+            {/* Scroll Mode Controls */}
+            {paginationMode === 'scroll' && data.length > 0 && (
+                <div className="flex flex-col-reverse gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+                        {/* Show Mode Toggle only if explicitly enabled */}
+                        {showModeToggle && (
+                            <div className="flex items-center border rounded-md">
+                                <Button
+                                    variant={paginationMode === 'page' ? 'default' : 'ghost'}
+                                    size="sm"
+                                    onClick={() => onPaginationModeChange?.('page')}
+                                    className="rounded-none border-r"
+                                >
+                                    Page
+                                </Button>
+                                <Button
+                                    variant={paginationMode === 'scroll' ? 'default' : 'ghost'}
+                                    size="sm"
+                                    onClick={() => onPaginationModeChange?.('scroll')}
+                                    className="rounded-none"
+                                >
+                                    Scroll
+                                </Button>
+                            </div>
+                        )}
+
+                        <span className="hidden md:inline-block text-muted-foreground">
+                            Loaded {data.length} records{hasMore ? ' (more available)' : ' (all loaded)'}
+                        </span>
+                    </div>
+
+                    <div className="flex items-center gap-3 flex-wrap">
+                        <div className="flex items-center gap-2">
+                            <span className="text-sm text-muted-foreground">Auto-load</span>
+                            <Switch
+                                checked={autoLoad}
+                                onCheckedChange={onAutoLoadChange}
+                                disabled={!hasMore || isLoadingMore}
+                            />
+                        </div>
+                        {hasMore && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={onLoadMore}
+                                disabled={isLoadingMore}
+                                className="gap-2"
+                            >
+                                {isLoadingMore ? (
+                                    <>
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                        Loading...
+                                    </>
+                                ) : (
+                                    'Load More'
+                                )}
+                            </Button>
+                        )}
+                    </div>
+                </div>
+            )}
+
         </div>
     );
 }
