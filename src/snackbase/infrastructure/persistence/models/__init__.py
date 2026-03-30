@@ -28,6 +28,10 @@ from snackbase.infrastructure.persistence.models.token_blacklist import TokenBla
 
 from snackbase.infrastructure.persistence.models.user import UserModel
 from snackbase.infrastructure.persistence.models.users_groups import UsersGroupsModel
+from snackbase.infrastructure.persistence.models.webhook import (
+    WebhookDeliveryModel,
+    WebhookModel,
+)
 
 __all__ = [
     "AccountModel",
@@ -49,4 +53,6 @@ __all__ = [
     "TokenBlacklistModel",
     "UserModel",
     "UsersGroupsModel",
+    "WebhookDeliveryModel",
+    "WebhookModel",
 ]

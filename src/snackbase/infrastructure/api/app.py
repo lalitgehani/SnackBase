@@ -84,6 +84,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             register_builtin_hooks(app.state.hook_registry)
             logger.info("Built-in hooks registered")
 
+            # Register webhook delivery hooks
+            from snackbase.infrastructure.hooks.webhook_hook import register_webhook_hooks
+            register_webhook_hooks(app.state.hook_registry, db_manager.session)
+            logger.info("Webhook hooks registered")
+
             # Register global SQLAlchemy listeners for systemic audit logging
             from snackbase.infrastructure.persistence.event_listeners import (
                 register_sqlalchemy_listeners,
@@ -295,6 +300,7 @@ def register_routes(app: FastAPI) -> None:
         roles_router,
         saml_router,
         users_router,
+        webhooks_router,
     )
 
     settings = get_settings()
@@ -385,6 +391,13 @@ def register_routes(app: FastAPI) -> None:
         email_templates_router,
         prefix=f"{settings.api_prefix}/admin/email",
         tags=["admin", "email"],
+    )
+
+    # Register webhooks routes
+    app.include_router(
+        webhooks_router,
+        prefix=f"{settings.api_prefix}/webhooks",
+        tags=["webhooks"],
     )
 
     # Register dynamic record routes with /records prefix to avoid conflicts

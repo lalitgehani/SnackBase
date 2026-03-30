@@ -20,6 +20,7 @@ from .oauth_router import router as oauth_router
 from .saml_router import router as saml_router
 from .api_keys_router import router as api_keys_router
 from .realtime_router import router as realtime_router
+from .webhooks_router import router as webhooks_router
 
 __all__ = [
     "accounts_router",
@@ -44,5 +45,6 @@ __all__ = [
     "saml_router",
     "api_keys_router",
     "realtime_router",
+    "webhooks_router",
 ]
 

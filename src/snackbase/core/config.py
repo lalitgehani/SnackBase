@@ -183,6 +183,16 @@ class Settings(BaseSettings):
         description="Maximum records per batch create/update/delete (SNACKBASE_BATCH_MAX_SIZE)",
     )
 
+    # Webhook Settings
+    max_webhooks_per_account: int = Field(
+        default=20,
+        description="Maximum number of webhooks per account (SNACKBASE_MAX_WEBHOOKS_PER_ACCOUNT)",
+    )
+    webhook_timeout_seconds: int = Field(
+        default=30,
+        description="HTTP timeout for webhook delivery in seconds",
+    )
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, v: str | list[str]) -> list[str]:
