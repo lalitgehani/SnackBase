@@ -16,6 +16,7 @@ import MacrosPage from '@/pages/MacrosPage';
 import AcceptInvitationPage from '@/pages/AcceptInvitationPage';
 import ConfigurationDashboardPage from '@/pages/ConfigurationDashboardPage';
 import ApiKeysPage from '@/pages/ApiKeys/ApiKeysPage';
+import WebhooksPage from '@/pages/Webhooks/WebhooksPage';
 import AdminLayout from '@/layouts/AdminLayout';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { Toaster } from '@/components/ui/toaster';
@@ -58,6 +59,7 @@ function App() {
           <Route path="macros" element={<MacrosPage />} />
           <Route path="configuration" element={<ConfigurationDashboardPage />} />
           <Route path="api-keys" element={<ApiKeysPage />} />
+          <Route path="webhooks" element={<WebhooksPage />} />
         </Route>
 
         {/* Catch all - redirect to dashboard */}

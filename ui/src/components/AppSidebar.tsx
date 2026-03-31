@@ -13,6 +13,7 @@ import {
     Settings,
     Mail,
     Key,
+    Webhook,
 } from "lucide-react"
 import { useLocation, Link, useNavigate } from "react-router"
 import { useAuthStore } from "@/stores/auth.store"
@@ -104,6 +105,14 @@ const items = [
     },
 ]
 
+const integrationItems = [
+    {
+        title: "Webhooks",
+        url: "/admin/webhooks",
+        icon: Webhook,
+    },
+]
+
 export function AppSidebar() {
     const location = useLocation()
     const navigate = useNavigate()
@@ -147,6 +156,26 @@ export function AppSidebar() {
                                     </SidebarMenuItem>
                                 );
                             })}
+                        </SidebarMenu>
+                    </SidebarGroupContent>
+                </SidebarGroup>
+                <SidebarGroup>
+                    <SidebarGroupLabel>Integrations</SidebarGroupLabel>
+                    <SidebarGroupContent>
+                        <SidebarMenu>
+                            {integrationItems.map((item) => (
+                                <SidebarMenuItem key={item.title}>
+                                    <SidebarMenuButton
+                                        asChild
+                                        isActive={location.pathname === item.url}
+                                    >
+                                        <Link to={item.url}>
+                                            <item.icon />
+                                            <span>{item.title}</span>
+                                        </Link>
+                                    </SidebarMenuButton>
+                                </SidebarMenuItem>
+                            ))}
                         </SidebarMenu>
                     </SidebarGroupContent>
                 </SidebarGroup>
