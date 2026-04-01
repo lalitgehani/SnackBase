@@ -16,6 +16,7 @@ import {
     Key,
     Webhook,
     Briefcase,
+    Clock,
 } from "lucide-react"
 import { useLocation, Link, useNavigate } from "react-router"
 import { useAuthStore } from "@/stores/auth.store"
@@ -125,6 +126,11 @@ const integrationItems: SidebarItem[] = [
         url: "/admin/jobs",
         icon: Briefcase,
         superadminOnly: true,
+    },
+    {
+        title: "Scheduled Tasks",
+        url: "/admin/scheduled-tasks",
+        icon: Clock,
     },
 ]
 

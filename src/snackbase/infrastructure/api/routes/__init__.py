@@ -22,6 +22,7 @@ from .api_keys_router import router as api_keys_router
 from .realtime_router import router as realtime_router
 from .webhooks_router import router as webhooks_router
 from .jobs_router import router as jobs_router
+from .hooks_router import router as hooks_router
 
 __all__ = [
     "accounts_router",
@@ -48,5 +49,6 @@ __all__ = [
     "realtime_router",
     "webhooks_router",
     "jobs_router",
+    "hooks_router",
 ]
 

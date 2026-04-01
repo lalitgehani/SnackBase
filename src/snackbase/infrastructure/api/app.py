@@ -325,6 +325,7 @@ def register_routes(app: FastAPI) -> None:
         users_router,
         webhooks_router,
         jobs_router,
+        hooks_router,
     )
 
     settings = get_settings()
@@ -429,6 +430,13 @@ def register_routes(app: FastAPI) -> None:
         jobs_router,
         prefix=f"{settings.api_prefix}/admin/jobs",
         tags=["admin", "jobs"],
+    )
+
+    # Register hooks routes (account-scoped: scheduled tasks + future event hooks)
+    app.include_router(
+        hooks_router,
+        prefix=f"{settings.api_prefix}/hooks",
+        tags=["hooks"],
     )
 
     # Register dynamic record routes with /records prefix to avoid conflicts
