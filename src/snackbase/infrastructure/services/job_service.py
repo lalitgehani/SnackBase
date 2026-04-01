@@ -153,7 +153,7 @@ async def _handle_send_email(payload: dict, job: "JobModel") -> None:
 
 @handler_registry.register("scheduled_task")
 async def _handle_scheduled_task(payload: dict, job: "JobModel") -> None:
-    """Placeholder handler for F7.3 scheduled tasks.
+    """Placeholder handler for generic scheduled tasks.
 
     Payload keys:
         task_type: str — type identifier for the scheduled task
@@ -161,6 +161,30 @@ async def _handle_scheduled_task(payload: dict, job: "JobModel") -> None:
     """
     task_type = payload.get("task_type", "unknown")
     logger.info("Scheduled task executed", task_type=task_type, job_id=job.id)
+
+
+@handler_registry.register("scheduled_hook")
+async def _handle_scheduled_hook(payload: dict, job: "JobModel") -> None:
+    """Execute a scheduled hook fired by the cron scheduler (F7.3).
+
+    Logs hook execution.  F8.1 will extend this to dispatch actions
+    (send_webhook, send_email, create_record, etc.).
+
+    Payload keys:
+        hook_id: str — ID of the HookModel that fired
+        hook_name: str — human-readable name (for log context)
+        actions: list — action definitions to execute (populated by F8.1)
+    """
+    hook_id = payload.get("hook_id", "unknown")
+    hook_name = payload.get("hook_name", "")
+    actions = payload.get("actions", [])
+    logger.info(
+        "Scheduled hook executed",
+        hook_id=hook_id,
+        hook_name=hook_name,
+        actions_count=len(actions),
+        job_id=job.id,
+    )
 
 
 # ---------------------------------------------------------------------------

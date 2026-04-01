@@ -132,6 +132,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             await job_worker.start()
             app.state.job_worker = job_worker
 
+        # Start cron scheduler
+        if settings.scheduler_enabled:
+            from snackbase.infrastructure.services.scheduler_service import SchedulerWorker
+
+            scheduler_worker = SchedulerWorker(db_manager.session, settings)
+            await scheduler_worker.start()
+            app.state.scheduler_worker = scheduler_worker
+
         logger.info("SnackBase startup complete and ready to serve")
         yield
 
@@ -145,6 +153,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # Stop background job worker
         if hasattr(app.state, "job_worker"):
             await app.state.job_worker.stop()
+
+        # Stop cron scheduler
+        if hasattr(app.state, "scheduler_worker"):
+            await app.state.scheduler_worker.stop()
 
         # Trigger ON_TERMINATE hook
         if hasattr(app.state, "hook_registry"):

@@ -211,6 +211,20 @@ class Settings(BaseSettings):
         description="Enable background job worker within FastAPI lifespan (SNACKBASE_JOB_WORKER_ENABLED)",
     )
 
+    # Scheduler Settings
+    scheduler_enabled: bool = Field(
+        default=True,
+        description="Enable cron scheduler within FastAPI lifespan (SNACKBASE_SCHEDULER_ENABLED)",
+    )
+    scheduler_poll_interval: float = Field(
+        default=30.0,
+        description="Scheduler poll interval in seconds (SNACKBASE_SCHEDULER_POLL_INTERVAL)",
+    )
+    max_scheduled_hooks_per_account: int = Field(
+        default=10,
+        description="Maximum schedule-type hooks per account (SNACKBASE_MAX_SCHEDULED_HOOKS_PER_ACCOUNT)",
+    )
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, v: str | list[str]) -> list[str]:

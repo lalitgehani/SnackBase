@@ -54,6 +54,9 @@ from snackbase.infrastructure.persistence.repositories.macro_repository import (
 from snackbase.infrastructure.persistence.repositories.oauth_state_repository import (
     OAuthStateRepository,
 )
+from snackbase.infrastructure.persistence.repositories.hook_repository import (
+    HookRepository,
+)
 from snackbase.infrastructure.persistence.repositories.webhook_repository import (
     WebhookDeliveryRepository,
     WebhookRepository,
@@ -78,6 +81,7 @@ __all__ = [
     "RefreshTokenRepository",
     "RoleRepository",
     "UserRepository",
+    "HookRepository",
     "WebhookDeliveryRepository",
     "WebhookRepository",
 ]
