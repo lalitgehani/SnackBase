@@ -193,6 +193,24 @@ class Settings(BaseSettings):
         description="HTTP timeout for webhook delivery in seconds",
     )
 
+    # Job Queue Settings
+    job_retention_days: int = Field(
+        default=7,
+        description="Days to retain completed jobs before deletion (SNACKBASE_JOB_RETENTION_DAYS)",
+    )
+    job_worker_poll_interval: float = Field(
+        default=1.0,
+        description="Worker poll interval in seconds (SNACKBASE_JOB_WORKER_POLL_INTERVAL)",
+    )
+    job_execution_timeout: int = Field(
+        default=300,
+        description="Job execution timeout in seconds, default 5 minutes (SNACKBASE_JOB_EXECUTION_TIMEOUT)",
+    )
+    job_worker_enabled: bool = Field(
+        default=True,
+        description="Enable background job worker within FastAPI lifespan (SNACKBASE_JOB_WORKER_ENABLED)",
+    )
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, v: str | list[str]) -> list[str]:

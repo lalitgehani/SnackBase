@@ -32,6 +32,7 @@ from snackbase.infrastructure.persistence.models.webhook import (
     WebhookDeliveryModel,
     WebhookModel,
 )
+from snackbase.infrastructure.persistence.models.job import JobModel
 
 __all__ = [
     "AccountModel",
@@ -55,4 +56,5 @@ __all__ = [
     "UsersGroupsModel",
     "WebhookDeliveryModel",
     "WebhookModel",
+    "JobModel",
 ]

@@ -612,6 +612,99 @@ def repair(dry_run: bool) -> None:
     )
 
 
+@cli.command()
+@click.option(
+    "--queue",
+    type=str,
+    default=None,
+    help="Only process jobs from this queue (default: all queues)",
+)
+@click.option(
+    "--poll-interval",
+    type=float,
+    default=None,
+    help="Override poll interval in seconds (default: from config)",
+)
+def worker(queue: str | None, poll_interval: float | None) -> None:
+    """Start a standalone background job worker process.
+
+    For multi-process deployments, run this command separately from the
+    web server. The worker polls the database for pending jobs and executes
+    them reliably with retry support and exponential backoff.
+
+    Examples:
+
+        # Process all queues
+        python -m snackbase worker
+
+        # Process only the 'webhooks' queue
+        python -m snackbase worker --queue webhooks
+
+        # Override poll interval
+        python -m snackbase worker --poll-interval 0.5
+    """
+    import asyncio
+
+    settings = get_settings()
+    configure_logging(settings)
+
+    logger = get_logger(__name__)
+
+    async def run() -> None:
+        from snackbase.infrastructure.persistence.database import (
+            get_db_manager,
+            init_database,
+        )
+        from snackbase.infrastructure.services.job_service import JobWorker
+
+        # Initialize database
+        await init_database()
+        db_manager = get_db_manager()
+
+        # Import job_service module to trigger handler registration side-effects
+        import snackbase.infrastructure.services.job_service  # noqa: F401
+
+        # Allow CLI override of poll interval
+        effective_settings = settings
+        if poll_interval is not None:
+            # Create a lightweight wrapper to override the poll interval
+            class _SettingsOverride:
+                def __getattr__(self, name: str):  # type: ignore[override]
+                    if name == "job_worker_poll_interval":
+                        return poll_interval
+                    return getattr(effective_settings, name)
+
+            effective_settings = _SettingsOverride()  # type: ignore[assignment]
+
+        job_worker = JobWorker(
+            session_factory=db_manager.session,
+            settings=effective_settings,
+            queue_filter=queue,
+        )
+        await job_worker.start()
+        logger.info(
+            "Standalone job worker started",
+            queue_filter=queue,
+            poll_interval=poll_interval or settings.job_worker_poll_interval,
+        )
+
+        try:
+            # Run until interrupted
+            stop_event = asyncio.Event()
+            await stop_event.wait()
+        except asyncio.CancelledError:
+            pass
+        finally:
+            await job_worker.stop()
+            await db_manager.disconnect()
+
+    click.echo("Starting SnackBase job worker... (Ctrl+C to stop)")
+    try:
+        asyncio.run(run())
+    except KeyboardInterrupt:
+        click.echo("\nJob worker stopped.")
+
+
 def main() -> NoReturn:
     """Main entry point for the CLI.
 

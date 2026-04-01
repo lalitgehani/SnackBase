@@ -1,3 +1,4 @@
+import React from "react"
 
 import {
     LayoutDashboard,
@@ -14,6 +15,7 @@ import {
     Mail,
     Key,
     Webhook,
+    Briefcase,
 } from "lucide-react"
 import { useLocation, Link, useNavigate } from "react-router"
 import { useAuthStore } from "@/stores/auth.store"
@@ -40,8 +42,15 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { ChevronsUpDown } from "lucide-react"
 
+interface SidebarItem {
+    title: string;
+    url: string;
+    icon: React.ElementType;
+    superadminOnly?: boolean;
+}
+
 // Menu items.
-const items = [
+const items: SidebarItem[] = [
     {
         title: "Dashboard",
         url: "/admin/dashboard",
@@ -105,11 +114,17 @@ const items = [
     },
 ]
 
-const integrationItems = [
+const integrationItems: SidebarItem[] = [
     {
         title: "Webhooks",
         url: "/admin/webhooks",
         icon: Webhook,
+    },
+    {
+        title: "Jobs",
+        url: "/admin/jobs",
+        icon: Briefcase,
+        superadminOnly: true,
     },
 ]
 
@@ -138,7 +153,7 @@ export function AppSidebar() {
                     <SidebarGroupLabel>Application</SidebarGroupLabel>
                     <SidebarGroupContent>
                         <SidebarMenu>
-                            {items.map((item: any) => {
+                            {items.map((item: SidebarItem) => {
                                 if (item.superadminOnly && account?.id !== "00000000-0000-0000-0000-000000000000") {
                                     return null;
                                 }
@@ -163,19 +178,24 @@ export function AppSidebar() {
                     <SidebarGroupLabel>Integrations</SidebarGroupLabel>
                     <SidebarGroupContent>
                         <SidebarMenu>
-                            {integrationItems.map((item) => (
-                                <SidebarMenuItem key={item.title}>
-                                    <SidebarMenuButton
-                                        asChild
-                                        isActive={location.pathname === item.url}
-                                    >
-                                        <Link to={item.url}>
-                                            <item.icon />
-                                            <span>{item.title}</span>
-                                        </Link>
-                                    </SidebarMenuButton>
-                                </SidebarMenuItem>
-                            ))}
+                            {integrationItems.map((item: SidebarItem) => {
+                                if (item.superadminOnly && account?.id !== "00000000-0000-0000-0000-000000000000") {
+                                    return null;
+                                }
+                                return (
+                                    <SidebarMenuItem key={item.title}>
+                                        <SidebarMenuButton
+                                            asChild
+                                            isActive={location.pathname === item.url}
+                                        >
+                                            <Link to={item.url}>
+                                                <item.icon />
+                                                <span>{item.title}</span>
+                                            </Link>
+                                        </SidebarMenuButton>
+                                    </SidebarMenuItem>
+                                );
+                            })}
                         </SidebarMenu>
                     </SidebarGroupContent>
                 </SidebarGroup>

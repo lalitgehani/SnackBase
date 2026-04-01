@@ -119,10 +119,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         
         connection_manager = ConnectionManager()
         event_broadcaster = EventBroadcaster(connection_manager)
-        
+
         app.state.connection_manager = connection_manager
         app.state.event_broadcaster = event_broadcaster
         logger.info("Realtime components initialized")
+
+        # Start background job worker
+        if settings.job_worker_enabled:
+            from snackbase.infrastructure.services.job_service import JobWorker
+
+            job_worker = JobWorker(db_manager.session, settings)
+            await job_worker.start()
+            app.state.job_worker = job_worker
 
         logger.info("SnackBase startup complete and ready to serve")
         yield
@@ -134,6 +142,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # Shutdown
         logger.info("Shutting down SnackBase")
 
+        # Stop background job worker
+        if hasattr(app.state, "job_worker"):
+            await app.state.job_worker.stop()
 
         # Trigger ON_TERMINATE hook
         if hasattr(app.state, "hook_registry"):
@@ -301,6 +312,7 @@ def register_routes(app: FastAPI) -> None:
         saml_router,
         users_router,
         webhooks_router,
+        jobs_router,
     )
 
     settings = get_settings()
@@ -398,6 +410,13 @@ def register_routes(app: FastAPI) -> None:
         webhooks_router,
         prefix=f"{settings.api_prefix}/webhooks",
         tags=["webhooks"],
+    )
+
+    # Register jobs routes (superadmin only)
+    app.include_router(
+        jobs_router,
+        prefix=f"{settings.api_prefix}/admin/jobs",
+        tags=["admin", "jobs"],
     )
 
     # Register dynamic record routes with /records prefix to avoid conflicts

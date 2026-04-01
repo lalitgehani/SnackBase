@@ -4,7 +4,8 @@ Registers hooks that fire outbound webhooks when record events occur.
 Webhook delivery is asynchronous and does NOT block the record operation.
 """
 
-from typing import Any, Optional
+import asyncio
+from typing import Any, Optional, Set
 
 from snackbase.core.hooks.hook_events import HookEvent
 from snackbase.core.hooks.hook_registry import HookRegistry
@@ -12,6 +13,10 @@ from snackbase.core.logging import get_logger
 from snackbase.domain.entities.hook_context import HookContext
 
 logger = get_logger(__name__)
+
+# Track background tasks to prevent them from being garbage collected
+# before they complete (mirrors the pattern in event_listeners.py).
+_background_tasks: Set[asyncio.Task] = set()
 
 # Map hook event names to webhook event names
 _EVENT_MAP = {
@@ -150,22 +155,28 @@ async def _dispatch_webhooks(
                     )
                     continue
 
-            # Fire delivery as background task
-            try:
-                await dispatch_webhook(
-                    webhook=webhook,
-                    event_type=webhook_event,
-                    record=current_record or {},
-                    previous=previous,
-                    session_factory=session_factory,
-                    timeout_seconds=timeout,
-                )
-            except Exception as exc:
-                logger.error(
-                    "Failed to dispatch webhook",
-                    webhook_id=webhook.id,
-                    error=str(exc),
-                )
+            # Fire delivery as background task, deferred so the calling
+            # transaction can commit first (avoids SQLite "database is locked").
+            async def _dispatch(wh: Any = webhook) -> None:
+                try:
+                    await dispatch_webhook(
+                        webhook=wh,
+                        event_type=webhook_event,
+                        record=current_record or {},
+                        previous=previous,
+                        session_factory=session_factory,
+                        timeout_seconds=timeout,
+                    )
+                except Exception as exc:
+                    logger.error(
+                        "Failed to dispatch webhook",
+                        webhook_id=wh.id,
+                        error=str(exc),
+                    )
+
+            task = asyncio.create_task(_dispatch())
+            _background_tasks.add(task)
+            task.add_done_callback(_background_tasks.discard)
 
     except Exception as exc:
         logger.error(

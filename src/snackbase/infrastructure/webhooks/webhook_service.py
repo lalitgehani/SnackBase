@@ -1,9 +1,15 @@
 """Webhook delivery service.
 
 Handles signing, delivery, retry logic, and filter evaluation for outbound webhooks.
+
+Delivery architecture:
+- dispatch_webhook(): creates a delivery record and enqueues a job for delivery
+- attempt_webhook_delivery(): performs exactly ONE HTTP attempt (used by job handler)
+- _send_and_retry(): legacy looping retry, kept for test_webhook synchronous path
 """
 
 import asyncio
+import base64
 import hashlib
 import hmac
 import ipaddress
@@ -314,6 +320,96 @@ async def _send_and_retry(
     )
 
 
+async def attempt_webhook_delivery(
+    delivery_id: str,
+    url: str,
+    secret: str,
+    custom_headers: dict[str, str],
+    payload_bytes: bytes,
+    timeout_seconds: int = 30,
+) -> None:
+    """Perform exactly one HTTP delivery attempt for a webhook.
+
+    Called by the job handler (webhook_delivery). A single failure raises
+    an exception, which the job worker uses to schedule a retry via the
+    exponential backoff mechanism.
+
+    On success, updates the delivery record to "delivered".
+    On failure, updates the delivery record to "failed" and raises.
+
+    Args:
+        delivery_id: ID of the WebhookDeliveryModel to update.
+        url: Destination URL.
+        secret: HMAC signing secret (used to re-sign for attempt tracking).
+        custom_headers: Extra HTTP headers to include.
+        payload_bytes: Raw JSON bytes to POST.
+        timeout_seconds: HTTP request timeout.
+
+    Raises:
+        RuntimeError: On HTTP error or non-2xx response.
+    """
+    import httpx
+
+    from snackbase.infrastructure.persistence.database import get_db_manager
+
+    signature = sign_payload(secret, payload_bytes)
+    headers: dict[str, str] = {
+        "Content-Type": "application/json",
+        "X-SnackBase-Signature": signature,
+    }
+    headers.update(custom_headers)
+
+    db_manager = get_db_manager()
+    status_code = None
+    response_body = None
+    success = False
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+            response = await client.post(url, content=payload_bytes, headers=headers)
+            status_code = response.status_code
+            response_body = response.text[:5000]
+            success = 200 <= status_code < 300
+    except Exception as exc:
+        response_body = str(exc)[:5000]
+        async with db_manager.session() as session:
+            delivery_repo = WebhookDeliveryRepository(session)
+            await delivery_repo.update_status(
+                delivery_id=delivery_id,
+                status="failed",
+                response_body=response_body,
+            )
+            await session.commit()
+        raise RuntimeError(f"Webhook HTTP request failed: {exc}") from exc
+
+    async with db_manager.session() as session:
+        delivery_repo = WebhookDeliveryRepository(session)
+        if success:
+            await delivery_repo.update_status(
+                delivery_id=delivery_id,
+                status="delivered",
+                response_status=status_code,
+                response_body=response_body,
+                delivered_at=datetime.now(UTC),
+                next_retry_at=None,
+            )
+        else:
+            await delivery_repo.update_status(
+                delivery_id=delivery_id,
+                status="failed",
+                response_status=status_code,
+                response_body=response_body,
+            )
+        await session.commit()
+
+    if not success:
+        raise RuntimeError(
+            f"Webhook delivery failed with status {status_code}: {response_body[:200]}"
+        )
+
+    logger.info("Webhook delivered", delivery_id=delivery_id, url=url, status_code=status_code)
+
+
 async def dispatch_webhook(
     webhook: WebhookModel,
     event_type: str,
@@ -322,7 +418,7 @@ async def dispatch_webhook(
     session_factory: Any,
     timeout_seconds: int = 30,
 ) -> str:
-    """Create a delivery record and fire it as a background task.
+    """Create a delivery record and enqueue a job for reliable delivery.
 
     Args:
         webhook: The webhook configuration.
@@ -345,16 +441,13 @@ async def dispatch_webhook(
         "account_id": webhook.account_id,
     }
     payload_bytes = json.dumps(payload, default=str).encode()
-    signature = sign_payload(webhook.secret, payload_bytes)
 
-    headers: dict[str, str] = {
-        "Content-Type": "application/json",
-        "X-SnackBase-Signature": signature,
+    custom_headers: dict[str, str] = {
         "X-SnackBase-Event": event_type,
         "X-SnackBase-Webhook-Id": webhook.id,
     }
     if webhook.headers:
-        headers.update(webhook.headers)
+        custom_headers.update(webhook.headers)
 
     # Create the delivery record
     delivery = WebhookDeliveryModel(
@@ -371,16 +464,25 @@ async def dispatch_webhook(
         await session.commit()
         delivery_id = delivery.id
 
-    # Fire background task — does NOT block the caller
-    asyncio.create_task(
-        _send_and_retry(
-            delivery_id=delivery_id,
-            webhook=webhook,
-            payload_bytes=payload_bytes,
-            delivery_headers=headers,
-            session_factory=session_factory,
-            timeout_seconds=timeout_seconds,
-        )
+    # Enqueue a job for reliable delivery with retry support
+    from snackbase.infrastructure.services.job_service import JobService
+
+    job_service = JobService(session_factory)
+    await job_service.enqueue(
+        handler="webhook_delivery",
+        payload={
+            "delivery_id": delivery_id,
+            "url": webhook.url,
+            "secret": webhook.secret,
+            "custom_headers": custom_headers,
+            "payload_b64": base64.b64encode(payload_bytes).decode(),
+            "timeout_seconds": timeout_seconds,
+        },
+        queue="webhooks",
+        priority=1,
+        max_retries=5,
+        retry_delay_seconds=60,
+        account_id=webhook.account_id,
     )
 
     return delivery_id
