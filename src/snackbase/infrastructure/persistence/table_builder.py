@@ -111,7 +111,7 @@ class TableBuilder:
         return f"col_{collection_name.lower()}"
 
     @classmethod
-    def build_column_def(cls, field: dict[str, Any], table_name: str, dialect: str = "sqlite") -> tuple[str, str | None]:
+    def build_column_def(cls, field: dict[str, Any], table_name: str, dialect: str = "sqlite") -> tuple[str | None, str | None]:
         """Build column definition for a single field.
 
         Args:
@@ -121,9 +121,14 @@ class TableBuilder:
 
         Returns:
             Tuple of (column definition, optional foreign key constraint).
+            Returns (None, None) for computed fields (no physical column).
         """
         name = field["name"]
         field_type = field["type"].lower()
+
+        # Computed fields are virtual — no physical column
+        if field_type == FieldType.COMPUTED.value:
+            return None, None
         sql_type = get_sql_type(field_type, dialect)
 
         # Build column definition parts
@@ -191,10 +196,12 @@ class TableBuilder:
         system_columns = get_system_columns(dialect)
         column_defs = [f'"{col}" {col_type}' for col, col_type in system_columns]
 
-        # Build user field columns
+        # Build user field columns (skip computed fields — they have no physical column)
         fk_constraints = []
         for field in schema:
             col_def, fk_constraint = cls.build_column_def(field, table_name, dialect)
+            if col_def is None:
+                continue  # computed field — no physical column
             column_defs.append(col_def)
             if fk_constraint:
                 fk_constraints.append(fk_constraint)
@@ -234,6 +241,10 @@ class TableBuilder:
         for field in schema:
             name = field["name"]
             field_type = field.get("type", "").lower()
+
+            # Skip computed fields — they have no physical column to index
+            if field_type == FieldType.COMPUTED.value:
+                continue
 
             if field_type == FieldType.REFERENCE.value:
                 indexes.append(
@@ -319,8 +330,13 @@ class TableBuilder:
         ddl_statements = []
 
         for field in fields:
-            name = field["name"]
             field_type = field["type"].lower()
+
+            # Computed fields are virtual — no physical column to add
+            if field_type == FieldType.COMPUTED.value:
+                continue
+
+            name = field["name"]
             sql_type = get_sql_type(field_type, dialect)
 
             # Build column definition parts

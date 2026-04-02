@@ -22,11 +22,18 @@ class FilterCompiler:
 
     Designed for user-provided filters on the records list endpoint.
     Context variables (@request.auth.*, @request.data.*) are rejected.
+
+    Args:
+        computed_fields_map: Optional mapping of computed field name → SQL expression.
+            When a filter references a computed field (e.g., ``total_price > 100``),
+            the field name is substituted with its compiled SQL expression so that
+            the WHERE clause works against the derived value.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, computed_fields_map: dict[str, str] | None = None) -> None:
         self.param_counter = 0
         self.params: dict[str, Any] = {}
+        self.computed_fields_map = computed_fields_map or {}
 
     def compile(self, node: Node) -> tuple[str, dict[str, Any]]:
         """Compile AST node to SQL WHERE clause.
@@ -78,6 +85,7 @@ class FilterCompiler:
         """Compile variable to SQL column reference.
 
         Only plain field names are allowed. Context variables (@request.*) are rejected.
+        Computed field names are substituted with their SQL expressions.
         """
         var_name = node.name
 
@@ -91,6 +99,10 @@ class FilterCompiler:
         # Validate it's a safe identifier (alphanumeric + underscore)
         if not var_name.replace("_", "").isalnum():
             raise FilterCompilationError(f"Invalid field name: '{var_name}'")
+
+        # Substitute computed fields with their SQL expression
+        if var_name in self.computed_fields_map:
+            return f"({self.computed_fields_map[var_name]})"
 
         # Quote the column name to prevent SQL injection via field name
         return f'"{var_name}"'
@@ -147,7 +159,10 @@ class FilterCompiler:
         return f"{operand} IS NOT NULL"
 
 
-def compile_filter_to_sql(expression: str) -> tuple[str, dict[str, Any]]:
+def compile_filter_to_sql(
+    expression: str,
+    computed_fields_map: dict[str, str] | None = None,
+) -> tuple[str, dict[str, Any]]:
     """Compile a user filter expression to SQL WHERE clause.
 
     Args:
@@ -158,6 +173,11 @@ def compile_filter_to_sql(expression: str) -> tuple[str, dict[str, Any]]:
 
     Special cases:
         - Empty string "" → ("1=1", {}) (no filter)
+
+    Args:
+        expression: Filter expression string.
+        computed_fields_map: Optional mapping of computed field name → SQL expression.
+            Enables filtering by computed fields (e.g., ``?filter=total_price > 100``).
 
     Raises:
         FilterCompilationError: If expression contains context variables or invalid identifiers
@@ -186,5 +206,5 @@ def compile_filter_to_sql(expression: str) -> tuple[str, dict[str, Any]]:
     parser = Parser(lexer)
     ast = parser.parse()
 
-    compiler = FilterCompiler()
+    compiler = FilterCompiler(computed_fields_map=computed_fields_map)
     return compiler.compile(ast)

@@ -329,6 +329,10 @@ class RecordValidator:
         schema_fields = {field["name"]: field for field in schema}
 
         # Check for unknown fields in data
+        # Computed fields in the request body are silently ignored (not an error)
+        computed_field_names = {
+            f["name"] for f in schema if f.get("type", "").lower() == FieldType.COMPUTED.value
+        }
         for field_name in data:
             if field_name not in schema_fields:
                 errors.append(
@@ -338,11 +342,18 @@ class RecordValidator:
                         code="unknown_field",
                     )
                 )
+            # Note: computed fields ARE in schema_fields so they won't trigger the above error,
+            # and will be skipped in the loop below.
 
         # Validate each schema field
         for field in schema:
             field_name = field["name"]
             field_type = field.get("type", "text").lower()
+
+            # Computed fields are virtual — skip validation and ignore any input value
+            if field_type == FieldType.COMPUTED.value:
+                continue
+
             is_required = field.get("required", False)
             default_value = field.get("default")
 

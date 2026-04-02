@@ -3,6 +3,7 @@
 from .aggregation_parser import AggFunction, AggregationParseError, parse_agg_functions, parse_having, validate_group_by
 from .ast import InOp, IsNullOp, Node
 from .exceptions import RuleError, RuleEvaluationError, RuleSyntaxError
+from .expression_compiler import ExpressionCompilationError, compile_expression_to_sql
 from .filter_compiler import FilterCompilationError, compile_filter_to_sql
 from .filter_validator import validate_filter_expression
 from .lexer import Lexer
@@ -36,4 +37,6 @@ __all__ = [
     "RuleSyntaxError",
     "RuleEvaluationError",
     "FilterCompilationError",
+    "ExpressionCompilationError",
+    "compile_expression_to_sql",
 ]

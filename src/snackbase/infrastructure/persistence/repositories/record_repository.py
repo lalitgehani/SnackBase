@@ -21,6 +21,59 @@ from snackbase.infrastructure.persistence.table_builder import TableBuilder
 logger = get_logger(__name__)
 
 
+def _build_computed_select_parts(
+    schema: list[dict[str, Any]],
+    dialect: str = "sqlite",
+) -> list[tuple[str, str]]:
+    """Build SQL SELECT expressions for computed fields.
+
+    Args:
+        schema: Collection schema (list of field definitions).
+        dialect: Database dialect ("sqlite" or "postgresql").
+
+    Returns:
+        List of (sql_expression, field_name) tuples for computed fields.
+        Returns empty list if there are no computed fields or expressions fail to compile.
+    """
+    from snackbase.core.rules.expression_compiler import (
+        ExpressionCompilationError,
+        compile_expression_to_sql,
+    )
+    from snackbase.core.rules.exceptions import RuleSyntaxError
+
+    non_computed = {
+        f["name"] for f in schema
+        if f.get("type", "").lower() != "computed"
+    }
+    system_fields = {"id", "account_id", "created_at", "created_by", "updated_at", "updated_by"}
+    allowed_fields = non_computed | system_fields
+
+    parts = []
+    for field in schema:
+        if field.get("type", "").lower() != "computed":
+            continue
+        expression = field.get("expression", "")
+        field_name = field["name"]
+        if not expression:
+            parts.append(("NULL", field_name))
+            continue
+        try:
+            sql, _params = compile_expression_to_sql(
+                expression, dialect=dialect, schema_fields=allowed_fields
+            )
+            parts.append((sql, field_name))
+        except (ExpressionCompilationError, RuleSyntaxError) as exc:
+            logger.warning(
+                "Failed to compile computed field expression",
+                field_name=field_name,
+                expression=expression,
+                error=str(exc),
+            )
+            parts.append(("NULL", field_name))
+
+    return parts
+
+
 @dataclass
 class RuleFilter:
     """Rule results including SQL filter for row-level security."""
@@ -335,8 +388,16 @@ class RecordRepository:
 
         where_clause = " AND ".join(where_clauses)
 
+        # Build SELECT with computed field expressions
+        dialect = self._get_dialect()
+        computed_parts = _build_computed_select_parts(schema, dialect)
+        computed_sql = ", ".join(
+            f'({sql}) AS "{name}"' for sql, name in computed_parts
+        )
+        select_cols = f'*, {computed_sql}' if computed_sql else '*'
+
         select_sql = f'''
-            SELECT * FROM "{table_name}"
+            SELECT {select_cols} FROM "{table_name}"
             WHERE {where_clause}
         '''
 
@@ -354,10 +415,13 @@ class RecordRepository:
 
         # Convert types back from SQL storage
         schema_lookup = {f["name"]: f for f in schema}
+        computed_fields = {f["name"]: f for f in schema if f.get("type", "").lower() == "computed"}
         for key, value in list(record.items()):
             # System fields: convert datetime to ISO string
             if key in ("created_at", "updated_at") and isinstance(value, datetime):
                 record[key] = value.isoformat()
+            elif key in computed_fields:
+                pass  # Computed fields: returned as-is from SQL
             elif key in schema_lookup:
                 field_type = schema_lookup[key].get("type", "text").lower()
                 if field_type == "json" and value is not None:
@@ -439,7 +503,15 @@ class RecordRepository:
             params["account_id"] = account_id
 
         where_clause = " AND ".join(where_clauses)
-        select_sql = f'SELECT * FROM "{table_name}" WHERE {where_clause}'
+
+        # Build SELECT with computed field expressions
+        dialect = self._get_dialect()
+        computed_parts = _build_computed_select_parts(schema, dialect)
+        computed_sql = ", ".join(
+            f'({sql}) AS "{name}"' for sql, name in computed_parts
+        )
+        select_cols = f'*, {computed_sql}' if computed_sql else '*'
+        select_sql = f'SELECT {select_cols} FROM "{table_name}" WHERE {where_clause}'
 
         try:
             result = await self.session.execute(text(select_sql), params)
@@ -448,6 +520,7 @@ class RecordRepository:
             return {}
 
         schema_lookup = {f["name"]: f for f in schema}
+        computed_fields = {f["name"] for f in schema if f.get("type", "").lower() == "computed"}
         records: dict[str, dict[str, Any]] = {}
 
         for row in rows:
@@ -455,6 +528,8 @@ class RecordRepository:
             for key, value in list(record.items()):
                 if key in ("created_at", "updated_at") and isinstance(value, datetime):
                     record[key] = value.isoformat()
+                elif key in computed_fields:
+                    pass  # Computed fields: returned as-is from SQL
                 elif key in schema_lookup:
                     field_type = schema_lookup[key].get("type", "text").lower()
                     if field_type == "json" and value is not None:
@@ -516,7 +591,7 @@ class RecordRepository:
             params.update(user_filter.params)
 
         # Validate sort field to prevent SQL injection
-        # Allow system fields and schema fields
+        # Allow system fields, schema fields (including computed)
         schema_field_names = {f["name"] for f in schema}
         system_fields = {"id", "created_at", "created_by", "updated_at", "updated_by"}
 
@@ -527,19 +602,34 @@ class RecordRepository:
         where_clause = " AND ".join(where_clauses)
         where_sql = f" WHERE {where_clause}" if where_clause else ""
 
-        # 2. Get total count
+        # 2. Build computed field expressions
+        dialect = self._get_dialect()
+        computed_parts = _build_computed_select_parts(schema, dialect)
+        computed_expr_map = {name: sql for sql, name in computed_parts}
+        computed_sql = ", ".join(
+            f'({sql}) AS "{name}"' for sql, name in computed_parts
+        )
+        extra_select = f", {computed_sql}" if computed_sql else ""
+
+        # Determine ORDER BY expression (computed fields use their SQL expression)
+        if sort_by in computed_expr_map:
+            sort_expr = f"({computed_expr_map[sort_by]})"
+        else:
+            sort_expr = f'r."{sort_by}"'
+
+        # 3. Get total count
         count_sql = f'SELECT COUNT(*) FROM "{table_name}" r {where_sql}'
         count_result = await self.session.execute(text(count_sql), params)
         total_count = count_result.scalar_one()
 
-        # 3. Get paginated records
+        # 4. Get paginated records
         sort_order = "DESC" if descending else "ASC"
 
         select_sql = f'''
-            SELECT r.*, a.name as account_name FROM "{table_name}" r
+            SELECT r.*, a.name as account_name{extra_select} FROM "{table_name}" r
             LEFT JOIN accounts a ON r.account_id = a.id
             {where_sql}
-            ORDER BY r."{sort_by}" {sort_order}
+            ORDER BY {sort_expr} {sort_order}
             LIMIT :limit OFFSET :skip
         '''
 
@@ -549,18 +639,21 @@ class RecordRepository:
         result = await self.session.execute(text(select_sql), params)
         rows = result.fetchall()
 
-        # 4. Convert rows to dicts and fix types
+        # 5. Convert rows to dicts and fix types
         records = []
         schema_lookup = {f["name"]: f for f in schema}
+        computed_fields = set(computed_expr_map.keys())
 
         for row in rows:
             record = dict(row._mapping)
 
-            # Type conversion (same as get_by_id)
+            # Type conversion
             for key, value in list(record.items()):
                 # System fields: convert datetime to ISO string
                 if key in ("created_at", "updated_at") and isinstance(value, datetime):
                     record[key] = value.isoformat()
+                elif key in computed_fields:
+                    pass  # Computed fields: returned as-is from SQL
                 elif key in schema_lookup:
                     field_type = schema_lookup[key].get("type", "text").lower()
                     if field_type == "json" and value is not None:
@@ -634,25 +727,34 @@ class RecordRepository:
         if sort_by not in schema_field_names and sort_by not in system_fields:
             sort_by = "created_at"
 
-        # 2. Build cursor condition for keyset pagination
+        # 2. Build computed field expressions
+        dialect = self._get_dialect()
+        computed_parts = _build_computed_select_parts(schema, dialect)
+        computed_expr_map = {name: sql for sql, name in computed_parts}
+        computed_sql = ", ".join(
+            f'({sql}) AS "{name}"' for sql, name in computed_parts
+        )
+        extra_select = f", {computed_sql}" if computed_sql else ""
+
+        # Determine ORDER BY expression (computed fields use their SQL expression)
+        if sort_by in computed_expr_map:
+            sort_expr = f"({computed_expr_map[sort_by]})"
+        else:
+            sort_expr = f'r."{sort_by}"'
+
+        # 3. Build cursor condition for keyset pagination
         cursor_condition = ""
         if cursor_sort_value is not None and cursor_record_id is not None:
-            sort_order = "DESC" if descending else "ASC"
-            opposite_order = "ASC" if descending else "DESC"
-
             if is_backward:
-                # For backward navigation, we want records BEFORE the cursor
-                # Since we're sorting DESC, "before" means higher values
                 if descending:
-                    cursor_condition = f'AND ((r."{sort_by}" > :cursor_sort_value) OR (r."{sort_by}" = :cursor_sort_value AND r."id" > :cursor_record_id))'
+                    cursor_condition = f'AND (({sort_expr} > :cursor_sort_value) OR ({sort_expr} = :cursor_sort_value AND r."id" > :cursor_record_id))'
                 else:
-                    cursor_condition = f'AND ((r."{sort_by}" < :cursor_sort_value) OR (r."{sort_by}" = :cursor_sort_value AND r."id" < :cursor_record_id))'
+                    cursor_condition = f'AND (({sort_expr} < :cursor_sort_value) OR ({sort_expr} = :cursor_sort_value AND r."id" < :cursor_record_id))'
             else:
-                # For forward navigation, we want records AFTER the cursor
                 if descending:
-                    cursor_condition = f'AND ((r."{sort_by}" < :cursor_sort_value) OR (r."{sort_by}" = :cursor_sort_value AND r."id" < :cursor_record_id))'
+                    cursor_condition = f'AND (({sort_expr} < :cursor_sort_value) OR ({sort_expr} = :cursor_sort_value AND r."id" < :cursor_record_id))'
                 else:
-                    cursor_condition = f'AND ((r."{sort_by}" > :cursor_sort_value) OR (r."{sort_by}" = :cursor_sort_value AND r."id" > :cursor_record_id))'
+                    cursor_condition = f'AND (({sort_expr} > :cursor_sort_value) OR ({sort_expr} = :cursor_sort_value AND r."id" > :cursor_record_id))'
 
             params["cursor_sort_value"] = cursor_sort_value
             params["cursor_record_id"] = cursor_record_id
@@ -660,21 +762,21 @@ class RecordRepository:
         where_clause = " AND ".join(where_clauses)
         where_sql = f" WHERE {where_clause}" if where_clause else ""
 
-        # 3. Get total count if requested (expensive)
+        # 4. Get total count if requested (expensive)
         total_count = None
         if include_count:
             count_sql = f'SELECT COUNT(*) FROM "{table_name}" r {where_sql}'
             count_result = await self.session.execute(text(count_sql), params)
             total_count = count_result.scalar_one()
 
-        # 4. Get records with cursor pagination
+        # 5. Get records with cursor pagination
         sort_order = "DESC" if descending else "ASC"
 
         select_sql = f'''
-            SELECT r.*, a.name as account_name FROM "{table_name}" r
+            SELECT r.*, a.name as account_name{extra_select} FROM "{table_name}" r
             LEFT JOIN accounts a ON r.account_id = a.id
             {where_sql} {cursor_condition}
-            ORDER BY r."{sort_by}" {sort_order}, r."id" {sort_order}
+            ORDER BY {sort_expr} {sort_order}, r."id" {sort_order}
             LIMIT :limit
         '''
 
@@ -683,9 +785,10 @@ class RecordRepository:
         result = await self.session.execute(text(select_sql), params)
         rows = result.fetchall()
 
-        # 5. Process results
+        # 6. Process results
         records = []
         schema_lookup = {f["name"]: f for f in schema}
+        computed_fields = set(computed_expr_map.keys())
 
         has_more = len(rows) > limit
         actual_rows = rows[:limit]  # Trim to requested limit
@@ -697,6 +800,8 @@ class RecordRepository:
             for key, value in list(record.items()):
                 if key in ("created_at", "updated_at") and isinstance(value, datetime):
                     record[key] = value.isoformat()
+                elif key in computed_fields:
+                    pass  # Computed fields: returned as-is from SQL
                 elif key in schema_lookup:
                     field_type = schema_lookup[key].get("type", "text").lower()
                     if field_type == "json" and value is not None:
@@ -709,7 +814,7 @@ class RecordRepository:
 
             records.append(record)
 
-        # 6. Generate cursors
+        # 7. Generate cursors
         next_cursor = None
         prev_cursor = None
 

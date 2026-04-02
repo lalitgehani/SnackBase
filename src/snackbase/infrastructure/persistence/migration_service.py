@@ -264,10 +264,12 @@ class MigrationService:
         lines.append("        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),")
         lines.append("        sa.Column('updated_by', sa.Text(), nullable=False),")
 
-        # User defined columns
+        # User defined columns (skip computed fields — no physical column)
         for field in schema:
-            name = field["name"]
             f_type = field["type"].lower()
+            if f_type == "computed":
+                continue
+            name = field["name"]
             sql_type = self._map_to_sa_type(f_type)
 
             nullable = not field.get("required", False)
@@ -286,7 +288,7 @@ class MigrationService:
             col_part += "),"
             lines.append(col_part)
 
-        # Foreign Keys
+        # Foreign Keys (computed fields have no FK constraints)
         for field in schema:
             if field["type"].lower() == "reference":
                 name = field["name"]
@@ -296,7 +298,7 @@ class MigrationService:
 
         lines.append("    )")
 
-        # Indexes
+        # Indexes (skip computed fields — no physical column)
         lines.append(f"    op.create_index('ix_{table_name}_account_id', '{table_name}', ['account_id'])")
         for field in schema:
             if field["type"].lower() == "reference":
@@ -314,8 +316,11 @@ class MigrationService:
         lines = [f"    with op.batch_alter_table('{table_name}', schema=None) as batch_op:"]
 
         for field in fields:
-            name = field["name"]
             f_type = field["type"].lower()
+            # Computed fields are virtual — no physical column to add
+            if f_type == "computed":
+                continue
+            name = field["name"]
             sql_type = self._map_to_sa_type(f_type)
             nullable = not field.get("required", False)
             unique = field.get("unique", False)
@@ -343,6 +348,9 @@ class MigrationService:
         table_name = TableBuilder.generate_table_name(collection_name)
         lines = [f"    with op.batch_alter_table('{table_name}', schema=None) as batch_op:"]
         for field in fields:
+            # Computed fields have no physical column to drop
+            if field.get("type", "").lower() == "computed":
+                continue
             name = field["name"]
             lines.append(f"        batch_op.drop_column('{name}')")
         return lines

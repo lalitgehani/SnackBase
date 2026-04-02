@@ -22,6 +22,7 @@ class FieldType(str, Enum):
     REFERENCE = "reference"
     FILE = "file"
     DATE = "date"
+    COMPUTED = "computed"
 
 
 class OnDeleteAction(str, Enum):
@@ -55,6 +56,12 @@ RESERVED_FIELD_NAMES = frozenset({
 
 # Pattern for valid collection and field names
 NAME_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9_]*$")
+
+# Valid return_type values for computed fields
+VALID_RETURN_TYPES = frozenset({"text", "number", "boolean", "datetime"})
+
+# Maximum computed fields allowed per collection
+MAX_COMPUTED_FIELDS = 10
 
 
 @dataclass
@@ -339,12 +346,126 @@ class CollectionValidator:
         return errors
 
     @classmethod
-    def validate_field(cls, field: dict, field_index: int) -> list[CollectionValidationError]:
+    def validate_computed_field(
+        cls,
+        field: dict,
+        field_index: int,
+        all_field_names: set[str] | None = None,
+        computed_field_names: set[str] | None = None,
+    ) -> list[CollectionValidationError]:
+        """Validate a computed field definition.
+
+        Args:
+            field: The field definition dict.
+            field_index: Index of the field in the schema (for error messages).
+            all_field_names: All non-computed field names in the schema (for expression validation).
+            computed_field_names: Names of other computed fields (to reject cross-references).
+
+        Returns:
+            List of validation errors (empty if valid).
+        """
+        errors = []
+        field_path = f"schema[{field_index}]"
+
+        # Reject constraints that don't apply to computed fields
+        if field.get("required", False):
+            errors.append(CollectionValidationError(
+                field=f"{field_path}.required",
+                message="Computed fields cannot have 'required' — they are always derived",
+                code="computed_field_no_required",
+            ))
+
+        if field.get("default") is not None:
+            errors.append(CollectionValidationError(
+                field=f"{field_path}.default",
+                message="Computed fields cannot have a 'default' value",
+                code="computed_field_no_default",
+            ))
+
+        if field.get("unique", False):
+            errors.append(CollectionValidationError(
+                field=f"{field_path}.unique",
+                message="Computed fields cannot have 'unique' constraint",
+                code="computed_field_no_unique",
+            ))
+
+        # expression is required
+        expression = field.get("expression")
+        if not expression or not str(expression).strip():
+            errors.append(CollectionValidationError(
+                field=f"{field_path}.expression",
+                message="Computed field requires an 'expression'",
+                code="computed_field_expression_required",
+            ))
+            return errors  # Can't validate further without expression
+
+        # return_type is required
+        return_type = field.get("return_type")
+        if not return_type:
+            errors.append(CollectionValidationError(
+                field=f"{field_path}.return_type",
+                message=(
+                    f"Computed field requires 'return_type'. "
+                    f"Valid values: {', '.join(sorted(VALID_RETURN_TYPES))}"
+                ),
+                code="computed_field_return_type_required",
+            ))
+        elif return_type.lower() not in VALID_RETURN_TYPES:
+            errors.append(CollectionValidationError(
+                field=f"{field_path}.return_type",
+                message=(
+                    f"Invalid return_type '{return_type}'. "
+                    f"Valid values: {', '.join(sorted(VALID_RETURN_TYPES))}"
+                ),
+                code="computed_field_return_type_invalid",
+            ))
+
+        # Validate expression syntax and field references
+        if not errors:
+            try:
+                from snackbase.core.rules.expression_compiler import compile_expression_to_sql
+                from snackbase.core.rules.exceptions import RuleSyntaxError
+
+                # Build schema_fields: all non-computed fields + system fields
+                system_fields = {
+                    "id", "account_id", "created_at", "created_by", "updated_at", "updated_by"
+                }
+                schema_fields: set[str] | None = None
+                if all_field_names is not None:
+                    schema_fields = all_field_names | system_fields
+
+                compile_expression_to_sql(expression, dialect="sqlite", schema_fields=schema_fields)
+
+            except RuleSyntaxError as e:
+                errors.append(CollectionValidationError(
+                    field=f"{field_path}.expression",
+                    message=f"Invalid expression syntax: {e}",
+                    code="computed_field_expression_invalid",
+                ))
+            except Exception as e:
+                errors.append(CollectionValidationError(
+                    field=f"{field_path}.expression",
+                    message=f"Expression error: {e}",
+                    code="computed_field_expression_error",
+                ))
+
+        return errors
+
+    @classmethod
+    def validate_field(
+        cls,
+        field: dict,
+        field_index: int,
+        all_field_names: set[str] | None = None,
+        computed_field_names: set[str] | None = None,
+    ) -> list[CollectionValidationError]:
         """Validate a single field definition.
 
         Args:
             field: The field definition dict with at least 'name' and 'type'.
             field_index: Index of the field in the schema (for error messages).
+            all_field_names: Non-computed field names (passed to computed field validation).
+            computed_field_names: Computed field names (passed to computed field validation).
 
         Returns:
             List of validation errors (empty if valid).
@@ -358,6 +479,13 @@ class CollectionValidator:
         # Validate field type
         field_type = field.get("type", "")
         errors.extend(cls.validate_field_type(field_type, field_index))
+
+        # Computed fields have their own validation path
+        if field_type.lower() == FieldType.COMPUTED.value:
+            errors.extend(cls.validate_computed_field(
+                field, field_index, all_field_names, computed_field_names
+            ))
+            return errors
 
         # If this is a reference field, validate reference-specific config
         if field_type.lower() == FieldType.REFERENCE.value:
@@ -391,11 +519,36 @@ class CollectionValidator:
             )
             return errors
 
+        # Collect non-computed and computed field names for cross-validation
+        non_computed_names: set[str] = set()
+        computed_names: set[str] = set()
+        for field in schema:
+            name = field.get("name", "")
+            if field.get("type", "").lower() == FieldType.COMPUTED.value:
+                computed_names.add(name)
+            else:
+                non_computed_names.add(name)
+
+        # Enforce max computed fields limit
+        if len(computed_names) > MAX_COMPUTED_FIELDS:
+            errors.append(CollectionValidationError(
+                field="schema",
+                message=(
+                    f"Collection cannot have more than {MAX_COMPUTED_FIELDS} computed fields "
+                    f"(found {len(computed_names)})"
+                ),
+                code="too_many_computed_fields",
+            ))
+
         # Validate each field
         seen_names: set[str] = set()
         for i, field in enumerate(schema):
-            # Validate the field
-            errors.extend(cls.validate_field(field, i))
+            # Validate the field (pass context for computed field validation)
+            errors.extend(cls.validate_field(
+                field, i,
+                all_field_names=non_computed_names,
+                computed_field_names=computed_names,
+            ))
 
             # Check for duplicate field names
             name = field.get("name", "").lower()

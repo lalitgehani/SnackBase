@@ -1,6 +1,6 @@
 """Parser for rule expressions - SQL-centric syntax."""
 
-from .ast import BinaryOp, InOp, IsNullOp, Literal, Node, UnaryOp, Variable
+from .ast import BinaryOp, FunctionCall, InOp, IsNullOp, Literal, Node, UnaryOp, Variable
 from .exceptions import RuleSyntaxError
 from .lexer import Lexer, Token, TokenType
 
@@ -63,16 +63,16 @@ class Parser:
 
     def comparison(self) -> Node:
         """Parse comparison expressions (=, !=, <, >, <=, >=, ~, IN, IS NULL, IS NOT NULL)."""
-        node = self.atom()
+        node = self.additive()
 
         # Handle IN operator: field IN (val1, val2, ...)
         if self.current_token.type == TokenType.IN:
             self.consume(TokenType.IN)
             self.consume(TokenType.LPAREN)
-            values: list[Node] = [self.atom()]
+            values: list[Node] = [self.additive()]
             while self.current_token.type == TokenType.COMMA:
                 self.consume(TokenType.COMMA)
-                values.append(self.atom())
+                values.append(self.additive())
             self.consume(TokenType.RPAREN)
             return InOp(operand=node, values=values)
 
@@ -110,13 +110,40 @@ class Parser:
                 TokenType.LIKE: "~",
             }
             self.consume(token.type)
-            right = self.atom()
+            right = self.additive()
             node = BinaryOp(left=node, operator=operator_map[token.type], right=right)
 
         return node
 
+    def additive(self) -> Node:
+        """Parse additive expressions (+ and -)."""
+        node = self.multiplicative()
+
+        while self.current_token.type in (TokenType.PLUS, TokenType.MINUS):
+            token = self.current_token
+            op = "+" if token.type == TokenType.PLUS else "-"
+            self.consume(token.type)
+            right = self.multiplicative()
+            node = BinaryOp(left=node, operator=op, right=right)
+
+        return node
+
+    def multiplicative(self) -> Node:
+        """Parse multiplicative expressions (*, /, %)."""
+        node = self.atom()
+
+        while self.current_token.type in (TokenType.STAR, TokenType.SLASH, TokenType.PERCENT):
+            token = self.current_token
+            op_map = {TokenType.STAR: "*", TokenType.SLASH: "/", TokenType.PERCENT: "%"}
+            op = op_map[token.type]
+            self.consume(token.type)
+            right = self.atom()
+            node = BinaryOp(left=node, operator=op, right=right)
+
+        return node
+
     def atom(self) -> Node:
-        """Parse basic units: literals, variables, parentheses."""
+        """Parse basic units: literals, variables, function calls, parentheses."""
         token = self.current_token
 
         if token.type == TokenType.INTEGER:
@@ -139,6 +166,12 @@ class Parser:
             self.consume(TokenType.NULL)
             return Literal(None)
 
+        if token.type == TokenType.MINUS:
+            # Unary minus: -expr
+            self.consume(TokenType.MINUS)
+            operand = self.atom()
+            return UnaryOp(operator="-", operand=operand)
+
         if token.type == TokenType.LPAREN:
             self.consume(TokenType.LPAREN)
             node = self.expression()
@@ -148,6 +181,17 @@ class Parser:
         if token.type == TokenType.IDENTIFIER:
             identifier_value = str(token.value)
             self.consume(TokenType.IDENTIFIER)
+            # Check if this is a function call: IDENTIFIER(args...)
+            if self.current_token.type == TokenType.LPAREN:
+                self.consume(TokenType.LPAREN)
+                args: list[Node] = []
+                if self.current_token.type != TokenType.RPAREN:
+                    args.append(self.expression())
+                    while self.current_token.type == TokenType.COMMA:
+                        self.consume(TokenType.COMMA)
+                        args.append(self.expression())
+                self.consume(TokenType.RPAREN)
+                return FunctionCall(name=identifier_value, args=args)
             return Variable(identifier_value)
 
         self.error(f"Unexpected token: {token.type.name}")

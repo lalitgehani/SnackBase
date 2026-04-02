@@ -35,6 +35,13 @@ class TokenType(Enum):
     IN = auto()   # IN keyword
     IS = auto()   # IS keyword
 
+    # Arithmetic Operators
+    PLUS = auto()     # +
+    MINUS = auto()    # -
+    STAR = auto()     # *
+    SLASH = auto()    # /
+    PERCENT = auto()  # %
+
     # Punctuation
     LPAREN = auto()
     RPAREN = auto()
@@ -211,6 +218,27 @@ class Lexer:
             if self.current_char == "~":
                 self.advance()
                 return Token(TokenType.LIKE, "~", start_pos)
+
+            # Arithmetic operators
+            if self.current_char == "+":
+                self.advance()
+                return Token(TokenType.PLUS, "+", start_pos)
+
+            if self.current_char == "-":
+                self.advance()
+                return Token(TokenType.MINUS, "-", start_pos)
+
+            if self.current_char == "*":
+                self.advance()
+                return Token(TokenType.STAR, "*", start_pos)
+
+            if self.current_char == "/":
+                self.advance()
+                return Token(TokenType.SLASH, "/", start_pos)
+
+            if self.current_char == "%":
+                self.advance()
+                return Token(TokenType.PERCENT, "%", start_pos)
 
             # && (AND operator)
             if self.current_char == "&":

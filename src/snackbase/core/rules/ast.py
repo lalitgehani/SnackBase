@@ -57,3 +57,11 @@ class IsNullOp(Node):
     operand: Node
     is_null: bool  # True = IS NULL, False = IS NOT NULL
 
+
+@dataclass
+class FunctionCall(Node):
+    """Represents a function call (e.g., concat(first_name, ' ', last_name))."""
+
+    name: str
+    args: list[Node] = field(default_factory=list)
+

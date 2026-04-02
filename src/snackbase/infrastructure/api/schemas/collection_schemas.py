@@ -54,6 +54,15 @@ class FieldDefinition(BaseModel):
         default=None,
         description="Mask type for PII fields: email, ssn, phone, name, full, custom",
     )
+    # Computed field properties
+    expression: str | None = Field(
+        default=None,
+        description="SQL expression for computed fields (e.g., 'concat(first_name, last_name)')",
+    )
+    return_type: str | None = Field(
+        default=None,
+        description="Return type for computed fields: text, number, boolean, datetime",
+    )
 
     @field_validator("type")
     @classmethod
@@ -133,6 +142,8 @@ class SchemaFieldResponse(BaseModel):
     on_delete: str | None = None
     pii: bool = False
     mask_type: str | None = None
+    expression: str | None = None
+    return_type: str | None = None
 
 
 class CollectionResponse(BaseModel):
@@ -327,6 +338,8 @@ class CollectionExportFieldDefinition(BaseModel):
     on_delete: str | None = None
     pii: bool = False
     mask_type: str | None = None
+    expression: str | None = None
+    return_type: str | None = None
 
 
 class CollectionExportItem(BaseModel):

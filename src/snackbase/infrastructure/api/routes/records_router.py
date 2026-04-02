@@ -24,6 +24,9 @@ from snackbase.core.rules import (
     validate_filter_expression,
     validate_group_by,
 )
+from snackbase.infrastructure.persistence.repositories.record_repository import (
+    _build_computed_select_parts,
+)
 from snackbase.domain.services import FieldType, PIIMaskingService, RecordValidator
 from snackbase.infrastructure.api.dependencies import (
     ANONYMOUS_USER_ID,
@@ -652,7 +655,11 @@ async def list_records(
     if filter_expr:
         try:
             validate_filter_expression(filter_expr, schema)
-            filter_sql, filter_params = compile_filter_to_sql(filter_expr)
+            # Build computed fields map so ?filter=computed_field > X works
+            _dialect = session.bind.dialect.name if session.bind and hasattr(session.bind, "dialect") else "sqlite"
+            _computed_parts = _build_computed_select_parts(schema, _dialect)
+            _computed_map = {name: sql for sql, name in _computed_parts}
+            filter_sql, filter_params = compile_filter_to_sql(filter_expr, computed_fields_map=_computed_map)
             if filter_sql != "1=1":
                 user_filter = RuleFilter(sql=filter_sql, params=filter_params)
         except (RuleSyntaxError, FilterCompilationError) as exc:
@@ -869,7 +876,11 @@ async def aggregate_collection(
     if filter_expr:
         try:
             validate_filter_expression(filter_expr, schema)
-            filter_sql, filter_params = compile_filter_to_sql(filter_expr)
+            # Build computed fields map so ?filter=computed_field > X works
+            _dialect = session.bind.dialect.name if session.bind and hasattr(session.bind, "dialect") else "sqlite"
+            _computed_parts = _build_computed_select_parts(schema, _dialect)
+            _computed_map = {name: sql for sql, name in _computed_parts}
+            filter_sql, filter_params = compile_filter_to_sql(filter_expr, computed_fields_map=_computed_map)
             if filter_sql != "1=1":
                 user_filter = RuleFilter(sql=filter_sql, params=filter_params)
         except (RuleSyntaxError, FilterCompilationError) as exc:

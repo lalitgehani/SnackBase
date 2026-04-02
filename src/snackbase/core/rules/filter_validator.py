@@ -7,7 +7,7 @@ compatibility, and only allows known collection fields and system fields.
 
 from typing import Any
 
-from .ast import BinaryOp, InOp, IsNullOp, Literal, Node, UnaryOp, Variable
+from .ast import BinaryOp, FunctionCall, InOp, IsNullOp, Literal, Node, UnaryOp, Variable
 from .exceptions import RuleSyntaxError
 from .lexer import Lexer
 from .parser import Parser
@@ -50,8 +50,13 @@ FIELD_TYPE_OPERATORS: dict[str, set[str]] = {
     "datetime": _NO_LIKE,
     "reference": _EQUALITY_ONLY,
     "json": _NULL_ONLY,
+    # Computed fields: allow all comparisons (return_type determines runtime semantics)
+    "computed": _ALL_COMPARISON_OPS,
     # Fallback for unknown types: allow all
 }
+
+# Arithmetic operators — pass through during validation without field checking
+_ARITHMETIC_OPS = frozenset({"+", "-", "*", "/", "%"})
 
 # Map AST operator strings to display names for error messages
 OPERATOR_DISPLAY: dict[str, str] = {
@@ -143,6 +148,11 @@ class FilterValidator:
                 self._validate_node(node.left)
                 self._validate_node(node.right)
                 return
+            # For arithmetic operators, recurse without operator/type validation
+            if node.operator in _ARITHMETIC_OPS:
+                self._validate_node(node.left)
+                self._validate_node(node.right)
+                return
             # For comparison operators, validate field + operator compatibility
             if isinstance(node.left, Variable):
                 self._validate_variable(node.left)
@@ -150,6 +160,12 @@ class FilterValidator:
             else:
                 self._validate_node(node.left)
             self._validate_node(node.right)
+            return
+
+        if isinstance(node, FunctionCall):
+            # Function calls in filters: just validate variable references in args
+            for arg in node.args:
+                self._validate_node(arg)
             return
 
         if isinstance(node, UnaryOp):
