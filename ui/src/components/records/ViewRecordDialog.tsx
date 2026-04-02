@@ -6,7 +6,7 @@
 import { AppDialog } from '@/components/common/AppDialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ExternalLink } from 'lucide-react';
+import { Calculator, ExternalLink } from 'lucide-react';
 import type { FieldDefinition } from '@/services/collections.service';
 import type { RecordData } from '@/types/records.types';
 import { shouldMaskField, maskPiiValue } from '@/lib/form-helpers';
@@ -210,7 +210,7 @@ export default function ViewRecordDialog({
 				<div className="max-h-[60vh] overflow-y-auto">
 					{/* Schema Fields */}
 					<div className="space-y-4 pb-4">
-						{schema.map((field) => (
+						{schema.filter(f => f.type !== 'computed').map((field) => (
 							<div key={field.name} className="border-b pb-3 last:border-0">
 								<div className="flex items-center gap-2 mb-1">
 									<span className="font-medium text-sm">{field.name}</span>
@@ -235,6 +235,30 @@ export default function ViewRecordDialog({
 							</div>
 						))}
 					</div>
+
+					{/* Computed Fields */}
+					{schema.some(f => f.type === 'computed') && (
+						<div className="space-y-3 pb-4">
+							<div className="flex items-center gap-2">
+								<Calculator className="h-4 w-4 text-muted-foreground" />
+								<p className="text-xs font-semibold text-muted-foreground uppercase">Computed Fields</p>
+							</div>
+							{schema.filter(f => f.type === 'computed').map((field) => (
+								<div key={field.name} className="border-b pb-3 last:border-0 bg-blue-50/30 dark:bg-blue-950/10 rounded px-2">
+									<div className="flex items-center gap-2 mb-1">
+										<span className="font-medium text-sm">{field.name}</span>
+										<Badge variant="secondary" className="text-xs">Computed</Badge>
+										{field.return_type && (
+											<Badge variant="outline" className="text-xs">{field.return_type}</Badge>
+										)}
+									</div>
+									<div className="pl-4 text-muted-foreground">
+										{renderFieldValue(field, record[field.name])}
+									</div>
+								</div>
+							))}
+						</div>
+					)}
 
 					{/* System Fields */}
 					<div className="bg-muted/50 rounded-lg p-4 space-y-2">

@@ -8,9 +8,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2, MoveUp, MoveDown } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Plus, Trash2, MoveUp, MoveDown, Calculator, HelpCircle } from 'lucide-react';
 import type { FieldDefinition } from '@/services/collections.service';
-import { FIELD_TYPES, ON_DELETE_OPTIONS, MASK_TYPE_OPTIONS } from '@/services/collections.service';
+import { FIELD_TYPES, ON_DELETE_OPTIONS, MASK_TYPE_OPTIONS, RETURN_TYPE_OPTIONS } from '@/services/collections.service';
 
 interface SchemaBuilderProps {
     fields: FieldDefinition[];
@@ -64,6 +66,19 @@ export default function SchemaBuilder({
             delete newFields[index].mask_type;
         }
 
+        // Clear computed-specific fields if type changes away from computed
+        if (updates.type && updates.type !== 'computed') {
+            delete newFields[index].expression;
+            delete newFields[index].return_type;
+        }
+
+        // Clear required/unique/pii when type becomes computed
+        if (updates.type === 'computed') {
+            newFields[index].required = false;
+            newFields[index].unique = false;
+            newFields[index].pii = false;
+        }
+
         onChange(newFields);
     };
 
@@ -92,9 +107,12 @@ export default function SchemaBuilder({
                         return (
                             <div key={index} className="border rounded-lg p-4 space-y-3">
                                 <div className="flex items-center justify-between">
-                                    <span className="font-medium text-sm">
+                                    <span className="font-medium text-sm flex items-center gap-1">
                                         Field {index + 1}
                                         {isExisting && <span className="ml-2 text-xs text-muted-foreground">(existing)</span>}
+                                        {field.type === 'computed' && (
+                                            <Calculator className="h-3 w-3 text-muted-foreground" title="Computed field" />
+                                        )}
                                     </span>
                                     <div className="flex gap-1">
                                         <Button
@@ -166,35 +184,37 @@ export default function SchemaBuilder({
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-3 gap-3">
-                                    <label className="flex items-center space-x-2">
-                                        <input
-                                            type="checkbox"
-                                            checked={field.required || false}
-                                            onChange={(e) => updateField(index, { required: e.target.checked })}
-                                            className="rounded"
-                                        />
-                                        <span className="text-sm">Required</span>
-                                    </label>
-                                    <label className="flex items-center space-x-2">
-                                        <input
-                                            type="checkbox"
-                                            checked={field.unique || false}
-                                            onChange={(e) => updateField(index, { unique: e.target.checked })}
-                                            className="rounded"
-                                        />
-                                        <span className="text-sm">Unique</span>
-                                    </label>
-                                    <label className="flex items-center space-x-2">
-                                        <input
-                                            type="checkbox"
-                                            checked={field.pii || false}
-                                            onChange={(e) => updateField(index, { pii: e.target.checked })}
-                                            className="rounded"
-                                        />
-                                        <span className="text-sm">PII</span>
-                                    </label>
-                                </div>
+                                {field.type !== 'computed' && (
+                                    <div className="grid grid-cols-3 gap-3">
+                                        <label className="flex items-center space-x-2">
+                                            <input
+                                                type="checkbox"
+                                                checked={field.required || false}
+                                                onChange={(e) => updateField(index, { required: e.target.checked })}
+                                                className="rounded"
+                                            />
+                                            <span className="text-sm">Required</span>
+                                        </label>
+                                        <label className="flex items-center space-x-2">
+                                            <input
+                                                type="checkbox"
+                                                checked={field.unique || false}
+                                                onChange={(e) => updateField(index, { unique: e.target.checked })}
+                                                className="rounded"
+                                            />
+                                            <span className="text-sm">Unique</span>
+                                        </label>
+                                        <label className="flex items-center space-x-2">
+                                            <input
+                                                type="checkbox"
+                                                checked={field.pii || false}
+                                                onChange={(e) => updateField(index, { pii: e.target.checked })}
+                                                className="rounded"
+                                            />
+                                            <span className="text-sm">PII</span>
+                                        </label>
+                                    </div>
+                                )}
 
                                 {field.type === 'reference' && (
                                     <div className="grid grid-cols-2 gap-3">
@@ -255,6 +275,101 @@ export default function SchemaBuilder({
                                                 ))}
                                             </SelectContent>
                                         </Select>
+                                    </div>
+                                )}
+
+                                {field.type === 'computed' && (
+                                    <div className="space-y-3">
+                                        <div className="space-y-2">
+                                            <div className="flex items-center gap-2">
+                                                <Label htmlFor={`field-${index}-expression`}>Expression *</Label>
+                                                <Popover>
+                                                    <PopoverTrigger asChild>
+                                                        <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0">
+                                                            <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                                                        </Button>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent className="w-80 max-h-96 overflow-y-auto" align="start">
+                                                        <div className="space-y-3 text-sm">
+                                                            <p className="font-semibold">Expression Reference</p>
+                                                            <div>
+                                                                <p className="font-medium text-xs uppercase text-muted-foreground mb-1">String</p>
+                                                                <div className="space-y-1 font-mono text-xs">
+                                                                    <div>concat(a, b, ...) → "hello world"</div>
+                                                                    <div>upper(a) / lower(a)</div>
+                                                                    <div>trim(a) / length(a)</div>
+                                                                    <div>substring(a, start, len)</div>
+                                                                </div>
+                                                            </div>
+                                                            <div>
+                                                                <p className="font-medium text-xs uppercase text-muted-foreground mb-1">Math</p>
+                                                                <div className="space-y-1 font-mono text-xs">
+                                                                    <div>price * quantity</div>
+                                                                    <div>round(a, decimals)</div>
+                                                                    <div>abs(a) / ceil(a) / floor(a)</div>
+                                                                </div>
+                                                            </div>
+                                                            <div>
+                                                                <p className="font-medium text-xs uppercase text-muted-foreground mb-1">Logic</p>
+                                                                <div className="space-y-1 font-mono text-xs">
+                                                                    <div>if(condition, then, else)</div>
+                                                                    <div>coalesce(a, b, ...)</div>
+                                                                    <div>nullif(a, b)</div>
+                                                                </div>
+                                                            </div>
+                                                            <div>
+                                                                <p className="font-medium text-xs uppercase text-muted-foreground mb-1">Date</p>
+                                                                <div className="space-y-1 font-mono text-xs">
+                                                                    <div>now()</div>
+                                                                    <div>date_diff(a, b, 'days')</div>
+                                                                    <div>date_add(a, value, 'days')</div>
+                                                                </div>
+                                                            </div>
+                                                            {fields.filter(f => f.name && f.type !== 'computed').length > 0 && (
+                                                                <div>
+                                                                    <p className="font-medium text-xs uppercase text-muted-foreground mb-1">Available Fields</p>
+                                                                    <div className="space-y-1 font-mono text-xs">
+                                                                        {fields
+                                                                            .filter(f => f.name && f.type !== 'computed')
+                                                                            .map(f => (
+                                                                                <div key={f.name}>
+                                                                                    {f.name} <span className="text-muted-foreground">({f.type})</span>
+                                                                                </div>
+                                                                            ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </PopoverContent>
+                                                </Popover>
+                                            </div>
+                                            <Textarea
+                                                id={`field-${index}-expression`}
+                                                value={field.expression || ''}
+                                                onChange={(e) => updateField(index, { expression: e.target.value })}
+                                                placeholder="concat(first_name, ' ', last_name)"
+                                                rows={2}
+                                                className="font-mono text-sm"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor={`field-${index}-return-type`}>Return Type *</Label>
+                                            <Select
+                                                value={field.return_type || ''}
+                                                onValueChange={(value) => updateField(index, { return_type: value })}
+                                            >
+                                                <SelectTrigger id={`field-${index}-return-type`}>
+                                                    <SelectValue placeholder="Select return type" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {RETURN_TYPE_OPTIONS.map((option) => (
+                                                        <SelectItem key={option.value} value={option.value}>
+                                                            {option.label}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
                                     </div>
                                 )}
                             </div>

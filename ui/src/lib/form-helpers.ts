@@ -15,6 +15,7 @@ export function initializeFormState(
 	const fields: Record<string, FormFieldState> = {};
 
 	for (const field of schema) {
+		if (field.type === 'computed') continue;
 		const initialValue =
 			initialValues?.[field.name] ?? field.default ?? getDefaultValueForType(field.type);
 		fields[field.name] = {
@@ -122,6 +123,7 @@ export function validateFormState(
 	let isValid = true;
 
 	for (const field of schema) {
+		if (field.type === 'computed') continue;
 		const fieldState = formState.fields[field.name];
 		if (!fieldState) continue;
 

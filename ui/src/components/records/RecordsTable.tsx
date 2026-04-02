@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Eye, Pencil, Pin, PinOff, Trash2 } from 'lucide-react';
+import { Calculator, Eye, Pencil, Pin, PinOff, Trash2 } from 'lucide-react';
 import type { FieldDefinition } from '@/services/collections.service';
 import type { RecordData, RecordListItem } from '@/types/records.types';
 import { shouldMaskField, maskPiiValue } from '@/lib/form-helpers';
@@ -271,14 +271,18 @@ export default function RecordsTable({
 		const isPinned = pinnedColumns.has(field.name);
 		const pinnedIndex = pinnedFields.findIndex(f => f.name === field.name);
 		const isLastPinned = isPinned && pinnedIndex === pinnedFields.length - 1;
+		const isComputed = field.type === 'computed';
 
 		return {
-			header: field.name,
+			header: isComputed
+				? <span className="flex items-center gap-1">{field.name} <Calculator className="h-3 w-3 text-blue-400" /></span>
+				: field.name,
 			accessorKey: field.name as keyof RecordListItem,
 			sortable: true,
 			frozen: isPinned ? 'left' : undefined,
 			frozenOffset: isPinned ? checkboxOffset + pinnedIndex * PINNED_COL_WIDTH : undefined,
 			frozenBorderRight: isLastPinned,
+			className: isComputed ? 'bg-blue-50/40 dark:bg-blue-950/20' : undefined,
 			style: isPinned
 				? { minWidth: PINNED_COL_WIDTH, maxWidth: PINNED_COL_WIDTH }
 				: { minWidth: 140 },
@@ -296,7 +300,9 @@ export default function RecordsTable({
 					{isPinned ? <PinOff className="h-3 w-3" /> : <Pin className="h-3 w-3" />}
 				</button>
 			),
-			render: (record: RecordListItem) => renderCellValue(record, field),
+			render: (record: RecordListItem) => isComputed
+				? <span className="text-sm text-muted-foreground italic">{renderCellValue(record, field)}</span>
+				: renderCellValue(record, field),
 		};
 	});
 

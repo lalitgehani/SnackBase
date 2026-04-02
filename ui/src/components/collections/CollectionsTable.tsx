@@ -57,6 +57,7 @@ export default function CollectionsTable({
             accessorKey: 'name',
             sortable: true,
             className: 'font-medium',
+            style: { minWidth: 180 },
             render: (collection) => (
                 <span className="flex items-center gap-2">
                     <span className="font-medium">{collection.name}</span>
@@ -71,7 +72,7 @@ export default function CollectionsTable({
         {
             header: 'ID',
             accessorKey: 'id',
-            className: 'w-[100px]',
+            style: { minWidth: 120, maxWidth: 120 },
             render: (collection) => (
                 <span className="font-mono text-xs text-muted-foreground">
                     {collection.id.substring(0, 8)}...
@@ -82,23 +83,25 @@ export default function CollectionsTable({
             header: 'Fields',
             accessorKey: 'fields_count',
             sortable: true,
-            className: 'text-right',
+            style: { minWidth: 80, maxWidth: 100 },
         },
         {
             header: 'Records',
             accessorKey: 'records_count',
             sortable: true,
-            className: 'text-right',
+            style: { minWidth: 90, maxWidth: 110 },
         },
         {
             header: 'Created',
             accessorKey: 'created_at',
             sortable: true,
+            style: { minWidth: 130 },
             render: (collection) => <span>{formatDate(collection.created_at)}</span>,
         },
         {
             header: 'Actions',
             className: 'text-right',
+            style: { minWidth: 160 },
             render: (collection) => (
                 <div className="flex justify-end gap-2">
                     <Button

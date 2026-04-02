@@ -6,7 +6,7 @@
 import { useState, useEffect } from 'react';
 import { AppDialog } from '@/components/common/AppDialog';
 import { Button } from '@/components/ui/button';
-import { RefreshCw } from 'lucide-react';
+import { Calculator, RefreshCw } from 'lucide-react';
 import DynamicFieldInput from './DynamicFieldInput';
 import type { FieldDefinition } from '@/services/collections.service';
 import type { RecordData } from '@/types/records.types';
@@ -100,9 +100,10 @@ export default function EditRecordDialog({
 			return;
 		}
 
-		// Build record data from form state
+		// Build record data from form state (skip computed fields — they are read-only)
 		const recordData: Record<string, unknown> = {};
 		for (const field of schema) {
+			if (field.type === 'computed') continue;
 			recordData[field.name] = formState.fields[field.name]?.value;
 		}
 
@@ -156,7 +157,7 @@ export default function EditRecordDialog({
 			) : (
 				<form id="edit-record-form" onSubmit={handleSubmit} className="space-y-6">
 					<div className="max-h-[60vh] overflow-y-auto pr-4 space-y-4">
-						{schema.map((field) => (
+						{schema.filter(f => f.type !== 'computed').map((field) => (
 							<DynamicFieldInput
 								key={field.name}
 								field={field}
@@ -171,6 +172,21 @@ export default function EditRecordDialog({
 								}
 							/>
 						))}
+
+						{schema.some(f => f.type === 'computed') && record && (
+							<div className="space-y-2 pt-2 border-t">
+								<div className="flex items-center gap-2">
+									<Calculator className="h-4 w-4 text-muted-foreground" />
+									<p className="text-xs font-semibold text-muted-foreground uppercase">Computed Fields</p>
+								</div>
+								{schema.filter(f => f.type === 'computed').map(field => (
+									<div key={field.name} className="flex justify-between items-center text-sm bg-muted/40 rounded px-3 py-2">
+										<span className="font-medium text-muted-foreground">{field.name}</span>
+										<span className="text-sm">{String(record[field.name] ?? '')}</span>
+									</div>
+								))}
+							</div>
+						)}
 					</div>
 
 					{error && (

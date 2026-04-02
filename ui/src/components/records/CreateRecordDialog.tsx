@@ -129,9 +129,10 @@ export default function CreateRecordDialog({
 			return;
 		}
 
-		// Build record data from form state
+		// Build record data from form state (skip computed fields — they are read-only)
 		const recordData: Record<string, unknown> = {};
 		for (const field of schema) {
+			if (field.type === 'computed') continue;
 			recordData[field.name] = formState.fields[field.name]?.value;
 		}
 
@@ -222,7 +223,7 @@ export default function CreateRecordDialog({
 					)}
 
 					<div className="max-h-[60vh] overflow-y-auto pr-4 space-y-4">
-						{schema.map((field) => (
+						{schema.filter(f => f.type !== 'computed').map((field) => (
 							<DynamicFieldInput
 								key={field.name}
 								field={field}

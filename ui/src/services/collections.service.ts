@@ -16,6 +16,8 @@ export interface FieldDefinition {
   on_delete?: string;
   pii?: boolean;
   mask_type?: string;
+  expression?: string;
+  return_type?: string;
 }
 
 export interface Collection {
@@ -274,6 +276,7 @@ export const importCollections = async (
  */
 export const FIELD_TYPES = [
   { value: 'boolean', label: 'Boolean' },
+  { value: 'computed', label: 'Computed' },
   { value: 'date', label: 'Date' },
   { value: 'datetime', label: 'DateTime' },
   { value: 'email', label: 'Email' },
@@ -304,6 +307,16 @@ export const MASK_TYPE_OPTIONS = [
   { value: 'name', label: 'Name' },
   { value: 'full', label: 'Full' },
   { value: 'custom', label: 'Custom' },
+] as const;
+
+/**
+ * Return type options for computed fields
+ */
+export const RETURN_TYPE_OPTIONS = [
+  { value: 'text', label: 'Text' },
+  { value: 'number', label: 'Number' },
+  { value: 'boolean', label: 'Boolean' },
+  { value: 'datetime', label: 'DateTime' },
 ] as const;
 
 /**
