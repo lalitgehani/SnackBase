@@ -331,6 +331,8 @@ def register_routes(app: FastAPI) -> None:
         webhooks_router,
         jobs_router,
         hooks_router,
+        endpoints_router,
+        custom_endpoint_dispatcher_router,
     )
 
     settings = get_settings()
@@ -442,6 +444,21 @@ def register_routes(app: FastAPI) -> None:
         hooks_router,
         prefix=f"{settings.api_prefix}/hooks",
         tags=["hooks"],
+    )
+
+    # Register custom endpoints management routes (F8.2)
+    app.include_router(
+        endpoints_router,
+        prefix=f"{settings.api_prefix}/endpoints",
+        tags=["endpoints"],
+    )
+
+    # Register custom endpoint dispatcher at /api/v1/x (F8.2)
+    # Must be registered before records_router to avoid catch-all collision
+    app.include_router(
+        custom_endpoint_dispatcher_router,
+        prefix=f"{settings.api_prefix}/x",
+        tags=["custom-endpoints"],
     )
 
     # Register dynamic record routes with /records prefix to avoid conflicts

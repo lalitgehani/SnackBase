@@ -23,6 +23,8 @@ from .realtime_router import router as realtime_router
 from .webhooks_router import router as webhooks_router
 from .jobs_router import router as jobs_router
 from .hooks_router import router as hooks_router
+from .endpoints_router import router as endpoints_router
+from .custom_endpoint_dispatcher import router as custom_endpoint_dispatcher_router
 
 __all__ = [
     "accounts_router",
@@ -50,5 +52,7 @@ __all__ = [
     "webhooks_router",
     "jobs_router",
     "hooks_router",
+    "endpoints_router",
+    "custom_endpoint_dispatcher_router",
 ]
 

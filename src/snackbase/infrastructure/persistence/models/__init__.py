@@ -35,6 +35,8 @@ from snackbase.infrastructure.persistence.models.webhook import (
 from snackbase.infrastructure.persistence.models.hook import HookModel
 from snackbase.infrastructure.persistence.models.hook_execution import HookExecutionModel
 from snackbase.infrastructure.persistence.models.job import JobModel
+from snackbase.infrastructure.persistence.models.endpoint import EndpointModel
+from snackbase.infrastructure.persistence.models.endpoint_execution import EndpointExecutionModel
 
 __all__ = [
     "AccountModel",
@@ -61,4 +63,6 @@ __all__ = [
     "HookModel",
     "HookExecutionModel",
     "JobModel",
+    "EndpointModel",
+    "EndpointExecutionModel",
 ]

@@ -225,6 +225,16 @@ class Settings(BaseSettings):
         description="Maximum schedule-type hooks per account (SNACKBASE_MAX_SCHEDULED_HOOKS_PER_ACCOUNT)",
     )
 
+    # Custom Endpoints Settings (F8.2)
+    max_endpoints_per_account: int = Field(
+        default=20,
+        description="Maximum custom endpoints per account (SNACKBASE_MAX_ENDPOINTS_PER_ACCOUNT)",
+    )
+    endpoint_execution_timeout_seconds: int = Field(
+        default=30,
+        description="Custom endpoint execution timeout in seconds (SNACKBASE_ENDPOINT_EXECUTION_TIMEOUT_SECONDS)",
+    )
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, v: str | list[str]) -> list[str]:
