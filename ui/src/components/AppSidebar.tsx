@@ -18,6 +18,7 @@ import {
     Briefcase,
     Clock,
     Zap,
+    Route,
 } from "lucide-react"
 import { useLocation, Link, useNavigate } from "react-router"
 import { useAuthStore } from "@/stores/auth.store"
@@ -137,6 +138,11 @@ const integrationItems: SidebarItem[] = [
         title: "Hooks",
         url: "/admin/hooks",
         icon: Zap,
+    },
+    {
+        title: "Endpoints",
+        url: "/admin/endpoints",
+        icon: Route,
     },
 ]
 
