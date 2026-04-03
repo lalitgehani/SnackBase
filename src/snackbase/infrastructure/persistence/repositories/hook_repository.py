@@ -154,6 +154,68 @@ class HookRepository:
             .values(**values)
         )
 
+    async def list_event_hooks_for_account(
+        self,
+        account_id: str,
+        event_name: str,
+        collection: str | None = None,
+    ) -> list[HookModel]:
+        """Return enabled event-type hooks matching the given event and collection.
+
+        Filters are applied in Python to remain DB-agnostic over the JSON column.
+
+        Args:
+            account_id: Tenant account ID.
+            event_name: Public event string (e.g. "records.create").
+            collection: If provided, only return hooks targeting this collection
+                        or hooks with no collection filter (None means any).
+
+        Returns:
+            List of matching HookModel instances.
+        """
+        result = await self._session.execute(
+            select(HookModel).where(
+                HookModel.account_id == account_id,
+                HookModel.enabled == True,  # noqa: E712
+            )
+        )
+        all_hooks = list(result.scalars().all())
+
+        matching = []
+        for hook in all_hooks:
+            trigger = hook.trigger
+            if not isinstance(trigger, dict):
+                continue
+            if trigger.get("type") != "event":
+                continue
+            if trigger.get("event") != event_name:
+                continue
+            hook_collection = trigger.get("collection")
+            # hook_collection is None/missing means "fire for any collection"
+            if hook_collection and collection and hook_collection != collection:
+                continue
+            matching.append(hook)
+
+        return matching
+
+    async def count_hooks_for_account(self, account_id: str) -> int:
+        """Count all hooks (any trigger type) for an account.
+
+        Used for limit enforcement (max 50 per account by default).
+
+        Args:
+            account_id: Tenant account ID.
+
+        Returns:
+            Total number of hooks for the account.
+        """
+        result = await self._session.execute(
+            select(func.count(HookModel.id)).where(
+                HookModel.account_id == account_id
+            )
+        )
+        return result.scalar_one()
+
     async def count_scheduled_hooks_for_account(self, account_id: str) -> int:
         """Count schedule-type hooks for an account (for limit enforcement in F8.1).
 

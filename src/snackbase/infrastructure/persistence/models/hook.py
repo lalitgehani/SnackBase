@@ -112,6 +112,11 @@ class HookModel(Base):
         onupdate=func.now(),
         comment="Last update timestamp (UTC)",
     )
+    condition: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Optional rule expression; hook fires only if condition evaluates to True",
+    )
     created_by: Mapped[str | None] = mapped_column(
         String(36),
         nullable=True,

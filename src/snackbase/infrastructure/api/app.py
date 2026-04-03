@@ -89,6 +89,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             register_webhook_hooks(app.state.hook_registry, db_manager.session)
             logger.info("Webhook hooks registered")
 
+            # Register API-defined event hook dispatchers (F8.1)
+            from snackbase.infrastructure.hooks.api_defined_hook import register_api_defined_hooks
+            register_api_defined_hooks(app.state.hook_registry, db_manager.session)
+            logger.info("API-defined event hook dispatchers registered")
+
             # Register global SQLAlchemy listeners for systemic audit logging
             from snackbase.infrastructure.persistence.event_listeners import (
                 register_sqlalchemy_listeners,
