@@ -19,6 +19,7 @@ import {
     Clock,
     Zap,
     Route,
+    GitMerge,
 } from "lucide-react"
 import { useLocation, Link, useNavigate } from "react-router"
 import { useAuthStore } from "@/stores/auth.store"
@@ -143,6 +144,11 @@ const integrationItems: SidebarItem[] = [
         title: "Endpoints",
         url: "/admin/endpoints",
         icon: Route,
+    },
+    {
+        title: "Workflows",
+        url: "/admin/workflows",
+        icon: GitMerge,
     },
 ]
 

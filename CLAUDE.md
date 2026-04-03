@@ -350,6 +350,7 @@ See `.env.example` for complete configuration options.
 - **ShadCN**: Use existing components in `ui/src/components/ui/`.
 - Intall new ShadCN components using npx shadcn@latest add {component name}
 - Never create ShadCN component file. Always install using CLI.
+- **TypeScript interfaces in Vite**: Always use `import type { Foo }` (not `import { Foo }`) when importing TypeScript interfaces or type aliases across modules. Vite's dev server serves native ESM and strips type-only exports at runtime, so mixing value and type imports in a single `import { ... }` causes "does not provide an export named" errors in the browser.
 
 ## General Note
 

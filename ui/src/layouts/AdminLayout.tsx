@@ -20,6 +20,7 @@ export default function AdminLayout() {
         if (location.pathname.startsWith('/admin/audit-logs')) return 'Audit Logs';
         if (location.pathname.startsWith('/admin/migrations')) return 'Migrations';
         if (location.pathname.startsWith('/admin/macros')) return 'Macros';
+        if (location.pathname.startsWith('/admin/workflows')) return 'Workflows';
         return 'Admin';
     };
 

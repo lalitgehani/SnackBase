@@ -21,6 +21,7 @@ import JobsPage from '@/pages/Jobs/JobsPage';
 import ScheduledTasksPage from '@/pages/ScheduledTasks/ScheduledTasksPage';
 import HooksPage from '@/pages/Hooks/HooksPage';
 import EndpointsPage from '@/pages/Endpoints/EndpointsPage';
+import WorkflowsPage from '@/pages/Workflows/WorkflowsPage';
 import AdminLayout from '@/layouts/AdminLayout';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { Toaster } from '@/components/ui/toaster';
@@ -68,6 +69,7 @@ function App() {
           <Route path="scheduled-tasks" element={<ScheduledTasksPage />} />
           <Route path="hooks" element={<HooksPage />} />
           <Route path="endpoints" element={<EndpointsPage />} />
+          <Route path="workflows" element={<WorkflowsPage />} />
         </Route>
 
         {/* Catch all - redirect to dashboard */}
