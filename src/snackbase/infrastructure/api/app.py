@@ -94,6 +94,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             register_api_defined_hooks(app.state.hook_registry, db_manager.session)
             logger.info("API-defined event hook dispatchers registered")
 
+            # Register workflow event-trigger dispatchers (F8.3)
+            from snackbase.infrastructure.workflows.workflow_trigger import (
+                register_workflow_event_triggers,
+            )
+            register_workflow_event_triggers(app.state.hook_registry, db_manager.session)
+            logger.info("Workflow event trigger dispatchers registered")
+
             # Register global SQLAlchemy listeners for systemic audit logging
             from snackbase.infrastructure.persistence.event_listeners import (
                 register_sqlalchemy_listeners,
@@ -334,6 +341,10 @@ def register_routes(app: FastAPI) -> None:
         endpoints_router,
         custom_endpoint_dispatcher_router,
     )
+    from snackbase.infrastructure.api.routes.workflows_router import (
+        router as workflows_router,
+        webhook_router as workflow_webhook_router,
+    )
 
     settings = get_settings()
 
@@ -459,6 +470,20 @@ def register_routes(app: FastAPI) -> None:
         custom_endpoint_dispatcher_router,
         prefix=f"{settings.api_prefix}/x",
         tags=["custom-endpoints"],
+    )
+
+    # Register workflow CRUD + instance management routes (F8.3)
+    app.include_router(
+        workflows_router,
+        prefix=settings.api_prefix,
+        tags=["workflows"],
+    )
+
+    # Register workflow webhook dispatcher (no auth, token-based) (F8.3)
+    app.include_router(
+        workflow_webhook_router,
+        prefix=settings.api_prefix,
+        tags=["workflows"],
     )
 
     # Register dynamic record routes with /records prefix to avoid conflicts

@@ -163,6 +163,24 @@ async def _handle_scheduled_task(payload: dict, job: "JobModel") -> None:
     logger.info("Scheduled task executed", task_type=task_type, job_id=job.id)
 
 
+@handler_registry.register("workflow_resume")
+async def _handle_workflow_resume(payload: dict, job: "JobModel") -> None:
+    """Resume a waiting workflow instance after a wait_delay step elapses (F8.3).
+
+    Payload keys:
+        instance_id: str — ID of the WorkflowInstanceModel to resume
+        next_step: str | None — step name to resume from (None = continue sequentially)
+    """
+    instance_id: str = payload["instance_id"]
+    next_step: str | None = payload.get("next_step")
+
+    from snackbase.infrastructure.persistence.database import get_db_manager
+    from snackbase.infrastructure.workflows.workflow_executor import resume_instance
+
+    db_manager = get_db_manager()
+    await resume_instance(instance_id, next_step, db_manager.session)
+
+
 @handler_registry.register("scheduled_hook")
 async def _handle_scheduled_hook(payload: dict, job: "JobModel") -> None:
     """Execute a scheduled hook fired by the cron scheduler (F7.3).
