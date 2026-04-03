@@ -22,10 +22,10 @@ SnackBase is a Python/FastAPI-based BaaS providing auto-generated REST APIs, mul
 
 | Category          | Count      | Lines    |
 | ----------------- | ---------- | -------- |
-| **Backend Code**  | ~350 files | ~120,000 |
-| **Frontend Code** | ~100 files | ~25,000  |
-| **Tests**         | 153 files  | ~30,000  |
-| **Documentation** | 25+ files  | ~20,000  |
+| **Backend Code**  | ~248 files | ~130,000 |
+| **Frontend Code** | ~268 files | ~60,000  |
+| **Tests**         | 191 files  | ~30,000  |
+| **Documentation** | 31+ files  | ~20,000  |
 | **Total**         | ~525 files | ~195,000 |
 
 ---
@@ -82,6 +82,28 @@ SnackBase is a Python/FastAPI-based BaaS providing auto-generated REST APIs, mul
 - [ ] Advanced Monitoring (Prometheus metrics, distributed tracing)
 - [ ] APM Integration (DataDog, New Relic)
 
+**Phase 6: Data Layer Competitiveness** (100% Complete)
+
+- [x] F6.1: Advanced Filtering Operators (comparison `>`, `<`, `>=`, `<=`, `!=`, `IN`/`NOT IN`, `IS NULL`/`IS NOT NULL`, `~` LIKE; reuses rule engine grammar; type-safe comparisons)
+- [x] F6.2: Reference Expansion (populate reference fields inline via `?expand=field`; deep/nested expansion; batch-loaded to avoid N+1)
+- [x] F6.3: Anonymous / Public Access (public collections accessible without authentication; per-operation public toggle; public badge in UI)
+- [x] F6.4: Bulk Operations (batch create, batch update, batch delete; JSON import/export for records; filter-aware export)
+- [x] F6.5: Aggregation Queries (`COUNT`, `SUM`, `AVG`, `MIN`, `MAX` with `GROUP BY` and `HAVING`; Analytics page with group-by builder)
+- [x] F6.6: Full-Text Search (skipped)
+- [x] F6.7: Cursor-Based Pagination (efficient pagination for large datasets; `cursor`/`cursor_before` params; page vs scroll mode in UI)
+
+**Phase 7: Background Processing** (100% Complete)
+
+- [x] F7.2: Background Job Queue (async workers, retry logic, job monitoring UI)
+- [x] F7.3: Scheduled Tasks (cron-based scheduling, scheduler admin UI)
+- [x] F7.4: Computed/Virtual Fields (expression compiler, SQL injection at query time, filter/sort support)
+
+**Phase 8: Extensibility & Automation** (100% Complete)
+
+- [x] F8.1: API-Defined Hooks (unified automation: event/schedule/manual triggers, action executor, execution log, hot-reload)
+- [x] F8.2: Custom Endpoints (serverless functions: DB-stored HTTP endpoints dispatched via `/api/v1/x/{slug}/{path}`, 30s timeout, path params, template vars)
+- [x] F8.3: Workflow Engine (multi-step automation: directed-graph steps, event/schedule/manual/webhook triggers, job-backed wait_delay)
+
 ---
 
 ## Quick Start
@@ -135,7 +157,12 @@ open http://localhost:8000
 - **Auto-Generated CRUD APIs** - RESTful endpoints for any collection
 - **Field Types** - Text, number, boolean, datetime, email, url, json, reference, file
 - **Schema Builder UI** - Visual interface for designing collection schemas
-- **Bulk Operations** - Bulk create, update, delete with filtering
+- **Batch Operations** - Bulk create, update, delete with filtering
+- **Advanced Query Filters** - Complex boolean expressions (`AND`, `OR`, `NOT`), comparison (`=`, `!=`, `<`, `>`, `~` LIKE), `IN`/`NOT IN`, `IS NULL`, grouping with parentheses
+- **Aggregation Queries** - `COUNT`, `SUM`, `AVG`, `MIN`, `MAX` with `GROUP BY` and `HAVING` support
+- **Cursor-Based Pagination** - Efficient pagination for large datasets alongside offset pagination
+- **Reference Field Expansion** - Populate reference fields inline via `?expand=field` (supports deep/nested expansion)
+- **Public Collections** - Anonymous read access for public data without authentication
 - **Reference Fields** - Foreign keys to other collections with cascade options
 
 ### Authorization & Security
@@ -148,12 +175,24 @@ open http://localhost:8000
 - **PII Masking** - 6 mask types (email, ssn, phone, name, full, custom) with group-based access
 - **SQL Macros** - Reusable expression fragments (e.g., `@owns_record`, `@has_role`)
 
-### Extensibility
+### Extensibility & Automation
 
 - **Hook System (Stable API v1.0)** - Event-driven extensibility
   - 40+ hook events across 8 categories
   - Built-in hooks: timestamp, account_isolation, created_by, audit_capture
   - Custom hooks with priority-based execution
+- **API-Defined Hooks (F8.1)** - Create and manage hooks via API or Admin UI
+  - Trigger types: event (data events), schedule (cron), manual (explicit API call)
+  - Action executor pipeline with execution log and hot-reload
+- **Custom Endpoints (F8.2)** - Serverless functions stored in the database
+  - Define HTTP endpoints with custom path, method, and action pipeline
+  - Dispatched via `/api/v1/x/{slug}/{path}` with 30-second timeout
+  - Path parameters, template variables, and execution history tracking
+- **Workflow Engine (F8.3)** - Multi-step automation with directed-graph steps
+  - Trigger types: event, schedule, manual, webhook
+  - Job-backed `wait_delay` for asynchronous step execution
+  - Workflow instances with step-by-step logging, cancel/resume, status tracking
+- **Outbound Webhooks** - HTTP webhook delivery with retry logic and delivery logs
 - **SQL Macros** - Reusable SQL snippets with safe execution
   - Built-in permission macros: `@has_role()`, `@has_group()`, `@owns_record()`, `@in_time_range()`, `@has_permission()`
   - Timeout protection (5 seconds) and test mode with rollback
@@ -161,7 +200,7 @@ open http://localhost:8000
 
 ### Admin UI
 
-- **React 19 + TypeScript** - Modern admin interface with 12 pages
+- **React 19 + TypeScript** - Modern admin interface with 28+ pages
 - **Dashboard** - Platform statistics and metrics with auto-refresh
 - **Account Management** - Create and manage accounts (superadmin)
 - **User Management** - Full CRUD for users across accounts (superadmin)
@@ -175,6 +214,14 @@ open http://localhost:8000
 - **Audit Logs** - Filterable, exportable audit trail with PII masking
 - **Configuration Dashboard** - System/account-level provider configs (OAuth, SAML, Email, Storage)
 - **Email Templates** - Customizable email template management
+- **API Keys** - Create, list, and revoke service API keys
+- **Hooks** - Create and manage user-defined hooks (event/schedule/manual)
+- **Custom Endpoints** - Build and test serverless function endpoints
+- **Workflows** - Design multi-step workflows and track execution instances
+- **Webhooks** - Configure outbound webhooks and view delivery history
+- **Background Jobs** - Monitor job queue status, retries, and history
+- **Scheduled Tasks** - Manage cron-scheduled tasks
+- **Analytics** - Platform usage analytics dashboard
 
 ### Additional Features
 
@@ -185,6 +232,10 @@ open http://localhost:8000
 - **Rate Limiting** - IP-based and user-based rate limiting, configurable per endpoint, superadmin bypass
 - **File Storage** - Configurable system-level storage provider with local filesystem (default) or Amazon S3, account-scoped paths, UUID-based filenames, size validation (10MB default), and MIME type validation
 - **Real-time Updates** - WebSocket and SSE endpoints for live data updates on CRUD operations
+- **Background Job Queue** - Async job workers with retry logic, status tracking, and monitoring UI
+- **Scheduled Tasks** - Cron-based scheduled task management with an admin UI
+- **Computed/Virtual Fields** - Expression-based virtual fields compiled to SQL at query time with filter/sort support
+- **Outbound Webhooks** - Configurable HTTP webhook delivery with automatic retry and delivery history
 
 ### Storage Providers
 
@@ -197,13 +248,13 @@ open http://localhost:8000
 
 ### API & Testing
 
-- **20 API Routers** - Comprehensive REST API coverage with 100+ endpoints
+- **28 API Routers** - Comprehensive REST API coverage with 150+ endpoints
 - **Interactive Docs** - Swagger/OpenAPI at `/docs`
-- **Comprehensive Tests** - 1,105 tests (unit, integration, security)
-  - 710+ unit tests
-  - 320+ integration tests
-  - 55+ security tests with HTML reporting
-- **Test Coverage** - ~29,600 lines of test code
+- **Comprehensive Tests** - 1,161 tests (unit, integration, security)
+  - 705+ unit tests
+  - 317+ integration tests
+  - 50+ security tests with HTML reporting
+- **Test Coverage** - ~30,000 lines of test code
 
 ---
 
@@ -354,11 +405,11 @@ See the [Deployment Guide](docs/deployment.md) for other platforms.
 ├── /oauth/                     # OAuth 2.0 flow (Google, GitHub, Microsoft, Apple)
 ├── /saml/                      # SAML 2.0 SSO (Okta, Azure AD, Generic)
 ├── /collections/               # Collection CRUD (superadmin)
-├── /records/{collection}/      # Dynamic collection CRUD
 ├── /accounts/                  # Account management (superadmin)
 ├── /users/                     # User management (superadmin)
-├── /roles/                     # Role management (labels only)
-├── /collections/{name}/rules   # Collection-level access rules
+├── /roles/                     # Role management
+├── /permissions/               # Permission management
+├── /collection-rules/          # Collection-level access rules
 ├── /macros/                    # SQL macro management
 ├── /groups/                    # Group management
 ├── /invitations/               # User invitations
@@ -367,9 +418,16 @@ See the [Deployment Guide](docs/deployment.md) for other platforms.
 ├── /audit-logs/                # Audit log retrieval and export
 ├── /migrations/                # Alembic migration status
 ├── /files/                     # File upload/download
-├── /realtime/                  # WebSocket & SSE real-time subscriptions
+├── /realtime/                  # WebSocket (/ws) & SSE (/events) real-time subscriptions
+├── /webhooks/                  # Outbound webhook management
+├── /jobs/                      # Background job queue management
+├── /hooks/                     # User-defined hook management (event/schedule/manual)
+├── /endpoints/                 # Custom serverless endpoint management
+├── /workflows/                 # Workflow engine (steps, triggers, instances)
+├── /email-templates/           # Email template management
 ├── /admin/                     # System/configuration management
-└── /admin/email/               # Email template management
+├── /x/{slug}/{path}            # Custom endpoint dispatcher (serverless functions)
+└── /{collection}/              # Dynamic collection CRUD (registered last)
 ```
 
 ---
@@ -421,31 +479,40 @@ SnackBase/
 │       ├── api/
 │       │   ├── app.py                # FastAPI app factory
 │       │   ├── dependencies.py       # FastAPI dependencies
-│       │   ├── routes/               # 19 API routers
-│       │   │   ├── auth_router.py           # Authentication
-│       │   │   ├── oauth_router.py          # OAuth flow
-│       │   │   ├── saml_router.py           # SAML SSO
-│       │   │   ├── collections_router.py    # Collection CRUD
-│       │   │   ├── records_router.py        # Dynamic records
-│       │   │   ├── accounts_router.py       # Account mgmt
-│       │   │   ├── users_router.py          # User mgmt
-│       │   │   ├── roles_router.py          # Role mgmt
-│       │   │   ├── permissions_router.py    # Permission mgmt
-│       │   │   ├── groups_router.py         # Group mgmt
-│       │   │   ├── invitations_router.py    # Invitations
-│       │   │   ├── audit_log_router.py      # Audit logs
-│       │   │   ├── dashboard_router.py      # Statistics
-│       │   │   ├── macros_router.py         # SQL macros
-│       │   │   ├── migrations_router.py     # Alembic status
-│       │   │   ├── files_router.py          # File upload
-│       │   │   ├── admin_router.py          # System config
-│       │   │   └── email_templates_router.py # Email templates
+│       │   ├── routes/               # 28 API routers
+│       │   │   ├── auth_router.py              # Authentication
+│       │   │   ├── oauth_router.py             # OAuth flow
+│       │   │   ├── saml_router.py              # SAML SSO
+│       │   │   ├── collections_router.py       # Collection CRUD
+│       │   │   ├── records_router.py           # Dynamic records (registered last)
+│       │   │   ├── accounts_router.py          # Account mgmt
+│       │   │   ├── users_router.py             # User mgmt
+│       │   │   ├── roles_router.py             # Role mgmt
+│       │   │   ├── permissions_router.py       # Permission mgmt
+│       │   │   ├── collection_rules_router.py  # Collection-level rules
+│       │   │   ├── groups_router.py            # Group mgmt
+│       │   │   ├── invitations_router.py       # Invitations
+│       │   │   ├── api_keys_router.py          # API key auth
+│       │   │   ├── audit_log_router.py         # Audit logs
+│       │   │   ├── dashboard_router.py         # Statistics
+│       │   │   ├── macros_router.py            # SQL macros
+│       │   │   ├── migrations_router.py        # Alembic status
+│       │   │   ├── files_router.py             # File upload
+│       │   │   ├── realtime_router.py          # WebSocket/SSE
+│       │   │   ├── webhooks_router.py          # Outbound webhooks
+│       │   │   ├── jobs_router.py              # Background job queue
+│       │   │   ├── hooks_router.py             # User-defined hooks
+│       │   │   ├── endpoints_router.py         # Custom endpoints
+│       │   │   ├── custom_endpoint_dispatcher.py # Serverless dispatch (/x/)
+│       │   │   ├── workflows_router.py         # Workflow engine
+│       │   │   ├── email_templates_router.py   # Email templates
+│       │   │   └── admin_router.py             # System config
 │       │   ├── schemas/              # Pydantic models
 │       │   └── middleware/           # Authorization, context, logging
 │       ├── persistence/
 │       │   ├── database.py           # SQLAlchemy 2.0 async
-│       │   ├── models/               # ORM models (17 models)
-│       │   ├── repositories/         # Repository pattern (18 repos)
+│       │   ├── models/               # ORM models (31 models)
+│       │   ├── repositories/         # Repository pattern (20+ repos)
 │       │   ├── table_builder.py      # Dynamic table creation
 │       │   ├── migration_service.py  # Dynamic migrations
 │       │   └── event_listeners.py    # SQLAlchemy event hooks
@@ -458,10 +525,12 @@ SnackBase/
 │       ├── auth/                     # JWT, password hasher
 │       ├── security/                 # Encryption service
 │       ├── hooks/                    # Built-in hooks implementation
-│       └── services/                 # Token, email services
-├── ui/                               # React Admin UI (~25,000 LOC)
+│       ├── workflows/                # Workflow engine & executor
+│       ├── endpoints/                # Custom endpoint executor
+│       └── services/                 # Token, email, scheduler, job queue
+├── ui/                               # React Admin UI (~60,000 LOC)
 │   ├── src/
-│   │   ├── pages/                    # 12 pages
+│   │   ├── pages/                    # 28+ pages
 │   │   │   ├── DashboardPage.tsx
 │   │   │   ├── AccountsPage.tsx
 │   │   │   ├── UsersPage.tsx
@@ -473,9 +542,17 @@ SnackBase/
 │   │   │   ├── AuditLogsPage.tsx
 │   │   │   ├── MigrationsPage.tsx
 │   │   │   ├── MacrosPage.tsx
-│   │   │   └── ConfigurationDashboardPage.tsx
+│   │   │   ├── ConfigurationDashboardPage.tsx
+│   │   │   ├── ApiKeys/              # API key management
+│   │   │   ├── Hooks/                # User-defined hooks
+│   │   │   ├── Endpoints/            # Custom serverless endpoints
+│   │   │   ├── Workflows/            # Workflow designer & instances
+│   │   │   ├── Webhooks/             # Outbound webhooks
+│   │   │   ├── Jobs/                 # Background job monitoring
+│   │   │   ├── ScheduledTasks/       # Scheduled task management
+│   │   │   └── AnalyticsPage.tsx     # Analytics dashboard
 │   │   ├── components/               # React components
-│   │   │   ├── ui/                   # 35 ShadCN components
+│   │   │   ├── ui/                   # 35+ ShadCN components
 │   │   │   ├── accounts/             # Account-specific components
 │   │   │   ├── audit-logs/           # Audit log components
 │   │   │   ├── collections/          # Schema builder, CRUD dialogs
@@ -486,12 +563,12 @@ SnackBase/
 │   │   │   ├── migrations/           # Migration status
 │   │   │   ├── records/              # Dynamic record CRUD
 │   │   │   └── roles/                # Permission matrix, rule editor
-│   │   ├── services/                 # API clients (15 services)
+│   │   ├── services/                 # API clients (20+ services)
 │   │   │   ├── auth.service.ts
 │   │   │   ├── accounts.service.ts
 │   │   │   ├── collections.service.ts
 │   │   │   ├── records.service.ts
-│   │   │   └── ...                   # + 11 more
+│   │   │   └── ...                   # + 16 more
 │   │   ├── stores/                   # Zustand state
 │   │   │   └── auth.store.ts         # Authentication state
 │   │   └── lib/                      # Utilities, axios config
@@ -684,6 +761,9 @@ See [PRD_PHASES.md](PRD_PHASES.md) for detailed specifications.
 - [x] **Phase 3**: Operations - GxP audit logging, migrations, dashboard UI (100% complete)
 - [~] **Phase 4**: Advanced Features - Real-time (WebSocket/SSE), file storage, PostgreSQL support (60% complete)
 - [~] **Phase 5**: Enterprise - Rate limiting, monitoring (40% complete)
+- [x] **Phase 6**: Data Layer Competitiveness - Advanced filters, reference expansion, public access, bulk ops, aggregations, cursor pagination (100% complete)
+- [x] **Phase 7**: Background Processing - Job queue, scheduled tasks, computed/virtual fields (100% complete)
+- [x] **Phase 8**: Extensibility & Automation - API-defined hooks, custom endpoints, workflow engine (100% complete)
 
 ---
 
