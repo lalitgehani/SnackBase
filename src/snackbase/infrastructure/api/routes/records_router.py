@@ -657,7 +657,7 @@ async def list_records(
             validate_filter_expression(filter_expr, schema)
             # Build computed fields map so ?filter=computed_field > X works
             _dialect = session.bind.dialect.name if session.bind and hasattr(session.bind, "dialect") else "sqlite"
-            _computed_parts = _build_computed_select_parts(schema, _dialect)
+            _computed_parts, _computed_params = _build_computed_select_parts(schema, _dialect)
             _computed_map = {name: sql for sql, name in _computed_parts}
             filter_sql, filter_params = compile_filter_to_sql(filter_expr, computed_fields_map=_computed_map)
             if filter_sql != "1=1":
@@ -878,7 +878,7 @@ async def aggregate_collection(
             validate_filter_expression(filter_expr, schema)
             # Build computed fields map so ?filter=computed_field > X works
             _dialect = session.bind.dialect.name if session.bind and hasattr(session.bind, "dialect") else "sqlite"
-            _computed_parts = _build_computed_select_parts(schema, _dialect)
+            _computed_parts, _computed_params = _build_computed_select_parts(schema, _dialect)
             _computed_map = {name: sql for sql, name in _computed_parts}
             filter_sql, filter_params = compile_filter_to_sql(filter_expr, computed_fields_map=_computed_map)
             if filter_sql != "1=1":

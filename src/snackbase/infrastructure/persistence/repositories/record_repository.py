@@ -24,7 +24,7 @@ logger = get_logger(__name__)
 def _build_computed_select_parts(
     schema: list[dict[str, Any]],
     dialect: str = "sqlite",
-) -> list[tuple[str, str]]:
+) -> tuple[list[tuple[str, str]], dict[str, Any]]:
     """Build SQL SELECT expressions for computed fields.
 
     Args:
@@ -32,8 +32,10 @@ def _build_computed_select_parts(
         dialect: Database dialect ("sqlite" or "postgresql").
 
     Returns:
-        List of (sql_expression, field_name) tuples for computed fields.
-        Returns empty list if there are no computed fields or expressions fail to compile.
+        A tuple of:
+        - List of (sql_expression, field_name) tuples for computed fields.
+        - Merged params dict that must be passed when executing the query.
+        Returns ([], {}) if there are no computed fields.
     """
     from snackbase.core.rules.expression_compiler import (
         ExpressionCompilationError,
@@ -48,7 +50,9 @@ def _build_computed_select_parts(
     system_fields = {"id", "account_id", "created_at", "created_by", "updated_at", "updated_by"}
     allowed_fields = non_computed | system_fields
 
-    parts = []
+    parts: list[tuple[str, str]] = []
+    all_params: dict[str, Any] = {}
+
     for field in schema:
         if field.get("type", "").lower() != "computed":
             continue
@@ -58,9 +62,16 @@ def _build_computed_select_parts(
             parts.append(("NULL", field_name))
             continue
         try:
-            sql, _params = compile_expression_to_sql(
+            sql, expr_params = compile_expression_to_sql(
                 expression, dialect=dialect, schema_fields=allowed_fields
             )
+            # Namespace params per field to avoid conflicts between computed fields.
+            # e.g. ec_0 for field "full_name" becomes cf_full_name_ec_0
+            if expr_params:
+                ns_params = {f"cf_{field_name}_{k}": v for k, v in expr_params.items()}
+                for orig_key, ns_key in zip(expr_params.keys(), ns_params.keys()):
+                    sql = sql.replace(f":{orig_key}", f":{ns_key}")
+                all_params.update(ns_params)
             parts.append((sql, field_name))
         except (ExpressionCompilationError, RuleSyntaxError) as exc:
             logger.warning(
@@ -71,7 +82,7 @@ def _build_computed_select_parts(
             )
             parts.append(("NULL", field_name))
 
-    return parts
+    return parts, all_params
 
 
 @dataclass
@@ -390,11 +401,12 @@ class RecordRepository:
 
         # Build SELECT with computed field expressions
         dialect = self._get_dialect()
-        computed_parts = _build_computed_select_parts(schema, dialect)
+        computed_parts, computed_params = _build_computed_select_parts(schema, dialect)
         computed_sql = ", ".join(
             f'({sql}) AS "{name}"' for sql, name in computed_parts
         )
         select_cols = f'*, {computed_sql}' if computed_sql else '*'
+        params.update(computed_params)
 
         select_sql = f'''
             SELECT {select_cols} FROM "{table_name}"
@@ -506,11 +518,12 @@ class RecordRepository:
 
         # Build SELECT with computed field expressions
         dialect = self._get_dialect()
-        computed_parts = _build_computed_select_parts(schema, dialect)
+        computed_parts, computed_params = _build_computed_select_parts(schema, dialect)
         computed_sql = ", ".join(
             f'({sql}) AS "{name}"' for sql, name in computed_parts
         )
         select_cols = f'*, {computed_sql}' if computed_sql else '*'
+        params.update(computed_params)
         select_sql = f'SELECT {select_cols} FROM "{table_name}" WHERE {where_clause}'
 
         try:
@@ -604,12 +617,13 @@ class RecordRepository:
 
         # 2. Build computed field expressions
         dialect = self._get_dialect()
-        computed_parts = _build_computed_select_parts(schema, dialect)
+        computed_parts, computed_params = _build_computed_select_parts(schema, dialect)
         computed_expr_map = {name: sql for sql, name in computed_parts}
         computed_sql = ", ".join(
             f'({sql}) AS "{name}"' for sql, name in computed_parts
         )
         extra_select = f", {computed_sql}" if computed_sql else ""
+        params.update(computed_params)
 
         # Determine ORDER BY expression (computed fields use their SQL expression)
         if sort_by in computed_expr_map:
@@ -729,12 +743,13 @@ class RecordRepository:
 
         # 2. Build computed field expressions
         dialect = self._get_dialect()
-        computed_parts = _build_computed_select_parts(schema, dialect)
+        computed_parts, computed_params = _build_computed_select_parts(schema, dialect)
         computed_expr_map = {name: sql for sql, name in computed_parts}
         computed_sql = ", ".join(
             f'({sql}) AS "{name}"' for sql, name in computed_parts
         )
         extra_select = f", {computed_sql}" if computed_sql else ""
+        params.update(computed_params)
 
         # Determine ORDER BY expression (computed fields use their SQL expression)
         if sort_by in computed_expr_map:
