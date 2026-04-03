@@ -19,6 +19,7 @@ import ApiKeysPage from '@/pages/ApiKeys/ApiKeysPage';
 import WebhooksPage from '@/pages/Webhooks/WebhooksPage';
 import JobsPage from '@/pages/Jobs/JobsPage';
 import ScheduledTasksPage from '@/pages/ScheduledTasks/ScheduledTasksPage';
+import HooksPage from '@/pages/Hooks/HooksPage';
 import AdminLayout from '@/layouts/AdminLayout';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { Toaster } from '@/components/ui/toaster';
@@ -64,6 +65,7 @@ function App() {
           <Route path="webhooks" element={<WebhooksPage />} />
           <Route path="jobs" element={<JobsPage />} />
           <Route path="scheduled-tasks" element={<ScheduledTasksPage />} />
+          <Route path="hooks" element={<HooksPage />} />
         </Route>
 
         {/* Catch all - redirect to dashboard */}
