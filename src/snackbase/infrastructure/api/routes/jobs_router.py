@@ -3,7 +3,7 @@
 All endpoints require superadmin access. Provides:
 - GET /  — list jobs with optional filters
 - GET /stats — aggregate counts by status
-- POST /{id}/retry — manually retry a dead/failed job
+- POST /{id}/retry — manually retry a dead/failed/retrying job
 - DELETE /{id} — cancel a pending job
 
 Note: /stats must be registered before /{id} to prevent FastAPI from
@@ -111,7 +111,7 @@ async def retry_job(
     repo: JobRepo,
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> JobResponse:
-    """Manually retry a dead or failed job.
+    """Manually retry a dead, failed, or retrying job.
 
     Resets the job's status to pending, clears the error message,
     and resets the attempt counter. The job will be picked up by
@@ -122,7 +122,7 @@ async def retry_job(
 
     Raises:
         404: Job not found.
-        400: Job is not in dead or failed status.
+        400: Job is not in dead, failed, or retrying status.
     """
     job = await repo.get_by_id(job_id)
     if job is None:
@@ -130,10 +130,10 @@ async def retry_job(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Job {job_id} not found",
         )
-    if job.status not in ("dead", "failed"):
+    if job.status not in ("dead", "failed", "retrying"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Job is in status '{job.status}'; only dead or failed jobs can be retried",
+            detail=f"Job is in status '{job.status}'; only dead, failed, or retrying jobs can be retried",
         )
 
     retried = await repo.retry_job(job_id)

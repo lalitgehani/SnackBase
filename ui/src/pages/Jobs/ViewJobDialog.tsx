@@ -86,7 +86,7 @@ export function ViewJobDialog({ job, open, onOpenChange, onUpdated }: ViewJobDia
         }
     };
 
-    const canRetry = job.status === 'dead' || job.status === 'failed';
+    const canRetry = job.status === 'dead' || job.status === 'failed' || job.status === 'retrying';
     const canCancel = job.status === 'pending';
 
     return (

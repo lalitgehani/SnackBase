@@ -50,9 +50,13 @@ export function CreateScheduledTaskDialog({ open, onOpenChange, onCreated }: Pro
             onOpenChange(false);
             setForm({ name: '', description: '', cron: '', enabled: true });
         } catch (err: unknown) {
-            const msg =
-                (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
-                'Failed to create task';
+            const detail =
+                (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+            const msg = typeof detail === 'string'
+                ? detail
+                : Array.isArray(detail)
+                    ? detail.map((d: { msg?: string }) => d.msg ?? '').filter(Boolean).join('; ')
+                    : 'Failed to create task';
             toast({ title: 'Error', description: msg, variant: 'destructive' });
         } finally {
             setLoading(false);

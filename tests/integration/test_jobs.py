@@ -346,8 +346,33 @@ async def test_retry_job_resets_dead_job(db_session: AsyncSession) -> None:
 
 
 @pytest.mark.asyncio
+async def test_retry_job_resets_retrying_job(db_session: AsyncSession) -> None:
+    """retry_job resets a retrying job back to pending."""
+    repo = JobRepository(db_session)
+
+    retrying_job = _make_job(
+        status="retrying",
+        error_message="Connection refused",
+        attempt_number=1,
+    )
+    await repo.create(retrying_job)
+    await db_session.commit()
+
+    result = await repo.retry_job(retrying_job.id)
+    await db_session.commit()
+
+    assert result is True
+
+    fetched = await repo.get_by_id(retrying_job.id)
+    assert fetched is not None
+    assert fetched.status == "pending"
+    assert fetched.attempt_number == 0
+    assert fetched.error_message is None
+
+
+@pytest.mark.asyncio
 async def test_retry_job_rejects_running_job(db_session: AsyncSession) -> None:
-    """retry_job returns False for jobs not in dead/failed status."""
+    """retry_job returns False for jobs not in dead/failed/retrying status."""
     repo = JobRepository(db_session)
 
     running_job = _make_job(status="running")

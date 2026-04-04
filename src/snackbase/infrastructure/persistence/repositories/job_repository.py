@@ -230,7 +230,7 @@ class JobRepository:
         await self.session.flush()
 
     async def retry_job(self, job_id: str) -> bool:
-        """Reset a dead or failed job back to pending for manual retry.
+        """Reset a dead, failed, or retrying job back to pending for manual retry.
 
         Args:
             job_id: ID of the job to retry.
@@ -243,7 +243,7 @@ class JobRepository:
             .where(
                 and_(
                     JobModel.id == job_id,
-                    JobModel.status.in_(["dead", "failed"]),
+                    JobModel.status.in_(["dead", "failed", "retrying"]),
                 )
             )
             .values(

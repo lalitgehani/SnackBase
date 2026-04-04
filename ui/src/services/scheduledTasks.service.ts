@@ -27,6 +27,7 @@ export interface CreateScheduledTaskRequest {
   description?: string;
   cron: string;
   enabled?: boolean;
+  actions?: Record<string, unknown>[];
 }
 
 export interface UpdateScheduledTaskRequest {
@@ -50,12 +51,23 @@ export const scheduledTasksService = {
   },
 
   create: async (data: CreateScheduledTaskRequest): Promise<ScheduledTask> => {
-    const response = await apiClient.post<ScheduledTask>('/hooks', data);
+    const response = await apiClient.post<ScheduledTask>('/hooks', {
+      name: data.name,
+      description: data.description,
+      trigger: { type: 'schedule', cron: data.cron },
+      actions: data.actions ?? [],
+      enabled: data.enabled ?? true,
+    });
     return response.data;
   },
 
   update: async (id: string, data: UpdateScheduledTaskRequest): Promise<ScheduledTask> => {
-    const response = await apiClient.patch<ScheduledTask>(`/hooks/${id}`, data);
+    const payload: Record<string, unknown> = {};
+    if (data.name !== undefined) payload.name = data.name;
+    if (data.description !== undefined) payload.description = data.description;
+    if (data.cron !== undefined) payload.trigger = { type: 'schedule', cron: data.cron };
+    if (data.enabled !== undefined) payload.enabled = data.enabled;
+    const response = await apiClient.patch<ScheduledTask>(`/hooks/${id}`, payload);
     return response.data;
   },
 
