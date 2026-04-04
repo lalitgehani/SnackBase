@@ -3,6 +3,7 @@ from fastapi import Request, WebSocket, status, HTTPException
 from snackbase.core.logging import get_logger
 from snackbase.infrastructure.api.dependencies import CurrentUser, SYSTEM_ACCOUNT_ID
 from snackbase.infrastructure.auth import jwt_service, InvalidTokenError, TokenExpiredError
+from snackbase.infrastructure.auth.token_types import TokenType
 
 logger = get_logger(__name__)
 
@@ -54,6 +55,7 @@ async def authenticate_realtime(
             account_id=payload["account_id"],
             email=payload["email"],
             role=payload["role"],
+            token_type=TokenType.JWT,
             groups=payload.get("groups", [])
         )
     except (InvalidTokenError, TokenExpiredError, KeyError) as e:

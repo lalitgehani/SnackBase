@@ -102,19 +102,22 @@ async def websocket_endpoint(
                         operations=set(message.get("operations", ["create", "update", "delete"]))
                     )
                     connection.add_subscription(subscription)
-                    await websocket.send_json({"status": "subscribed", "collection": collection})
+                    await websocket.send_json({"type": "subscribed", "collection": collection})
                     
                 elif action == "unsubscribe":
                     collection = message.get("collection")
                     sub_id = f"{collection}:{connection_id}"
                     connection.remove_subscription(sub_id)
-                    await websocket.send_json({"status": "unsubscribed", "collection": collection})
+                    await websocket.send_json({"type": "unsubscribed", "collection": collection})
                 
                 elif action == "ping":
                     await websocket.send_json({"type": "pong"})
                     
             except json.JSONDecodeError:
                 await websocket.send_json({"error": "Invalid JSON"})
+            except Exception as e:
+                logger.error("Error processing WebSocket message", error=str(e))
+                # Intentionally not re-raising: message errors should not close the connection
                 
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected", connection_id=connection_id)
