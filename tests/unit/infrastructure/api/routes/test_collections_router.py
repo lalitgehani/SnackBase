@@ -70,6 +70,8 @@ async def test_create_collection_success(
     mock_service.create_collection.assert_called_once()
     assert response.name == "TestCollection"
     assert response.id == "col-123"
+    # New: collection.type should default to 'base'
+    assert response.type == "base"
 
 
 @patch("snackbase.infrastructure.api.routes.collections_router.CollectionService")
@@ -171,6 +173,8 @@ async def test_create_collection_with_pii_fields(
 
     # Verify
     assert response.name == "Customers"
+    # New: collection.type should default to 'base'
+    assert response.type == "base"
     assert len(response.fields) == 3
     
     # Check PII metadata is preserved

@@ -326,7 +326,7 @@ async def get_collection(
 
     # Parse schema
     schema_dicts = json.loads(collection.schema)
-    collection_type = getattr(collection, "type", "base")
+    collection_type = getattr(collection, "type", None) or "base"
 
     if collection_type == "view":
         table_name = TableBuilder.generate_view_name(collection.name)
@@ -441,7 +441,7 @@ async def create_collection(
                 },
             )
 
-    collection_type = getattr(collection, "type", "base")
+    collection_type = getattr(collection, "type", None) or "base"
     if collection_type == "view":
         table_name = TableBuilder.generate_view_name(collection.name)
     else:
@@ -514,7 +514,7 @@ async def update_collection(
                 },
             )
 
-        collection_type = getattr(existing, "type", "base")
+        collection_type = getattr(existing, "type", None) or "base"
 
         if collection_type == "view":
             updated_collection = await collection_service.update_view_collection(
@@ -566,7 +566,7 @@ async def update_collection(
                 },
             )
 
-    updated_type = getattr(updated_collection, "type", "base")
+    updated_type = getattr(updated_collection, "type", None) or "base"
     if updated_type == "view":
         table_name = TableBuilder.generate_view_name(updated_collection.name)
     else:
