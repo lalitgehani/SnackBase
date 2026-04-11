@@ -107,3 +107,5 @@ tests/security-reports/
 
 # Agent workspace rules (do not ignore)
 !.agent/
+
+.claude
