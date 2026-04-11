@@ -96,7 +96,11 @@ class FieldDefinition(BaseModel):
 
 
 class CreateCollectionRequest(BaseModel):
-    """Request body for creating a new collection."""
+    """Request body for creating a new collection.
+
+    Supports both base collections (physical tables) and view collections (SQL views).
+    When type="view", the query field is required and write rules are ignored.
+    """
 
     name: str = Field(
         ...,
@@ -109,6 +113,15 @@ class CreateCollectionRequest(BaseModel):
         min_length=1,
         description="List of field definitions (at least one required)",
         alias="schema",
+    )
+    type: str = Field(
+        default="base",
+        description="Collection type: 'base' for physical tables, 'view' for SQL views",
+    )
+    query: str | None = Field(
+        default=None,
+        description="SQL query for view collections (required when type='view'). "
+        "Use collection names directly (e.g., 'SELECT * FROM orders JOIN customers ...')",
     )
 
     model_config = {"populate_by_name": True}
@@ -127,6 +140,26 @@ class CreateCollectionRequest(BaseModel):
     view_fields: str = Field("*", description="Fields visible in view operations")
     create_fields: str = Field("*", description="Fields allowed in create requests")
     update_fields: str = Field("*", description="Fields allowed in update requests")
+
+    @field_validator("type")
+    @classmethod
+    def validate_type(cls, v: str) -> str:
+        """Validate collection type."""
+        v = v.lower()
+        if v not in ("base", "view"):
+            raise ValueError("type must be 'base' or 'view'")
+        return v
+
+    @field_validator("query")
+    @classmethod
+    def validate_query(cls, v: str | None, info) -> str | None:
+        """Validate that query is provided for view collections."""
+        collection_type = info.data.get("type", "base")
+        if collection_type == "view" and not v:
+            raise ValueError("query is required when type is 'view'")
+        if collection_type == "base" and v is not None:
+            raise ValueError("query should not be set for base collections")
+        return v
 
 
 class SchemaFieldResponse(BaseModel):
@@ -151,7 +184,9 @@ class CollectionResponse(BaseModel):
 
     id: str = Field(..., description="Collection ID (UUID)")
     name: str = Field(..., description="Collection name")
-    table_name: str = Field(..., description="Physical table name in database")
+    table_name: str = Field(..., description="Physical table/view name in database")
+    type: str = Field(default="base", description="Collection type: 'base' or 'view'")
+    view_query: str | None = Field(default=None, description="SQL query for view collections")
     fields: list[SchemaFieldResponse] = Field(
         ...,
         description="Collection schema",
@@ -168,7 +203,8 @@ class CollectionListItem(BaseModel):
 
     id: str = Field(..., description="Collection ID (UUID)")
     name: str = Field(..., description="Collection name")
-    table_name: str = Field(..., description="Physical table name in database")
+    table_name: str = Field(..., description="Physical table/view name in database")
+    type: str = Field(default="base", description="Collection type: 'base' or 'view'")
     fields_count: int = Field(..., description="Number of fields in the schema")
     records_count: int = Field(default=0, description="Number of records in the collection")
     has_public_access: bool = Field(default=False, description="True if any rule is public (empty string)")
@@ -188,13 +224,21 @@ class CollectionListResponse(BaseModel):
 
 
 class UpdateCollectionRequest(BaseModel):
-    """Request body for updating a collection schema."""
+    """Request body for updating a collection schema.
+
+    For base collections: only fields/schema can be updated.
+    For view collections: both query and fields/schema can be updated.
+    """
 
     fields: list[FieldDefinition] = Field(
         ...,
         min_length=1,
         description="Updated list of field definitions (at least one required)",
         alias="schema",
+    )
+    query: str | None = Field(
+        default=None,
+        description="Updated SQL query for view collections",
     )
 
     model_config = {"populate_by_name": True}
@@ -348,6 +392,8 @@ class CollectionExportItem(BaseModel):
     name: str
     schema_: list[CollectionExportFieldDefinition] = Field(alias="schema")
     rules: CollectionExportRules
+    type: str = "base"
+    view_query: str | None = None
 
     model_config = ConfigDict(populate_by_name=True)
 

@@ -61,6 +61,7 @@ from snackbase.infrastructure.persistence.repositories import (
     CollectionRepository,
     RecordRepository,
 )
+from snackbase.infrastructure.persistence.table_builder import TableBuilder
 
 logger = get_logger(__name__)
 
@@ -341,6 +342,16 @@ async def create_record(
             },
         )
 
+    # Block write operations on view collections
+    if getattr(collection_model, "type", "base") == "view":
+        return JSONResponse(
+            status_code=status.HTTP_405_METHOD_NOT_ALLOWED,
+            content={
+                "error": "Method not allowed",
+                "message": f"Collection '{collection}' is a view collection and does not support write operations",
+            },
+        )
+
     # 1.5 Parse collection schema
     try:
         schema = json.loads(collection_model.schema)
@@ -568,6 +579,23 @@ async def list_records(
             content={"error": "Internal error", "message": "Invalid collection schema"},
         )
 
+    # 2b. Resolve table name based on collection type
+    collection_type = getattr(collection_model, "type", "base")
+    if collection_type == "view":
+        resolved_table_name = TableBuilder.generate_view_name(collection_model.name)
+    else:
+        resolved_table_name = None  # Let repository resolve from collection name
+
+    # 2c. Disable reference expansion for view collections
+    if collection_type == "view" and expand:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "error": "Unsupported operation",
+                "message": "Reference expansion (?expand=) is not supported for view collections",
+            },
+        )
+
     # 3. Parse sort parameter
     descending = True
     sort_by = "created_at"
@@ -693,6 +721,7 @@ async def list_records(
             cursor_record_id=cursor_record_id,
             is_backward=is_backward,
             include_count=include_count,
+            table_name=resolved_table_name,
         )
     else:
         records, total = await record_repo.find_all(
@@ -705,6 +734,7 @@ async def list_records(
             descending=descending,
             user_filter=user_filter,
             rule_filter=rule_result,
+            table_name=resolved_table_name,
         )
         next_cursor = None
         prev_cursor = None
@@ -911,7 +941,13 @@ async def aggregate_collection(
         else target_account_id
     )
 
-    # 9. Run aggregation
+    # 9. Resolve table name for views
+    collection_type = getattr(collection_model, "type", "base")
+    resolved_table_name: str | None = None
+    if collection_type == "view":
+        resolved_table_name = TableBuilder.generate_view_name(collection_model.name)
+
+    # 10. Run aggregation
     record_repo = RecordRepository(session)
     results, total_groups = await record_repo.aggregate_records(
         collection_name=collection,
@@ -923,6 +959,7 @@ async def aggregate_collection(
         having_sql=having_sql,
         having_params=having_params,
         schema=schema,
+        table_name=resolved_table_name,
     )
 
     return AggregationResponse(results=results, total_groups=total_groups)
@@ -976,6 +1013,16 @@ async def batch_create_records(
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
             content={"error": "Not found", "message": f"Collection '{collection}' not found"},
+        )
+
+    # Block write operations on view collections
+    if getattr(collection_model, "type", "base") == "view":
+        return JSONResponse(
+            status_code=status.HTTP_405_METHOD_NOT_ALLOWED,
+            content={
+                "error": "Method not allowed",
+                "message": f"Collection '{collection}' is a view collection and does not support write operations",
+            },
         )
 
     try:
@@ -1114,6 +1161,18 @@ async def batch_update_records(
     that case so no records are modified.
     """
     from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID
+
+    # Block write operations on view collections
+    collection_repo_check = CollectionRepository(session)
+    collection_model_check = await collection_repo_check.get_by_name(collection)
+    if collection_model_check and getattr(collection_model_check, "type", "base") == "view":
+        return JSONResponse(
+            status_code=status.HTTP_405_METHOD_NOT_ALLOWED,
+            content={
+                "error": "Method not allowed",
+                "message": f"Collection '{collection}' is a view collection and does not support write operations",
+            },
+        )
 
     settings = get_settings()
     if len(body.records) > settings.batch_max_size:
@@ -1284,6 +1343,18 @@ async def batch_delete_records(
     """
     from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID
 
+    # Block write operations on view collections
+    collection_repo_check = CollectionRepository(session)
+    collection_model_check = await collection_repo_check.get_by_name(collection)
+    if collection_model_check and getattr(collection_model_check, "type", "base") == "view":
+        return JSONResponse(
+            status_code=status.HTTP_405_METHOD_NOT_ALLOWED,
+            content={
+                "error": "Method not allowed",
+                "message": f"Collection '{collection}' is a view collection and does not support write operations",
+            },
+        )
+
     settings = get_settings()
     if len(body.ids) > settings.batch_max_size:
         return JSONResponse(
@@ -1420,6 +1491,23 @@ async def get_record(
             content={"error": "Internal error", "message": "Invalid collection schema"},
         )
 
+    # Resolve table name for view collections
+    collection_type = getattr(collection_model, "type", "base")
+    if collection_type == "view":
+        resolved_table_name = TableBuilder.generate_view_name(collection_model.name)
+    else:
+        resolved_table_name = None
+
+    # Disable expand for view collections
+    if collection_type == "view" and expand:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "error": "Unsupported operation",
+                "message": "Reference expansion (?expand=) is not supported for view collections",
+            },
+        )
+
     # 2. Get record (with view filter)
     # First resolve permission/rule filter
     rule_result = await check_collection_permission(
@@ -1442,6 +1530,7 @@ async def get_record(
         account_id=repo_account_id,
         schema=schema,
         rule_filter=rule_result,
+        table_name=resolved_table_name,
     )
 
     if record is None:
@@ -1568,6 +1657,16 @@ async def _update_record(
             content={
                 "error": "Not found",
                 "message": f"Collection '{collection}' not found",
+            },
+        )
+
+    # Block write operations on view collections
+    if getattr(collection_model, "type", "base") == "view":
+        return JSONResponse(
+            status_code=status.HTTP_405_METHOD_NOT_ALLOWED,
+            content={
+                "error": "Method not allowed",
+                "message": f"Collection '{collection}' is a view collection and does not support write operations",
             },
         )
 
@@ -1789,6 +1888,16 @@ async def delete_record(
             content={
                 "error": "Not found",
                 "message": f"Collection '{collection}' not found",
+            },
+        )
+
+    # Block write operations on view collections
+    if getattr(collection_model, "type", "base") == "view":
+        return JSONResponse(
+            status_code=status.HTTP_405_METHOD_NOT_ALLOWED,
+            content={
+                "error": "Method not allowed",
+                "message": f"Collection '{collection}' is a view collection and does not support write operations",
             },
         )
 

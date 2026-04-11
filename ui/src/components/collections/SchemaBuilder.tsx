@@ -12,13 +12,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Plus, Trash2, MoveUp, MoveDown, Calculator, HelpCircle } from 'lucide-react';
 import type { FieldDefinition } from '@/services/collections.service';
-import { FIELD_TYPES, ON_DELETE_OPTIONS, MASK_TYPE_OPTIONS, RETURN_TYPE_OPTIONS } from '@/services/collections.service';
+import { FIELD_TYPES, VIEW_FIELD_TYPES, ON_DELETE_OPTIONS, MASK_TYPE_OPTIONS, RETURN_TYPE_OPTIONS } from '@/services/collections.service';
 
 interface SchemaBuilderProps {
     fields: FieldDefinition[];
     onChange: (fields: FieldDefinition[]) => void;
     originalFieldCount?: number;
     collections?: string[];
+    isView?: boolean;
 }
 
 export default function SchemaBuilder({
@@ -26,6 +27,7 @@ export default function SchemaBuilder({
     onChange,
     originalFieldCount = 0,
     collections = [],
+    isView = false,
 }: SchemaBuilderProps) {
     const addField = () => {
         onChange([
@@ -174,7 +176,7 @@ export default function SchemaBuilder({
                                                 <SelectValue />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                {FIELD_TYPES.map((type) => (
+                                                {(isView ? VIEW_FIELD_TYPES : FIELD_TYPES).map((type) => (
                                                     <SelectItem key={type.value} value={type.value}>
                                                         {type.label}
                                                     </SelectItem>
@@ -185,25 +187,29 @@ export default function SchemaBuilder({
                                 </div>
 
                                 {field.type !== 'computed' && (
-                                    <div className="grid grid-cols-3 gap-3">
-                                        <label className="flex items-center space-x-2">
-                                            <input
-                                                type="checkbox"
-                                                checked={field.required || false}
-                                                onChange={(e) => updateField(index, { required: e.target.checked })}
-                                                className="rounded"
-                                            />
-                                            <span className="text-sm">Required</span>
-                                        </label>
-                                        <label className="flex items-center space-x-2">
-                                            <input
-                                                type="checkbox"
-                                                checked={field.unique || false}
-                                                onChange={(e) => updateField(index, { unique: e.target.checked })}
-                                                className="rounded"
-                                            />
-                                            <span className="text-sm">Unique</span>
-                                        </label>
+                                    <div className={`grid ${isView ? 'grid-cols-1' : 'grid-cols-3'} gap-3`}>
+                                        {!isView && (
+                                            <>
+                                                <label className="flex items-center space-x-2">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={field.required || false}
+                                                        onChange={(e) => updateField(index, { required: e.target.checked })}
+                                                        className="rounded"
+                                                    />
+                                                    <span className="text-sm">Required</span>
+                                                </label>
+                                                <label className="flex items-center space-x-2">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={field.unique || false}
+                                                        onChange={(e) => updateField(index, { unique: e.target.checked })}
+                                                        className="rounded"
+                                                    />
+                                                    <span className="text-sm">Unique</span>
+                                                </label>
+                                            </>
+                                        )}
                                         <label className="flex items-center space-x-2">
                                             <input
                                                 type="checkbox"

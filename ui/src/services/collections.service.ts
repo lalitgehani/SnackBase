@@ -24,6 +24,8 @@ export interface Collection {
   id: string;
   name: string;
   table_name: string;
+  type: 'base' | 'view';
+  view_query?: string | null;
   schema: FieldDefinition[];
   created_at: string;
   updated_at: string;
@@ -33,6 +35,7 @@ export interface CollectionListItem {
   id: string;
   name: string;
   table_name: string;
+  type: 'base' | 'view';
   fields_count: number;
   records_count: number;
   has_public_access: boolean;
@@ -50,10 +53,13 @@ export interface CollectionListResponse {
 export interface CreateCollectionData {
   name: string;
   schema: FieldDefinition[];
+  type?: 'base' | 'view';
+  query?: string;
 }
 
 export interface UpdateCollectionData {
   schema: FieldDefinition[];
+  query?: string;
 }
 
 export interface CollectionRule {
@@ -189,6 +195,8 @@ export interface CollectionExportItem {
   name: string;
   schema: FieldDefinition[];
   rules: CollectionExportRules;
+  type?: 'base' | 'view';
+  view_query?: string | null;
 }
 
 export interface CollectionExportData {
@@ -284,6 +292,20 @@ export const FIELD_TYPES = [
   { value: 'json', label: 'JSON' },
   { value: 'number', label: 'Number' },
   { value: 'reference', label: 'Reference' },
+  { value: 'text', label: 'Text' },
+  { value: 'url', label: 'URL' },
+] as const;
+
+/**
+ * Field type options for view collections (no reference, file, or computed)
+ */
+export const VIEW_FIELD_TYPES = [
+  { value: 'boolean', label: 'Boolean' },
+  { value: 'date', label: 'Date' },
+  { value: 'datetime', label: 'DateTime' },
+  { value: 'email', label: 'Email' },
+  { value: 'json', label: 'JSON' },
+  { value: 'number', label: 'Number' },
   { value: 'text', label: 'Text' },
   { value: 'url', label: 'URL' },
 ] as const;

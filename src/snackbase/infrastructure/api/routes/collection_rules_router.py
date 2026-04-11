@@ -134,6 +134,20 @@ async def update_collection_rules(
             detail=f"Collection '{collection_name}' not found",
         )
 
+    # Check if this is a view collection — write rules cannot be set on views
+    collection_type = getattr(collection, "type", "base")
+    update_data = request.model_dump(exclude_unset=True)
+
+    if collection_type == "view":
+        write_rule_fields = {"create_rule", "update_rule", "delete_rule", "create_fields", "update_fields"}
+        blocked = {k: v for k, v in update_data.items() if k in write_rule_fields and v is not None}
+        if blocked:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot set write rules on view collections. "
+                f"View collections are read-only. Blocked fields: {', '.join(sorted(blocked.keys()))}",
+            )
+
     # Get collection field names for validation
     schema = json.loads(collection.schema) if isinstance(collection.schema, str) else collection.schema
     collection_fields = [field["name"] for field in schema]
@@ -141,7 +155,6 @@ async def update_collection_rules(
     collection_fields.extend(["id", "created_at", "updated_at", "created_by", "account_id"])
 
     # Validate rule expressions
-    update_data = request.model_dump(exclude_unset=True)
     rule_operations = {
         "list_rule": "list",
         "view_rule": "view",

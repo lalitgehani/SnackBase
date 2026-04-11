@@ -370,6 +370,7 @@ class RecordRepository:
         account_id: str,
         schema: list[dict[str, Any]],
         rule_filter: RuleFilter | None = None,
+        table_name: str | None = None,
     ) -> dict[str, Any] | None:
         """Get a record by ID, scoped to account and rules.
 
@@ -378,12 +379,14 @@ class RecordRepository:
             record_id: The record ID.
             account_id: The account ID for scoping.
             schema: The collection schema for type conversion.
+            table_name: Optional override for the physical table/view name.
             rule_filter: Optional rule filter for row-level security.
 
         Returns:
             The record dict if found, None otherwise.
         """
-        table_name = TableBuilder.generate_table_name(collection_name)
+        if not table_name:
+            table_name = TableBuilder.generate_table_name(collection_name)
 
         # Build WHERE clause
         where_clauses = ['"id" = :record_id']
@@ -567,6 +570,7 @@ class RecordRepository:
         descending: bool = True,
         user_filter: RuleFilter | None = None,
         rule_filter: RuleFilter | None = None,
+        table_name: str | None = None,
     ) -> tuple[list[dict[str, Any]], int]:
         """Find records in a collection with pagination, sorting, and filtering.
 
@@ -580,11 +584,13 @@ class RecordRepository:
             descending: Whether to sort in descending order.
             user_filter: Optional compiled filter from ?filter= query param.
             rule_filter: Optional rule filter for row-level security.
+            table_name: Optional override for the physical table/view name.
 
         Returns:
             A tuple containing (list of records, total count).
         """
-        table_name = TableBuilder.generate_table_name(collection_name)
+        if not table_name:
+            table_name = TableBuilder.generate_table_name(collection_name)
 
         # 1. Build base query components
         where_clauses = []
@@ -696,6 +702,7 @@ class RecordRepository:
         cursor_record_id: str | None = None,
         is_backward: bool = False,
         include_count: bool = False,
+        table_name: str | None = None,
     ) -> tuple[list[dict[str, Any]], str | None, str | None, bool, int | None]:
         """Find records using cursor-based pagination.
 
@@ -712,11 +719,13 @@ class RecordRepository:
             cursor_record_id: Record ID from cursor (tie-breaker).
             is_backward: Whether this is a backward navigation request.
             include_count: Whether to include total count (expensive).
+            table_name: Optional override for the physical table/view name.
 
         Returns:
             A tuple containing (records, next_cursor, prev_cursor, has_more, total).
         """
-        table_name = TableBuilder.generate_table_name(collection_name)
+        if not table_name:
+            table_name = TableBuilder.generate_table_name(collection_name)
 
         # 1. Build base query components
         where_clauses = []
@@ -855,6 +864,7 @@ class RecordRepository:
         having_sql: str | None = None,
         having_params: dict[str, Any] | None = None,
         schema: list[dict[str, Any]] | None = None,
+        table_name: str | None = None,
     ) -> tuple[list[dict[str, Any]], int]:
         """Run a database-level aggregation query against a collection.
 
@@ -868,11 +878,13 @@ class RecordRepository:
             having_sql: Optional HAVING SQL fragment (already substituted with sql_expr).
             having_params: Optional params for the HAVING clause (hp_ prefix).
             schema: Optional collection schema for type conversion of group-by fields.
+            table_name: Optional override for the physical table/view name.
 
         Returns:
             A tuple of (result_rows, total_groups).
         """
-        table_name = TableBuilder.generate_table_name(collection_name)
+        if not table_name:
+            table_name = TableBuilder.generate_table_name(collection_name)
 
         # 1. Build SELECT clause
         select_parts: list[str] = []

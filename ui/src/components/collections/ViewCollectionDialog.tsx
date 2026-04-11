@@ -26,7 +26,7 @@ export default function ViewCollectionDialog({
             open={open}
             onOpenChange={onOpenChange}
             title={collection.name}
-            description={`Collection schema with ${collection.schema.length} fields`}
+            description={`${collection.type === 'view' ? 'View' : 'Collection'} schema with ${collection.schema.length} fields`}
             className="max-w-2xl"
             footer={
                 <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
@@ -39,10 +39,26 @@ export default function ViewCollectionDialog({
                         <span className="ml-2 font-mono">{collection.id}</span>
                     </div>
                     <div>
-                        <span className="text-muted-foreground">Table:</span>
+                        <span className="text-muted-foreground">{collection.type === 'view' ? 'View:' : 'Table:'}</span>
                         <span className="ml-2 font-mono">{collection.table_name}</span>
                     </div>
+                    {collection.type === 'view' && (
+                        <div className="col-span-2">
+                            <Badge variant="outline" className="text-xs border-purple-500 text-purple-600">
+                                View Collection
+                            </Badge>
+                        </div>
+                    )}
                 </div>
+
+                {collection.type === 'view' && collection.view_query && (
+                    <div>
+                        <h3 className="font-semibold mb-2">SQL Query</h3>
+                        <pre className="bg-muted rounded-lg p-4 text-sm font-mono overflow-x-auto whitespace-pre-wrap">
+                            {collection.view_query}
+                        </pre>
+                    </div>
+                )}
 
                 <div>
                     <h3 className="font-semibold mb-3">Fields</h3>
@@ -82,17 +98,19 @@ export default function ViewCollectionDialog({
                     </div>
                 </div>
 
-                <div className="bg-muted/50 rounded-lg p-4">
-                    <h4 className="font-medium mb-2 text-sm">System Fields (Auto-added)</h4>
-                    <div className="text-sm text-muted-foreground space-y-1">
-                        <div>• id (TEXT PRIMARY KEY)</div>
-                        <div>• account_id (TEXT NOT NULL)</div>
-                        <div>• created_at (DATETIME)</div>
-                        <div>• created_by (TEXT)</div>
-                        <div>• updated_at (DATETIME)</div>
-                        <div>• updated_by (TEXT)</div>
+                {collection.type !== 'view' && (
+                    <div className="bg-muted/50 rounded-lg p-4">
+                        <h4 className="font-medium mb-2 text-sm">System Fields (Auto-added)</h4>
+                        <div className="text-sm text-muted-foreground space-y-1">
+                            <div>• id (TEXT PRIMARY KEY)</div>
+                            <div>• account_id (TEXT NOT NULL)</div>
+                            <div>• created_at (DATETIME)</div>
+                            <div>• created_by (TEXT)</div>
+                            <div>• updated_at (DATETIME)</div>
+                            <div>• updated_by (TEXT)</div>
+                        </div>
                     </div>
-                </div>
+                )}
             </div>
         </AppDialog>
     );

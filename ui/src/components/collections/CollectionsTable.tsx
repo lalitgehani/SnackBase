@@ -61,6 +61,11 @@ export default function CollectionsTable({
             render: (collection) => (
                 <span className="flex items-center gap-2">
                     <span className="font-medium">{collection.name}</span>
+                    {collection.type === 'view' && (
+                        <Badge variant="outline" className="text-xs border-purple-500 text-purple-600">
+                            View
+                        </Badge>
+                    )}
                     {collection.has_public_access && (
                         <Badge variant="outline" className="text-xs border-green-500 text-green-600">
                             Public
@@ -90,6 +95,9 @@ export default function CollectionsTable({
             accessorKey: 'records_count',
             sortable: true,
             style: { minWidth: 90, maxWidth: 110 },
+            render: (collection) => (
+                <span>{collection.type === 'view' ? '--' : collection.records_count}</span>
+            ),
         },
         {
             header: 'Created',

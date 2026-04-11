@@ -63,13 +63,15 @@ export default function CollectionRulesTab({ collection }: CollectionRulesTabPro
         const updateData: UpdateCollectionRulesData = {
             list_rule: rules.list_rule,
             view_rule: rules.view_rule,
-            create_rule: rules.create_rule,
-            update_rule: rules.update_rule,
-            delete_rule: rules.delete_rule,
             list_fields: rules.list_fields,
             view_fields: rules.view_fields,
-            create_fields: rules.create_fields,
-            update_fields: rules.update_fields,
+            ...(isView ? {} : {
+                create_rule: rules.create_rule,
+                update_rule: rules.update_rule,
+                delete_rule: rules.delete_rule,
+                create_fields: rules.create_fields,
+                update_fields: rules.update_fields,
+            }),
         };
 
         try {
@@ -112,15 +114,18 @@ export default function CollectionRulesTab({ collection }: CollectionRulesTabPro
 
     if (!rules) return null;
 
+    const isView = collection.type === 'view';
     const allFieldNames = collection.schema.map(f => f.name).concat(['id', 'created_at', 'updated_at', 'created_by', 'account_id']);
 
     const publicOps = (
         [
             rules.list_rule === '' && 'List',
             rules.view_rule === '' && 'View',
-            rules.create_rule === '' && 'Create',
-            rules.update_rule === '' && 'Update',
-            rules.delete_rule === '' && 'Delete',
+            ...(!isView ? [
+                rules.create_rule === '' && 'Create',
+                rules.update_rule === '' && 'Update',
+                rules.delete_rule === '' && 'Delete',
+            ] : []),
         ] as (string | false)[]
     ).filter((op): op is string => op !== false);
 
@@ -185,31 +190,35 @@ export default function CollectionRulesTab({ collection }: CollectionRulesTabPro
                             onChange={(v) => handleUpdateRule('view_rule', v)}
                             onTest={() => openTester(rules.view_rule)}
                         />
-                        <Separator />
-                        <RuleEditor
-                            label="Create Rule"
-                            description="Validation applied during record creation"
-                            value={rules.create_rule}
-                            onChange={(v) => handleUpdateRule('create_rule', v)}
-                            onTest={() => openTester(rules.create_rule)}
-                            placeholder="e.g. @request.auth.id != ''"
-                        />
-                        <Separator />
-                        <RuleEditor
-                            label="Update Rule"
-                            description="Filter/Validation applied during record updates"
-                            value={rules.update_rule}
-                            onChange={(v) => handleUpdateRule('update_rule', v)}
-                            onTest={() => openTester(rules.update_rule)}
-                        />
-                        <Separator />
-                        <RuleEditor
-                            label="Delete Rule"
-                            description="Filter applied to record deletions"
-                            value={rules.delete_rule}
-                            onChange={(v) => handleUpdateRule('delete_rule', v)}
-                            onTest={() => openTester(rules.delete_rule)}
-                        />
+                        {!isView && (
+                            <>
+                                <Separator />
+                                <RuleEditor
+                                    label="Create Rule"
+                                    description="Validation applied during record creation"
+                                    value={rules.create_rule}
+                                    onChange={(v) => handleUpdateRule('create_rule', v)}
+                                    onTest={() => openTester(rules.create_rule)}
+                                    placeholder="e.g. @request.auth.id != ''"
+                                />
+                                <Separator />
+                                <RuleEditor
+                                    label="Update Rule"
+                                    description="Filter/Validation applied during record updates"
+                                    value={rules.update_rule}
+                                    onChange={(v) => handleUpdateRule('update_rule', v)}
+                                    onTest={() => openTester(rules.update_rule)}
+                                />
+                                <Separator />
+                                <RuleEditor
+                                    label="Delete Rule"
+                                    description="Filter applied to record deletions"
+                                    value={rules.delete_rule}
+                                    onChange={(v) => handleUpdateRule('delete_rule', v)}
+                                    onTest={() => openTester(rules.delete_rule)}
+                                />
+                            </>
+                        )}
                     </CardContent>
                 </Card>
 
@@ -236,22 +245,26 @@ export default function CollectionRulesTab({ collection }: CollectionRulesTabPro
                             fields={allFieldNames}
                             onChange={(v) => handleUpdateRule('view_fields', v)}
                         />
-                        <Separator />
-                        <FieldPermissionSelector
-                            label="Create Fields"
-                            description="Fields allowed in the creation request body"
-                            value={rules.create_fields}
-                            fields={allFieldNames}
-                            onChange={(v) => handleUpdateRule('create_fields', v)}
-                        />
-                        <Separator />
-                        <FieldPermissionSelector
-                            label="Update Fields"
-                            description="Fields allowed in the update request body"
-                            value={rules.update_fields}
-                            fields={allFieldNames}
-                            onChange={(v) => handleUpdateRule('update_fields', v)}
-                        />
+                        {!isView && (
+                            <>
+                                <Separator />
+                                <FieldPermissionSelector
+                                    label="Create Fields"
+                                    description="Fields allowed in the creation request body"
+                                    value={rules.create_fields}
+                                    fields={allFieldNames}
+                                    onChange={(v) => handleUpdateRule('create_fields', v)}
+                                />
+                                <Separator />
+                                <FieldPermissionSelector
+                                    label="Update Fields"
+                                    description="Fields allowed in the update request body"
+                                    value={rules.update_fields}
+                                    fields={allFieldNames}
+                                    onChange={(v) => handleUpdateRule('update_fields', v)}
+                                />
+                            </>
+                        )}
                     </CardContent>
                 </Card>
             </div>

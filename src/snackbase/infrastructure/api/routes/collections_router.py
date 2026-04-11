@@ -77,25 +77,31 @@ async def list_collections(
     items = []
     for collection in collections:
         schema = json.loads(collection.schema)
-        table_name = TableBuilder.generate_table_name(collection.name)
+        collection_type = getattr(collection, "type", "base")
 
-        # Get record count
-        try:
-            records_count = await collection_repo.get_record_count(table_name)
-        except Exception as e:
-            logger.warning(
-                "Failed to get record count for collection",
-                collection_id=collection.id,
-                table_name=table_name,
-                error=str(e),
-            )
-            records_count = 0
+        if collection_type == "view":
+            table_name = TableBuilder.generate_view_name(collection.name)
+            records_count = 0  # Views don't own records
+        else:
+            table_name = TableBuilder.generate_table_name(collection.name)
+            # Get record count
+            try:
+                records_count = await collection_repo.get_record_count(table_name)
+            except Exception as e:
+                logger.warning(
+                    "Failed to get record count for collection",
+                    collection_id=collection.id,
+                    table_name=table_name,
+                    error=str(e),
+                )
+                records_count = 0
 
         items.append(
             CollectionListItem(
                 id=collection.id,
                 name=collection.name,
                 table_name=table_name,
+                type=collection_type,
                 fields_count=len(schema),
                 records_count=records_count,
                 has_public_access=collection.id in public_ids,
@@ -320,7 +326,12 @@ async def get_collection(
 
     # Parse schema
     schema_dicts = json.loads(collection.schema)
-    table_name = TableBuilder.generate_table_name(collection.name)
+    collection_type = getattr(collection, "type", "base")
+
+    if collection_type == "view":
+        table_name = TableBuilder.generate_view_name(collection.name)
+    else:
+        table_name = TableBuilder.generate_table_name(collection.name)
 
     logger.info(
         "Collection retrieved",
@@ -333,6 +344,8 @@ async def get_collection(
         id=collection.id,
         name=collection.name,
         table_name=table_name,
+        type=collection_type,
+        view_query=getattr(collection, "view_query", None),
         fields=[
             SchemaFieldResponse(
                 name=f["name"],
@@ -394,9 +407,18 @@ async def create_collection(
     }
 
     try:
-        collection = await collection_service.create_collection(
-            request.name, schema_dicts, current_user.user_id, rules_data=rules_data
-        )
+        if request.type == "view":
+            collection = await collection_service.create_view_collection(
+                name=request.name,
+                query=request.query or "",
+                schema=schema_dicts,
+                user_id=current_user.user_id,
+                rules_data=rules_data,
+            )
+        else:
+            collection = await collection_service.create_collection(
+                request.name, schema_dicts, current_user.user_id, rules_data=rules_data
+            )
         await session.commit()
         await session.refresh(collection)
     except ValueError as e:
@@ -419,12 +441,18 @@ async def create_collection(
                 },
             )
 
-    table_name = TableBuilder.generate_table_name(collection.name)
+    collection_type = getattr(collection, "type", "base")
+    if collection_type == "view":
+        table_name = TableBuilder.generate_view_name(collection.name)
+    else:
+        table_name = TableBuilder.generate_table_name(collection.name)
 
     return CollectionResponse(
         id=collection.id,
         name=collection.name,
         table_name=table_name,
+        type=collection_type,
+        view_query=getattr(collection, "view_query", None),
         fields=[
             SchemaFieldResponse(
                 name=f["name"],
@@ -474,9 +502,38 @@ async def update_collection(
     collection_service = CollectionService(session, engine)
 
     try:
-        updated_collection = await collection_service.update_collection_schema(
-            collection_id, schema_dicts
-        )
+        # Check if this is a view collection
+        collection_repo = CollectionRepository(session)
+        existing = await collection_repo.get_by_id(collection_id)
+        if not existing:
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={
+                    "error": "Not Found",
+                    "message": f"Collection with ID '{collection_id}' not found",
+                },
+            )
+
+        collection_type = getattr(existing, "type", "base")
+
+        if collection_type == "view":
+            updated_collection = await collection_service.update_view_collection(
+                collection_id,
+                query=request.query,
+                new_schema=schema_dicts,
+            )
+        else:
+            if request.query is not None:
+                return JSONResponse(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    content={
+                        "error": "Validation error",
+                        "message": "query cannot be set for base collections",
+                    },
+                )
+            updated_collection = await collection_service.update_collection_schema(
+                collection_id, schema_dicts
+            )
         await session.commit()
         await session.refresh(updated_collection)
     except ValueError as e:
@@ -509,7 +566,11 @@ async def update_collection(
                 },
             )
 
-    table_name = TableBuilder.generate_table_name(updated_collection.name)
+    updated_type = getattr(updated_collection, "type", "base")
+    if updated_type == "view":
+        table_name = TableBuilder.generate_view_name(updated_collection.name)
+    else:
+        table_name = TableBuilder.generate_table_name(updated_collection.name)
 
     logger.info(
         "Collection updated successfully",
@@ -522,6 +583,8 @@ async def update_collection(
         id=updated_collection.id,
         name=updated_collection.name,
         table_name=table_name,
+        type=updated_type,
+        view_query=getattr(updated_collection, "view_query", None),
         fields=[
             SchemaFieldResponse(
                 name=f["name"],
@@ -571,18 +634,41 @@ async def delete_collection(
     try:
         result = await collection_service.prepare_collection_deletion(collection_id)
     except ValueError as e:
-        logger.info(
-            "Collection deletion failed: not found",
-            collection_id=collection_id,
-            user_id=current_user.user_id,
-        )
-        return JSONResponse(
-            status_code=status.HTTP_404_NOT_FOUND,
-            content={
-                "error": "Not Found",
-                "message": str(e),
-            },
-        )
+        error_message = str(e)
+        if "not found" in error_message.lower():
+            logger.info(
+                "Collection deletion failed: not found",
+                collection_id=collection_id,
+                user_id=current_user.user_id,
+            )
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={
+                    "error": "Not Found",
+                    "message": error_message,
+                },
+            )
+        elif "referenced by" in error_message.lower():
+            logger.info(
+                "Collection deletion failed: has dependent views",
+                collection_id=collection_id,
+                user_id=current_user.user_id,
+            )
+            return JSONResponse(
+                status_code=status.HTTP_409_CONFLICT,
+                content={
+                    "error": "Conflict",
+                    "message": error_message,
+                },
+            )
+        else:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={
+                    "error": "Error",
+                    "message": error_message,
+                },
+            )
 
     # Phase 2: Close session and apply migration (no locks held)
     await session.close()

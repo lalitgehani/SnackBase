@@ -6,6 +6,8 @@
 import { useState, useEffect } from 'react';
 import { AppDialog } from '@/components/common/AppDialog';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Database, Shield, CheckCircle2, Loader2 } from 'lucide-react';
 import SchemaBuilder from './SchemaBuilder';
@@ -29,21 +31,26 @@ export default function EditCollectionDialog({
     collections = [],
 }: EditCollectionDialogProps) {
     const [fields, setFields] = useState<FieldDefinition[]>([]);
+    const [query, setQuery] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [originalFieldCount, setOriginalFieldCount] = useState(0);
     const [isSuccess, setIsSuccess] = useState(false);
+
+    const isView = collection?.type === 'view';
 
     useEffect(() => {
         if (open && collection) {
             // Initialize with existing schema
             setFields([...collection.schema]);
             setOriginalFieldCount(collection.schema.length);
+            setQuery(collection.view_query || '');
             setError(null);
             setIsSuccess(false);
         } else if (!open) {
             setFields([]);
             setOriginalFieldCount(0);
+            setQuery('');
             setError(null);
             setIsSuccess(false);
         }
@@ -97,7 +104,11 @@ export default function EditCollectionDialog({
 
         setIsSubmitting(true);
         try {
-            await onSubmit(collection.id, { schema: fields });
+            const updateData: UpdateCollectionData = { schema: fields };
+            if (isView && query.trim()) {
+                updateData.query = query;
+            }
+            await onSubmit(collection.id, updateData);
             setIsSuccess(true);
         } catch (err) {
             setError(handleApiError(err));
@@ -108,10 +119,12 @@ export default function EditCollectionDialog({
 
     if (!collection) return null;
 
-    const title = isSuccess ? 'Collection Updated' : `Edit Collection: ${collection.name}`;
+    const title = isSuccess ? 'Collection Updated' : `Edit ${isView ? 'View' : 'Collection'}: ${collection.name}`;
     const description = isSuccess
-        ? 'Your collection has been updated successfully with all migrations applied.'
-        : 'Add new fields or modify existing field properties. Type changes are not allowed for data safety.';
+        ? `Your ${isView ? 'view' : 'collection'} has been updated successfully with all migrations applied.`
+        : isView
+            ? 'Update the SQL query or modify field definitions for this view collection.'
+            : 'Add new fields or modify existing field properties. Type changes are not allowed for data safety.';
 
     const footer = isSuccess ? (
         <Button onClick={handleClose}>Done</Button>
@@ -183,18 +196,45 @@ export default function EditCollectionDialog({
 
                     <TabsContent value="schema">
                         <form id="edit-collection-form" onSubmit={handleSubmit} className="space-y-6">
-                            <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 rounded-lg p-4">
-                                <p className="text-sm text-blue-900 dark:text-blue-200">
-                                    <strong>ℹ️ Note:</strong> You can add new fields and modify properties of existing fields.
-                                    However, changing field types or deleting fields is not allowed to protect existing data.
-                                </p>
-                            </div>
+                            {isView ? (
+                                <div className="bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-900 rounded-lg p-4">
+                                    <p className="text-sm text-purple-900 dark:text-purple-200">
+                                        This is a view collection. You can update the SQL query and modify field definitions.
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 rounded-lg p-4">
+                                    <p className="text-sm text-blue-900 dark:text-blue-200">
+                                        <strong>Note:</strong> You can add new fields and modify properties of existing fields.
+                                        However, changing field types or deleting fields is not allowed to protect existing data.
+                                    </p>
+                                </div>
+                            )}
+
+                            {isView && (
+                                <div className="space-y-2">
+                                    <Label htmlFor="edit-view-query">SQL Query *</Label>
+                                    <Textarea
+                                        id="edit-view-query"
+                                        value={query}
+                                        onChange={(e) => setQuery(e.target.value)}
+                                        placeholder="SELECT o.id, o.account_id, o.total, c.name AS customer_name FROM orders o JOIN customers c ON o.customer_id = c.id"
+                                        rows={6}
+                                        className="font-mono text-sm"
+                                        disabled={isSubmitting}
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                        Use collection names directly. They are auto-translated to physical table names.
+                                    </p>
+                                </div>
+                            )}
 
                             <SchemaBuilder
                                 fields={fields}
                                 onChange={setFields}
                                 originalFieldCount={originalFieldCount}
                                 collections={collections}
+                                isView={isView}
                             />
 
                             {error && (

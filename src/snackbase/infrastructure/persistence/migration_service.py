@@ -250,6 +250,129 @@ class MigrationService:
             loop = asyncio.get_running_loop()
             await loop.run_in_executor(None, command.stamp, self.config, revision)
 
+    # ---- View collection migration methods ----
+
+    def generate_create_view_migration(
+        self, collection_name: str, translated_query: str
+    ) -> str:
+        """Generate a migration for creating a view collection.
+
+        Args:
+            collection_name: The name of the collection.
+            translated_query: The SQL query with physical table names.
+
+        Returns:
+            The revision ID of the generated migration.
+        """
+        message = f"create_view_{collection_name}"
+        dynamic_dir = os.path.abspath("sb_data/migrations")
+        branch_args = self._get_dynamic_branch_args()
+
+        rev = command.revision(
+            self.config,
+            message=message,
+            autogenerate=False,
+            version_path=dynamic_dir,
+            **branch_args,
+        )
+
+        rev_id = rev.revision
+        filepath = rev.path
+
+        upgrade_lines = self._generate_create_view_op_lines(collection_name, translated_query)
+        downgrade_lines = self._generate_drop_view_op_lines(collection_name)
+
+        self._inject_ops_into_migration(filepath, upgrade_lines, downgrade_lines)
+
+        return rev_id
+
+    def generate_update_view_migration(
+        self, collection_name: str, translated_query: str
+    ) -> str:
+        """Generate a migration for updating a view collection's query.
+
+        SQLite does not support CREATE OR REPLACE VIEW, so we DROP + CREATE.
+
+        Args:
+            collection_name: The name of the collection.
+            translated_query: The new SQL query with physical table names.
+
+        Returns:
+            The revision ID of the generated migration.
+        """
+        message = f"update_view_{collection_name}"
+        dynamic_dir = os.path.abspath("sb_data/migrations")
+        branch_args = self._get_dynamic_branch_args()
+
+        rev = command.revision(
+            self.config,
+            message=message,
+            autogenerate=False,
+            version_path=dynamic_dir,
+            **branch_args,
+        )
+
+        rev_id = rev.revision
+        filepath = rev.path
+
+        # Drop + recreate for cross-dialect compatibility
+        upgrade_lines = self._generate_drop_view_op_lines(collection_name) + \
+            self._generate_create_view_op_lines(collection_name, translated_query)
+        downgrade_lines = [
+            f"    # Downgrade for update_view_{collection_name} is not supported",
+            "    pass",
+        ]
+
+        self._inject_ops_into_migration(filepath, upgrade_lines, downgrade_lines)
+
+        return rev_id
+
+    def generate_delete_view_migration(self, collection_name: str) -> str:
+        """Generate a migration for dropping a view collection.
+
+        Args:
+            collection_name: The name of the collection.
+
+        Returns:
+            The revision ID of the generated migration.
+        """
+        message = f"delete_view_{collection_name}"
+        dynamic_dir = os.path.abspath("sb_data/migrations")
+        branch_args = self._get_dynamic_branch_args()
+
+        rev = command.revision(
+            self.config,
+            message=message,
+            autogenerate=False,
+            version_path=dynamic_dir,
+            **branch_args,
+        )
+
+        rev_id = rev.revision
+        filepath = rev.path
+
+        upgrade_lines = self._generate_drop_view_op_lines(collection_name)
+        downgrade_lines = [
+            f"    # Downgrade for delete_view_{collection_name} is not supported",
+            "    pass",
+        ]
+
+        self._inject_ops_into_migration(filepath, upgrade_lines, downgrade_lines)
+
+        return rev_id
+
+    def _generate_create_view_op_lines(
+        self, collection_name: str, translated_query: str
+    ) -> list[str]:
+        view_name = TableBuilder.generate_view_name(collection_name)
+        # Escape single quotes in the query for the migration file
+        escaped_query = translated_query.replace("'", "\\'")
+        return [f"    op.execute('CREATE VIEW \"{view_name}\" AS {escaped_query}')"]
+
+    def _generate_drop_view_op_lines(self, collection_name: str) -> list[str]:
+        view_name = TableBuilder.generate_view_name(collection_name)
+        return [f"    op.execute('DROP VIEW IF EXISTS \"{view_name}\"')"]
+
     def _generate_create_table_op_lines(self, collection_name: str, schema: list[dict[str, Any]]) -> list[str]:
         table_name = TableBuilder.generate_table_name(collection_name)
         lines = [f"    op.create_table('{table_name}',"]

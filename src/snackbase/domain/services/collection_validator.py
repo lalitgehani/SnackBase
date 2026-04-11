@@ -579,3 +579,111 @@ class CollectionValidator:
         errors.extend(cls.validate_name(name))
         errors.extend(cls.validate_schema(schema))
         return errors
+
+    # ---- View collection validation ----
+
+    # Field types not allowed in view collections
+    VIEW_DISALLOWED_FIELD_TYPES = frozenset({
+        FieldType.REFERENCE.value,
+        FieldType.FILE.value,
+        FieldType.COMPUTED.value,
+    })
+
+    @classmethod
+    def validate_view_field(cls, field: dict, field_index: int) -> list[CollectionValidationError]:
+        """Validate a single field definition for a view collection.
+
+        View fields only carry metadata (name, type, PII config).
+        Constraints like required/unique/default are informational only.
+
+        Args:
+            field: The field definition dict.
+            field_index: Index of the field in the schema.
+
+        Returns:
+            List of validation errors (empty if valid).
+        """
+        errors = []
+
+        # Validate field name
+        name = field.get("name", "")
+        errors.extend(cls.validate_field_name(name, field_index))
+
+        # Validate field type
+        field_type = field.get("type", "")
+        errors.extend(cls.validate_field_type(field_type, field_index))
+
+        # Reject disallowed types for views
+        if field_type.lower() in cls.VIEW_DISALLOWED_FIELD_TYPES:
+            errors.append(
+                CollectionValidationError(
+                    field=f"schema[{field_index}].type",
+                    message=f"Field type '{field_type}' is not allowed in view collections. "
+                    f"Views cannot use reference, file, or computed field types.",
+                    code="view_field_type_not_allowed",
+                )
+            )
+
+        # Validate PII configuration
+        errors.extend(cls.validate_pii_field(field, field_index))
+
+        return errors
+
+    @classmethod
+    def validate_view_schema(cls, schema: list[dict]) -> list[CollectionValidationError]:
+        """Validate a view collection schema.
+
+        View schemas define field metadata (name, type, PII) for the output
+        columns of the SQL query. Unlike base collections, they do not have
+        physical constraints.
+
+        Args:
+            schema: List of field definitions.
+
+        Returns:
+            List of validation errors (empty if valid).
+        """
+        errors = []
+
+        if not schema:
+            errors.append(
+                CollectionValidationError(
+                    field="schema",
+                    message="View schema must define at least one field",
+                    code="schema_empty",
+                )
+            )
+            return errors
+
+        seen_names: set[str] = set()
+        for i, field in enumerate(schema):
+            errors.extend(cls.validate_view_field(field, i))
+
+            name = field.get("name", "").lower()
+            if name and name in seen_names:
+                errors.append(
+                    CollectionValidationError(
+                        field=f"schema[{i}].name",
+                        message=f"Duplicate field name '{field.get('name')}'",
+                        code="field_name_duplicate",
+                    )
+                )
+            seen_names.add(name)
+
+        return errors
+
+    @classmethod
+    def validate_view(cls, name: str, schema: list[dict]) -> list[CollectionValidationError]:
+        """Validate a complete view collection definition (name + schema).
+
+        Args:
+            name: The collection name.
+            schema: The view schema (list of field definitions).
+
+        Returns:
+            List of validation errors (empty if valid).
+        """
+        errors = []
+        errors.extend(cls.validate_name(name))
+        errors.extend(cls.validate_view_schema(schema))
+        return errors

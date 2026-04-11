@@ -8,6 +8,7 @@ import { AppDialog } from '@/components/common/AppDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { CheckCircle2, Loader2 } from 'lucide-react';
 import SchemaBuilder from './SchemaBuilder';
 import type { CreateCollectionData, FieldDefinition } from '@/services/collections.service';
@@ -27,6 +28,8 @@ export default function CreateCollectionDialog({
     collections = [],
 }: CreateCollectionDialogProps) {
     const [name, setName] = useState('');
+    const [collectionType, setCollectionType] = useState<'base' | 'view'>('base');
+    const [query, setQuery] = useState('');
     const [fields, setFields] = useState<FieldDefinition[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -37,6 +40,8 @@ export default function CreateCollectionDialog({
         if (!open) {
             // Reset form when dialog closes
             setName('');
+            setCollectionType('base');
+            setQuery('');
             setFields([]);
             setError(null);
             setIsSuccess(false);
@@ -55,6 +60,12 @@ export default function CreateCollectionDialog({
         // Validation
         if (!name.trim()) {
             setError('Collection name is required');
+            return;
+        }
+
+        // Validate view query
+        if (collectionType === 'view' && !query.trim()) {
+            setError('SQL query is required for view collections');
             return;
         }
 
@@ -95,7 +106,12 @@ export default function CreateCollectionDialog({
 
         setIsSubmitting(true);
         try {
-            await onSubmit({ name, schema: fields });
+            const submitData: CreateCollectionData = { name, schema: fields };
+            if (collectionType === 'view') {
+                submitData.type = 'view';
+                submitData.query = query;
+            }
+            await onSubmit(submitData);
             setCreatedCollectionName(name);
             setIsSuccess(true);
         } catch (err) {
@@ -108,7 +124,9 @@ export default function CreateCollectionDialog({
     const title = isSuccess ? 'Collection Created' : 'Create Collection';
     const description = isSuccess
         ? 'Your collection has been created successfully with all migrations applied.'
-        : 'Create a new collection with custom schema. This will create a global database table.';
+        : collectionType === 'view'
+            ? 'Create a read-only view collection backed by a SQL query on existing collections.'
+            : 'Create a new collection with custom schema. This will create a global database table.';
 
     const footer = isSuccess ? (
         <Button onClick={handleClose}>Done</Button>
@@ -168,6 +186,28 @@ export default function CreateCollectionDialog({
             {!isSuccess && !isSubmitting && (
                 <form id="create-collection-form" onSubmit={handleSubmit} className="space-y-6">
                     <div className="space-y-2">
+                        <Label>Collection Type</Label>
+                        <div className="flex gap-2">
+                            <Button
+                                type="button"
+                                variant={collectionType === 'base' ? 'default' : 'outline'}
+                                size="sm"
+                                onClick={() => { setCollectionType('base'); setQuery(''); }}
+                            >
+                                Base Collection
+                            </Button>
+                            <Button
+                                type="button"
+                                variant={collectionType === 'view' ? 'default' : 'outline'}
+                                size="sm"
+                                onClick={() => setCollectionType('view')}
+                            >
+                                View Collection
+                            </Button>
+                        </div>
+                    </div>
+
+                    <div className="space-y-2">
                         <Label htmlFor="collection-name">Collection Name *</Label>
                         <Input
                             id="collection-name"
@@ -181,17 +221,47 @@ export default function CreateCollectionDialog({
                         </p>
                     </div>
 
-                    <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-lg p-4">
-                        <p className="text-sm text-amber-900 dark:text-amber-200">
-                            <strong>⚠️ Warning:</strong> This will create a global database table accessible across all accounts.
-                            System fields (id, account_id, created_at, etc.) will be added automatically.
-                        </p>
-                    </div>
+                    {collectionType === 'view' ? (
+                        <div className="bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-900 rounded-lg p-4">
+                            <p className="text-sm text-purple-900 dark:text-purple-200">
+                                View collections are read-only SQL views backed by existing base collections.
+                                Write operations (create, update, delete) are not supported.
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-lg p-4">
+                            <p className="text-sm text-amber-900 dark:text-amber-200">
+                                <strong>Warning:</strong> This will create a global database table accessible across all accounts.
+                                System fields (id, account_id, created_at, etc.) will be added automatically.
+                            </p>
+                        </div>
+                    )}
+
+                    {collectionType === 'view' && (
+                        <div className="space-y-2">
+                            <Label htmlFor="view-query">SQL Query *</Label>
+                            <Textarea
+                                id="view-query"
+                                value={query}
+                                onChange={(e) => setQuery(e.target.value)}
+                                placeholder={"SELECT o.id, o.account_id, o.total, c.name AS customer_name\nFROM orders o\nJOIN customers c ON o.customer_id = c.id"}
+                                rows={6}
+                                className="font-mono text-sm"
+                                disabled={isSubmitting}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                Use collection names directly (e.g., <code>orders</code>, <code>customers</code>).
+                                They will be automatically translated to physical table names.
+                                The query must produce an <code>account_id</code> column.
+                            </p>
+                        </div>
+                    )}
 
                     <SchemaBuilder
                         fields={fields}
                         onChange={setFields}
                         collections={collections}
+                        isView={collectionType === 'view'}
                     />
 
                     {error && (

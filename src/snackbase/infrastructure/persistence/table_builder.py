@@ -426,3 +426,46 @@ class TableBuilder:
 
         logger.info("Collection table dropped successfully", table_name=table_name)
 
+    # ---- View collection methods ----
+
+    @classmethod
+    def generate_view_name(cls, collection_name: str) -> str:
+        """Generate a view name from collection name.
+
+        Uses 'view_' prefix to distinguish from physical tables ('col_').
+
+        Args:
+            collection_name: The collection name.
+
+        Returns:
+            The generated view name.
+        """
+        return f"view_{collection_name.lower()}"
+
+    @classmethod
+    def build_create_view_ddl(cls, collection_name: str, translated_query: str) -> str:
+        """Build CREATE VIEW DDL statement.
+
+        Args:
+            collection_name: The collection name.
+            translated_query: The SQL query with physical table names.
+
+        Returns:
+            The DDL statement as a string.
+        """
+        view_name = cls.generate_view_name(collection_name)
+        return f'CREATE VIEW "{view_name}" AS {translated_query}'
+
+    @classmethod
+    def build_drop_view_ddl(cls, collection_name: str) -> str:
+        """Build DROP VIEW DDL statement.
+
+        Args:
+            collection_name: The collection name.
+
+        Returns:
+            The DDL statement as a string.
+        """
+        view_name = cls.generate_view_name(collection_name)
+        return f'DROP VIEW IF EXISTS "{view_name}"'
+

@@ -1,6 +1,7 @@
 """Collection service for business logic.
 
 Handles collection schema updates, validation, and deletion.
+Supports both base collections (physical tables) and view collections (SQL views).
 """
 
 import json
@@ -12,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from snackbase.core.logging import get_logger
 from snackbase.domain.services import CollectionValidationError, CollectionValidator
+from snackbase.domain.services.view_query_validator import ViewQueryValidator
 from snackbase.infrastructure.persistence.migration_service import MigrationService
 from snackbase.infrastructure.persistence.models import CollectionModel
 from snackbase.infrastructure.persistence.repositories import CollectionRepository
@@ -123,6 +125,179 @@ class CollectionService:
         )
 
         return created_collection
+
+    async def create_view_collection(
+        self,
+        name: str,
+        query: str,
+        schema: list[dict[str, Any]],
+        user_id: str,
+        rules_data: dict[str, Any] | None = None,
+    ) -> CollectionModel:
+        """Create a new view collection backed by a SQL view.
+
+        Args:
+            name: Collection name.
+            query: SQL query using friendly collection names.
+            schema: List of field definitions for the view output (PII/type metadata).
+            user_id: ID of the user creating the collection.
+            rules_data: Optional dictionary containing rules (only list_rule, view_rule used).
+
+        Returns:
+            The created collection model.
+
+        Raises:
+            ValueError: If validation fails.
+        """
+        # Validate name and schema
+        validation_errors = CollectionValidator.validate_view(name, schema)
+        if validation_errors:
+            error_messages = [f"{e.field}: {e.message}" for e in validation_errors]
+            raise ValueError(f"Validation failed: {'; '.join(error_messages)}")
+
+        # Check uniqueness (views and base collections share namespace)
+        if await self.repository.name_exists(name):
+            raise ValueError(f"Collection '{name}' already exists")
+
+        # Validate and translate the SQL query
+        query_errors, translated_query = await ViewQueryValidator.validate(
+            query, self.session
+        )
+        if query_errors:
+            error_messages = [f"{e.code}: {e.message}" for e in query_errors]
+            raise ValueError(f"View query validation failed: {'; '.join(error_messages)}")
+
+        # Generate and apply migration
+        logger.info("Generating migration for new view collection", collection_name=name)
+        rev_id = self.migration_service.generate_create_view_migration(name, translated_query)
+
+        logger.info("Applying migration", revision=rev_id)
+        await self.migration_service.apply_migrations()
+
+        # Store collection record
+        collection_id = str(uuid.uuid4())
+        collection = CollectionModel(
+            id=collection_id,
+            name=name,
+            schema=json.dumps(schema),
+            type="view",
+            view_query=query,  # Store the original user query (friendly names)
+            migration_revision=rev_id,
+        )
+        created_collection = await self.repository.create(collection)
+
+        # Create collection rules — write operations are always locked for views
+        from snackbase.infrastructure.persistence.models.collection_rule import CollectionRuleModel
+        from snackbase.infrastructure.persistence.repositories.collection_rule_repository import (
+            CollectionRuleRepository,
+        )
+
+        rule_repo = CollectionRuleRepository(self.session)
+        rules_dict = rules_data or {}
+
+        rule = CollectionRuleModel(
+            id=str(uuid.uuid4()),
+            collection_id=collection_id,
+            list_rule=rules_dict.get("list_rule"),
+            view_rule=rules_dict.get("view_rule"),
+            create_rule=None,   # Always locked for views
+            update_rule=None,   # Always locked for views
+            delete_rule=None,   # Always locked for views
+            list_fields=rules_dict.get("list_fields", "*"),
+            view_fields=rules_dict.get("view_fields", "*"),
+            create_fields="",   # Not applicable for views
+            update_fields="",   # Not applicable for views
+        )
+        await rule_repo.create(rule)
+
+        logger.info(
+            "View collection created successfully",
+            collection_id=collection_id,
+            collection_name=name,
+            revision=rev_id,
+            created_by=user_id,
+        )
+
+        return created_collection
+
+    async def update_view_collection(
+        self,
+        collection_id: str,
+        query: str | None = None,
+        new_schema: list[dict[str, Any]] | None = None,
+    ) -> CollectionModel:
+        """Update a view collection's query and/or schema.
+
+        Args:
+            collection_id: The collection ID.
+            query: New SQL query (optional).
+            new_schema: New schema metadata (optional).
+
+        Returns:
+            Updated collection model.
+        """
+        collection = await self.repository.get_by_id(collection_id)
+        if not collection:
+            raise ValueError(f"Collection with ID '{collection_id}' not found")
+
+        if getattr(collection, "type", "base") != "view":
+            raise ValueError("Cannot use update_view_collection on a base collection")
+
+        if new_schema is not None:
+            validation_errors = CollectionValidator.validate_view_schema(new_schema)
+            if validation_errors:
+                error_messages = [f"{e.field}: {e.message}" for e in validation_errors]
+                raise ValueError(f"Schema validation failed: {'; '.join(error_messages)}")
+            collection.schema = json.dumps(new_schema)
+
+        if query is not None:
+            query_errors, translated_query = await ViewQueryValidator.validate(
+                query, self.session
+            )
+            if query_errors:
+                error_messages = [f"{e.code}: {e.message}" for e in query_errors]
+                raise ValueError(f"View query validation failed: {'; '.join(error_messages)}")
+
+            rev_id = self.migration_service.generate_update_view_migration(
+                collection.name, translated_query
+            )
+            await self.migration_service.apply_migrations()
+            collection.view_query = query
+            collection.migration_revision = rev_id
+
+        updated_collection = await self.repository.update(collection)
+
+        logger.info(
+            "View collection updated",
+            collection_id=collection_id,
+            collection_name=collection.name,
+        )
+
+        return updated_collection
+
+    async def check_view_dependencies(self, collection_name: str) -> list[str]:
+        """Check if any view collections depend on a given base collection.
+
+        Args:
+            collection_name: The base collection name to check.
+
+        Returns:
+            List of view collection names that reference this collection.
+        """
+        all_collections = await self.repository.list_all()
+        dependent_views = []
+
+        for coll in all_collections:
+            if getattr(coll, "type", "base") != "view":
+                continue
+            view_query = getattr(coll, "view_query", None)
+            if not view_query:
+                continue
+            referenced = ViewQueryValidator.extract_collection_names(view_query)
+            if collection_name.lower() in [r.lower() for r in referenced]:
+                dependent_views.append(coll.name)
+
+        return dependent_views
 
     def validate_schema_update(
         self, existing_schema: list[dict[str, Any]], new_schema: list[dict[str, Any]]
@@ -240,40 +415,72 @@ class CollectionService:
             Dictionary with collection info and migration revision.
 
         Raises:
-            ValueError: If collection not found.
+            ValueError: If collection not found or if base collection has dependent views.
         """
         # Get collection (read-only operation)
         collection = await self.repository.get_by_id(collection_id)
         if not collection:
             raise ValueError(f"Collection with ID '{collection_id}' not found")
 
-        # Get record count for confirmation
-        table_name = TableBuilder.generate_table_name(collection.name)
-        record_count = await self.repository.get_record_count(table_name)
+        collection_type = getattr(collection, "type", "base")
+
+        # For base collections, check if any views depend on it
+        if collection_type == "base":
+            dependent_views = await self.check_view_dependencies(collection.name)
+            if dependent_views:
+                raise ValueError(
+                    f"Cannot delete collection '{collection.name}' because it is referenced by "
+                    f"view collection(s): {', '.join(dependent_views)}. "
+                    f"Delete the dependent views first."
+                )
 
         logger.info(
             "Preparing collection deletion",
             collection_id=collection_id,
             collection_name=collection.name,
+            collection_type=collection_type,
         )
 
-        # Generate migration (file creation only, no DB changes)
-        rev_id = self.migration_service.generate_delete_collection_migration(collection.name)
+        if collection_type == "view":
+            # View collections use DROP VIEW
+            view_name = TableBuilder.generate_view_name(collection.name)
+            rev_id = self.migration_service.generate_delete_view_migration(collection.name)
 
-        logger.info(
-            "Migration generated for collection deletion",
-            collection_id=collection_id,
-            collection_name=collection.name,
-            revision=rev_id,
-        )
+            logger.info(
+                "Migration generated for view collection deletion",
+                collection_id=collection_id,
+                collection_name=collection.name,
+                revision=rev_id,
+            )
 
-        return {
-            "collection_id": collection_id,
-            "collection_name": collection.name,
-            "table_name": table_name,
-            "records_deleted": record_count,
-            "migration_revision": rev_id,
-        }
+            return {
+                "collection_id": collection_id,
+                "collection_name": collection.name,
+                "table_name": view_name,
+                "records_deleted": 0,
+                "migration_revision": rev_id,
+            }
+        else:
+            # Base collections use DROP TABLE
+            table_name = TableBuilder.generate_table_name(collection.name)
+            record_count = await self.repository.get_record_count(table_name)
+
+            rev_id = self.migration_service.generate_delete_collection_migration(collection.name)
+
+            logger.info(
+                "Migration generated for collection deletion",
+                collection_id=collection_id,
+                collection_name=collection.name,
+                revision=rev_id,
+            )
+
+            return {
+                "collection_id": collection_id,
+                "collection_name": collection.name,
+                "table_name": table_name,
+                "records_deleted": record_count,
+                "migration_revision": rev_id,
+            }
 
     async def finalize_collection_deletion(self, collection_id: str) -> None:
         """Finalize collection deletion by removing the collection record.
@@ -364,13 +571,17 @@ class CollectionService:
                 "update_fields": rule.update_fields if rule else "*",
             }
 
-            export_collections.append(
-                {
-                    "name": collection.name,
-                    "schema": schema,
-                    "rules": rules_dict,
-                }
-            )
+            collection_type = getattr(collection, "type", "base")
+            export_item: dict[str, Any] = {
+                "name": collection.name,
+                "schema": schema,
+                "rules": rules_dict,
+                "type": collection_type,
+            }
+            if collection_type == "view":
+                export_item["view_query"] = getattr(collection, "view_query", None)
+
+            export_collections.append(export_item)
 
         export_data = {
             "version": "1.0",
@@ -469,12 +680,23 @@ class CollectionService:
                             continue
 
                 # Create new collection with migration
-                collection = await self.create_collection(
-                    name=name,
-                    schema=schema,
-                    user_id=user_id,
-                    rules_data=rules,
-                )
+                coll_type = coll_data.get("type", "base")
+                if coll_type == "view":
+                    view_query = coll_data.get("view_query", "")
+                    collection = await self.create_view_collection(
+                        name=name,
+                        query=view_query,
+                        schema=schema,
+                        user_id=user_id,
+                        rules_data=rules,
+                    )
+                else:
+                    collection = await self.create_collection(
+                        name=name,
+                        schema=schema,
+                        user_id=user_id,
+                        rules_data=rules,
+                    )
                 if collection.migration_revision:
                     migrations_created.append(collection.migration_revision)
 
@@ -525,6 +747,8 @@ class CollectionService:
     ) -> list[dict[str, Any]]:
         """Sort collections so that referenced collections come before those that reference them.
 
+        Base collections always come before view collections since views depend on base tables.
+
         Args:
             collections: List of collection data dictionaries.
 
@@ -538,11 +762,22 @@ class CollectionService:
         for coll in collections:
             name = coll["name"]
             deps = set()
-            for field in coll.get("schema", []):
-                if field.get("type") == "reference":
-                    target = field.get("collection")
-                    if target and target in name_to_collection and target != name:
-                        deps.add(target)
+            coll_type = coll.get("type", "base")
+
+            if coll_type == "view":
+                # View collections depend on all base collections they reference
+                view_query = coll.get("view_query", "")
+                if view_query:
+                    referenced = ViewQueryValidator.extract_collection_names(view_query)
+                    for ref in referenced:
+                        if ref.lower() in name_to_collection and ref.lower() != name.lower():
+                            deps.add(ref.lower())
+            else:
+                for field in coll.get("schema", []):
+                    if field.get("type") == "reference":
+                        target = field.get("collection")
+                        if target and target in name_to_collection and target != name:
+                            deps.add(target)
             dependencies[name] = deps
 
         # Topological sort
