@@ -365,13 +365,19 @@ class MigrationService:
         self, collection_name: str, translated_query: str
     ) -> list[str]:
         view_name = TableBuilder.generate_view_name(collection_name)
-        # Escape single quotes in the query for the migration file
-        escaped_query = translated_query.replace("'", "\\'")
-        return [f"    op.execute('CREATE VIEW \"{view_name}\" AS {escaped_query}')"]
+        # Normalize newlines and strip trailing whitespace
+        normalized_query = translated_query.replace("\r\n", "\n").rstrip()
+        # Build DDL using TableBuilder so it's consistent
+        sql = TableBuilder.build_create_view_ddl(collection_name, normalized_query)
+        # Guard against triple-quote collisions in generated migrations
+        safe_sql = sql.replace('"""', '\\"""')
+        return [f'    op.execute(sa.text("""{safe_sql}"""))']
 
     def _generate_drop_view_op_lines(self, collection_name: str) -> list[str]:
         view_name = TableBuilder.generate_view_name(collection_name)
-        return [f"    op.execute('DROP VIEW IF EXISTS \"{view_name}\"')"]
+        sql = f'DROP VIEW IF EXISTS "{view_name}"'
+        safe_sql = sql.replace('"""', '\\"""')
+        return [f'    op.execute(sa.text("""{safe_sql}"""))']
 
     def _generate_create_table_op_lines(self, collection_name: str, schema: list[dict[str, Any]]) -> list[str]:
         table_name = TableBuilder.generate_table_name(collection_name)

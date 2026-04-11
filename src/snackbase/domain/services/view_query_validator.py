@@ -275,21 +275,36 @@ class ViewQueryValidator:
         try:
             test_sql = f"SELECT * FROM ({translated}) _view_test LIMIT 0"
             result = await session.execute(text(test_sql))
-            columns = list(result.keys())
+            columns = [c.lower() for c in list(result.keys())]
 
-            if "account_id" not in columns:
+            # Enforce presence of required system columns to preserve API contract
+            required_system_cols = [
+                "id",
+                "account_id",
+                "created_at",
+                "created_by",
+                "updated_at",
+                "updated_by",
+            ]
+
+            missing = [c for c in required_system_cols if c not in columns]
+            if missing:
                 errors.append(
                     ViewQueryValidationError(
-                        message="View query must include 'account_id' in its output columns for multi-tenant isolation",
-                        code="missing_account_id",
+                        message=(
+                            "View query must include required system columns: "
+                            + ", ".join(missing)
+                        ),
+                        code="missing_system_columns",
                     )
                 )
-
-            if "id" not in columns:
-                logger.warning(
-                    "View query does not include 'id' column - single-record access will not work",
-                    query=query[:200],
-                )
+            else:
+                # Keep existing warning for id absence (defensive)
+                if "id" not in columns:
+                    logger.warning(
+                        "View query does not include 'id' column - single-record access will not work",
+                        query=query[:200],
+                    )
 
         except Exception as e:
             errors.append(

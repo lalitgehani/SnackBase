@@ -252,7 +252,8 @@ export default function CreateCollectionDialog({
                             <p className="text-xs text-muted-foreground">
                                 Use collection names directly (e.g., <code>orders</code>, <code>customers</code>).
                                 They will be automatically translated to physical table names.
-                                The query must produce an <code>account_id</code> column.
+                                The query must produce the required system columns: <code>id</code>, <code>account_id</code>, <code>created_at</code>, <code>created_by</code>, <code>updated_at</code>, and <code>updated_by</code>.
+                                Alias or compute them from your source tables (e.g., <code>o.created_at AS created_at</code> or <code>COALESCE(o.created_at, c.created_at) AS created_at</code>).
                             </p>
                         </div>
                     )}
