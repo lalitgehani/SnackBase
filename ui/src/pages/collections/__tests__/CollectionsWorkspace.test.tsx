@@ -73,21 +73,32 @@ const mockProductsFull = {
   table_name: 'products',
 }
 
-function setupAuth(role: string = 'superadmin') {
+/**
+ * Superadmin is system-account membership (nil UUID), not a role named "superadmin".
+ * Real superadmins have role "admin" on the system account.
+ */
+function setupAuth(asSuperadmin: boolean = true) {
   useAuthStore.setState({
     user: {
       id: 'user-1',
       email: 'admin@example.com',
-      role,
+      role: 'admin',
       is_active: true,
       created_at: '2026-01-01T00:00:00Z',
     },
-    account: {
-      id: 'SY0000',
-      slug: 'system',
-      name: 'System',
-      created_at: '2026-01-01T00:00:00Z',
-    },
+    account: asSuperadmin
+      ? {
+          id: '00000000-0000-0000-0000-000000000000',
+          slug: 'system',
+          name: 'System',
+          created_at: '2026-01-01T00:00:00Z',
+        }
+      : {
+          id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+          slug: 'acme',
+          name: 'Acme Corp',
+          created_at: '2026-01-01T00:00:00Z',
+        },
     token: 'test-token',
     refreshToken: 'refresh',
     isAuthenticated: true,
@@ -220,8 +231,14 @@ beforeEach(() => {
         user: {
           id: 'user-1',
           email: 'admin@example.com',
-          role: 'superadmin',
+          role: 'admin',
           is_active: true,
+          created_at: '2026-01-01T00:00:00Z',
+        },
+        account: {
+          id: '00000000-0000-0000-0000-000000000000',
+          slug: 'system',
+          name: 'System',
           created_at: '2026-01-01T00:00:00Z',
         },
         isAuthenticated: true,
@@ -229,7 +246,7 @@ beforeEach(() => {
     }),
   )
 
-  setupAuth('superadmin')
+  setupAuth(true)
   setupHandlers()
 })
 
@@ -476,7 +493,7 @@ describe('CollectionsWorkspace', () => {
     })
 
     it('hides DDL actions for non-superadmin', async () => {
-      setupAuth('admin')
+      setupAuth(false)
       renderWorkspace('/admin/collections/posts/schema')
 
       await waitFor(() => {
@@ -488,7 +505,7 @@ describe('CollectionsWorkspace', () => {
     })
 
     it('hides new collection for non-superadmin', async () => {
-      setupAuth('admin')
+      setupAuth(false)
       renderWorkspace()
 
       await waitFor(() => {
@@ -592,7 +609,7 @@ describe('CollectionsWorkspace', () => {
     })
 
     it('shows superadmin-only message for non-superadmin without editors', async () => {
-      setupAuth('admin')
+      setupAuth(false)
       renderWorkspace('/admin/collections/posts/rules')
 
       await waitFor(() => {

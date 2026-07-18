@@ -17,6 +17,7 @@ import {
   type CollectionListItem,
 } from '@/services/collections.service';
 import { handleApiError } from '@/lib/api';
+import { isSuperadminAccount } from '@/lib/auth';
 import { useAuthStore } from '@/stores/auth.store';
 
 interface CollectionsWorkspaceContextValue {
@@ -40,8 +41,10 @@ const CollectionsWorkspaceContext = createContext<CollectionsWorkspaceContextVal
 const RAIL_COLLAPSED_KEY = 'snackbase_collections_rail_collapsed';
 
 export function CollectionsWorkspaceProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuthStore();
-  const isSuperadmin = user?.role === 'superadmin';
+  const { account } = useAuthStore();
+  // Superadmin = system account membership (backend require_superadmin), not role name.
+  // Superadmins are seeded with role "admin" on the system account.
+  const isSuperadmin = isSuperadminAccount(account);
 
   const [collections, setCollections] = useState<CollectionListItem[]>([]);
   const [loading, setLoading] = useState(true);

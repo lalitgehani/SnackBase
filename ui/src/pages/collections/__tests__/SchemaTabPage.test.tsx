@@ -35,12 +35,17 @@ function setupAuth() {
     user: {
       id: 'u1',
       email: 'admin@test.com',
-      role: 'superadmin',
-      account_id: 'SY0000',
+      role: 'admin',
       is_active: true,
       created_at: '2024-01-01T00:00:00Z',
     },
-    accessToken: 'token',
+    account: {
+      id: '00000000-0000-0000-0000-000000000000',
+      slug: 'system',
+      name: 'System',
+      created_at: '2024-01-01T00:00:00Z',
+    },
+    token: 'token',
     isAuthenticated: true,
   } as never)
 }
