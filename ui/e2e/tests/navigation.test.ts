@@ -11,39 +11,69 @@
  *   - Run tests with: npm run test:e2e
  */
 
+import type { Page } from '@playwright/test'
 import { test, expect } from '../fixtures.js'
 
 // ---------------------------------------------------------------------------
-// Sidebar nav items: { label, url } — mirrors AppSidebar items (no superadminOnly guard)
+// Sidebar nav items: { label, url } — mirrors AppSidebar (non-superadminOnly items)
+// Grouped in the same order as AppSidebar information architecture.
 // ---------------------------------------------------------------------------
 const NAV_ITEMS = [
+  // Overview
   { label: 'Dashboard', url: '/admin/dashboard' },
-  { label: 'Configuration', url: '/admin/configuration' },
+  // Data
+  { label: 'Collections', url: '/admin/collections' },
+  { label: 'Macros', url: '/admin/macros' },
+  // Access — accounts → users/groups/roles → invitations → API keys
   { label: 'Accounts', url: '/admin/accounts' },
   { label: 'Users', url: '/admin/users' },
-  { label: 'Invitations', url: '/admin/invitations' },
   { label: 'Groups', url: '/admin/groups' },
-  { label: 'Collections', url: '/admin/collections' },
   { label: 'Roles', url: '/admin/roles' },
+  { label: 'Invitations', url: '/admin/invitations' },
+  // Automation — hooks → schedules → workflows → jobs
+  { label: 'Hooks', url: '/admin/hooks' },
+  { label: 'Scheduled Tasks', url: '/admin/scheduled-tasks' },
+  { label: 'Workflows', url: '/admin/workflows' },
+  // Integrations
+  { label: 'Webhooks', url: '/admin/webhooks' },
+  { label: 'Endpoints', url: '/admin/endpoints' },
+  // System
+  { label: 'Configuration', url: '/admin/configuration' },
   { label: 'Audit Logs', url: '/admin/audit-logs' },
   { label: 'Migrations', url: '/admin/migrations' },
-  { label: 'Macros', url: '/admin/macros' },
 ] as const
+
+/**
+ * Expand every collapsed sidebar section so nested nav links are visible.
+ * Collapsible content is not actionable while data-state="closed".
+ * Trigger is the section menu-button (CollapsibleTrigger asChild merges slots).
+ */
+async function expandAllSidebarSections(page: Page) {
+  const closed = page.locator('[data-slot="collapsible"][data-state="closed"]')
+  // Guard against infinite loops if a trigger fails to open
+  for (let i = 0; i < 20 && (await closed.count()) > 0; i++) {
+    await closed.first().locator('[data-sidebar="menu-button"]').click()
+  }
+}
 
 // Header titles as returned by AdminLayout's getPageTitle()
 const PAGE_TITLES: Record<string, string> = {
   '/admin/dashboard': 'Dashboard',
+  '/admin/collections': 'Collections',
+  '/admin/macros': 'Macros',
   '/admin/accounts': 'Accounts',
   '/admin/users': 'Users',
   '/admin/groups': 'Groups',
-  '/admin/collections': 'Collections',
   '/admin/roles': 'Roles',
+  '/admin/invitations': 'Invitations',
+  '/admin/hooks': 'Hooks',
+  '/admin/scheduled-tasks': 'Scheduled Tasks',
+  '/admin/workflows': 'Workflows',
+  '/admin/webhooks': 'Webhooks',
+  '/admin/endpoints': 'Endpoints',
+  '/admin/configuration': 'Configuration',
   '/admin/audit-logs': 'Audit Logs',
   '/admin/migrations': 'Migrations',
-  '/admin/macros': 'Macros',
-  // Falls through to default in getPageTitle()
-  '/admin/configuration': 'Admin',
-  '/admin/invitations': 'Admin',
 }
 
 // ---------------------------------------------------------------------------
@@ -52,7 +82,11 @@ const PAGE_TITLES: Record<string, string> = {
 
 test.describe('Sidebar navigation links', () => {
   test('all nav links resolve to correct pages', async ({ page, authenticatedPage }) => {
+    await expandAllSidebarSections(page)
+
     for (const item of NAV_ITEMS) {
+      // Nested sections may re-collapse after navigation; re-expand as needed
+      await expandAllSidebarSections(page)
       // Click the sidebar link by its visible text label
       await page.getByRole('link', { name: item.label, exact: true }).click()
       await page.waitForURL(`**${item.url}`, { timeout: 10_000 })
@@ -64,8 +98,10 @@ test.describe('Sidebar navigation links', () => {
     // Navigate to Accounts and verify the link has the active state
     await page.goto('/admin/accounts')
     await page.waitForURL('**/admin/accounts', { timeout: 10_000 })
+    // Access section auto-opens for the active route
+    await expandAllSidebarSections(page)
 
-    // SidebarMenuButton renders with data-active="true" when isActive=true
+    // SidebarMenuSubButton renders with data-active="true" when isActive=true
     const accountsLink = page.getByRole('link', { name: 'Accounts', exact: true })
     await expect(accountsLink).toBeVisible()
     // The active state is applied via aria-current or a data attribute by Radix/shadcn
@@ -193,6 +229,12 @@ test.describe('Responsive sidebar toggle', () => {
     const mobileSheet = page.locator('[data-mobile="true"]')
     await expect(mobileSheet).toBeVisible({ timeout: 5_000 })
 
+    // Expand collapsed sections inside the mobile sheet, then navigate
+    const closed = mobileSheet.locator('[data-slot="collapsible"][data-state="closed"]')
+    for (let i = 0; i < 20 && (await closed.count()) > 0; i++) {
+      await closed.first().locator('[data-sidebar="menu-button"]').click()
+    }
+
     // Click a nav link inside the mobile sidebar
     await mobileSheet.getByRole('link', { name: 'Collections', exact: true }).click()
     await page.waitForURL('**/admin/collections', { timeout: 10_000 })
@@ -252,6 +294,9 @@ test.describe('Back navigation', () => {
       timeout: 10_000,
     })
     await page.waitForLoadState('networkidle')
+
+    // Data section auto-opens on collection routes; ensure nested link is visible
+    await expandAllSidebarSections(page)
 
     // Sidebar nav link (exact) — not "Refresh collections" or other chrome
     const collectionsNav = page.getByRole('link', { name: 'Collections', exact: true })

@@ -9,18 +9,26 @@ import { AppSidebar } from '@/components/AppSidebar';
 export default function AdminLayout() {
     const location = useLocation();
 
-    // Map current path to page title
+    // Map current path to page title (keep in sync with AppSidebar nav items)
     const getPageTitle = () => {
         if (location.pathname === '/admin/dashboard') return 'Dashboard';
+        if (location.pathname.startsWith('/admin/collections')) return 'Collections';
+        if (location.pathname.startsWith('/admin/macros')) return 'Macros';
         if (location.pathname.startsWith('/admin/accounts')) return 'Accounts';
         if (location.pathname.startsWith('/admin/users')) return 'Users';
         if (location.pathname.startsWith('/admin/groups')) return 'Groups';
-        if (location.pathname.startsWith('/admin/collections')) return 'Collections';
         if (location.pathname.startsWith('/admin/roles')) return 'Roles';
+        if (location.pathname.startsWith('/admin/invitations')) return 'Invitations';
+        if (location.pathname.startsWith('/admin/api-keys')) return 'API Keys';
+        if (location.pathname.startsWith('/admin/hooks')) return 'Hooks';
+        if (location.pathname.startsWith('/admin/scheduled-tasks')) return 'Scheduled Tasks';
+        if (location.pathname.startsWith('/admin/workflows')) return 'Workflows';
+        if (location.pathname.startsWith('/admin/jobs')) return 'Jobs';
+        if (location.pathname.startsWith('/admin/webhooks')) return 'Webhooks';
+        if (location.pathname.startsWith('/admin/endpoints')) return 'Endpoints';
+        if (location.pathname.startsWith('/admin/configuration')) return 'Configuration';
         if (location.pathname.startsWith('/admin/audit-logs')) return 'Audit Logs';
         if (location.pathname.startsWith('/admin/migrations')) return 'Migrations';
-        if (location.pathname.startsWith('/admin/macros')) return 'Macros';
-        if (location.pathname.startsWith('/admin/workflows')) return 'Workflows';
         return 'Admin';
     };
 
