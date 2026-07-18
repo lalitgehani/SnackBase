@@ -88,6 +88,10 @@ export class CollectionsPage extends BasePage {
 
   /**
    * Delete a collection using the header Delete action.
+   *
+   * CollectionDetailLayout navigates to /admin/collections after a successful
+   * delete (replace), which unmounts the success dialog — so we wait for that
+   * navigation rather than a "Done" button.
    */
   async deleteCollection(name: string) {
     await this.openCollection(name)
@@ -101,10 +105,8 @@ export class CollectionsPage extends BasePage {
     await this.page.locator('#confirm-name').fill(name)
     await this.page.getByRole('button', { name: /^delete collection$/i }).click()
 
-    await this.page.waitForSelector('text=deleted successfully', { timeout: 30_000 })
-    await this.page.getByRole('button', { name: /done/i }).click()
-
-    await this.page.waitForSelector('[role="alertdialog"]', { state: 'hidden' })
+    // Auto-navigate to workspace list after delete; dialog may unmount first
+    await this.page.waitForURL(/\/admin\/collections\/?$/, { timeout: 30_000 })
     await this.waitForPageReady()
   }
 }

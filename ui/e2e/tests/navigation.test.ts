@@ -240,24 +240,28 @@ test.describe('Back navigation', () => {
     await expect(page).toHaveURL(/admin\/accounts/)
   })
 
-  test('"Collections" back-button on records page navigates to collections list', async ({
+  test('sidebar Collections link returns to list from collection data tab', async ({
     page,
     authenticatedPage,
   }) => {
-    // First create a test collection via direct API call to have something to navigate to,
-    // OR navigate to the records page for a known collection if any exists.
-    // Since we cannot guarantee a collection exists, we test the "Back" button
-    // by navigating directly to a records URL and checking if the button is present.
-    await page.goto('/admin/collections/test_nav_col/records')
+    // Use the collection seeded by global-setup (e2e_test_items).
+    // Workspace embeds RecordsPage without the old standalone "← Collections" chrome;
+    // the app sidebar Collections link is the primary way back to the list.
+    await page.goto('/admin/collections/e2e_test_items/data')
+    await page.waitForURL('**/admin/collections/e2e_test_items/data', {
+      timeout: 10_000,
+    })
     await page.waitForLoadState('networkidle')
 
-    // The RecordsPage always renders a "Collections" back button (ArrowLeft icon + "Collections")
-    const backButton = page.getByRole('button', { name: /collections/i })
-    await expect(backButton).toBeVisible({ timeout: 10_000 })
+    // Sidebar nav link (exact) — not "Refresh collections" or other chrome
+    const collectionsNav = page.getByRole('link', { name: 'Collections', exact: true })
+    await expect(collectionsNav).toBeVisible({ timeout: 10_000 })
+    await collectionsNav.click()
 
-    // Clicking it should navigate back to /admin/collections
-    await backButton.click()
-    await page.waitForURL('**/admin/collections', { timeout: 10_000 })
-    await expect(page).toHaveURL(/admin\/collections/)
+    await page.waitForURL(/\/admin\/collections\/?$/, { timeout: 10_000 })
+    await expect(page).toHaveURL(/\/admin\/collections\/?$/)
+    await expect(
+      page.getByRole('heading', { name: /select a collection/i }),
+    ).toBeVisible({ timeout: 10_000 })
   })
 })
