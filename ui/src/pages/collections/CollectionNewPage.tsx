@@ -8,6 +8,7 @@ import { AlertTriangle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { ToastAction } from '@/components/ui/toast';
 import SchemaColumnTable from '@/components/collections/SchemaColumnTable';
 import SystemFieldsPanel from '@/components/collections/SystemFieldsPanel';
 import {
@@ -75,7 +76,18 @@ export default function CollectionNewPage() {
       await refreshCollections();
       toast({
         title: 'Collection created',
-        description: `"${created.name}" is ready. Configure access rules on the Rules tab or start adding data.`,
+        description:
+          'Default access rules are locked. Configure Rules so clients can list or create records.',
+        action: (
+          <ToastAction
+            altText="Configure rules"
+            onClick={() =>
+              navigate(`/admin/collections/${created.name}/rules`)
+            }
+          >
+            Configure rules
+          </ToastAction>
+        ),
       });
       navigate(`/admin/collections/${created.name}/schema`, { replace: true });
     } catch (err) {
@@ -127,14 +139,33 @@ export default function CollectionNewPage() {
             </p>
           </div>
 
-          <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950/20">
-            <p className="text-sm text-blue-900 dark:text-blue-100">
-              <strong>Access model:</strong> Every collection is a global table
-              isolated by <code className="font-mono text-xs">account_id</code>.
-              Row-level access is enforced by collection rules (list / view /
-              create / update / delete), not a Postgres RLS toggle. Configure
-              rules on the Rules tab after create.
+          <div
+            className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950/20"
+            data-testid="create-access-callout"
+          >
+            <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
+              Access model
             </p>
+            <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm text-blue-900/90 dark:text-blue-100/90">
+              <li>
+                Every collection is a <strong>global table</strong>. Row isolation
+                is always on via{' '}
+                <code className="font-mono text-xs">account_id</code>.
+              </li>
+              <li>
+                Access rules control API visibility per operation (list / view /
+                create / update / delete) — not a Postgres RLS toggle.
+              </li>
+              <li>
+                Defaults are <strong>locked</strong>: non-superadmin clients get
+                HTTP 403 until you open or customize rules on the Rules tab.
+              </li>
+              <li>
+                An empty-string rule is <strong>public</strong> (unauthenticated
+                allowed for that operation). Custom expressions require auth and
+                may return empty lists when no rows match.
+              </li>
+            </ul>
           </div>
 
           <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/20">

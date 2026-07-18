@@ -1,14 +1,17 @@
 /**
- * Rules tab — embeds CollectionRulesTab.
+ * Rules tab — first-class access rules editor (Phase 3).
  */
 
 import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import CollectionRulesTab from '@/components/collections/CollectionRulesTab';
 import { useCollectionDetail } from '../CollectionDetailContext';
+import { useCollectionsWorkspace } from '../CollectionsWorkspaceContext';
 
 export default function RulesTabPage() {
-  const { collection, loading, error, refreshDetail } = useCollectionDetail();
+  const { collection, listItem, loading, error, refreshDetail } =
+    useCollectionDetail();
+  const { isSuperadmin, refreshCollections } = useCollectionsWorkspace();
 
   if (loading && !collection) {
     return (
@@ -20,7 +23,7 @@ export default function RulesTabPage() {
 
   if (error || !collection) {
     return (
-      <div className="text-center py-8 space-y-2">
+      <div className="space-y-2 py-8 text-center">
         <p className="text-destructive">{error ?? 'Collection not found'}</p>
         <Button size="sm" variant="outline" onClick={() => void refreshDetail()}>
           Retry
@@ -31,7 +34,14 @@ export default function RulesTabPage() {
 
   return (
     <div data-testid="rules-tab">
-      <CollectionRulesTab collection={collection} />
+      <CollectionRulesTab
+        collection={collection}
+        readOnly={!isSuperadmin}
+        hasPublicAccess={listItem?.has_public_access ?? false}
+        onRulesSaved={() => {
+          void refreshCollections();
+        }}
+      />
     </div>
   );
 }

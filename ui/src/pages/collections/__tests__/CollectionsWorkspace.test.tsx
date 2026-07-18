@@ -516,5 +516,46 @@ describe('CollectionsWorkspace', () => {
         screen.getByRole('button', { name: /create collection/i }),
       ).toBeInTheDocument()
     })
+
+    it('shows multi-tenant access model callout without RLS toggle language', async () => {
+      renderWorkspace('/admin/collections/new')
+
+      await waitFor(() => {
+        expect(screen.getByTestId('create-access-callout')).toBeInTheDocument()
+      })
+      const callout = screen.getByTestId('create-access-callout')
+      expect(callout).toHaveTextContent(/account_id/i)
+      expect(callout).toHaveTextContent(/locked/i)
+      expect(callout).toHaveTextContent(/access rules/i)
+      expect(callout).not.toHaveTextContent(/Enable RLS/i)
+    })
+  })
+
+  describe('rules tab role awareness', () => {
+    it('loads rules editor with education for superadmin', async () => {
+      renderWorkspace('/admin/collections/posts/rules')
+
+      await waitFor(() => {
+        expect(screen.getByTestId('rules-tab')).toBeInTheDocument()
+        expect(screen.getByTestId('collection-rules-tab')).toBeInTheDocument()
+      })
+      expect(screen.getByTestId('rules-access-education')).toBeInTheDocument()
+      expect(screen.getByText('Access rules by operation')).toBeInTheDocument()
+    })
+
+    it('shows superadmin-only message for non-superadmin without editors', async () => {
+      setupAuth('admin')
+      renderWorkspace('/admin/collections/posts/rules')
+
+      await waitFor(() => {
+        expect(screen.getByTestId('rules-tab')).toBeInTheDocument()
+        expect(screen.getByTestId('rules-readonly')).toBeInTheDocument()
+      })
+      expect(screen.getByTestId('rules-superadmin-only')).toBeInTheDocument()
+      expect(screen.queryByText('List Rule')).not.toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: /save rules/i }),
+      ).not.toBeInTheDocument()
+    })
   })
 })
