@@ -13,7 +13,7 @@
  * - Selecting all records works
  */
 
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { render } from '@/test/utils'
@@ -178,6 +178,68 @@ describe('RecordsTable', () => {
       renderTable({ records: longRecords })
       // Should show truncated version with ...
       expect(screen.getByText(`${'a'.repeat(50)}...`)).toBeInTheDocument()
+    })
+  })
+
+  describe('column visibility', () => {
+    beforeEach(() => {
+      localStorage.clear()
+    })
+
+    it('renders Columns toggle when schema has fields', () => {
+      renderTable({ collectionName: 'posts' })
+      expect(screen.getByTestId('column-visibility-trigger')).toBeInTheDocument()
+    })
+
+    it('hides a user schema column when unchecked', async () => {
+      const user = userEvent.setup()
+      renderTable({ collectionName: 'posts' })
+
+      await user.click(screen.getByTestId('column-visibility-trigger'))
+      await user.click(screen.getByTestId('column-toggle-title'))
+
+      // Header for title should no longer appear in the table (menu still open may show it)
+      // Close by checking data cells: Hello World was under title
+      expect(screen.queryByText('Hello World')).not.toBeInTheDocument()
+      // Actions still work
+      expect(screen.getAllByTitle('View record').length).toBeGreaterThan(0)
+    })
+
+    it('persists hidden columns to localStorage', async () => {
+      const user = userEvent.setup()
+      renderTable({ collectionName: 'posts' })
+
+      await user.click(screen.getByTestId('column-visibility-trigger'))
+      await user.click(screen.getByTestId('column-toggle-title'))
+
+      const stored = localStorage.getItem('column_visibility_posts')
+      expect(stored).toBeTruthy()
+      expect(JSON.parse(stored!)).toContain('title')
+    })
+
+    it('restores hidden columns from localStorage on mount', () => {
+      localStorage.setItem('column_visibility_posts', JSON.stringify(['published']))
+      renderTable({ collectionName: 'posts' })
+
+      // published header should not be in the table headers
+      // Yes/No badges come from published field — should be gone
+      expect(screen.queryByText('Yes')).not.toBeInTheDocument()
+      expect(screen.queryByText('No')).not.toBeInTheDocument()
+      // title values still visible
+      expect(screen.getByText('Hello World')).toBeInTheDocument()
+    })
+
+    it('show all restores columns', async () => {
+      const user = userEvent.setup()
+      localStorage.setItem('column_visibility_posts', JSON.stringify(['title']))
+      renderTable({ collectionName: 'posts' })
+
+      expect(screen.queryByText('Hello World')).not.toBeInTheDocument()
+
+      await user.click(screen.getByTestId('column-visibility-trigger'))
+      await user.click(screen.getByTestId('column-show-all'))
+
+      expect(screen.getByText('Hello World')).toBeInTheDocument()
     })
   })
 })

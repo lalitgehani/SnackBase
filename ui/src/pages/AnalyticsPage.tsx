@@ -231,42 +231,34 @@ export default function AnalyticsPage({ embedded = false }: AnalyticsPageProps) 
 	}
 
 	return (
-		<div className="space-y-6">
-			{/* Header */}
-			<div className="flex items-center justify-between">
-				<div>
-					{!embedded && (
-						<>
-							<div className="flex items-center gap-2 mb-2">
-								<Button
-									variant="ghost"
-									size="sm"
-									onClick={() => navigate(`/admin/collections/${collectionName}/data`)}
-									className="gap-1"
-								>
-									<ArrowLeft className="h-4 w-4" />
-									Data
-								</Button>
-							</div>
-							<h1 className="text-3xl font-bold flex items-center gap-2">
-								<BarChart2 className="h-7 w-7 text-primary" />
-								{collectionName} — Analytics
-							</h1>
-						</>
-					)}
-					{embedded && (
-						<p className="text-sm text-muted-foreground flex items-center gap-1.5">
-							<BarChart2 className="h-4 w-4" />
+		<div className="space-y-6" data-testid="analytics-page">
+			{/* Standalone header only — workspace shell owns title/tabs when embedded */}
+			{!embedded && (
+				<div className="flex items-center justify-between">
+					<div>
+						<div className="mb-2 flex items-center gap-2">
+							<Button
+								variant="ghost"
+								size="sm"
+								onClick={() =>
+									navigate(`/admin/collections/${collectionName}/data`)
+								}
+								className="gap-1"
+							>
+								<ArrowLeft className="h-4 w-4" />
+								Data
+							</Button>
+						</div>
+						<h1 className="flex items-center gap-2 text-3xl font-bold">
+							<BarChart2 className="h-7 w-7 text-primary" />
+							{collectionName} — Analytics
+						</h1>
+						<p className="mt-2 text-muted-foreground">
 							Group records and compute aggregations
 						</p>
-					)}
-					{!embedded && (
-						<p className="text-muted-foreground mt-2">
-							Group records and compute aggregations
-						</p>
-					)}
+					</div>
 				</div>
-			</div>
+			)}
 
 			<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 				{/* Left column: Filter + Group By Builder */}

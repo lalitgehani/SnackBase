@@ -3,13 +3,26 @@
  * Full implementation with CRUD operations, search, and pagination
  */
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Database, Download, Plus, Search, RefreshCw, ArrowLeft, Filter, Trash2, Upload, BarChart2 } from 'lucide-react';
+import {
+    Database,
+    Download,
+    Plus,
+    Search,
+    RefreshCw,
+    ArrowLeft,
+    Trash2,
+    Upload,
+    BarChart2,
+    Table2,
+    AlertTriangle,
+} from 'lucide-react';
 import RecordsTable from '@/components/records/RecordsTable';
+import DataEmptyState from '@/components/records/DataEmptyState';
 import CreateRecordDialog from '@/components/records/CreateRecordDialog';
 import ViewRecordDialog from '@/components/records/ViewRecordDialog';
 import EditRecordDialog from '@/components/records/EditRecordDialog';
@@ -108,6 +121,22 @@ export default function RecordsPage({ embedded = false }: RecordsPageProps) {
     // Check if user has PII access (admin or superadmin role)
     const hasPiiAccess = user?.role === 'admin' || user?.role === 'superadmin';
 
+    const hasSchema =
+        !!collection?.schema && collection.schema.length > 0;
+
+    const schemaFieldNames = useMemo(
+        () => new Set((collection?.schema ?? []).map((f) => f.name)),
+        [collection?.schema],
+    );
+
+    const brokenFilterFields = useMemo(() => {
+        if (!hasSchema || appliedFilterRows.length === 0) return [];
+        const missing = appliedFilterRows
+            .map((r) => r.field)
+            .filter((name) => name && !schemaFieldNames.has(name));
+        return [...new Set(missing)];
+    }, [appliedFilterRows, hasSchema, schemaFieldNames]);
+
     const fetchCollection = useCallback(async () => {
         if (!collectionName) return;
         setLoading(true);
@@ -172,7 +201,11 @@ export default function RecordsPage({ embedded = false }: RecordsPageProps) {
                 const response = await getRecords(params);
                 setData(response.items);
                 // response is CursorListResponse when cursor param is passed
-                const cursorResponse = response as { items: typeof response.items; next_cursor: string | null; has_more: boolean };
+                const cursorResponse = response as {
+                    items: typeof response.items;
+                    next_cursor: string | null;
+                    has_more: boolean;
+                };
                 setCursor(cursorResponse.next_cursor || null);
                 setHasMore(cursorResponse.has_more || false);
                 // Clear selection when records are refreshed
@@ -261,6 +294,12 @@ export default function RecordsPage({ embedded = false }: RecordsPageProps) {
         setPage(1);
     };
 
+    const handleClearSearch = () => {
+        setSearch('');
+        setSearchInput('');
+        setPage(1);
+    };
+
     const handleFetchReferenceRecords = async (refCollection: string) => {
         if (referenceRecords[refCollection]) {
             return; // Already fetched
@@ -335,7 +374,17 @@ export default function RecordsPage({ embedded = false }: RecordsPageProps) {
     };
 
     const handleNavigateToRecord = (refCollection: string) => {
-        navigate(`/admin/collections/${refCollection}/records`);
+        navigate(`/admin/collections/${refCollection}/data`);
+    };
+
+    const openSchema = () => {
+        if (!collectionName) return;
+        navigate(`/admin/collections/${collectionName}/schema`);
+    };
+
+    const openRules = () => {
+        if (!collectionName) return;
+        navigate(`/admin/collections/${collectionName}/rules`);
     };
 
     const handleApplyFilters = (expression: string, rows: FilterRow[]) => {
@@ -367,258 +416,334 @@ export default function RecordsPage({ embedded = false }: RecordsPageProps) {
         setHasMore(true);
     };
 
-    return (
-        <div className="space-y-6">
-            {/* Header */}
-            <div className="flex items-center justify-between flex-wrap gap-3">
-                <div>
-                    {!embedded && (
-                        <>
-                            <div className="flex items-center gap-2 mb-2">
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => navigate('/admin/collections')}
-                                    className="gap-1"
-                                >
-                                    <ArrowLeft className="h-4 w-4" />
-                                    Collections
-                                </Button>
-                            </div>
-                            <h1 className="text-3xl font-bold">{collectionName || 'Records'}</h1>
-                            <p className="text-muted-foreground mt-2">
-                                Manage records in the <strong>{collectionName}</strong> collection
-                            </p>
-                        </>
-                    )}
-                    {embedded && (
-                        <p className="text-sm text-muted-foreground">
-                            Manage records in this collection
-                        </p>
-                    )}
+    const actionButtons =
+        hasSchema ? (
+            <>
+                {embedded && (
+                    <Button
+                        variant="outline"
+                        size={embedded ? 'sm' : 'default'}
+                        onClick={openSchema}
+                        className="gap-2"
+                        data-testid="data-open-schema"
+                    >
+                        <Table2 className="h-4 w-4" />
+                        Schema
+                    </Button>
+                )}
+                {!embedded && (
+                    <Button
+                        variant="outline"
+                        onClick={() =>
+                            navigate(`/admin/collections/${collectionName}/analytics`)
+                        }
+                        className="gap-2"
+                    >
+                        <BarChart2 className="h-4 w-4" />
+                        Analytics
+                    </Button>
+                )}
+                <Button
+                    variant="outline"
+                    size={embedded ? 'sm' : 'default'}
+                    onClick={() => setExportDialogOpen(true)}
+                    className="gap-2"
+                >
+                    <Download className="h-4 w-4" />
+                    Export
+                </Button>
+                <Button
+                    variant="outline"
+                    size={embedded ? 'sm' : 'default'}
+                    onClick={() => setImportDialogOpen(true)}
+                    className="gap-2"
+                >
+                    <Upload className="h-4 w-4" />
+                    Import
+                </Button>
+                <Button
+                    size={embedded ? 'sm' : 'default'}
+                    onClick={() => setCreateDialogOpen(true)}
+                    className="gap-2"
+                >
+                    <Plus className="h-4 w-4" />
+                    Create Record
+                </Button>
+            </>
+        ) : null;
+
+    const mainContent = (
+        <div className="space-y-4">
+            {/* Search Bar + Refresh */}
+            <form onSubmit={handleSearch} className="flex gap-2">
+                <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                        value={searchInput}
+                        onChange={(e) => setSearchInput(e.target.value)}
+                        placeholder="Search records..."
+                        className="pl-9"
+                    />
                 </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                    {collection && collection.schema && collection.schema.length > 0 && (
-                        <>
-                            {!embedded && (
-                                <Button
-                                    variant="outline"
-                                    onClick={() => navigate(`/admin/collections/${collectionName}/analytics`)}
-                                    className="gap-2"
-                                >
-                                    <BarChart2 className="h-4 w-4" />
-                                    Analytics
-                                </Button>
-                            )}
-                            <Button
-                                variant="outline"
-                                onClick={() => setExportDialogOpen(true)}
-                                className="gap-2"
-                            >
-                                <Download className="h-4 w-4" />
-                                Export
-                            </Button>
-                            <Button
-                                variant="outline"
-                                onClick={() => setImportDialogOpen(true)}
-                                className="gap-2"
-                            >
-                                <Upload className="h-4 w-4" />
-                                Import
-                            </Button>
-                            <Button onClick={() => setCreateDialogOpen(true)} className="gap-2">
-                                <Plus className="h-4 w-4" />
-                                Create Record
-                            </Button>
-                        </>
-                    )}
-                </div>
-            </div>
+                <Button type="submit" variant="secondary">
+                    Search
+                </Button>
+                {search && (
+                    <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleClearSearch}
+                    >
+                        Clear
+                    </Button>
+                )}
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={fetchRecords}
+                    disabled={loading}
+                >
+                    <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                </Button>
+            </form>
 
-            {/* Search and Actions */}
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <Database className="h-5 w-5 text-primary" />
-                        Records Management
-                    </CardTitle>
-                    <CardDescription>
-                        View, create, edit, and delete records
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    {/* Search Bar + Refresh */}
-                    <form onSubmit={handleSearch} className="flex gap-2">
-                        <div className="relative flex-1">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                value={searchInput}
-                                onChange={(e) => setSearchInput(e.target.value)}
-                                placeholder="Search records..."
-                                className="pl-9"
-                            />
-                        </div>
-                        <Button type="submit" variant="secondary">
-                            Search
-                        </Button>
-                        {search && (
-                            <Button
-                                type="button"
-                                variant="outline"
-                                onClick={() => {
-                                    setSearch('');
-                                    setSearchInput('');
-                                    setPage(1);
-                                }}
-                            >
-                                Clear
-                            </Button>
-                        )}
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="icon"
-                            onClick={fetchRecords}
-                            disabled={loading}
-                        >
-                            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                        </Button>
-                    </form>
+            {/* Filter Builder Panel */}
+            {hasSchema && collection && (
+                <FilterBuilderPanel
+                    schema={collection.schema}
+                    appliedRows={appliedFilterRows}
+                    onApply={handleApplyFilters}
+                    onClear={handleClearFilters}
+                    onRemovePill={handleRemoveFilterPill}
+                />
+            )}
 
-                    {/* Filter Builder Panel */}
-                    {collection && collection.schema && collection.schema.length > 0 && (
-                        <FilterBuilderPanel
-                            schema={collection.schema}
-                            appliedRows={appliedFilterRows}
-                            onApply={handleApplyFilters}
-                            onClear={handleClearFilters}
-                            onRemovePill={handleRemoveFilterPill}
-                        />
-                    )}
-
-                    {/* Aggregation Summary Bar */}
-                    {collection && collection.schema && collection.schema.length > 0 && (
-                        <AggregationSummaryBar
-                            collection={collection}
-                            filterExpression={filterExpression}
-                        />
-                    )}
-
-                    {/* Collection not found */}
-                    {error && !collection && (
-                        <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
-                            <p className="text-destructive font-medium">Failed to load collection</p>
-                            <p className="text-sm text-muted-foreground mt-1">{error}</p>
-                        </div>
-                    )}
-
-                    {/* Loading State */}
-                    {loading && !data && (
-                        <div className="flex items-center justify-center py-12">
-                            <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
-                        </div>
-                    )}
-
-                    {/* Collection loaded but no schema */}
-                    {collection && (!collection.schema || collection.schema.length === 0) && (
-                        <div className="text-center py-12">
-                            <Database className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-                            <h3 className="text-lg font-medium mb-2">No schema defined</h3>
-                            <p className="text-muted-foreground mb-4">
-                                This collection has no fields defined yet. Add fields to the schema to start creating records.
-                            </p>
-                        </div>
-                    )}
-
-                    {/* Floating bulk action bar — shown when records are selected */}
-                    {selectedIds.size > 0 && (
-                        <div className="flex items-center gap-3 bg-muted border rounded-lg px-4 py-2">
-                            <span className="text-sm font-medium">
-                                {selectedIds.size} record{selectedIds.size === 1 ? '' : 's'} selected
+            {/* Broken filter fields hint */}
+            {brokenFilterFields.length > 0 && (
+                <div
+                    className="flex flex-wrap items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3"
+                    data-testid="broken-filter-hint"
+                >
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                    <div className="min-w-0 flex-1 space-y-1">
+                        <p className="text-sm font-medium">
+                            Filter references unknown field
+                            {brokenFilterFields.length > 1 ? 's' : ''}:{' '}
+                            <span className="font-mono">
+                                {brokenFilterFields.join(', ')}
                             </span>
-                            <Button
-                                variant="destructive"
-                                size="sm"
-                                onClick={() => setBulkDeleteDialogOpen(true)}
-                                className="gap-1"
-                            >
-                                <Trash2 className="h-4 w-4" />
-                                Delete
-                            </Button>
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                            These fields may have been removed or renamed. Update filters
+                            or review the schema.
+                        </p>
+                    </div>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={openSchema}
+                        className="gap-1.5"
+                    >
+                        <Table2 className="h-3.5 w-3.5" />
+                        Open Schema
+                    </Button>
+                </div>
+            )}
+
+            {/* Aggregation Summary Bar */}
+            {hasSchema && collection && (
+                <AggregationSummaryBar
+                    collection={collection}
+                    filterExpression={filterExpression}
+                />
+            )}
+
+            {/* Collection not found */}
+            {error && !collection && (
+                <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-4">
+                    <p className="font-medium text-destructive">Failed to load collection</p>
+                    <p className="mt-1 text-sm text-muted-foreground">{error}</p>
+                </div>
+            )}
+
+            {/* Loading State */}
+            {loading && !data && (
+                <div className="flex items-center justify-center py-12">
+                    <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+            )}
+
+            {/* Empty: no schema */}
+            {collection && !hasSchema && (
+                <DataEmptyState
+                    variant="no-schema"
+                    collectionName={collectionName || collection.name}
+                    onOpenSchema={openSchema}
+                />
+            )}
+
+            {/* Floating bulk action bar — shown when records are selected */}
+            {selectedIds.size > 0 && (
+                <div className="flex items-center gap-3 rounded-lg border bg-muted px-4 py-2">
+                    <span className="text-sm font-medium">
+                        {selectedIds.size} record{selectedIds.size === 1 ? '' : 's'} selected
+                    </span>
+                    <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => setBulkDeleteDialogOpen(true)}
+                        className="gap-1"
+                    >
+                        <Trash2 className="h-4 w-4" />
+                        Delete
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSelectedIds(new Set())}
+                    >
+                        Deselect all
+                    </Button>
+                </div>
+            )}
+
+            {/* Table */}
+            {!loading &&
+                data &&
+                data.length > 0 &&
+                hasSchema &&
+                collection && (
+                    <RecordsTable
+                        records={data}
+                        schema={collection.schema}
+                        collectionName={collectionName || collection.name}
+                        sortBy={sortBy}
+                        sortOrder={sortOrder}
+                        onSort={handleSort}
+                        onView={handleView}
+                        onEdit={handleEdit}
+                        onDelete={handleDelete}
+                        hasPiiAccess={hasPiiAccess}
+                        referenceRecords={referenceRecords}
+                        selectedIds={selectedIds}
+                        onSelectionChange={setSelectedIds}
+                        totalItems={total}
+                        page={page}
+                        pageSize={pageSize}
+                        onPageChange={setPage}
+                        onPageSizeChange={(size) => {
+                            setPageSize(size);
+                            setPage(1);
+                        }}
+                        paginationMode={paginationMode}
+                        onPaginationModeChange={setPaginationMode}
+                        hasMore={hasMore}
+                        onLoadMore={loadMoreRecords}
+                        isLoadingMore={isLoadingMore}
+                        autoLoad={autoLoad}
+                        onAutoLoadChange={setAutoLoad}
+                    />
+                )}
+
+            {/* Empty: filters */}
+            {!loading &&
+                data &&
+                data.length === 0 &&
+                !!filterExpression &&
+                hasSchema && (
+                    <DataEmptyState
+                        variant="filtered"
+                        collectionName={collectionName || ''}
+                        onClearFilters={handleClearFilters}
+                    />
+                )}
+
+            {/* Empty: search only */}
+            {!loading &&
+                data &&
+                data.length === 0 &&
+                !filterExpression &&
+                !!search &&
+                hasSchema && (
+                    <DataEmptyState
+                        variant="search"
+                        collectionName={collectionName || ''}
+                        onClearSearch={handleClearSearch}
+                        onCreateRecord={() => setCreateDialogOpen(true)}
+                    />
+                )}
+
+            {/* Empty: no records */}
+            {!loading &&
+                data &&
+                data.length === 0 &&
+                !filterExpression &&
+                !search &&
+                hasSchema && (
+                    <DataEmptyState
+                        variant="no-records"
+                        collectionName={collectionName || collection?.name || ''}
+                        onCreateRecord={() => setCreateDialogOpen(true)}
+                        onOpenSchema={openSchema}
+                        onOpenRules={openRules}
+                    />
+                )}
+        </div>
+    );
+
+    return (
+        <div className="space-y-6" data-testid="records-page">
+            {/* Standalone header only — workspace shell owns title/tabs when embedded */}
+            {!embedded && (
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <div className="mb-2 flex items-center gap-2">
                             <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => setSelectedIds(new Set())}
+                                onClick={() => navigate('/admin/collections')}
+                                className="gap-1"
                             >
-                                Deselect all
+                                <ArrowLeft className="h-4 w-4" />
+                                Collections
                             </Button>
                         </div>
-                    )}
+                        <h1 className="text-3xl font-bold">
+                            {collectionName || 'Records'}
+                        </h1>
+                        <p className="mt-2 text-muted-foreground">
+                            Manage records in the <strong>{collectionName}</strong>{' '}
+                            collection
+                        </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                        {actionButtons}
+                    </div>
+                </div>
+            )}
 
-                    {/* Table */}
-                    {!loading && data && data.length > 0 && collection && collection.schema && collection.schema.length > 0 && (
-                        <RecordsTable
-                            records={data}
-                            schema={collection.schema}
-                            sortBy={sortBy}
-                            sortOrder={sortOrder}
-                            onSort={handleSort}
-                            onView={handleView}
-                            onEdit={handleEdit}
-                            onDelete={handleDelete}
-                            hasPiiAccess={hasPiiAccess}
-                            referenceRecords={referenceRecords}
-                            selectedIds={selectedIds}
-                            onSelectionChange={setSelectedIds}
-                            totalItems={total}
-                            page={page}
-                            pageSize={pageSize}
-                            onPageChange={setPage}
-                            onPageSizeChange={(size) => {
-                                setPageSize(size);
-                                setPage(1);
-                            }}
-                            // Cursor pagination props
-                            paginationMode={paginationMode}
-                            onPaginationModeChange={setPaginationMode}
-                            hasMore={hasMore}
-                            onLoadMore={loadMoreRecords}
-                            isLoadingMore={isLoadingMore}
-                            autoLoad={autoLoad}
-                            onAutoLoadChange={setAutoLoad}
-                        />
-                    )}
-
-                    {/* Empty State — filters active, no results */}
-                    {!loading && data && data.length === 0 && filterExpression && collection && collection.schema && collection.schema.length > 0 && (
-                        <div className="text-center py-12">
-                            <Filter className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-                            <h3 className="text-lg font-medium mb-2">No records match your filters</h3>
-                            <p className="text-muted-foreground mb-4">
-                                Try adjusting or removing your filters to see more records.
-                            </p>
-                            <Button variant="outline" onClick={handleClearFilters}>
-                                Clear Filters
-                            </Button>
-                        </div>
-                    )}
-
-                    {/* Empty State — no filters, no records */}
-                    {!loading && data && data.length === 0 && !filterExpression && !search && collection && collection.schema && collection.schema.length > 0 && (
-                        <div className="text-center py-12">
-                            <Database className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-                            <h3 className="text-lg font-medium mb-2">No records yet</h3>
-                            <p className="text-muted-foreground mb-4">
-                                Get started by creating your first record in this collection
-                            </p>
-                            <Button onClick={() => setCreateDialogOpen(true)}>
-                                <Plus className="h-4 w-4 mr-2" />
-                                Create Record
-                            </Button>
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
+            {embedded ? (
+                <div className="space-y-4" data-testid="records-embedded-panel">
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                        {actionButtons}
+                    </div>
+                    {mainContent}
+                </div>
+            ) : (
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Database className="h-5 w-5 text-primary" />
+                            Records Management
+                        </CardTitle>
+                        <CardDescription>
+                            View, create, edit, and delete records
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">{mainContent}</CardContent>
+                </Card>
+            )}
 
             {/* Dialogs */}
             {collection && (

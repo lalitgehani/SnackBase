@@ -678,5 +678,84 @@ describe('RecordsPage', () => {
       expect(screen.queryByRole('button', { name: /export/i })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: /import/i })).not.toBeInTheDocument()
     })
+
+    it('shows Open Schema CTA when schema is empty', async () => {
+      server.use(
+        http.get('/api/v1/collections', () =>
+          HttpResponse.json({
+            items: [mockCollectionListItem],
+            total: 1, page: 1, page_size: 10, total_pages: 1,
+          }),
+        ),
+        http.get('/api/v1/collections/:id', () =>
+          HttpResponse.json({ ...mockCollectionFull, schema: [] }),
+        ),
+        http.get('/api/v1/records/posts', () =>
+          HttpResponse.json({ items: [], total: 0, skip: 0, limit: 25 }),
+        ),
+      )
+
+      renderPage()
+
+      await waitFor(() => {
+        expect(screen.getByTestId('data-empty-open-schema')).toBeInTheDocument()
+      })
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // Embedded workspace mode (Phase 4)
+  // -------------------------------------------------------------------------
+
+  describe('embedded mode', () => {
+    function renderEmbedded(collectionName = 'posts') {
+      return render(
+        <Routes>
+          <Route
+            path="/admin/collections/:collectionName/data"
+            element={<RecordsPage embedded />}
+          />
+        </Routes>,
+        { initialEntries: [`/admin/collections/${collectionName}/data`] },
+      )
+    }
+
+    it('hides standalone back link and page title', async () => {
+      renderEmbedded()
+
+      await waitFor(() => {
+        expect(screen.getByText('First Post')).toBeInTheDocument()
+      })
+
+      expect(
+        screen.queryByRole('button', { name: /collections/i }),
+      ).not.toBeInTheDocument()
+      expect(
+        screen.queryByRole('heading', { name: 'posts' }),
+      ).not.toBeInTheDocument()
+      expect(screen.getByTestId('records-embedded-panel')).toBeInTheDocument()
+    })
+
+    it('still exposes import/export/create and Schema link', async () => {
+      renderEmbedded()
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /create record/i })).toBeInTheDocument()
+      })
+
+      expect(screen.getByRole('button', { name: /export/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /import/i })).toBeInTheDocument()
+      expect(screen.getByTestId('data-open-schema')).toBeInTheDocument()
+    })
+
+    it('shows soft rules CTA on true empty', async () => {
+      setupEmptyRecordsHandler()
+      renderEmbedded()
+
+      await waitFor(() => {
+        expect(screen.getByTestId('data-empty-no-records')).toBeInTheDocument()
+      })
+      expect(screen.getByTestId('data-empty-open-rules')).toBeInTheDocument()
+    })
   })
 })

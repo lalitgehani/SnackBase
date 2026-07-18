@@ -8,6 +8,7 @@ import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { server } from '@/test/mocks/server'
 import { render } from '@/test/utils'
+import { Toaster } from '@/components/ui/toaster'
 import SchemaTabPage from '@/pages/collections/tabs/SchemaTabPage'
 import {
   CollectionDetailProvider,
@@ -90,6 +91,7 @@ function renderSchemaTab(overrides: Partial<CollectionDetailContextValue> = {}) 
     <CollectionsWorkspaceProvider>
       <CollectionDetailProvider value={value}>
         <SchemaTabPage />
+        <Toaster />
       </CollectionDetailProvider>
     </CollectionsWorkspaceProvider>,
   )
@@ -150,5 +152,26 @@ describe('SchemaTabPage', () => {
     await waitFor(() => {
       expect(refreshDetail).toHaveBeenCalled()
     })
+  })
+
+  it('shows View data cross-link', () => {
+    renderSchemaTab()
+    expect(screen.getByTestId('schema-view-data')).toBeInTheDocument()
+  })
+
+  it('offers View data toast action after successful save', async () => {
+    const user = userEvent.setup()
+    const refreshDetail = vi.fn().mockResolvedValue(undefined)
+    renderSchemaTab({ refreshDetail })
+
+    await user.click(screen.getByRole('button', { name: /add field/i }))
+    await user.type(screen.getByLabelText(/field 3 name/i), 'sku')
+    await user.click(screen.getByRole('button', { name: /^save$/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText(/schema updated/i)).toBeInTheDocument()
+    })
+    // Header "View data" + toast action "View data"
+    expect(screen.getAllByRole('button', { name: /view data/i }).length).toBeGreaterThanOrEqual(2)
   })
 })

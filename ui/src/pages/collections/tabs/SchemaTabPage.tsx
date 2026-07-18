@@ -3,8 +3,10 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2, RefreshCw } from 'lucide-react';
+import { useNavigate } from 'react-router';
+import { Database, Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ToastAction } from '@/components/ui/toast';
 import SchemaColumnTable from '@/components/collections/SchemaColumnTable';
 import SystemFieldsPanel from '@/components/collections/SystemFieldsPanel';
 import {
@@ -25,6 +27,7 @@ import { useCollectionsWorkspace } from '../CollectionsWorkspaceContext';
 export default function SchemaTabPage() {
   const {
     collection,
+    collectionName,
     loading,
     error: loadError,
     refreshDetail,
@@ -32,6 +35,7 @@ export default function SchemaTabPage() {
   const { isSuperadmin, collectionNames, refreshCollections } =
     useCollectionsWorkspace();
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const [baseline, setBaseline] = useState<FieldDefinition[]>([]);
   const [draftFields, setDraftFields] = useState<FieldDefinition[]>([]);
@@ -85,9 +89,18 @@ export default function SchemaTabPage() {
         schema: prepareSchemaPayload(draftFields),
       });
       await Promise.all([refreshDetail(), refreshCollections()]);
+      const dataPath = `/admin/collections/${collectionName || collection.name}/data`;
       toast({
         title: 'Schema updated',
         description: 'Migrations applied successfully.',
+        action: (
+          <ToastAction
+            altText="View data"
+            onClick={() => navigate(dataPath)}
+          >
+            View data
+          </ToastAction>
+        ),
       });
       // baseline will re-sync from refreshed collection via useEffect
     } catch (err) {
@@ -130,15 +143,32 @@ export default function SchemaTabPage() {
             {isSuperadmin && isDirty ? ' · unsaved changes' : ''}
           </p>
         </div>
-        <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
-          <div>
-            <span className="text-muted-foreground">ID:</span>
-            <span className="ml-2 font-mono text-xs">{collection.id}</span>
+        <div className="flex flex-wrap items-start gap-4">
+          <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
+            <div>
+              <span className="text-muted-foreground">ID:</span>
+              <span className="ml-2 font-mono text-xs">{collection.id}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Table:</span>
+              <span className="ml-2 font-mono text-xs">{collection.table_name}</span>
+            </div>
           </div>
-          <div>
-            <span className="text-muted-foreground">Table:</span>
-            <span className="ml-2 font-mono text-xs">{collection.table_name}</span>
-          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() =>
+              navigate(
+                `/admin/collections/${collectionName || collection.name}/data`,
+              )
+            }
+            data-testid="schema-view-data"
+          >
+            <Database className="h-3.5 w-3.5" />
+            View data
+          </Button>
         </div>
       </div>
 

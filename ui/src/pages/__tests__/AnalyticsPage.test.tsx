@@ -52,12 +52,12 @@ const mockAggregationResult = {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function renderPage(collectionName = 'orders') {
+function renderPage(collectionName = 'orders', embedded = false) {
   return render(
     <Routes>
       <Route
         path="/collections/:collectionName/analytics"
-        element={<AnalyticsPage />}
+        element={<AnalyticsPage embedded={embedded} />}
       />
     </Routes>,
     { initialEntries: [`/collections/${collectionName}/analytics`] },
@@ -482,6 +482,46 @@ describe('AnalyticsPage', () => {
       const havingInput = screen.getByPlaceholderText(/e\.g\. count\(\) > 5/i)
       await user.type(havingInput, 'count() > 3')
       expect(havingInput).toHaveValue('count() > 3')
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // Embedded workspace mode (Phase 4)
+  // -------------------------------------------------------------------------
+
+  describe('embedded mode', () => {
+    it('hides back navigation and page title', async () => {
+      renderPage('orders', true)
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /run/i })).toBeInTheDocument()
+      })
+
+      expect(screen.queryByRole('button', { name: /^data$/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument()
+      expect(screen.getByTestId('analytics-page')).toBeInTheDocument()
+    })
+
+    it('still runs aggregation query', async () => {
+      let aggregateCalled = false
+      server.use(
+        http.get('/api/v1/records/orders/aggregate', () => {
+          aggregateCalled = true
+          return HttpResponse.json(mockAggregationResult)
+        }),
+      )
+
+      renderPage('orders', true)
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /run/i })).toBeInTheDocument()
+      })
+
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      await user.click(screen.getByRole('button', { name: /run/i }))
+
+      await waitFor(() => {
+        expect(aggregateCalled).toBe(true)
+      })
     })
   })
 })

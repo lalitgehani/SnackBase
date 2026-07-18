@@ -3,12 +3,21 @@
  * Dynamic table that renders columns based on collection schema
  */
 
-import { useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calculator, Eye, Pencil, Pin, PinOff, Trash2 } from 'lucide-react';
+import {
+	DropdownMenu,
+	DropdownMenuCheckboxItem,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuLabel,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Calculator, Columns3, Eye, Pencil, Pin, PinOff, Trash2 } from 'lucide-react';
 import type { FieldDefinition } from '@/services/collections.service';
 import type { RecordData, RecordListItem } from '@/types/records.types';
 import { shouldMaskField, maskPiiValue } from '@/lib/form-helpers';
@@ -16,6 +25,28 @@ import { DataTable, type Column, type DispatchPagination, type DispatchSorting }
 import { useAuthStore } from '@/stores/auth.store';
 import { cn } from '@/lib/utils';
 
+const COLUMN_VISIBILITY_KEY = (collectionName: string) =>
+	`column_visibility_${collectionName}`;
+
+function loadHiddenColumns(collectionName?: string): Set<string> {
+	if (!collectionName || typeof localStorage === 'undefined') return new Set();
+	try {
+		const raw = localStorage.getItem(COLUMN_VISIBILITY_KEY(collectionName));
+		if (!raw) return new Set();
+		const parsed = JSON.parse(raw) as unknown;
+		if (!Array.isArray(parsed)) return new Set();
+		return new Set(parsed.filter((x): x is string => typeof x === 'string'));
+	} catch {
+		return new Set();
+	}
+}
+
+function persistHiddenColumns(collectionName: string, hidden: Set<string>) {
+	localStorage.setItem(
+		COLUMN_VISIBILITY_KEY(collectionName),
+		JSON.stringify([...hidden]),
+	);
+}
 
 interface RecordsTableProps {
 	records: RecordListItem[];
@@ -28,6 +59,8 @@ interface RecordsTableProps {
 	onDelete: (record: RecordListItem) => void;
 	hasPiiAccess?: boolean;
 	referenceRecords?: Record<string, RecordData[]>;
+	/** Used for per-collection column visibility localStorage. */
+	collectionName?: string;
 
 	// Multi-select
 	selectedIds?: Set<string>;
@@ -144,6 +177,7 @@ export default function RecordsTable({
 	onDelete,
 	hasPiiAccess = false,
 	referenceRecords = {},
+	collectionName,
 	selectedIds,
 	onSelectionChange,
 	totalItems,
@@ -162,6 +196,9 @@ export default function RecordsTable({
 }: RecordsTableProps) {
 
 	const [pinnedColumns, setPinnedColumns] = useState<Set<string>>(new Set());
+	const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(() =>
+		loadHiddenColumns(collectionName),
+	);
 
 	const togglePin = (fieldName: string) => {
 		setPinnedColumns(prev => {
@@ -171,6 +208,29 @@ export default function RecordsTable({
 			return next;
 		});
 	};
+
+	const setFieldHidden = useCallback(
+		(fieldName: string, hidden: boolean) => {
+			setHiddenColumns((prev) => {
+				const next = new Set(prev);
+				if (hidden) next.add(fieldName);
+				else next.delete(fieldName);
+				if (collectionName) persistHiddenColumns(collectionName, next);
+				return next;
+			});
+		},
+		[collectionName],
+	);
+
+	const showAllColumns = useCallback(() => {
+		setHiddenColumns(new Set());
+		if (collectionName) persistHiddenColumns(collectionName, new Set());
+	}, [collectionName]);
+
+	const visibleSchema = useMemo(
+		() => schema.filter((f) => !hiddenColumns.has(f.name)),
+		[schema, hiddenColumns],
+	);
 
 	const formatDate = (dateString: string) => {
 		return new Date(dateString).toLocaleString('en-US', {
@@ -256,10 +316,10 @@ export default function RecordsTable({
 	const isAllSelected = records.length > 0 && selectedIds !== undefined && selectedIds.size === records.length;
 	const isIndeterminate = (selectedIds?.size ?? 0) > 0 && !isAllSelected;
 
-	// Pinned fields in original schema order
-	const pinnedFields = schema.filter(f => pinnedColumns.has(f.name));
-	// Unpinned fields in original schema order
-	const unpinnedFields = schema.filter(f => !pinnedColumns.has(f.name));
+	// Pinned fields in original schema order (visible only)
+	const pinnedFields = visibleSchema.filter(f => pinnedColumns.has(f.name));
+	// Unpinned fields in original schema order (visible only)
+	const unpinnedFields = visibleSchema.filter(f => !pinnedColumns.has(f.name));
 	// Render order: pinned first (original order), then unpinned
 	const orderedFields = [...pinnedFields, ...unpinnedFields];
 
@@ -403,24 +463,79 @@ export default function RecordsTable({
 		onSort,
 	};
 
+	const columnVisibilityMenu =
+		schema.length > 0 ? (
+			<DropdownMenu>
+				<DropdownMenuTrigger asChild>
+					<Button
+						variant="outline"
+						size="sm"
+						className="gap-1.5"
+						data-testid="column-visibility-trigger"
+					>
+						<Columns3 className="h-4 w-4" />
+						Columns
+						{hiddenColumns.size > 0 && (
+							<Badge variant="secondary" className="ml-0.5 text-xs">
+								{schema.length - hiddenColumns.size}/{schema.length}
+							</Badge>
+						)}
+					</Button>
+				</DropdownMenuTrigger>
+				<DropdownMenuContent align="end" className="w-56" data-testid="column-visibility-menu">
+					<DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
+					<DropdownMenuSeparator />
+					{schema.map((field) => {
+						const isVisible = !hiddenColumns.has(field.name);
+						return (
+							<DropdownMenuCheckboxItem
+								key={field.name}
+								checked={isVisible}
+								onCheckedChange={(checked) =>
+									setFieldHidden(field.name, !checked)
+								}
+								onSelect={(e) => e.preventDefault()}
+								data-testid={`column-toggle-${field.name}`}
+							>
+								<span className="font-mono text-sm">{field.name}</span>
+							</DropdownMenuCheckboxItem>
+						);
+					})}
+					{hiddenColumns.size > 0 && (
+						<>
+							<DropdownMenuSeparator />
+							<DropdownMenuItem onClick={showAllColumns} data-testid="column-show-all">
+								Show all
+							</DropdownMenuItem>
+						</>
+					)}
+				</DropdownMenuContent>
+			</DropdownMenu>
+		) : null;
+
 	return (
-		<DataTable
-			data={records}
-			columns={columns}
-			keyExtractor={(item) => item.id}
-			pagination={pagination}
-			sorting={sorting}
-			totalItems={totalItems}
-			noDataMessage="No records found. Create your first record to get started."
-			paginationMode={paginationMode}
-			onPaginationModeChange={onPaginationModeChange}
-			hasMore={hasMore}
-			onLoadMore={onLoadMore}
-			isLoadingMore={isLoadingMore}
-			autoLoad={autoLoad}
-			onAutoLoadChange={onAutoLoadChange}
-			showModeToggle={true}
-			maxTableHeight={maxTableHeight}
-		/>
+		<div className="space-y-3">
+			{columnVisibilityMenu && (
+				<div className="flex justify-end">{columnVisibilityMenu}</div>
+			)}
+			<DataTable
+				data={records}
+				columns={columns}
+				keyExtractor={(item) => item.id}
+				pagination={pagination}
+				sorting={sorting}
+				totalItems={totalItems}
+				noDataMessage="No records found. Create your first record to get started."
+				paginationMode={paginationMode}
+				onPaginationModeChange={onPaginationModeChange}
+				hasMore={hasMore}
+				onLoadMore={onLoadMore}
+				isLoadingMore={isLoadingMore}
+				autoLoad={autoLoad}
+				onAutoLoadChange={onAutoLoadChange}
+				showModeToggle={true}
+				maxTableHeight={maxTableHeight}
+			/>
+		</div>
 	);
 }
