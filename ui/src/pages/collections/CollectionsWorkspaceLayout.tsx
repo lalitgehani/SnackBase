@@ -10,6 +10,7 @@ import ImportCollectionsDialog from '@/components/collections/ImportCollectionsD
 import { exportCollections } from '@/services/collections.service';
 import { handleApiError } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
+import { useCollectionsWorkspaceShortcuts } from '@/hooks/useCollectionsWorkspaceShortcuts';
 import {
   CollectionsWorkspaceProvider,
   useCollectionsWorkspace,
@@ -25,6 +26,8 @@ function WorkspaceChrome() {
   } = useCollectionsWorkspace();
   const { toast } = useToast();
   const [isExporting, setIsExporting] = useState(false);
+
+  useCollectionsWorkspaceShortcuts({ enabled: true });
 
   const handleExport = async () => {
     setIsExporting(true);

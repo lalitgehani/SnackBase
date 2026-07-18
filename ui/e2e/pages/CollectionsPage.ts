@@ -1,8 +1,8 @@
-import type { Page } from '@playwright/test'
 import { BasePage } from './BasePage.js'
 
 /**
  * Page object for the Collections workspace (/admin/collections).
+ * Create flow is full-page at /admin/collections/new (not a modal).
  */
 export class CollectionsPage extends BasePage {
   readonly url = '/admin/collections'
@@ -10,9 +10,14 @@ export class CollectionsPage extends BasePage {
   // Locators
   readonly heading = () => this.page.getByRole('heading', { name: /collections/i })
   readonly createButton = () =>
-    this.page.getByRole('button', { name: /new collection|create collection/i }).first()
+    this.page
+      .getByRole('button', {
+        name: /new collection|create blank collection|create collection/i,
+      })
+      .first()
   readonly rail = () => this.page.getByTestId('collection-browser-rail')
   readonly emptyState = () => this.page.getByText(/no collections/i)
+  readonly newPage = () => this.page.getByTestId('collection-new-page')
 
   async navigate() {
     await this.goto(this.url)
@@ -31,41 +36,37 @@ export class CollectionsPage extends BasePage {
   }
 
   /**
-   * Create a collection via the Create Collection dialog.
+   * Create a collection via the full-page create flow.
    *
    * @param name    Collection name (alphanumeric + underscores, 3-64 chars).
-   * @param fields  Array of schema fields to add via SchemaBuilder.
+   * @param fields  Array of schema fields to add via SchemaColumnTable.
    */
   async createCollection(
     name: string,
     fields: Array<{ name: string; type?: string }>,
   ) {
-    // Open dialog (workspace rail or empty-state CTA)
     await this.createButton().click()
-    await this.page.waitForSelector('[role="dialog"]', { state: 'visible' })
+    await this.page.waitForURL('**/admin/collections/new**', { timeout: 10_000 })
+    await this.newPage().waitFor({ state: 'visible' })
 
-    const dialog = this.page.getByRole('dialog')
+    await this.page.locator('#collection-name').fill(name)
 
-    // Fill collection name
-    await dialog.locator('#collection-name').fill(name)
-
-    // Add schema fields via SchemaBuilder
     for (let i = 0; i < fields.length; i++) {
-      await dialog.getByRole('button', { name: /add field/i }).click()
-      await dialog.locator(`#field-${i}-name`).fill(fields[i].name)
+      await this.page.getByTestId('schema-add-field').click()
+      await this.page.locator(`#field-${i}-name`).fill(fields[i].name)
 
       if (fields[i].type && fields[i].type !== 'text') {
-        await dialog.locator(`#field-${i}-type`).click()
-        await this.page.getByRole('option', { name: fields[i].type }).click()
+        await this.page.locator(`#field-${i}-type`).click()
+        await this.page.getByRole('option', { name: fields[i].type, exact: true }).click()
       }
     }
 
-    await dialog.getByRole('button', { name: /^create collection$/i }).click()
+    await this.page.getByRole('button', { name: /^create collection$/i }).click()
 
-    await this.page.waitForSelector('text=created successfully', { timeout: 30_000 })
-    await dialog.getByRole('button', { name: /done/i }).click()
-
-    await this.page.waitForSelector('[role="dialog"]', { state: 'hidden' })
+    // Success toast + navigate to schema tab
+    await this.page.waitForURL(new RegExp(`/admin/collections/${name}`), {
+      timeout: 30_000,
+    })
     await this.waitForPageReady()
   }
 

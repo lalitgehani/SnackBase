@@ -1,9 +1,9 @@
 /**
- * /admin/collections/new — full-page create collection flow (Phase 2).
+ * /admin/collections/new — full-page create collection flow (Phase 2 + templates).
  */
 
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useEffect, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { ToastAction } from '@/components/ui/toast';
 import SchemaColumnTable from '@/components/collections/SchemaColumnTable';
 import SystemFieldsPanel from '@/components/collections/SystemFieldsPanel';
+import CollectionTemplatePicker from '@/components/collections/CollectionTemplatePicker';
 import {
   prepareSchemaPayload,
   validateSchemaFields,
@@ -20,21 +21,41 @@ import {
   createCollection,
   type FieldDefinition,
 } from '@/services/collections.service';
+import {
+  applyTemplate,
+  BLANK_TEMPLATE_ID,
+  getTemplateById,
+} from '@/lib/collectionTemplates';
 import { handleApiError } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { useCollectionsWorkspace } from './CollectionsWorkspaceContext';
 
 export default function CollectionNewPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
   const { collectionNames, refreshCollections, isSuperadmin } =
     useCollectionsWorkspace();
 
-  const [name, setName] = useState('');
-  const [fields, setFields] = useState<FieldDefinition[]>([]);
+  const initialTemplateId =
+    searchParams.get('template') &&
+    (searchParams.get('template') === BLANK_TEMPLATE_ID ||
+      getTemplateById(searchParams.get('template')!))
+      ? searchParams.get('template')!
+      : BLANK_TEMPLATE_ID;
+
+  const initialApply = applyTemplate(initialTemplateId);
+
+  const [selectedTemplateId, setSelectedTemplateId] =
+    useState(initialTemplateId);
+  const [name, setName] = useState(initialApply.suggestedName);
+  const [fields, setFields] = useState<FieldDefinition[]>(initialApply.fields);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<SchemaFieldErrors>({});
+
+  /** Last template-suggested name so we only overwrite name when user has not customized it. */
+  const lastSuggestedNameRef = useRef(initialApply.suggestedName);
 
   useEffect(() => {
     if (!isSuperadmin) {
@@ -45,6 +66,36 @@ export default function CollectionNewPage() {
   if (!isSuperadmin) {
     return null;
   }
+
+  const handleSelectTemplate = (templateId: string) => {
+    const applied = applyTemplate(templateId);
+    setSelectedTemplateId(applied.templateId);
+    setFields(applied.fields);
+    setFieldErrors({});
+    setError(null);
+
+    setName((current) => {
+      if (
+        !current.trim() ||
+        current === lastSuggestedNameRef.current
+      ) {
+        lastSuggestedNameRef.current = applied.suggestedName;
+        return applied.suggestedName;
+      }
+      return current;
+    });
+
+    toast({
+      title:
+        applied.templateId === BLANK_TEMPLATE_ID
+          ? 'Blank template'
+          : 'Template applied',
+      description:
+        applied.templateId === BLANK_TEMPLATE_ID
+          ? 'Schema cleared. Add your own columns.'
+          : `Loaded ${applied.fields.length} fields. Edit before creating.`,
+    });
+  };
 
   const handleCancel = () => {
     navigate('/admin/collections');
@@ -124,6 +175,18 @@ export default function CollectionNewPage() {
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-6" id="create-collection-form">
+          <div className="space-y-2">
+            <Label>Starter template</Label>
+            <CollectionTemplatePicker
+              selectedId={selectedTemplateId}
+              onSelect={handleSelectTemplate}
+              disabled={isSubmitting}
+            />
+            <p className="text-xs text-muted-foreground">
+              Templates pre-fill columns; everything remains editable before create.
+            </p>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="collection-name">Collection name *</Label>
             <Input

@@ -299,6 +299,20 @@ describe('SchemaColumnTable', () => {
       expect(screen.getByRole('button', { name: /move field 1 down/i })).toBeDisabled()
       expect(screen.getByRole('button', { name: /move field 3 up/i })).toBeDisabled()
     })
+
+    it('shows drag handles for movable fields and disables for existing', () => {
+      renderTable({
+        fields: [makeField({ name: 'existing' }), makeField({ name: 'new' })],
+        originalFieldCount: 1,
+      })
+      expect(screen.getByTestId('schema-field-drag-0')).toBeDisabled()
+      expect(screen.getByTestId('schema-field-drag-1')).not.toBeDisabled()
+    })
+
+    it('exposes schema-add-field test id for shortcuts', () => {
+      renderTable({ fields: [] })
+      expect(screen.getByTestId('schema-add-field')).toBeInTheDocument()
+    })
   })
 
   describe('readOnly', () => {

@@ -8,6 +8,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Database,
+  Keyboard,
   Plus,
   RefreshCw,
   Search,
@@ -22,7 +23,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { useIsMobile } from '@/hooks/use-mobile';
+import {
+  COLLECTION_BROWSER_SEARCH_ID,
+  SHORTCUTS_HELP_TRIGGER_ID,
+} from '@/hooks/useCollectionsWorkspaceShortcuts';
 import { cn } from '@/lib/utils';
 import { useCollectionsWorkspace } from './CollectionsWorkspaceContext';
 
@@ -131,6 +141,47 @@ export default function CollectionBrowserRail() {
           >
             <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
           </Button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                id={SHORTCUTS_HELP_TRIGGER_ID}
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                title="Keyboard shortcuts"
+                aria-label="Keyboard shortcuts"
+                data-testid="collections-shortcuts-help"
+              >
+                <Keyboard className="h-3.5 w-3.5" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-64 text-sm" side="bottom">
+              <p className="font-semibold mb-2">Keyboard shortcuts</p>
+              <ul className="space-y-1.5 text-muted-foreground">
+                <li className="flex justify-between gap-2">
+                  <span>Focus collection search</span>
+                  <kbd className="rounded border bg-muted px-1.5 font-mono text-xs text-foreground">
+                    /
+                  </kbd>
+                </li>
+                <li className="flex justify-between gap-2">
+                  <span>Add schema field</span>
+                  <kbd className="rounded border bg-muted px-1.5 font-mono text-xs text-foreground">
+                    a
+                  </kbd>
+                </li>
+                <li className="flex justify-between gap-2">
+                  <span>Show this help</span>
+                  <kbd className="rounded border bg-muted px-1.5 font-mono text-xs text-foreground">
+                    ?
+                  </kbd>
+                </li>
+              </ul>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Shortcuts are disabled while typing in inputs.
+              </p>
+            </PopoverContent>
+          </Popover>
           <Button
             variant="ghost"
             size="icon"
@@ -148,6 +199,8 @@ export default function CollectionBrowserRail() {
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
+            id={COLLECTION_BROWSER_SEARCH_ID}
+            data-testid={COLLECTION_BROWSER_SEARCH_ID}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search collections…"

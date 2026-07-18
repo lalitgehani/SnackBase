@@ -84,6 +84,25 @@ A **Collection** is a named data schema with fields, types, and configuration op
 >
 > **Description**: The Collection Builder UI showing a collection being created with name, description, and fields in a form interface.
 
+### Admin UI: Collections workspace
+
+The admin UI primary surface is a **unified Collections workspace** (not a flat list with create/edit modals):
+
+| Tab | Purpose |
+|-----|---------|
+| **Schema** | Dense column editor; system fields (`id`, `account_id`, timestamps, audit user fields) are visible and locked |
+| **Data** | Record CRUD for the selected collection (legacy `/records` URLs redirect here) |
+| **Rules** | List / view / create / update / delete access rules and field allow-lists |
+| **Analytics** | Aggregation queries for the collection |
+
+**Multi-tenant model (UI copy matches backend):**
+
+- Collections are **global tables** shared by all accounts; rows are isolated by `account_id` (not separate Postgres schemas or a fake “public schema” switch).
+- Access rules are **not** Postgres RLS toggles. Empty-string rules are **public** for that operation; custom expressions require auth and may yield empty lists when no rows match.
+- Default rules after create are **locked** until a superadmin opens or customizes them on the Rules tab.
+
+**Create flow:** `/admin/collections/new` supports client-side starter templates (posts, products, contacts) or blank. Schema changes use the existing collections API.
+
 ---
 
 ## Collection vs Table

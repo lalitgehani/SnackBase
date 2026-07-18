@@ -169,9 +169,9 @@ test.describe.serial('FT4.3: Collection & Record Management E2E Flow', () => {
       true, // select first account (superadmin context)
     )
 
-    // After creation the dialog closes and we stay on the records page
+    // After creation the dialog closes and we stay on the data tab
     await expect(page).toHaveURL(
-      new RegExp(`/admin/collections/${COLLECTION_NAME}/records`),
+      new RegExp(`/admin/collections/${COLLECTION_NAME}/(data|records)`),
     )
   })
 

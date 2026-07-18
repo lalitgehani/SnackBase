@@ -260,38 +260,39 @@ A **Collection** is like a table in a traditional database. It defines the struc
 
 ### 3.1 Navigate to Collections
 
-Click **Collections** in the sidebar.
+Click **Collections** in the sidebar. You land in the **Collections workspace**: a searchable collection browser on the left and Schema / Data / Rules / Analytics tabs for the selected collection.
 
 > **Screenshot Placeholder 9**
 >
-> **Description**: Collections page showing an empty state or existing collections list with the "New Collection" button prominent.
+> **Description**: Collections workspace with browser rail, empty or selected collection, and New collection action.
 
 ### 3.2 Create a New Collection
 
-Click the **+ New Collection** button.
+Click **New collection** (or pick a starter template such as **Posts** on the empty state).
 
-A modal or form will appear. Enter:
-- **Name**: `posts` (this will become the API endpoint: `/api/v1/records/posts`)
-- **Description**: `Blog posts and articles` (optional)
+On the full-page create form:
+- Optionally choose a **starter template** (Posts, Products, Contacts) or **Blank**
+- **Name**: e.g. `posts` (API endpoint: `/api/v1/posts` or dynamic records path for the collection)
+- Edit pre-filled columns as needed, then **Create collection**
 
-Click **Create**.
+You are taken to the **Schema** tab. A toast reminds you to configure **Rules** (defaults are locked for non-superadmin clients).
 
 > **Screenshot Placeholder 10**
 >
-> **Description**: The new collection creation modal with "posts" filled in as the name and a description added.
+> **Description**: Full-page create collection form with template picker and dense column schema editor.
 
-### 3.3 Add Fields to Your Collection
+### 3.3 Add or edit fields
 
-After creating the collection, you'll see the collection detail page. Now let's add fields.
+On the **Schema** tab (or during create), use **Add Field** (or keyboard `a` when not typing). Drag the grip handle or use up/down to reorder new fields.
 
-Click **+ Add Field** and add the following fields:
+Example fields for a blog:
 
 | Field Name | Type | Required | Options |
 |------------|------|----------|---------|
 | `title` | Text | Yes | - |
-| `content` | Text | No | Multi-line: Yes |
-| `status` | Select | Yes | Options: `draft`, `published`, `archived` |
-| `published_at` | Date | No | - |
+| `content` | Text | No | - |
+| `status` | Text | No | Default `draft` |
+| `published_at` | DateTime | No | - |
 | `views` | Number | No | Default: `0` |
 
 > **Screenshot Placeholder 11**

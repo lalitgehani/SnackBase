@@ -53,14 +53,20 @@ ui/
 │   ├── App.tsx                  # Root component with Router
 │   ├── App.css                  # Global styles with TailwindCSS @theme syntax
 │   │
-│   ├── pages/                   # Page components (15 pages, ~4,385 lines)
+│   ├── pages/                   # Page components
 │   │   ├── LoginPage.tsx
 │   │   ├── DashboardPage.tsx
 │   │   ├── AccountsPage.tsx
 │   │   ├── UsersPage.tsx
 │   │   ├── GroupsPage.tsx
-│   │   ├── CollectionsPage.tsx
-│   │   ├── RecordsPage.tsx
+│   │   ├── CollectionsPage.tsx  # Legacy unrouted list (workspace is primary)
+│   │   ├── collections/         # Collections workspace (primary UX)
+│   │   │   ├── CollectionsWorkspaceLayout.tsx
+│   │   │   ├── CollectionBrowserRail.tsx
+│   │   │   ├── CollectionNewPage.tsx
+│   │   │   ├── CollectionDetailLayout.tsx
+│   │   │   └── tabs/            # Schema, Data, Rules, Analytics
+│   │   ├── RecordsPage.tsx      # Embedded under Data tab
 │   │   ├── RolesPage.tsx
 │   │   ├── AuditLogsPage.tsx
 │   │   ├── MigrationsPage.tsx
@@ -70,11 +76,11 @@ ui/
 │   │   ├── SystemProvidersTab.tsx
 │   │   └── EmailTemplatesTab.tsx
 │   │
-│   ├── components/              # Reusable components (83 components, ~12,419 lines)
-│   │   ├── ui/                  # ShadCN components (30 components - DO NOT EDIT)
+│   ├── components/              # Reusable components
+│   │   ├── ui/                  # ShadCN components (DO NOT EDIT; install via CLI)
 │   │   ├── accounts/            # Account-related components
 │   │   ├── audit-logs/          # Audit log components
-│   │   ├── collections/         # Collection builder components
+│   │   ├── collections/         # Schema editor, rules, import/export
 │   │   ├── common/              # Shared components (ProviderLogo, ConfigurationForm, etc.)
 │   │   ├── groups/              # Group components
 │   │   ├── macros/              # Macro management components
@@ -609,34 +615,59 @@ SnackBase uses React Router v7 for client-side routing.
 
 ### Route Structure
 
-All routes are under the `/admin` prefix:
+All routes are under the `/admin` prefix. **Collections** use a nested workspace shell (not a flat list + modals).
 
 ```typescript
-// src/App.tsx
+// src/App.tsx (simplified)
 <Routes>
-  {/* Public routes */}
   <Route path="/admin/login" element={<LoginPage />} />
 
-  {/* Protected routes with layout */}
   <Route path="/admin" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
     <Route index element={<Navigate to="/admin/dashboard" replace />} />
     <Route path="dashboard" element={<DashboardPage />} />
     <Route path="accounts" element={<AccountsPage />} />
     <Route path="users" element={<UsersPage />} />
     <Route path="groups" element={<GroupsPage />} />
-    <Route path="collections" element={<CollectionsPage />} />
-    <Route path="collections/:collectionName/records" element={<RecordsPage />} />
+
+    {/* Collections workspace — primary UX */}
+    <Route path="collections" element={<CollectionsWorkspaceLayout />}>
+      <Route index element={<CollectionEmptyState />} />
+      <Route path="new" element={<CollectionNewPage />} />
+      <Route path=":collectionName" element={<CollectionDetailLayout />}>
+        <Route index element={<CollectionDefaultTabRedirect />} />
+        <Route path="schema" element={<SchemaTabPage />} />
+        <Route path="data" element={<DataTabPage />} />
+        <Route path="rules" element={<RulesTabPage />} />
+        <Route path="analytics" element={<AnalyticsTabPage />} />
+        {/* Legacy: /records → /data */}
+        <Route path="records" element={<LegacyRecordsRedirect />} />
+      </Route>
+    </Route>
+
     <Route path="roles" element={<RolesPage />} />
     <Route path="audit-logs" element={<AuditLogsPage />} />
     <Route path="migrations" element={<MigrationsPage />} />
     <Route path="macros" element={<MacrosPage />} />
     <Route path="configuration" element={<ConfigurationDashboardPage />} />
   </Route>
-
-  {/* Catch all - redirect to dashboard */}
-  <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
 </Routes>
 ```
+
+#### Collections workspace concepts
+
+| Surface | Path | Notes |
+|--------|------|--------|
+| Browser + empty state | `/admin/collections` | Searchable collection rail; create / import CTAs |
+| Create | `/admin/collections/new` | Full-page schema editor; optional starter templates (`?template=posts`) |
+| Schema | `/admin/collections/:name/schema` | Dense column editor; system fields locked |
+| Data | `/admin/collections/:name/data` | Records CRUD (embedded Records page) |
+| Rules | `/admin/collections/:name/rules` | First-class access rules (not Postgres RLS) |
+| Analytics | `/admin/collections/:name/analytics` | Aggregation UI for the collection |
+| Legacy records URL | `/admin/collections/:name/records` | Redirects to **Data** tab |
+
+**Keyboard shortcuts** (when focus is not in an input): `/` focus rail search, `a` add schema field, `?` shortcuts help.
+
+**Access model callouts** in create/rules explain multi-tenant isolation via `account_id` and that empty-string rules are public for that operation.
 
 ### Navigation
 

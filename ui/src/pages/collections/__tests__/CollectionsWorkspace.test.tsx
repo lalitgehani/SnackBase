@@ -295,11 +295,13 @@ describe('CollectionsWorkspace', () => {
 
       expect(screen.getByText(/account_id/i)).toBeInTheDocument()
       expect(
-        screen.getByRole('button', { name: /create collection/i }),
+        screen.getByRole('button', { name: /create blank collection/i }),
       ).toBeInTheDocument()
       expect(
         screen.getByRole('button', { name: /import from json/i }),
       ).toBeInTheDocument()
+      expect(screen.getByTestId('collection-template-picker')).toBeInTheDocument()
+      expect(screen.getByTestId('template-posts')).toBeInTheDocument()
     })
   })
 
@@ -528,6 +530,52 @@ describe('CollectionsWorkspace', () => {
       expect(callout).toHaveTextContent(/locked/i)
       expect(callout).toHaveTextContent(/access rules/i)
       expect(callout).not.toHaveTextContent(/Enable RLS/i)
+    })
+
+    it('shows template picker and applies posts template fields', async () => {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      renderWorkspace('/admin/collections/new')
+
+      await waitFor(() => {
+        expect(screen.getByTestId('collection-template-picker')).toBeInTheDocument()
+      })
+
+      await user.click(screen.getByTestId('template-posts'))
+
+      await waitFor(() => {
+        expect(screen.getByDisplayValue('posts')).toBeInTheDocument()
+        expect(screen.getByDisplayValue('title')).toBeInTheDocument()
+        expect(screen.getByDisplayValue('slug')).toBeInTheDocument()
+      })
+      expect(screen.getByTestId('schema-field-row-0')).toBeInTheDocument()
+    })
+
+    it('can start from blank after a template', async () => {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      renderWorkspace('/admin/collections/new')
+
+      await waitFor(() => {
+        expect(screen.getByTestId('template-products')).toBeInTheDocument()
+      })
+      await user.click(screen.getByTestId('template-products'))
+      await waitFor(() => {
+        expect(screen.getByDisplayValue('sku')).toBeInTheDocument()
+      })
+
+      await user.click(screen.getByTestId('template-blank'))
+      await waitFor(() => {
+        expect(screen.queryByDisplayValue('sku')).not.toBeInTheDocument()
+      })
+      expect(screen.getByText(/no fields yet/i)).toBeInTheDocument()
+    })
+
+    it('shows keyboard shortcuts help control on the rail', async () => {
+      renderWorkspace()
+
+      await waitFor(() => {
+        expect(screen.getByTestId('collections-shortcuts-help')).toBeInTheDocument()
+        expect(screen.getByTestId('collection-browser-search')).toBeInTheDocument()
+      })
     })
   })
 

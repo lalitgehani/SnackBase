@@ -1,19 +1,36 @@
 /**
  * Dense schema column table with progressive disclosure for advanced field options.
- * Primary create/edit UX for collection schemas (Phase 2).
+ * Primary create/edit UX for collection schemas (Phase 2 + DnD reorder).
  */
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Calculator,
   ChevronDown,
   ChevronRight,
+  GripVertical,
   HelpCircle,
   MoveDown,
   MoveUp,
   Plus,
   Trash2,
 } from 'lucide-react';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -40,6 +57,14 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
+import {
+  canMoveField,
+  moveFieldByDirection,
+  remapExpandedAfterReorder,
+  remapExpandedAfterSwap,
+  reorderFields,
+} from '@/lib/schemaFieldReorder';
+import { SCHEMA_ADD_FIELD_TEST_ID } from '@/hooks/useCollectionsWorkspaceShortcuts';
 import type { FieldDefinition } from '@/services/collections.service';
 import {
   FIELD_TYPES,
@@ -48,6 +73,10 @@ import {
   RETURN_TYPE_OPTIONS,
 } from '@/services/collections.service';
 import type { SchemaFieldErrors } from './schemaValidation';
+
+function fieldSortableId(index: number): string {
+  return `schema-field-${index}`;
+}
 
 export interface SchemaColumnTableProps {
   fields: FieldDefinition[];
@@ -174,35 +203,55 @@ export default function SchemaColumnTable({
     });
   };
 
-  const canMove = (index: number, direction: 'up' | 'down'): boolean => {
-    const target = direction === 'up' ? index - 1 : index + 1;
-    if (target < 0 || target >= fields.length) return false;
-    // In edit mode, only reorder within newly added fields
-    if (originalFieldCount > 0) {
-      if (index < originalFieldCount || target < originalFieldCount) return false;
-    }
-    return true;
-  };
+  const canMove = (index: number, direction: 'up' | 'down'): boolean =>
+    canMoveField(fields.length, index, direction, originalFieldCount);
 
   const moveField = (index: number, direction: 'up' | 'down') => {
-    if (!canMove(index, direction)) return;
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    const newFields = [...fields];
-    [newFields[index], newFields[targetIndex]] = [
-      newFields[targetIndex],
-      newFields[index],
-    ];
+    const newFields = moveFieldByDirection(
+      fields,
+      index,
+      direction,
+      originalFieldCount,
+    );
+    if (newFields === fields) return;
     onChange(newFields);
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      const a = prev.has(index);
-      const b = prev.has(targetIndex);
-      if (a) next.add(targetIndex);
-      else next.delete(targetIndex);
-      if (b) next.add(index);
-      else next.delete(index);
-      return next;
-    });
+    setExpanded((prev) => remapExpandedAfterSwap(prev, index, targetIndex));
+  };
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 6 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
+
+  const sortableIds = useMemo(
+    () => fields.map((_, index) => fieldSortableId(index)),
+    [fields],
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const fromIndex = sortableIds.indexOf(String(active.id));
+    const toIndex = sortableIds.indexOf(String(over.id));
+    if (fromIndex < 0 || toIndex < 0) return;
+
+    const newFields = reorderFields(
+      fields,
+      fromIndex,
+      toIndex,
+      originalFieldCount,
+    );
+    if (newFields === fields) return;
+    onChange(newFields);
+    setExpanded((prev) =>
+      remapExpandedAfterReorder(prev, fromIndex, toIndex),
+    );
   };
 
   const updateField = (index: number, updates: Partial<FieldDefinition>) => {
@@ -262,7 +311,13 @@ export default function SchemaColumnTable({
           </p>
         </div>
         {!readOnly && showAddButton && (
-          <Button type="button" onClick={addField} size="sm" variant="outline">
+          <Button
+            type="button"
+            onClick={addField}
+            size="sm"
+            variant="outline"
+            data-testid={SCHEMA_ADD_FIELD_TEST_ID}
+          >
             <Plus className="mr-2 h-4 w-4" />
             Add Field
           </Button>
@@ -275,55 +330,69 @@ export default function SchemaColumnTable({
         </div>
       ) : (
         <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                {!readOnly && <TableHead className="w-16 px-1" />}
-                <TableHead className="min-w-[140px]">Name</TableHead>
-                <TableHead className="min-w-[120px]">Type</TableHead>
-                <TableHead className="min-w-[100px]">Default</TableHead>
-                <TableHead className="w-16 text-center">Req</TableHead>
-                <TableHead className="w-16 text-center">Uniq</TableHead>
-                <TableHead className="w-16 text-center">PII</TableHead>
-                <TableHead className="w-10" />
-                {!readOnly && <TableHead className="w-10" />}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {fields.map((field, index) => {
-                const isExisting = index < originalFieldCount;
-                const isNew = !isExisting && originalFieldCount > 0;
-                const isExpanded = expanded.has(index);
-                const errors = fieldErrors[index] ?? {};
-                const isComputed = field.type === 'computed';
-                const showExpand = needsExpand(field) || isExpanded;
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={readOnly ? undefined : handleDragEnd}
+          >
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  {!readOnly && <TableHead className="w-24 px-1" />}
+                  <TableHead className="min-w-[140px]">Name</TableHead>
+                  <TableHead className="min-w-[120px]">Type</TableHead>
+                  <TableHead className="min-w-[100px]">Default</TableHead>
+                  <TableHead className="w-16 text-center">Req</TableHead>
+                  <TableHead className="w-16 text-center">Uniq</TableHead>
+                  <TableHead className="w-16 text-center">PII</TableHead>
+                  <TableHead className="w-10" />
+                  {!readOnly && <TableHead className="w-10" />}
+                </TableRow>
+              </TableHeader>
+              <SortableContext
+                items={sortableIds}
+                strategy={verticalListSortingStrategy}
+                disabled={readOnly}
+              >
+                <TableBody>
+                  {fields.map((field, index) => {
+                    const isExisting = index < originalFieldCount;
+                    const isNew = !isExisting && originalFieldCount > 0;
+                    const isExpanded = expanded.has(index);
+                    const errors = fieldErrors[index] ?? {};
+                    const isComputed = field.type === 'computed';
+                    const showExpand = needsExpand(field) || isExpanded;
 
-                return (
-                  <FieldRows
-                    key={`field-row-${index}`}
-                    field={field}
-                    index={index}
-                    isExisting={isExisting}
-                    isNew={isNew}
-                    isExpanded={isExpanded}
-                    isComputed={isComputed}
-                    showExpand={showExpand}
-                    errors={errors}
-                    readOnly={readOnly}
-                    collections={collections}
-                    fields={fields}
-                    canMoveUp={canMove(index, 'up')}
-                    canMoveDown={canMove(index, 'down')}
-                    onToggleExpand={() => toggleExpand(index)}
-                    onMoveUp={() => moveField(index, 'up')}
-                    onMoveDown={() => moveField(index, 'down')}
-                    onRemove={() => removeField(index)}
-                    onUpdate={(updates) => updateField(index, updates)}
-                  />
-                );
-              })}
-            </TableBody>
-          </Table>
+                    return (
+                      <FieldRows
+                        key={fieldSortableId(index)}
+                        id={fieldSortableId(index)}
+                        field={field}
+                        index={index}
+                        isExisting={isExisting}
+                        isNew={isNew}
+                        isExpanded={isExpanded}
+                        isComputed={isComputed}
+                        showExpand={showExpand}
+                        errors={errors}
+                        readOnly={readOnly}
+                        collections={collections}
+                        fields={fields}
+                        canDrag={!readOnly && !isExisting}
+                        canMoveUp={canMove(index, 'up')}
+                        canMoveDown={canMove(index, 'down')}
+                        onToggleExpand={() => toggleExpand(index)}
+                        onMoveUp={() => moveField(index, 'up')}
+                        onMoveDown={() => moveField(index, 'down')}
+                        onRemove={() => removeField(index)}
+                        onUpdate={(updates) => updateField(index, updates)}
+                      />
+                    );
+                  })}
+                </TableBody>
+              </SortableContext>
+            </Table>
+          </DndContext>
         </div>
       )}
     </div>
@@ -331,6 +400,7 @@ export default function SchemaColumnTable({
 }
 
 interface FieldRowsProps {
+  id: string;
   field: FieldDefinition;
   index: number;
   isExisting: boolean;
@@ -342,6 +412,7 @@ interface FieldRowsProps {
   readOnly: boolean;
   collections: string[];
   fields: FieldDefinition[];
+  canDrag: boolean;
   canMoveUp: boolean;
   canMoveDown: boolean;
   onToggleExpand: () => void;
@@ -352,6 +423,7 @@ interface FieldRowsProps {
 }
 
 function FieldRows({
+  id,
   field,
   index,
   isExisting,
@@ -363,6 +435,7 @@ function FieldRows({
   readOnly,
   collections,
   fields,
+  canDrag,
   canMoveUp,
   canMoveDown,
   onToggleExpand,
@@ -376,12 +449,32 @@ function FieldRows({
   const deleteDisabled = readOnly || isExisting;
   const colSpan = readOnly ? 7 : 9;
 
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id, disabled: !canDrag });
+
+  const rowStyle = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : undefined,
+    position: isDragging ? ('relative' as const) : undefined,
+    zIndex: isDragging ? 10 : undefined,
+  };
+
   return (
     <>
       <TableRow
+        ref={setNodeRef}
+        style={rowStyle}
         className={cn(
           isNew && 'bg-primary/5',
           Object.keys(errors).length > 0 && 'bg-destructive/5',
+          isDragging && 'bg-muted/40 shadow-sm',
         )}
         data-testid={`schema-field-row-${index}`}
         data-existing={isExisting || undefined}
@@ -390,6 +483,21 @@ function FieldRows({
         {!readOnly && (
           <TableCell className="px-1">
             <div className="flex items-center gap-0.5">
+              <button
+                type="button"
+                className={cn(
+                  'inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground',
+                  canDrag
+                    ? 'cursor-grab hover:bg-accent active:cursor-grabbing'
+                    : 'cursor-not-allowed opacity-30',
+                )}
+                disabled={!canDrag}
+                aria-label={`Drag to reorder field ${index + 1}`}
+                data-testid={`schema-field-drag-${index}`}
+                {...(canDrag ? { ...attributes, ...listeners } : {})}
+              >
+                <GripVertical className="h-3.5 w-3.5" />
+              </button>
               <Button
                 type="button"
                 variant="ghost"
