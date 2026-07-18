@@ -68,7 +68,10 @@ export const EmailTemplateEditDialog = ({
     const [selectedProvider, setSelectedProvider] = useState<string>('auto');
     const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
     const [previewHtml, setPreviewHtml] = useState<string>('');
+    const [previewText, setPreviewText] = useState<string>('');
     const [previewLoading, setPreviewLoading] = useState(false);
+    /** Which body format is shown in the editor / preview */
+    const [bodyFormat, setBodyFormat] = useState<'html' | 'text'>('html');
 
     const queryClient = useQueryClient();
     const { toast } = useToast();
@@ -200,6 +203,7 @@ export const EmailTemplateEditDialog = ({
             });
 
             setPreviewHtml(response.html_body);
+            setPreviewText(response.text_body);
         } catch (error: any) {
             toast({
                 title: 'Preview Failed',
@@ -220,13 +224,24 @@ export const EmailTemplateEditDialog = ({
                 enabled: template.enabled,
             };
             setFormData(initialData);
-            setPreviewHtml(''); // Clear old preview
-            handlePreview(initialData); // Use new data immediately
+            setBodyFormat('html');
+            setPreviewHtml('');
+            setPreviewText('');
+            handlePreview(initialData);
         }
     }, [template, open]);
 
+    const bodyField = bodyFormat === 'html' ? 'html_body' : 'text_body';
+
     const [focusedField, setFocusedField] = useState<'subject' | 'html_body' | 'text_body' | null>('subject');
     const [cursorPosition, setCursorPosition] = useState<number | null>(null);
+
+    const handleBodyFormatChange = (value: string) => {
+        const next = value === 'text' ? 'text' : 'html';
+        setBodyFormat(next);
+        setFocusedField(next === 'html' ? 'html_body' : 'text_body');
+        setCursorPosition(null);
+    };
 
     const handleInputFocus = (field: 'subject' | 'html_body' | 'text_body') => {
         setFocusedField(field);
@@ -271,7 +286,8 @@ export const EmailTemplateEditDialog = ({
             open={open}
             onOpenChange={onOpenChange}
             title={`Edit Template: ${template.template_type} (${template.locale})`}
-            className="max-w-2xl"
+            className="sm:max-w-5xl lg:max-w-6xl w-[calc(100%-2rem)] md:h-[90vh]"
+            bodyClassName="flex flex-col px-6 py-4 min-h-0 overflow-y-auto md:overflow-hidden"
             footer={
                 <>
                     <div className="mr-auto flex items-center">
@@ -307,114 +323,163 @@ export const EmailTemplateEditDialog = ({
                 </>
             }
         >
-            <div className="space-y-4">
-                {/* Enabled Toggle & Vars */}
-                <div className="flex items-center justify-between">
-                    <Label htmlFor="enabled">Enabled</Label>
-                    <Switch
-                        id="enabled"
-                        checked={formData.enabled ?? template.enabled}
-                        onCheckedChange={(checked) =>
-                            setFormData((prev) => ({ ...prev, enabled: checked }))
-                        }
-                    />
-                </div>
-
-                {/* Variable Selector */}
-                {availableVariables.length > 0 && (
-                    <div className="space-y-2">
-                        <Label>Insert Variable</Label>
-                        <Select onValueChange={insertVariable}>
-                            <SelectTrigger>
-                                <SelectValue placeholder={`Insert into ${focusedField || 'subject'}`} />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {availableVariables.map((variable) => (
-                                    <SelectItem key={variable} value={variable}>
-                                        {`{{${variable}}}`}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                )}
-
-                {/* Subject */}
-                <div className="space-y-2">
-                    <Label htmlFor="subject">Subject</Label>
-                    <Input
-                        id="subject"
-                        value={formData.subject ?? template.subject}
-                        onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, subject: e.target.value }))
-                        }
-                        onFocus={() => handleInputFocus('subject')}
-                        onSelect={handleInputSelect}
-                        placeholder="Email subject line"
-                    />
-                </div>
-
-                {/* HTML Body */}
-                <div className="space-y-2">
-                    <Label htmlFor="html_body">HTML Body</Label>
-                    <Textarea
-                        id="html_body"
-                        value={formData.html_body ?? template.html_body}
-                        onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, html_body: e.target.value }))
-                        }
-                        onFocus={() => handleInputFocus('html_body')}
-                        onSelect={handleInputSelect}
-                        placeholder="HTML email body"
-                        className="font-mono text-sm resize-none min-h-[200px]"
-                    />
-                </div>
-
-                {/* Text Body */}
-                <div className="space-y-2">
-                    <Label htmlFor="text_body">Text Body</Label>
-                    <Textarea
-                        id="text_body"
-                        value={formData.text_body ?? template.text_body}
-                        onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, text_body: e.target.value }))
-                        }
-                        onFocus={() => handleInputFocus('text_body')}
-                        onSelect={handleInputSelect}
-                        placeholder="Plain text email body"
-                        className="font-mono text-sm min-h-[100px]"
-                    />
-                </div>
-
-                {/* Preview */}
-                <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                        <Label>Preview</Label>
-                        <Button size="sm" variant="secondary" onClick={() => handlePreview()} disabled={previewLoading}>
-                            {previewLoading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
-                            Refresh Preview
-                        </Button>
-                    </div>
-                    <div className="rounded-md border overflow-hidden bg-gray-50 dark:bg-gray-900" style={{ height: '300px' }}>
-                        {previewHtml ? (
-                            <iframe
-                                srcDoc={previewHtml}
-                                title="Email Preview"
-                                className="w-full h-full border-0"
-                                sandbox="allow-same-origin"
+            <div className="flex flex-col flex-1 min-h-0 gap-4">
+                {/* Side-by-side editor + preview — fills dialog body height on md+ */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:flex-1 md:min-h-0">
+                    {/* Left: form fields (scroll independently on md+) */}
+                    <div className="min-w-0 md:min-h-0 md:overflow-y-auto md:flex md:flex-col space-y-4 md:pr-1">
+                        {/* Enabled Toggle */}
+                        <div className="flex items-center justify-between">
+                            <Label htmlFor="enabled">Enabled</Label>
+                            <Switch
+                                id="enabled"
+                                checked={formData.enabled ?? template.enabled}
+                                onCheckedChange={(checked) =>
+                                    setFormData((prev) => ({ ...prev, enabled: checked }))
+                                }
                             />
-                        ) : (
-                            <div className="flex items-center justify-center h-full text-muted-foreground">
-                                Click Refresh to see preview
+                        </div>
+
+                        {/* Variable Selector */}
+                        {availableVariables.length > 0 && (
+                            <div className="space-y-2">
+                                <Label>Insert Variable</Label>
+                                <Select onValueChange={insertVariable}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder={`Insert into ${focusedField || 'subject'}`} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {availableVariables.map((variable) => (
+                                            <SelectItem key={variable} value={variable}>
+                                                {`{{${variable}}}`}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
                         )}
+
+                        {/* Subject */}
+                        <div className="space-y-2">
+                            <Label htmlFor="subject">Subject</Label>
+                            <Input
+                                id="subject"
+                                value={formData.subject ?? template.subject}
+                                onChange={(e) =>
+                                    setFormData((prev) => ({ ...prev, subject: e.target.value }))
+                                }
+                                onFocus={() => handleInputFocus('subject')}
+                                onSelect={handleInputSelect}
+                                placeholder="Email subject line"
+                            />
+                        </div>
+
+                        {/* Body — HTML or plain text via format selector */}
+                        <div className="space-y-2 flex flex-col flex-1 min-h-0">
+                            <div className="flex items-center justify-between gap-3">
+                                <Label htmlFor="body_editor">Body</Label>
+                                <Select value={bodyFormat} onValueChange={handleBodyFormatChange}>
+                                    <SelectTrigger id="body_format" className="w-[140px] h-8">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="html">HTML</SelectItem>
+                                        <SelectItem value="text">Plain text</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <Textarea
+                                id="body_editor"
+                                value={
+                                    bodyFormat === 'html'
+                                        ? (formData.html_body ?? template.html_body)
+                                        : (formData.text_body ?? template.text_body)
+                                }
+                                onChange={(e) =>
+                                    setFormData((prev) => ({
+                                        ...prev,
+                                        [bodyField]: e.target.value,
+                                    }))
+                                }
+                                onFocus={() => handleInputFocus(bodyField)}
+                                onSelect={handleInputSelect}
+                                placeholder={
+                                    bodyFormat === 'html'
+                                        ? 'HTML email body'
+                                        : 'Plain text email body (fallback for clients that do not render HTML)'
+                                }
+                                className="font-mono text-sm field-sizing-fixed resize-y min-h-[280px] h-[48vh] md:h-auto md:min-h-0 md:flex-1"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                {bodyFormat === 'html'
+                                    ? 'Rich HTML version shown in most email clients.'
+                                    : 'Plain-text fallback sent with every email for clients that do not render HTML.'}
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Right: full-height live preview (matches selected body format) */}
+                    <div className="min-w-0 min-h-[360px] md:min-h-0 flex flex-col gap-2">
+                        <div className="flex justify-between items-center gap-2 shrink-0">
+                            <div className="flex items-center gap-2">
+                                <Label>
+                                    Preview
+                                    <span className="ml-1.5 font-normal text-muted-foreground">
+                                        ({bodyFormat === 'html' ? 'HTML' : 'Plain text'})
+                                    </span>
+                                </Label>
+                                {previewLoading && (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                                )}
+                            </div>
+                            <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => handlePreview()}
+                                disabled={previewLoading}
+                            >
+                                Refresh Preview
+                            </Button>
+                        </div>
+                        <div className="rounded-md border overflow-hidden bg-muted/30 flex-1 min-h-0 relative">
+                            {previewLoading && !previewHtml && !previewText ? (
+                                <div className="absolute inset-0 flex items-center justify-center text-muted-foreground gap-2">
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    Generating preview…
+                                </div>
+                            ) : bodyFormat === 'html' ? (
+                                previewHtml ? (
+                                    <iframe
+                                        srcDoc={previewHtml}
+                                        title="Email HTML Preview"
+                                        className="absolute inset-0 w-full h-full border-0 bg-white"
+                                        sandbox="allow-same-origin"
+                                    />
+                                ) : (
+                                    <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm px-4 text-center">
+                                        Click Refresh Preview to render the email
+                                    </div>
+                                )
+                            ) : previewText ? (
+                                <pre className="absolute inset-0 m-0 p-4 overflow-auto whitespace-pre-wrap break-words font-mono text-sm text-foreground bg-background">
+                                    {previewText}
+                                </pre>
+                            ) : (
+                                <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm px-4 text-center">
+                                    Click Refresh Preview to render the email
+                                </div>
+                            )}
+                        </div>
+                        <p className="text-xs text-muted-foreground shrink-0">
+                            Preview uses sample values for template variables.
+                        </p>
                     </div>
                 </div>
 
-                {/* Test Email */}
-                <div className="space-y-2 border-t pt-4">
+                {/* Test Email — pinned full width below editor/preview */}
+                <div className="space-y-2 border-t pt-4 shrink-0">
                     <Label>Send Test Email</Label>
-                    <div className="grid grid-cols-[1fr,2fr,auto] gap-2 items-end">
+                    <div className="grid grid-cols-1 sm:grid-cols-[1fr_2fr_auto] gap-2 items-end">
                         <div className="space-y-2">
                             <Label htmlFor="provider-select" className="text-xs text-muted-foreground">Provider</Label>
                             <Select value={selectedProvider} onValueChange={setSelectedProvider}>
