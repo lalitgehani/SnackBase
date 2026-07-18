@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { AppDialog } from '@/components/common/AppDialog';
 import { Badge } from '@/components/ui/badge';
 import type { EmailLog } from '@/services/email.service';
@@ -7,6 +8,23 @@ interface EmailLogDetailProps {
     log: EmailLog | null;
     open: boolean;
     onOpenChange: (open: boolean) => void;
+}
+
+function DetailField({
+    label,
+    children,
+    className,
+}: {
+    label: string;
+    children: ReactNode;
+    className?: string;
+}) {
+    return (
+        <div className={className}>
+            <div className="text-sm font-medium text-muted-foreground">{label}</div>
+            <div className="mt-1 text-sm break-words">{children}</div>
+        </div>
+    );
 }
 
 const EmailLogDetail = ({ log, open, onOpenChange }: EmailLogDetailProps) => {
@@ -19,73 +37,61 @@ const EmailLogDetail = ({ log, open, onOpenChange }: EmailLogDetailProps) => {
                 ? 'destructive'
                 : 'secondary';
 
+    const providerLabel =
+        !log.provider || log.provider.toLowerCase() === 'unknown'
+            ? '—'
+            : log.provider;
+
     return (
         <AppDialog
             open={open}
             onOpenChange={onOpenChange}
             title="Email Log Details"
-            className="max-w-2xl"
+            className="sm:max-w-2xl"
+            bodyClassName="px-6 py-4 overflow-y-auto min-h-0"
         >
-            <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <label className="text-sm font-medium text-muted-foreground">
-                            Status
-                        </label>
-                        <div className="mt-1">
-                            <Badge variant={statusVariant} className="capitalize">
-                                {log.status}
-                            </Badge>
-                        </div>
-                    </div>
+            <div className="space-y-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+                    <DetailField label="Status">
+                        <Badge variant={statusVariant} className="capitalize">
+                            {log.status}
+                        </Badge>
+                    </DetailField>
 
-                    <div>
-                        <label className="text-sm font-medium text-muted-foreground">
-                            Provider
-                        </label>
-                        <p className="mt-1 text-sm font-mono uppercase">{log.provider}</p>
-                    </div>
+                    <DetailField label="Provider">
+                        <span className="font-mono text-sm uppercase tracking-wide">
+                            {providerLabel}
+                        </span>
+                    </DetailField>
 
-                    <div>
-                        <label className="text-sm font-medium text-muted-foreground">
-                            Recipient
-                        </label>
-                        <p className="mt-1 text-sm">{log.recipient_email}</p>
-                    </div>
+                    <DetailField label="Recipient">
+                        <span className="break-all">{log.recipient_email}</span>
+                    </DetailField>
 
-                    <div>
-                        <label className="text-sm font-medium text-muted-foreground">
-                            Template Type
-                        </label>
-                        <p className="mt-1 text-sm capitalize">
+                    <DetailField label="Template Type">
+                        <span className="capitalize">
                             {log.template_type.replace(/_/g, ' ')}
-                        </p>
-                    </div>
+                        </span>
+                    </DetailField>
 
-                    <div>
-                        <label className="text-sm font-medium text-muted-foreground">
-                            Sent At
-                        </label>
-                        <p className="mt-1 text-sm">
-                            {format(new Date(log.sent_at), 'PPpp')}
-                        </p>
-                    </div>
+                    <DetailField label="Sent At">
+                        {format(new Date(log.sent_at), 'PPpp')}
+                    </DetailField>
 
-                    <div>
-                        <label className="text-sm font-medium text-muted-foreground">
-                            Log ID
-                        </label>
-                        <p className="mt-1 font-mono text-xs">{log.id}</p>
-                    </div>
+                    <DetailField label="Log ID">
+                        <code className="block font-mono text-xs leading-relaxed break-all select-all">
+                            {log.id}
+                        </code>
+                    </DetailField>
                 </div>
 
                 {log.error_message && (
                     <div>
-                        <label className="text-sm font-medium text-destructive">
+                        <div className="text-sm font-medium text-destructive">
                             Error Message
-                        </label>
-                        <div className="mt-1 p-3 bg-destructive/10 border border-destructive/20 rounded-md">
-                            <p className="text-sm text-destructive whitespace-pre-wrap">
+                        </div>
+                        <div className="mt-1.5 p-3 bg-destructive/10 border border-destructive/20 rounded-md">
+                            <p className="text-sm text-destructive whitespace-pre-wrap break-words">
                                 {log.error_message}
                             </p>
                         </div>
@@ -94,18 +100,27 @@ const EmailLogDetail = ({ log, open, onOpenChange }: EmailLogDetailProps) => {
 
                 {log.variables && Object.keys(log.variables).length > 0 && (
                     <div>
-                        <label className="text-sm font-medium text-muted-foreground">
+                        <div className="text-sm font-medium text-muted-foreground mb-1.5">
                             Template Variables
-                        </label>
-                        <div className="mt-1 p-3 bg-muted rounded-md">
-                            <dl className="space-y-2">
+                        </div>
+                        <div className="rounded-md border bg-muted/40 overflow-hidden">
+                            <dl className="divide-y divide-border">
                                 {Object.entries(log.variables).map(([key, value]) => (
-                                    <div key={key} className="flex gap-2">
-                                        <dt className="text-sm font-medium min-w-30">
-                                            {key}:
+                                    <div
+                                        key={key}
+                                        className="grid grid-cols-1 sm:grid-cols-[minmax(7rem,10rem)_1fr] gap-1 sm:gap-3 px-3 py-2.5"
+                                    >
+                                        <dt className="text-sm font-medium text-foreground shrink-0">
+                                            {key}
                                         </dt>
-                                        <dd className="text-sm text-muted-foreground">
-                                            {value}
+                                        <dd className="text-sm text-muted-foreground font-mono break-all min-w-0">
+                                            {value === '' || value == null ? (
+                                                <span className="italic text-muted-foreground/70">
+                                                    (empty)
+                                                </span>
+                                            ) : (
+                                                value
+                                            )}
                                         </dd>
                                     </div>
                                 ))}
