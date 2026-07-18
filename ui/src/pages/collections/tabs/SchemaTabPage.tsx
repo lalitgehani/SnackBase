@@ -1,17 +1,101 @@
 /**
- * Schema tab — temporary read-only field list + edit dialog trigger.
+ * Schema tab — inline column editor with dirty-state save (Phase 2).
  */
 
-import { Pencil, RefreshCw } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import SchemaColumnTable from '@/components/collections/SchemaColumnTable';
+import SystemFieldsPanel from '@/components/collections/SystemFieldsPanel';
+import {
+  normalizeSchemaForCompare,
+  prepareSchemaPayload,
+  validateSchemaFields,
+  type SchemaFieldErrors,
+} from '@/components/collections/schemaValidation';
+import {
+  updateCollection,
+  type FieldDefinition,
+} from '@/services/collections.service';
+import { handleApiError } from '@/lib/api';
+import { useToast } from '@/hooks/use-toast';
 import { useCollectionDetail } from '../CollectionDetailContext';
 import { useCollectionsWorkspace } from '../CollectionsWorkspaceContext';
 
 export default function SchemaTabPage() {
-  const { collection, loading, error, openEditSchema, refreshDetail } =
-    useCollectionDetail();
-  const { isSuperadmin } = useCollectionsWorkspace();
+  const {
+    collection,
+    loading,
+    error: loadError,
+    refreshDetail,
+  } = useCollectionDetail();
+  const { isSuperadmin, collectionNames, refreshCollections } =
+    useCollectionsWorkspace();
+  const { toast } = useToast();
+
+  const [baseline, setBaseline] = useState<FieldDefinition[]>([]);
+  const [draftFields, setDraftFields] = useState<FieldDefinition[]>([]);
+  const [originalFieldCount, setOriginalFieldCount] = useState(0);
+  const [fieldErrors, setFieldErrors] = useState<SchemaFieldErrors>({});
+  const [error, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const syncFromCollection = useCallback(() => {
+    if (!collection) return;
+    const schema = collection.schema.map((f) => ({ ...f }));
+    setBaseline(schema);
+    setDraftFields(schema.map((f) => ({ ...f })));
+    setOriginalFieldCount(schema.length);
+    setFieldErrors({});
+    setError(null);
+  }, [collection]);
+
+  useEffect(() => {
+    syncFromCollection();
+  }, [syncFromCollection]);
+
+  const isDirty = useMemo(() => {
+    return (
+      normalizeSchemaForCompare(draftFields) !==
+      normalizeSchemaForCompare(baseline)
+    );
+  }, [draftFields, baseline]);
+
+  const handleDiscard = () => {
+    setDraftFields(baseline.map((f) => ({ ...f })));
+    setFieldErrors({});
+    setError(null);
+  };
+
+  const handleSave = async () => {
+    if (!collection || !isDirty) return;
+
+    const result = validateSchemaFields(draftFields);
+    if (!result.valid) {
+      setFieldErrors(result.fieldErrors);
+      setError(result.formError ?? 'Schema validation failed');
+      return;
+    }
+
+    setIsSaving(true);
+    setError(null);
+    setFieldErrors({});
+    try {
+      await updateCollection(collection.id, {
+        schema: prepareSchemaPayload(draftFields),
+      });
+      await Promise.all([refreshDetail(), refreshCollections()]);
+      toast({
+        title: 'Schema updated',
+        description: 'Migrations applied successfully.',
+      });
+      // baseline will re-sync from refreshed collection via useEffect
+    } catch (err) {
+      setError(handleApiError(err));
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   if (loading && !collection) {
     return (
@@ -21,10 +105,10 @@ export default function SchemaTabPage() {
     );
   }
 
-  if (error || !collection) {
+  if (loadError || !collection) {
     return (
-      <div className="text-center py-8 space-y-2">
-        <p className="text-destructive">{error ?? 'Collection not found'}</p>
+      <div className="space-y-2 py-8 text-center">
+        <p className="text-destructive">{loadError ?? 'Collection not found'}</p>
         <Button size="sm" variant="outline" onClick={() => void refreshDetail()}>
           Retry
         </Button>
@@ -33,83 +117,88 @@ export default function SchemaTabPage() {
   }
 
   return (
-    <div className="space-y-6" data-testid="schema-tab">
-      <div className="flex items-center justify-between gap-2">
+    <div
+      className="relative space-y-6 pb-20"
+      data-testid="schema-tab"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <h2 className="text-lg font-semibold">Schema</h2>
           <p className="text-sm text-muted-foreground">
-            {collection.schema.length} user-defined field
-            {collection.schema.length !== 1 ? 's' : ''}
+            {draftFields.length} user-defined field
+            {draftFields.length !== 1 ? 's' : ''}
+            {isSuperadmin && isDirty ? ' · unsaved changes' : ''}
           </p>
         </div>
-        {isSuperadmin && (
-          <Button size="sm" className="gap-1.5" onClick={openEditSchema}>
-            <Pencil className="h-3.5 w-3.5" />
-            Edit schema
-          </Button>
-        )}
-      </div>
-
-      <div className="grid grid-cols-2 gap-4 text-sm">
-        <div>
-          <span className="text-muted-foreground">ID:</span>
-          <span className="ml-2 font-mono text-xs">{collection.id}</span>
-        </div>
-        <div>
-          <span className="text-muted-foreground">Table:</span>
-          <span className="ml-2 font-mono text-xs">{collection.table_name}</span>
-        </div>
-      </div>
-
-      <div className="space-y-3">
-        {collection.schema.map((field, index) => (
-          <div key={`${field.name}-${index}`} className="border rounded-lg p-4 space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <span className="font-medium">{field.name}</span>
-              <div className="flex flex-wrap gap-1.5">
-                <Badge variant="secondary">{field.type}</Badge>
-                {field.required && <Badge>Required</Badge>}
-                {field.unique && <Badge>Unique</Badge>}
-                {field.pii && <Badge variant="destructive">PII</Badge>}
-              </div>
-            </div>
-            {field.default !== null && field.default !== undefined && (
-              <div className="text-sm text-muted-foreground">
-                Default: <span className="font-mono">{String(field.default)}</span>
-              </div>
-            )}
-            {field.type === 'reference' && field.collection && (
-              <div className="text-sm text-muted-foreground">
-                References: <span className="font-mono">{field.collection}</span>
-                {field.on_delete && ` (on delete: ${field.on_delete})`}
-              </div>
-            )}
-            {field.type === 'computed' && field.expression && (
-              <div className="text-sm text-muted-foreground">
-                Expression: <span className="font-mono">{field.expression}</span>
-                {field.return_type && ` → ${field.return_type}`}
-              </div>
-            )}
-            {field.pii && field.mask_type && (
-              <div className="text-sm text-muted-foreground">
-                Mask type: {field.mask_type}
-              </div>
-            )}
+        <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
+          <div>
+            <span className="text-muted-foreground">ID:</span>
+            <span className="ml-2 font-mono text-xs">{collection.id}</span>
           </div>
-        ))}
-      </div>
-
-      <div className="bg-muted/50 rounded-lg p-4">
-        <h4 className="font-medium mb-2 text-sm">System Fields (Auto-added)</h4>
-        <div className="text-sm text-muted-foreground space-y-1">
-          <div>• id (TEXT PRIMARY KEY)</div>
-          <div>• account_id (TEXT NOT NULL)</div>
-          <div>• created_at (DATETIME)</div>
-          <div>• created_by (TEXT)</div>
-          <div>• updated_at (DATETIME)</div>
-          <div>• updated_by (TEXT)</div>
+          <div>
+            <span className="text-muted-foreground">Table:</span>
+            <span className="ml-2 font-mono text-xs">{collection.table_name}</span>
+          </div>
         </div>
       </div>
+
+      {isSaving && (
+        <div className="flex flex-col items-center justify-center space-y-3 rounded-lg border py-12">
+          <Loader2 className="h-10 w-10 animate-spin text-primary" />
+          <div className="text-center">
+            <p className="font-medium">Updating schema and applying migrations…</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Please wait while the database changes are applied.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {!isSaving && (
+        <>
+          <SystemFieldsPanel compact />
+
+          <SchemaColumnTable
+            fields={draftFields}
+            onChange={setDraftFields}
+            originalFieldCount={originalFieldCount}
+            collections={collectionNames}
+            fieldErrors={fieldErrors}
+            readOnly={!isSuperadmin}
+            showAddButton={isSuperadmin}
+          />
+
+          {isSuperadmin && originalFieldCount > 0 && (
+            <p className="text-xs text-muted-foreground">
+              Existing fields cannot be renamed, retyped, or deleted. Add new
+              columns and save to apply migrations.
+            </p>
+          )}
+
+          {error && (
+            <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-4">
+              <p className="text-sm text-destructive">{error}</p>
+            </div>
+          )}
+        </>
+      )}
+
+      {isSuperadmin && isDirty && !isSaving && (
+        <div
+          className="sticky bottom-0 z-10 -mx-2 flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-background px-4 py-3 shadow-md"
+          data-testid="schema-dirty-bar"
+        >
+          <p className="text-sm font-medium">Unsaved schema changes</p>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={handleDiscard}>
+              Discard
+            </Button>
+            <Button type="button" size="sm" onClick={() => void handleSave()}>
+              Save
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

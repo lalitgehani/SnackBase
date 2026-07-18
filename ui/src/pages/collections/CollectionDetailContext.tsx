@@ -15,7 +15,6 @@ export interface CollectionDetailContextValue {
   loading: boolean;
   error: string | null;
   refreshDetail: () => Promise<void>;
-  openEditSchema: () => void;
 }
 
 const CollectionDetailContext = createContext<CollectionDetailContextValue | null>(

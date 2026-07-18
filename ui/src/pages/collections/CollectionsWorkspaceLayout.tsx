@@ -6,13 +6,8 @@ import { useState } from 'react';
 import { Outlet } from 'react-router';
 import { Download, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import CreateCollectionDialog from '@/components/collections/CreateCollectionDialog';
 import ImportCollectionsDialog from '@/components/collections/ImportCollectionsDialog';
-import {
-  createCollection,
-  exportCollections,
-  type CreateCollectionData,
-} from '@/services/collections.service';
+import { exportCollections } from '@/services/collections.service';
 import { handleApiError } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -26,18 +21,10 @@ function WorkspaceChrome() {
     isSuperadmin,
     importDialogOpen,
     setImportDialogOpen,
-    createDialogOpen,
-    setCreateDialogOpen,
-    collectionNames,
     refreshCollections,
   } = useCollectionsWorkspace();
   const { toast } = useToast();
   const [isExporting, setIsExporting] = useState(false);
-
-  const handleCreate = async (data: CreateCollectionData) => {
-    await createCollection(data);
-    await refreshCollections();
-  };
 
   const handleExport = async () => {
     setIsExporting(true);
@@ -92,13 +79,6 @@ function WorkspaceChrome() {
           <Outlet />
         </div>
       </div>
-
-      <CreateCollectionDialog
-        open={createDialogOpen}
-        onOpenChange={setCreateDialogOpen}
-        onSubmit={handleCreate}
-        collections={collectionNames}
-      />
 
       <ImportCollectionsDialog
         open={importDialogOpen}

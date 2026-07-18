@@ -414,7 +414,7 @@ export default function DashboardPage() {
                             <Plus className="h-4 w-4" />
                             Create Account
                         </Button>
-                        <Button onClick={() => navigate('/admin/collections')} variant="outline" className="gap-2">
+                        <Button onClick={() => navigate('/admin/collections/new')} variant="outline" className="gap-2">
                             <Plus className="h-4 w-4" />
                             Create Collection
                         </Button>

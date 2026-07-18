@@ -15,14 +15,11 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import EditCollectionDialog from '@/components/collections/EditCollectionDialog';
 import DeleteCollectionDialog from '@/components/collections/DeleteCollectionDialog';
 import {
   deleteCollection,
   getCollectionByName,
-  updateCollection,
   type Collection,
-  type UpdateCollectionData,
 } from '@/services/collections.service';
 import { handleApiError } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -46,7 +43,6 @@ export default function CollectionDetailLayout() {
     getListItem,
     refreshCollections,
     isSuperadmin,
-    collectionNames,
   } = useCollectionsWorkspace();
 
   const listItem = getListItem(collectionName);
@@ -54,7 +50,6 @@ export default function CollectionDetailLayout() {
   const [collection, setCollection] = useState<Collection | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const refreshDetail = useCallback(async () => {
@@ -76,15 +71,6 @@ export default function CollectionDetailLayout() {
     void refreshDetail();
   }, [refreshDetail]);
 
-  const openEditSchema = useCallback(() => {
-    setEditOpen(true);
-  }, []);
-
-  const handleUpdate = async (collectionId: string, data: UpdateCollectionData) => {
-    await updateCollection(collectionId, data);
-    await Promise.all([refreshDetail(), refreshCollections()]);
-  };
-
   const handleDelete = async (collectionId: string) => {
     await deleteCollection(collectionId);
     await refreshCollections();
@@ -99,17 +85,8 @@ export default function CollectionDetailLayout() {
       loading,
       error,
       refreshDetail,
-      openEditSchema,
     }),
-    [
-      collection,
-      listItem,
-      collectionName,
-      loading,
-      error,
-      refreshDetail,
-      openEditSchema,
-    ],
+    [collection, listItem, collectionName, loading, error, refreshDetail],
   );
 
   if (loading && !collection) {
@@ -122,8 +99,8 @@ export default function CollectionDetailLayout() {
 
   if (error && !collection) {
     return (
-      <div className="p-8 text-center space-y-3" data-testid="collection-detail-error">
-        <p className="text-destructive font-medium">Failed to load collection</p>
+      <div className="space-y-3 p-8 text-center" data-testid="collection-detail-error">
+        <p className="font-medium text-destructive">Failed to load collection</p>
         <p className="text-sm text-muted-foreground">{error}</p>
         <Button size="sm" variant="outline" onClick={() => void refreshDetail()}>
           Retry
@@ -135,12 +112,11 @@ export default function CollectionDetailLayout() {
   return (
     <CollectionDetailProvider value={detailValue}>
       <div className="flex h-full min-h-0 flex-col" data-testid="collection-detail-layout">
-        {/* Header */}
         <header className="shrink-0 border-b bg-background px-6 py-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="space-y-1 min-w-0">
+            <div className="min-w-0 space-y-1">
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-2xl font-bold truncate">{collectionName}</h1>
+                <h1 className="truncate text-2xl font-bold">{collectionName}</h1>
                 {(listItem?.has_public_access || false) && (
                   <Badge
                     variant="outline"
@@ -164,7 +140,6 @@ export default function CollectionDetailLayout() {
                   className="gap-1.5"
                   onClick={() => {
                     navigate(`/admin/collections/${collectionName}/schema`);
-                    openEditSchema();
                   }}
                 >
                   <Pencil className="h-3.5 w-3.5" />
@@ -183,9 +158,8 @@ export default function CollectionDetailLayout() {
             )}
           </div>
 
-          {/* Tabs */}
           <nav
-            className="mt-4 flex gap-1 border-b -mb-px"
+            className="-mb-px mt-4 flex gap-1 border-b"
             aria-label="Collection tabs"
           >
             {TABS.map(({ segment, label, icon: Icon }) => (
@@ -194,10 +168,10 @@ export default function CollectionDetailLayout() {
                 to={`/admin/collections/${collectionName}/${segment}`}
                 className={({ isActive }) =>
                   cn(
-                    'inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+                    'inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium -mb-px transition-colors',
                     isActive
                       ? 'border-primary text-foreground'
-                      : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/40',
+                      : 'border-transparent text-muted-foreground hover:border-muted-foreground/40 hover:text-foreground',
                   )
                 }
               >
@@ -212,14 +186,6 @@ export default function CollectionDetailLayout() {
           <Outlet />
         </div>
       </div>
-
-      <EditCollectionDialog
-        open={editOpen}
-        onOpenChange={setEditOpen}
-        collection={collection}
-        onSubmit={handleUpdate}
-        collections={collectionNames}
-      />
 
       <DeleteCollectionDialog
         open={deleteOpen}

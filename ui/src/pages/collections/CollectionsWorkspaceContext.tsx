@@ -1,6 +1,6 @@
 /**
  * Shared state for the Collections workspace shell.
- * Provides collection list, rail collapse, and dialog orchestration.
+ * Provides collection list, rail collapse, and import dialog orchestration.
  */
 
 import {
@@ -29,8 +29,6 @@ interface CollectionsWorkspaceContextValue {
   isSuperadmin: boolean;
   importDialogOpen: boolean;
   setImportDialogOpen: (open: boolean) => void;
-  createDialogOpen: boolean;
-  setCreateDialogOpen: (open: boolean) => void;
   collectionNames: string[];
   getListItem: (name: string) => CollectionListItem | undefined;
 }
@@ -53,7 +51,6 @@ export function CollectionsWorkspaceProvider({ children }: { children: ReactNode
     return localStorage.getItem(RAIL_COLLAPSED_KEY) === 'true';
   });
   const [importDialogOpen, setImportDialogOpen] = useState(false);
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
   const setRailCollapsed = useCallback((collapsed: boolean) => {
     setRailCollapsedState(collapsed);
@@ -92,7 +89,7 @@ export function CollectionsWorkspaceProvider({ children }: { children: ReactNode
     [collections],
   );
 
-  const value = useMemo(
+  const value = useMemo<CollectionsWorkspaceContextValue>(
     () => ({
       collections,
       loading,
@@ -103,8 +100,6 @@ export function CollectionsWorkspaceProvider({ children }: { children: ReactNode
       isSuperadmin,
       importDialogOpen,
       setImportDialogOpen,
-      createDialogOpen,
-      setCreateDialogOpen,
       collectionNames,
       getListItem,
     }),
@@ -117,7 +112,6 @@ export function CollectionsWorkspaceProvider({ children }: { children: ReactNode
       setRailCollapsed,
       isSuperadmin,
       importDialogOpen,
-      createDialogOpen,
       collectionNames,
       getListItem,
     ],

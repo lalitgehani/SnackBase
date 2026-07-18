@@ -1,15 +1,5 @@
 /**
- * Tests for CreateCollectionDialog component (FT2.4)
- *
- * Verifies:
- * - Renders collection name input and schema builder
- * - Shows validation error when name is empty on submit
- * - Shows validation error when no fields are defined
- * - Shows validation error for fields missing a name
- * - Calls onSubmit with correct name and schema payload
- * - Shows submitting state during async operation
- * - Shows success state after creation completes
- * - Resets form when dialog is closed and reopened
+ * Tests for CreateCollectionDialog (legacy dialog; primary UX is /collections/new)
  */
 
 import { describe, it, expect, vi } from 'vitest'
@@ -38,7 +28,19 @@ function renderDialog(props: {
       onOpenChange={onOpenChange}
       onSubmit={onSubmit}
       collections={collections}
-    />
+    />,
+  )
+}
+
+async function addNamedField(
+  user: ReturnType<typeof userEvent.setup>,
+  name: string,
+  fieldIndex = 1,
+) {
+  await user.click(screen.getByRole('button', { name: /add field/i }))
+  await user.type(
+    screen.getByLabelText(new RegExp(`field ${fieldIndex} name`, 'i')),
+    name,
   )
 }
 
@@ -49,14 +51,11 @@ describe('CreateCollectionDialog', () => {
       expect(screen.getByRole('heading', { name: 'Create Collection' })).toBeInTheDocument()
     })
 
-    it('renders collection name input', () => {
+    it('renders collection name input and schema table', () => {
       renderDialog({})
       expect(screen.getByLabelText(/collection name \*/i)).toBeInTheDocument()
-    })
-
-    it('renders SchemaBuilder with Add Field button', () => {
-      renderDialog({})
       expect(screen.getByRole('button', { name: /add field/i })).toBeInTheDocument()
+      expect(screen.getByTestId('system-fields-panel')).toBeInTheDocument()
     })
 
     it('renders Cancel and Create Collection buttons', () => {
@@ -72,10 +71,7 @@ describe('CreateCollectionDialog', () => {
       const onSubmit = vi.fn()
       renderDialog({ onSubmit })
 
-      // Add a field first — SchemaBuilder renders a "Name *" label for each field
-      await user.click(screen.getByRole('button', { name: /add field/i }))
-      await user.type(screen.getByLabelText('Name *'), 'my_field')
-
+      await addNamedField(user, 'my_field')
       await user.click(screen.getByRole('button', { name: /create collection/i }))
 
       await waitFor(() => {
@@ -104,21 +100,13 @@ describe('CreateCollectionDialog', () => {
       renderDialog({ onSubmit })
 
       await user.type(screen.getByLabelText(/collection name \*/i), 'orders')
-
-      // Add first field named "email"
-      await user.click(screen.getByRole('button', { name: /add field/i }))
-      const [firstNameInput] = screen.getAllByLabelText('Name *')
-      await user.type(firstNameInput, 'email')
-
-      // Add second field with the same name
-      await user.click(screen.getByRole('button', { name: /add field/i }))
-      const nameInputs = screen.getAllByLabelText('Name *')
-      await user.type(nameInputs[1], 'email')
+      await addNamedField(user, 'email', 1)
+      await addNamedField(user, 'email', 2)
 
       await user.click(screen.getByRole('button', { name: /create collection/i }))
 
       await waitFor(() => {
-        expect(screen.getByText(/duplicate field name/i)).toBeInTheDocument()
+        expect(screen.getAllByText(/duplicate field name/i).length).toBeGreaterThan(0)
       })
       expect(onSubmit).not.toHaveBeenCalled()
     })
@@ -130,11 +118,10 @@ describe('CreateCollectionDialog', () => {
 
       await user.type(screen.getByLabelText(/collection name \*/i), 'customers')
       await user.click(screen.getByRole('button', { name: /add field/i }))
-      // Leave field name empty
       await user.click(screen.getByRole('button', { name: /create collection/i }))
 
       await waitFor(() => {
-        expect(screen.getByText('All fields must have a name')).toBeInTheDocument()
+        expect(screen.getAllByText(/field name is required/i).length).toBeGreaterThan(0)
       })
       expect(onSubmit).not.toHaveBeenCalled()
     })
@@ -145,18 +132,15 @@ describe('CreateCollectionDialog', () => {
       renderDialog({ onSubmit, collections: ['users', 'accounts'] })
 
       await user.type(screen.getByLabelText(/collection name \*/i), 'orders')
-      await user.click(screen.getByRole('button', { name: /add field/i }))
-      await user.type(screen.getByLabelText('Name *'), 'customer_ref')
+      await addNamedField(user, 'customer_ref')
 
-      // Change field type to "reference" — the first combobox is the field type selector
-      await user.click(screen.getByRole('combobox'))
+      await user.click(screen.getByRole('combobox', { name: /field 1 type/i }))
       await user.click(screen.getByRole('option', { name: /reference/i }))
 
-      // Do not select a target collection; submit immediately
       await user.click(screen.getByRole('button', { name: /create collection/i }))
 
       await waitFor(() => {
-        expect(screen.getByText(/is a reference but has no target collection/i)).toBeInTheDocument()
+        expect(screen.getAllByText(/target collection is required/i).length).toBeGreaterThan(0)
       })
       expect(onSubmit).not.toHaveBeenCalled()
     })
@@ -167,17 +151,13 @@ describe('CreateCollectionDialog', () => {
       renderDialog({ onSubmit })
 
       await user.type(screen.getByLabelText(/collection name \*/i), 'users')
-      await user.click(screen.getByRole('button', { name: /add field/i }))
-      await user.type(screen.getByLabelText('Name *'), 'ssn')
+      await addNamedField(user, 'ssn')
+      await user.click(screen.getByRole('checkbox', { name: /field 1 pii/i }))
 
-      // Check the PII checkbox — SchemaBuilder shows Mask Type selector but no value selected
-      await user.click(screen.getByRole('checkbox', { name: /pii/i }))
-
-      // Submit without selecting a mask type
       await user.click(screen.getByRole('button', { name: /create collection/i }))
 
       await waitFor(() => {
-        expect(screen.getByText(/is marked as PII but has no mask type/i)).toBeInTheDocument()
+        expect(screen.getAllByText(/mask type is required/i).length).toBeGreaterThan(0)
       })
       expect(onSubmit).not.toHaveBeenCalled()
     })
@@ -190,8 +170,7 @@ describe('CreateCollectionDialog', () => {
       renderDialog({ onSubmit })
 
       await user.type(screen.getByLabelText(/collection name \*/i), 'customers')
-      await user.click(screen.getByRole('button', { name: /add field/i }))
-      await user.type(screen.getByLabelText('Name *'), 'email')
+      await addNamedField(user, 'email')
       await user.click(screen.getByRole('button', { name: /create collection/i }))
 
       await waitFor(() => {
@@ -201,7 +180,7 @@ describe('CreateCollectionDialog', () => {
             schema: expect.arrayContaining([
               expect.objectContaining({ name: 'email', type: 'text' }),
             ]),
-          })
+          }),
         )
       })
     })
@@ -210,17 +189,20 @@ describe('CreateCollectionDialog', () => {
       const user = userEvent.setup()
       let resolveSubmit!: () => void
       const onSubmit = vi.fn().mockReturnValue(
-        new Promise<void>((resolve) => { resolveSubmit = resolve })
+        new Promise<void>((resolve) => {
+          resolveSubmit = resolve
+        }),
       )
       renderDialog({ onSubmit })
 
       await user.type(screen.getByLabelText(/collection name \*/i), 'orders')
-      await user.click(screen.getByRole('button', { name: /add field/i }))
-      await user.type(screen.getByLabelText('Name *'), 'amount')
+      await addNamedField(user, 'amount')
       await user.click(screen.getByRole('button', { name: /create collection/i }))
 
       await waitFor(() => {
-        expect(screen.getByText(/creating collection and applying migrations/i)).toBeInTheDocument()
+        expect(
+          screen.getByText(/creating collection and applying migrations/i),
+        ).toBeInTheDocument()
       })
 
       resolveSubmit()
@@ -232,19 +214,19 @@ describe('CreateCollectionDialog', () => {
       renderDialog({ onSubmit })
 
       await user.type(screen.getByLabelText(/collection name \*/i), 'products')
-      await user.click(screen.getByRole('button', { name: /add field/i }))
-      await user.type(screen.getByLabelText('Name *'), 'title')
+      await addNamedField(user, 'title')
       await user.click(screen.getByRole('button', { name: /create collection/i }))
 
       await waitFor(() => {
-        expect(screen.getByText(/collection "products" created successfully/i)).toBeInTheDocument()
+        expect(
+          screen.getByText(/collection "products" created successfully/i),
+        ).toBeInTheDocument()
       })
       expect(screen.getByRole('button', { name: /done/i })).toBeInTheDocument()
     })
 
     it('shows API error message when onSubmit throws', async () => {
       const user = userEvent.setup()
-      // handleApiError processes AxiosErrors; plain Errors fall back to generic message
       const axiosError = Object.assign(new Error('Request failed'), {
         isAxiosError: true,
         response: { data: { detail: 'Collection name already exists' } },
@@ -253,8 +235,7 @@ describe('CreateCollectionDialog', () => {
       renderDialog({ onSubmit })
 
       await user.type(screen.getByLabelText(/collection name \*/i), 'existing')
-      await user.click(screen.getByRole('button', { name: /add field/i }))
-      await user.type(screen.getByLabelText('Name *'), 'data')
+      await addNamedField(user, 'data')
       await user.click(screen.getByRole('button', { name: /create collection/i }))
 
       await waitFor(() => {
@@ -284,12 +265,11 @@ describe('CreateCollectionDialog', () => {
           onOpenChange={onOpenChange}
           onSubmit={onSubmit}
           collections={[]}
-        />
+        />,
       )
 
       await user.type(screen.getByLabelText(/collection name \*/i), 'done_test')
-      await user.click(screen.getByRole('button', { name: /add field/i }))
-      await user.type(screen.getByLabelText('Name *'), 'field_one')
+      await addNamedField(user, 'field_one')
       await user.click(screen.getByRole('button', { name: /create collection/i }))
 
       await waitFor(() => {

@@ -500,15 +500,21 @@ describe('CollectionsWorkspace', () => {
   })
 
   describe('/new route', () => {
-    it('opens create collection dialog', async () => {
+    it('renders full-page create collection form', async () => {
       renderWorkspace('/admin/collections/new')
 
       await waitFor(() => {
-        expect(screen.getByRole('dialog')).toBeInTheDocument()
+        expect(screen.getByTestId('collection-new-page')).toBeInTheDocument()
         expect(
           screen.getByRole('heading', { name: /create collection/i }),
         ).toBeInTheDocument()
       })
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      expect(screen.getByTestId('system-fields-panel')).toBeInTheDocument()
+      expect(screen.getByTestId('schema-column-table')).toBeInTheDocument()
+      expect(
+        screen.getByRole('button', { name: /create collection/i }),
+      ).toBeInTheDocument()
     })
   })
 })
