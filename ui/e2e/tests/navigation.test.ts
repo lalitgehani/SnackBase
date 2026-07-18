@@ -11,7 +11,7 @@
  *   - Run tests with: npm run test:e2e
  */
 
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 import { test, expect } from '../fixtures.js'
 
 // ---------------------------------------------------------------------------
@@ -43,16 +43,28 @@ const NAV_ITEMS = [
   { label: 'Migrations', url: '/admin/migrations' },
 ] as const
 
+/** Collapsible section labels in AppSidebar (buttons, not links). */
+const NAV_SECTIONS = [
+  'Data',
+  'Access',
+  'Automation',
+  'Integrations',
+  'System',
+] as const
+
 /**
  * Expand every collapsed sidebar section so nested nav links are visible.
- * Collapsible content is not actionable while data-state="closed".
- * Trigger is the section menu-button (CollapsibleTrigger asChild merges slots).
+ *
+ * Uses accessible section button names + aria-expanded (Radix CollapsibleTrigger).
+ * Optionally scope to the mobile sheet locator so desktop chrome is ignored.
  */
-async function expandAllSidebarSections(page: Page) {
-  const closed = page.locator('[data-slot="collapsible"][data-state="closed"]')
-  // Guard against infinite loops if a trigger fails to open
-  for (let i = 0; i < 20 && (await closed.count()) > 0; i++) {
-    await closed.first().locator('[data-sidebar="menu-button"]').click()
+async function expandAllSidebarSections(root: Page | Locator) {
+  for (const label of NAV_SECTIONS) {
+    const trigger = root.getByRole('button', { name: label, exact: true })
+    if ((await trigger.count()) === 0) continue
+    const expanded = await trigger.getAttribute('aria-expanded')
+    if (expanded === 'true') continue
+    await trigger.click()
   }
 }
 
@@ -202,7 +214,8 @@ test.describe('Responsive sidebar toggle', () => {
     await page.locator('[data-sidebar="trigger"]').click()
     await expect(mobileSheet).toBeVisible({ timeout: 5_000 })
 
-    // Close via Escape — Radix Sheet closes on Escape key press
+    // Focus dialog content so Escape is handled by the Radix Sheet/Dialog layer
+    await mobileSheet.focus()
     await page.keyboard.press('Escape')
     await expect(mobileSheet).toBeHidden({ timeout: 5_000 })
   })
@@ -217,9 +230,15 @@ test.describe('Responsive sidebar toggle', () => {
     // Open via trigger
     await page.locator('[data-sidebar="trigger"]').click()
     await expect(mobileSheet).toBeVisible({ timeout: 5_000 })
+    await expect(overlay).toBeVisible({ timeout: 5_000 })
 
-    // Click the backdrop overlay to dismiss the sheet
-    await overlay.click()
+    // Sheet is docked left and covers most of the viewport; click the
+    // exposed dimmed strip on the right so the overlay receives the event
+    // (top-left lands on the sheet header and is intercepted).
+    const box = await overlay.boundingBox()
+    expect(box).toBeTruthy()
+    await page.mouse.click(box!.x + box!.width - 8, box!.y + box!.height / 2)
+
     await expect(mobileSheet).toBeHidden({ timeout: 5_000 })
   })
 
@@ -230,10 +249,7 @@ test.describe('Responsive sidebar toggle', () => {
     await expect(mobileSheet).toBeVisible({ timeout: 5_000 })
 
     // Expand collapsed sections inside the mobile sheet, then navigate
-    const closed = mobileSheet.locator('[data-slot="collapsible"][data-state="closed"]')
-    for (let i = 0; i < 20 && (await closed.count()) > 0; i++) {
-      await closed.first().locator('[data-sidebar="menu-button"]').click()
-    }
+    await expandAllSidebarSections(mobileSheet)
 
     // Click a nav link inside the mobile sidebar
     await mobileSheet.getByRole('link', { name: 'Collections', exact: true }).click()

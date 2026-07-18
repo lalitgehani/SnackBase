@@ -399,21 +399,18 @@ export function AppSidebar() {
             <SidebarHeader>
                 <SidebarMenu>
                     <SidebarMenuItem>
-                        <SidebarMenuButton
-                            size="lg"
-                            className="pointer-events-none"
-                            tooltip="SnackBase"
-                        >
+                        {/* Non-interactive brand mark (avoids stealing dialog focus on mobile) */}
+                        <div className="flex h-12 items-center gap-2 overflow-hidden rounded-md px-2 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2!">
                             <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
                                 <Cookie className="size-4" />
                             </div>
-                            <div className="grid flex-1 text-left text-sm leading-tight">
+                            <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
                                 <span className="truncate font-semibold">SnackBase</span>
                                 <span className="truncate text-xs text-muted-foreground">
                                     v0.7.1
                                 </span>
                             </div>
-                        </SidebarMenuButton>
+                        </div>
                     </SidebarMenuItem>
                 </SidebarMenu>
             </SidebarHeader>
