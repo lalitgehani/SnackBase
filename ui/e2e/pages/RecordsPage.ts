@@ -2,8 +2,9 @@ import type { Page, Locator } from '@playwright/test'
 import { BasePage } from './BasePage.js'
 
 /**
- * Page object for the records management page
- * (/admin/collections/{collectionName}/records).
+ * Page object for the collection Data tab
+ * (/admin/collections/{collectionName}/data).
+ * Legacy /records URLs redirect here.
  */
 export class RecordsPage extends BasePage {
   readonly collectionName: string
@@ -14,7 +15,7 @@ export class RecordsPage extends BasePage {
   }
 
   get url() {
-    return `/admin/collections/${this.collectionName}/records`
+    return `/admin/collections/${this.collectionName}/data`
   }
 
   // Locators

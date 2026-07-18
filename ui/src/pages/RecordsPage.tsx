@@ -39,7 +39,12 @@ import {
 import { handleApiError } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth.store';
 
-export default function RecordsPage() {
+interface RecordsPageProps {
+    /** When true, hide standalone page chrome (back link, page title) for workspace embed. */
+    embedded?: boolean;
+}
+
+export default function RecordsPage({ embedded = false }: RecordsPageProps) {
     const { collectionName } = useParams<{ collectionName: string }>();
     const navigate = useNavigate();
     const { user } = useAuthStore();
@@ -365,35 +370,46 @@ export default function RecordsPage() {
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
-                    <div className="flex items-center gap-2 mb-2">
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => navigate('/admin/collections')}
-                            className="gap-1"
-                        >
-                            <ArrowLeft className="h-4 w-4" />
-                            Collections
-                        </Button>
-                    </div>
-                    <h1 className="text-3xl font-bold">{collectionName || 'Records'}</h1>
-                    <p className="text-muted-foreground mt-2">
-                        Manage records in the <strong>{collectionName}</strong> collection
-                    </p>
+                    {!embedded && (
+                        <>
+                            <div className="flex items-center gap-2 mb-2">
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => navigate('/admin/collections')}
+                                    className="gap-1"
+                                >
+                                    <ArrowLeft className="h-4 w-4" />
+                                    Collections
+                                </Button>
+                            </div>
+                            <h1 className="text-3xl font-bold">{collectionName || 'Records'}</h1>
+                            <p className="text-muted-foreground mt-2">
+                                Manage records in the <strong>{collectionName}</strong> collection
+                            </p>
+                        </>
+                    )}
+                    {embedded && (
+                        <p className="text-sm text-muted-foreground">
+                            Manage records in this collection
+                        </p>
+                    )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                     {collection && collection.schema && collection.schema.length > 0 && (
                         <>
-                            <Button
-                                variant="outline"
-                                onClick={() => navigate(`/admin/collections/${collectionName}/analytics`)}
-                                className="gap-2"
-                            >
-                                <BarChart2 className="h-4 w-4" />
-                                Analytics
-                            </Button>
+                            {!embedded && (
+                                <Button
+                                    variant="outline"
+                                    onClick={() => navigate(`/admin/collections/${collectionName}/analytics`)}
+                                    className="gap-2"
+                                >
+                                    <BarChart2 className="h-4 w-4" />
+                                    Analytics
+                                </Button>
+                            )}
                             <Button
                                 variant="outline"
                                 onClick={() => setExportDialogOpen(true)}

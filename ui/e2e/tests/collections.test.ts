@@ -106,8 +106,11 @@ test.describe.serial('FT4.3: Collection & Record Management E2E Flow', () => {
       { name: FIELD_NAME, type: 'text' },
     ])
 
-    // The dialog should have closed and the page is ready
-    await expect(page).toHaveURL(/\/admin\/collections$/)
+    // Dialog closes and workspace navigates to the new collection (schema/data tab)
+    await expect(page).toHaveURL(
+      new RegExp(`/admin/collections/${COLLECTION_NAME}`),
+      { timeout: 10_000 },
+    )
   })
 
   // ── 2. Collection appears in list ──────────────────────────────────────────
@@ -134,11 +137,11 @@ test.describe.serial('FT4.3: Collection & Record Management E2E Flow', () => {
   }) => {
     await collectionsPage.navigate()
 
-    // Click "Manage records" (Database icon) on the collection row
+    // Open collection from browser rail and land on Data tab
     await collectionsPage.openManageRecords(COLLECTION_NAME)
 
     await expect(page).toHaveURL(
-      new RegExp(`/admin/collections/${COLLECTION_NAME}/records`),
+      new RegExp(`/admin/collections/${COLLECTION_NAME}/data`),
     )
 
     // The page heading should show the collection name

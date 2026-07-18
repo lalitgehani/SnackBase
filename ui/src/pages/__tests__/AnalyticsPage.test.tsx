@@ -152,11 +152,11 @@ describe('AnalyticsPage', () => {
       })
     })
 
-    it('renders a back-to-records button even on error', async () => {
+    it('renders a back-to-data button even on error', async () => {
       setupCollectionErrorHandler()
       renderPage()
       await waitFor(() => {
-        expect(screen.getByText('Records')).toBeInTheDocument()
+        expect(screen.getByText('Data')).toBeInTheDocument()
       })
     })
   })
@@ -175,10 +175,10 @@ describe('AnalyticsPage', () => {
       })
     })
 
-    it('renders back to Records button', async () => {
+    it('renders back to Data button', async () => {
       renderPage()
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: /records/i })).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: /data/i })).toBeInTheDocument()
       })
     })
 

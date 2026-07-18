@@ -37,8 +37,14 @@ export default function AdminLayout() {
                     </h2>
                 </header>
 
-                {/* Page content */}
-                <main className="flex-1 min-w-0 overflow-y-auto bg-background p-6">
+                {/* Page content — collections workspace uses full-bleed shell */}
+                <main
+                    className={
+                        location.pathname.startsWith('/admin/collections')
+                            ? 'flex flex-1 min-h-0 min-w-0 flex-col overflow-hidden bg-background p-0'
+                            : 'flex-1 min-w-0 overflow-y-auto bg-background p-6'
+                    }
+                >
                     <Outlet />
                 </main>
             </SidebarInset>

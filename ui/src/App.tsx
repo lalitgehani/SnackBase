@@ -6,9 +6,16 @@ import AccountsPage from '@/pages/AccountsPage';
 import UsersPage from '@/pages/UsersPage';
 import InvitationsPage from '@/pages/InvitationsPage';
 import GroupsPage from '@/pages/GroupsPage';
-import CollectionsPage from '@/pages/CollectionsPage';
-import RecordsPage from '@/pages/RecordsPage';
-import AnalyticsPage from '@/pages/AnalyticsPage';
+import CollectionsWorkspaceLayout from '@/pages/collections/CollectionsWorkspaceLayout';
+import CollectionEmptyState from '@/pages/collections/CollectionEmptyState';
+import CollectionNewPage from '@/pages/collections/CollectionNewPage';
+import CollectionDetailLayout from '@/pages/collections/CollectionDetailLayout';
+import CollectionDefaultTabRedirect from '@/pages/collections/CollectionDefaultTabRedirect';
+import LegacyRecordsRedirect from '@/pages/collections/LegacyRecordsRedirect';
+import SchemaTabPage from '@/pages/collections/tabs/SchemaTabPage';
+import DataTabPage from '@/pages/collections/tabs/DataTabPage';
+import RulesTabPage from '@/pages/collections/tabs/RulesTabPage';
+import AnalyticsTabPage from '@/pages/collections/tabs/AnalyticsTabPage';
 import RolesPage from '@/pages/RolesPage';
 import AuditLogsPage from '@/pages/AuditLogsPage';
 import MigrationsPage from '@/pages/MigrationsPage';
@@ -55,9 +62,18 @@ function App() {
           <Route path="users" element={<UsersPage />} />
           <Route path="invitations" element={<InvitationsPage />} />
           <Route path="groups" element={<GroupsPage />} />
-          <Route path="collections" element={<CollectionsPage />} />
-          <Route path="collections/:collectionName/records" element={<RecordsPage />} />
-          <Route path="collections/:collectionName/analytics" element={<AnalyticsPage />} />
+          <Route path="collections" element={<CollectionsWorkspaceLayout />}>
+            <Route index element={<CollectionEmptyState />} />
+            <Route path="new" element={<CollectionNewPage />} />
+            <Route path=":collectionName" element={<CollectionDetailLayout />}>
+              <Route index element={<CollectionDefaultTabRedirect />} />
+              <Route path="schema" element={<SchemaTabPage />} />
+              <Route path="data" element={<DataTabPage />} />
+              <Route path="rules" element={<RulesTabPage />} />
+              <Route path="analytics" element={<AnalyticsTabPage />} />
+              <Route path="records" element={<LegacyRecordsRedirect />} />
+            </Route>
+          </Route>
           <Route path="roles" element={<RolesPage />} />
           <Route path="audit-logs" element={<AuditLogsPage />} />
           <Route path="migrations" element={<MigrationsPage />} />

@@ -79,7 +79,12 @@ function exportCsv(columns: string[], rows: AggregationResult[], filename: strin
 	URL.revokeObjectURL(url);
 }
 
-export default function AnalyticsPage() {
+interface AnalyticsPageProps {
+	/** When true, hide standalone page chrome for workspace embed. */
+	embedded?: boolean;
+}
+
+export default function AnalyticsPage({ embedded = false }: AnalyticsPageProps) {
 	const { collectionName } = useParams<{ collectionName: string }>();
 	const navigate = useNavigate();
 
@@ -210,9 +215,16 @@ export default function AnalyticsPage() {
 	if (collectionError || !collection) {
 		return (
 			<div className="space-y-4">
-				<Button variant="ghost" size="sm" onClick={() => navigate(`/admin/collections/${collectionName}/records`)} className="gap-1">
-					<ArrowLeft className="h-4 w-4" /> Records
-				</Button>
+				{!embedded && (
+					<Button
+						variant="ghost"
+						size="sm"
+						onClick={() => navigate(`/admin/collections/${collectionName}/data`)}
+						className="gap-1"
+					>
+						<ArrowLeft className="h-4 w-4" /> Data
+					</Button>
+				)}
 				<p className="text-destructive">{collectionError ?? 'Collection not found'}</p>
 			</div>
 		);
@@ -223,24 +235,36 @@ export default function AnalyticsPage() {
 			{/* Header */}
 			<div className="flex items-center justify-between">
 				<div>
-					<div className="flex items-center gap-2 mb-2">
-						<Button
-							variant="ghost"
-							size="sm"
-							onClick={() => navigate(`/admin/collections/${collectionName}/records`)}
-							className="gap-1"
-						>
-							<ArrowLeft className="h-4 w-4" />
-							Records
-						</Button>
-					</div>
-					<h1 className="text-3xl font-bold flex items-center gap-2">
-						<BarChart2 className="h-7 w-7 text-primary" />
-						{collectionName} — Analytics
-					</h1>
-					<p className="text-muted-foreground mt-2">
-						Group records and compute aggregations
-					</p>
+					{!embedded && (
+						<>
+							<div className="flex items-center gap-2 mb-2">
+								<Button
+									variant="ghost"
+									size="sm"
+									onClick={() => navigate(`/admin/collections/${collectionName}/data`)}
+									className="gap-1"
+								>
+									<ArrowLeft className="h-4 w-4" />
+									Data
+								</Button>
+							</div>
+							<h1 className="text-3xl font-bold flex items-center gap-2">
+								<BarChart2 className="h-7 w-7 text-primary" />
+								{collectionName} — Analytics
+							</h1>
+						</>
+					)}
+					{embedded && (
+						<p className="text-sm text-muted-foreground flex items-center gap-1.5">
+							<BarChart2 className="h-4 w-4" />
+							Group records and compute aggregations
+						</p>
+					)}
+					{!embedded && (
+						<p className="text-muted-foreground mt-2">
+							Group records and compute aggregations
+						</p>
+					)}
 				</div>
 			</div>
 
