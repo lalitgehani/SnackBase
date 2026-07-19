@@ -27,8 +27,11 @@ export function StepNameField({ name, onRename }: Props) {
 
     return (
         <div className="space-y-1.5">
-            <Label className="text-xs">Step name</Label>
+            <Label htmlFor="prop-step-name" className="text-xs">
+                Step name
+            </Label>
             <Input
+                id="prop-step-name"
                 className="h-8 text-sm font-mono"
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}

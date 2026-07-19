@@ -103,6 +103,7 @@ SnackBase is a Python/FastAPI-based BaaS providing auto-generated REST APIs, mul
 - [x] F8.1: API-Defined Hooks (unified automation: event/schedule/manual triggers, action executor, execution log, hot-reload)
 - [x] F8.2: Custom Endpoints (serverless functions: DB-stored HTTP endpoints dispatched via `/api/v1/x/{slug}/{path}`, 30s timeout, path params, template vars)
 - [x] F8.3: Workflow Engine (multi-step automation: directed-graph steps, event/schedule/manual/webhook triggers, job-backed wait_delay)
+- [x] Workflow Visual Studio (full-page React Flow editor: templates, validation, auto-layout, run status overlay; supersedes dialog step lists)
 
 ---
 
@@ -192,6 +193,9 @@ open http://localhost:8000
   - Trigger types: event, schedule, manual, webhook
   - Job-backed `wait_delay` for asynchronous step execution
   - Workflow instances with step-by-step logging, cancel/resume, status tracking
+  - **Visual studio** (full-page React Flow): palette | canvas | properties; template picker; graph validation; auto-layout
+  - Optional step layout fields `position_x` / `position_y` (UI only; executor ignores them)
+  - Overview + run detail with status overlay on the same graph
 - **Outbound Webhooks** - HTTP webhook delivery with retry logic and delivery logs
 - **SQL Macros** - Reusable SQL snippets with safe execution
   - Built-in permission macros: `@has_role()`, `@has_group()`, `@owns_record()`, `@in_time_range()`, `@has_permission()`
@@ -217,7 +221,7 @@ open http://localhost:8000
 - **API Keys** - Create, list, and revoke service API keys
 - **Hooks** - Create and manage user-defined hooks (event/schedule/manual)
 - **Custom Endpoints** - Build and test serverless function endpoints
-- **Workflows** - Design multi-step workflows and track execution instances
+- **Workflows** - Full-page visual studio (`/admin/workflows`, `/new`, `/:id`, `/:id/edit`, `/:id/runs/:instanceId`); list, design, overview, and run inspection
 - **Webhooks** - Configure outbound webhooks and view delivery history
 - **Background Jobs** - Monitor job queue status, retries, and history
 - **Scheduled Tasks** - Manage cron-scheduled tasks

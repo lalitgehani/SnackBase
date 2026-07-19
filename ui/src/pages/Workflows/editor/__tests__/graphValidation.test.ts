@@ -221,4 +221,72 @@ describe('validateWorkflowGraph', () => {
         expect(hasHardErrors(issues)).toBe(true);
         expect(nodeIssueSeverity(issues, 'notify')).toBe('error');
     });
+
+    it('accepts valid multi-branch condition graph without hard errors', () => {
+        const nodes: Node[] = [
+            triggerNode(),
+            stepNode('gate', { type: 'condition', expression: 'x == 1' }),
+            stepNode('yes', {
+                type: 'action',
+                action_type: 'send_webhook',
+                config: { url: 'https://yes' },
+            }),
+            stepNode('no', {
+                type: 'action',
+                action_type: 'send_webhook',
+                config: { url: 'https://no' },
+            }),
+        ];
+        const edges: Edge[] = [
+            { id: 't', source: TRIGGER_NODE_ID, target: 'gate' },
+            { id: 't1', source: 'gate', target: 'yes', sourceHandle: 'true' },
+            { id: 't2', source: 'gate', target: 'no', sourceHandle: 'false' },
+        ];
+        const issues = validateWorkflowGraph(nodes, edges);
+        expect(hasHardErrors(issues)).toBe(false);
+        expect(issues.filter((i) => i.message.includes('missing'))).toHaveLength(0);
+    });
+
+    it('errors when loop items expression is missing', () => {
+        const nodes: Node[] = [
+            triggerNode(),
+            stepNode('loop1', { type: 'loop', items: '', step: 'body' }),
+            stepNode('body', {
+                type: 'action',
+                action_type: 'send_webhook',
+                config: { url: 'https://x' },
+            }),
+        ];
+        const edges: Edge[] = [
+            { id: 't', source: TRIGGER_NODE_ID, target: 'loop1' },
+        ];
+        const issues = validateWorkflowGraph(nodes, edges);
+        expect(hasHardErrors(issues)).toBe(true);
+        expect(issues.some((i) => i.message.includes('Loop items'))).toBe(true);
+    });
+
+    it('allows parallel with empty branches without hard error', () => {
+        const nodes: Node[] = [
+            triggerNode(),
+            stepNode('par', { type: 'parallel', branches: [] }),
+        ];
+        const edges: Edge[] = [{ id: 't', source: TRIGGER_NODE_ID, target: 'par' }];
+        const issues = validateWorkflowGraph(nodes, edges);
+        // parallel field validation is currently lenient (engine-side)
+        expect(issues.filter((i) => i.nodeId === 'par' && i.severity === 'error')).toHaveLength(0);
+    });
+
+    it('does not treat dead-end actions as hard errors', () => {
+        const nodes: Node[] = [
+            triggerNode(),
+            stepNode('end', {
+                type: 'action',
+                action_type: 'send_webhook',
+                config: { url: 'https://end' },
+            }),
+        ];
+        const edges: Edge[] = [{ id: 't', source: TRIGGER_NODE_ID, target: 'end' }];
+        const issues = validateWorkflowGraph(nodes, edges);
+        expect(hasHardErrors(issues)).toBe(false);
+    });
 });

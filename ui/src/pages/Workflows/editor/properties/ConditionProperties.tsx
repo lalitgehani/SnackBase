@@ -14,15 +14,18 @@ export function ConditionProperties({ step, onChange, onRename }: Props) {
         <div className="space-y-3" data-testid="properties-condition">
             <StepNameField name={step.name} onRename={onRename} />
             <div className="space-y-1.5">
-                <Label className="text-xs">Expression</Label>
+                <Label htmlFor="prop-condition-expression" className="text-xs">
+                    Expression
+                </Label>
                 <Input
+                    id="prop-condition-expression"
                     className="h-8 text-sm font-mono"
                     value={String(step.expression ?? '')}
                     onChange={(e) => onChange({ ...step, expression: e.target.value })}
                     placeholder='status == "approved"'
                 />
                 <p className="text-[10px] text-muted-foreground">
-                    Wire true / false branches by connecting handles on the canvas
+                    Rule expression. Wire true / false branches below or on the canvas.
                 </p>
             </div>
         </div>

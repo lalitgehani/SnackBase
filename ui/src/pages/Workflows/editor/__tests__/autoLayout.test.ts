@@ -69,6 +69,25 @@ describe('layoutGraph', () => {
     it('returns empty array for empty input', () => {
         expect(layoutGraph([], [])).toEqual([]);
     });
+
+    it('layouts a 50-node linear chain with finite positions', () => {
+        const nodes: Node[] = [node(TRIGGER_NODE_ID, 0, 0, 'trigger')];
+        const edges: Edge[] = [];
+        for (let i = 1; i <= 50; i++) {
+            const id = `n${i}`;
+            nodes.push(node(id));
+            const prev = i === 1 ? TRIGGER_NODE_ID : `n${i - 1}`;
+            edges.push({ id: `e${i}`, source: prev, target: id });
+        }
+        const laid = layoutGraph(nodes, edges);
+        expect(laid).toHaveLength(51);
+        for (const n of laid) {
+            expect(Number.isFinite(n.position.x)).toBe(true);
+            expect(Number.isFinite(n.position.y)).toBe(true);
+        }
+        const byId = Object.fromEntries(laid.map((n) => [n.id, n.position]));
+        expect(byId.n1.x).toBeLessThan(byId.n50.x);
+    });
 });
 
 describe('shouldAutoLayoutOnLoad', () => {

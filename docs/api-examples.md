@@ -29,6 +29,7 @@ Complete guide to using the SnackBase REST API with practical examples.
 - [Audit Logs](#audit-logs)
 - [Migrations](#migrations)
 - [Dashboard](#dashboard)
+- [Workflows](#workflows)
 - [Health Checks](#health-checks)
 - [Error Handling](#error-handling)
 - [Best Practices](#best-practices)
@@ -3663,6 +3664,74 @@ curl -X GET 'http://localhost:8000/api/v1/dashboard/stats?range=30d' \
 | 401 | Missing/invalid token |
 | 403 | Authenticated but not superadmin |
 | 422 | Invalid `range` (not `7d` / `30d` / `90d`) |
+
+---
+
+## Workflows
+
+Multi-step automation (F8.3). Auth required; workflows are account-scoped. The admin UI designs graphs with React Flow; the API stores steps as JSON including optional canvas positions.
+
+### Step layout fields (visual editor)
+
+Each object in `steps[]` may include:
+
+| Field | Type | Notes |
+|-------|------|--------|
+| `position_x` | float (optional) | Canvas X; **ignored by the executor** |
+| `position_y` | float (optional) | Canvas Y; **ignored by the executor** |
+
+Control flow uses `next`, `on_true`, `on_false` (and type-specific fields). Positions round-trip on create, update, and get.
+
+### Create workflow with positions and a condition branch
+
+**Endpoint**: `POST /api/v1/workflows`
+
+```bash
+curl -X POST http://localhost:8000/api/v1/workflows \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Approval Branch",
+    "trigger": { "type": "manual" },
+    "enabled": true,
+    "steps": [
+      {
+        "name": "gate",
+        "type": "condition",
+        "expression": "status == \"ok\"",
+        "on_true": "approve",
+        "on_false": "reject",
+        "position_x": 200,
+        "position_y": 100
+      },
+      {
+        "name": "approve",
+        "type": "action",
+        "action_type": "send_webhook",
+        "config": { "url": "https://example.com/yes" },
+        "position_x": 420,
+        "position_y": 40
+      },
+      {
+        "name": "reject",
+        "type": "action",
+        "action_type": "send_webhook",
+        "config": { "url": "https://example.com/no" },
+        "position_x": 420,
+        "position_y": 160
+      }
+    ]
+  }'
+```
+
+**Response** (201): workflow object including the same `steps` with positions preserved.
+
+### Get / update
+
+- `GET /api/v1/workflows/{id}` — returns steps including `position_x` / `position_y` when set
+- `PUT /api/v1/workflows/{id}` — replace name, trigger, steps (send full steps array to update layout)
+
+Operator guide: [Workflows Visual Studio](guides/workflows-visual-studio.md). OpenAPI: `/docs` (`StepPositionMixin`).
 
 ---
 

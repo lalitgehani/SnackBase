@@ -65,17 +65,22 @@ export function NodePalette({ onAddStep, readOnly = false, className }: NodePale
 
     return (
         <aside
+            role="region"
+            aria-label="Step palette"
             className={cn('flex flex-col h-full min-h-0', className)}
             data-testid="workflow-editor-palette"
         >
             <div className="p-3 border-b shrink-0 space-y-2">
-                <p className="text-sm font-medium">Steps</p>
+                <p className="text-sm font-medium" id="workflow-palette-heading">
+                    Steps
+                </p>
                 <Input
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     placeholder="Search…"
                     className="h-8 text-sm"
                     disabled={readOnly}
+                    aria-label="Search step types"
                     data-testid="workflow-palette-search"
                 />
             </div>
@@ -102,6 +107,7 @@ export function NodePalette({ onAddStep, readOnly = false, className }: NodePale
                                                 if (!readOnly) onAddStep(item.stepType);
                                             }}
                                             disabled={readOnly}
+                                            aria-label={`Add ${item.label} step`}
                                             className={cn(
                                                 'w-full flex items-start gap-2 rounded-md border bg-card px-2 py-2 text-left transition-colors',
                                                 'hover:bg-accent/50 hover:border-accent-foreground/20',
@@ -129,7 +135,7 @@ export function NodePalette({ onAddStep, readOnly = false, className }: NodePale
             </div>
 
             <p className="text-[10px] text-muted-foreground px-3 py-2 border-t shrink-0">
-                Drag onto canvas or click to add
+                Click to add (or drag). With a node selected, the new step is auto-connected.
             </p>
         </aside>
     );

@@ -97,6 +97,23 @@ describe('WorkflowEditorPage', () => {
         await user.click(screen.getByTestId('palette-item-condition'));
         expect(await screen.findByTestId('workflow-node-condition')).toBeInTheDocument();
         expect(screen.getByTestId('properties-condition')).toBeInTheDocument();
+        expect(screen.getByTestId('properties-step-name')).toBeInTheDocument();
+    });
+
+    it('auto-connects sequential palette adds from the previously selected step', async () => {
+        const user = userEvent.setup();
+        renderEditor('/admin/workflows/new');
+        await chooseEmptyTemplate(user);
+        await screen.findByTestId('workflow-editor-page');
+
+        // First add selects the new action; second add wires action → condition
+        await user.click(screen.getByTestId('palette-item-action'));
+        expect(await screen.findByTestId('workflow-node-action')).toBeInTheDocument();
+        await user.click(screen.getByTestId('palette-item-condition'));
+        expect(await screen.findByTestId('workflow-node-condition')).toBeInTheDocument();
+        // Condition is selected; step name field present (properties path without drag)
+        expect(screen.getByTestId('properties-condition')).toBeInTheDocument();
+        expect(screen.getByTestId('prop-on-true')).toBeInTheDocument();
     });
 
     it('loads existing workflow on edit route without template picker', async () => {

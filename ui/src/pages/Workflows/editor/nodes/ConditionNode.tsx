@@ -35,6 +35,7 @@ function ConditionNode({ id, data, selected }: NodeProps<ConditionFlowNode>) {
                         style={{ top: '35%' }}
                         className="!h-2.5 !w-2.5 !border-2 !border-background !bg-green-600"
                         data-testid="condition-handle-true"
+                        aria-label="True branch"
                     />
                     <Handle
                         type="source"
@@ -43,6 +44,7 @@ function ConditionNode({ id, data, selected }: NodeProps<ConditionFlowNode>) {
                         style={{ top: '70%' }}
                         className="!h-2.5 !w-2.5 !border-2 !border-background !bg-red-500"
                         data-testid="condition-handle-false"
+                        aria-label="False branch"
                     />
                     <div className="absolute right-2 top-[28%] text-[9px] font-medium text-green-700 dark:text-green-400 pointer-events-none">
                         T

@@ -2,6 +2,7 @@
  * Right-rail properties: routes fields by selected node kind/type.
  */
 
+import { useEffect, useRef } from 'react';
 import type { Edge, Node } from '@xyflow/react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -12,6 +13,7 @@ import {
     isTriggerNodeData,
 } from '../graphMapper';
 import { TRIGGER_NODE_ID } from '../../workflowConstants';
+import { getOutgoingTarget } from '../connectionRules';
 import { WorkflowProperties } from './WorkflowProperties';
 import { TriggerProperties } from './TriggerProperties';
 import { ActionProperties } from './ActionProperties';
@@ -19,6 +21,7 @@ import { ConditionProperties } from './ConditionProperties';
 import { WaitProperties } from './WaitProperties';
 import { LoopProperties } from './LoopProperties';
 import { ParallelProperties } from './ParallelProperties';
+import { NextStepSelect, ConditionBranchSelects } from './OutgoingEdgeFields';
 import type { WorkflowTriggerConfig, WorkflowStep } from '@/services/workflows.service';
 
 export interface EditorMetaFields {
@@ -37,6 +40,12 @@ export interface PropertiesPanelProps {
     onUpdateStep: (nodeId: string, step: WorkflowStep) => void;
     onRenameStep: (nodeId: string, newName: string) => void;
     onDeleteNode: (nodeId: string) => void;
+    /** Set or clear outgoing canvas edge for a source handle. */
+    onSetOutgoing?: (
+        sourceId: string,
+        targetId: string | null,
+        sourceHandle?: string | null,
+    ) => void;
     className?: string;
 }
 
@@ -50,16 +59,32 @@ export function PropertiesPanel({
     onUpdateStep,
     onRenameStep,
     onDeleteNode,
+    onSetOutgoing,
     className,
 }: PropertiesPanelProps) {
+    const panelRef = useRef<HTMLElement>(null);
+    const prevSelectedRef = useRef<string | null>(null);
+
     const selected = selectedNodeId
         ? nodes.find((n) => n.id === selectedNodeId) ?? null
         : null;
+
+    // Move focus into the panel when selection changes (palette add / issue click)
+    useEffect(() => {
+        if (selectedNodeId && selectedNodeId !== prevSelectedRef.current) {
+            panelRef.current?.focus({ preventScroll: true });
+        }
+        prevSelectedRef.current = selectedNodeId;
+    }, [selectedNodeId]);
 
     const stepNames = nodes
         .filter((n) => !isTriggerNode(n))
         .map((n) => n.id)
         .filter(Boolean);
+
+    const otherStepNames = selected
+        ? stepNames.filter((n) => n !== selected.id)
+        : stepNames;
 
     const outgoing = selected
         ? edges.filter((e) => e.source === selected.id).map((e) => {
@@ -67,6 +92,11 @@ export function PropertiesPanel({
               return `${label}${e.target}`;
           })
         : [];
+
+    const isCondition =
+        selected &&
+        (selected.type === 'condition' ||
+            (isStepNodeData(selected.data) && selected.data.step.type === 'condition'));
 
     let body: React.ReactNode;
 
@@ -76,10 +106,22 @@ export function PropertiesPanel({
         );
     } else if (isTriggerNode(selected) && isTriggerNodeData(selected.data)) {
         body = (
-            <TriggerProperties
-                trigger={selected.data.trigger}
-                onChange={onUpdateTrigger}
-            />
+            <>
+                <TriggerProperties
+                    trigger={selected.data.trigger}
+                    onChange={onUpdateTrigger}
+                />
+                {onSetOutgoing && (
+                    <NextStepSelect
+                        id="prop-trigger-next"
+                        label="First step"
+                        value={getOutgoingTarget(edges, selected.id)}
+                        options={otherStepNames}
+                        onChange={(t) => onSetOutgoing(selected.id, t)}
+                        help="Which step runs after the trigger (same as drawing an edge)"
+                    />
+                )}
+            </>
         );
     } else if (isStepNodeData(selected.data)) {
         const step = selected.data.step;
@@ -144,15 +186,51 @@ export function PropertiesPanel({
                     />
                 );
         }
+
+        // Outgoing edge controls (not for condition — uses dual branch selects below)
+        if (onSetOutgoing && selected && !isCondition) {
+            body = (
+                <>
+                    {body}
+                    <NextStepSelect
+                        value={getOutgoingTarget(edges, selected.id)}
+                        options={otherNames}
+                        onChange={(t) => onSetOutgoing(selected.id, t)}
+                    />
+                </>
+            );
+        } else if (onSetOutgoing && selected && isCondition) {
+            body = (
+                <>
+                    {body}
+                    <ConditionBranchSelects
+                        trueValue={getOutgoingTarget(edges, selected.id, 'true')}
+                        falseValue={getOutgoingTarget(edges, selected.id, 'false')}
+                        options={otherNames}
+                        onChangeTrue={(t) => onSetOutgoing(selected.id, t, 'true')}
+                        onChangeFalse={(t) => onSetOutgoing(selected.id, t, 'false')}
+                    />
+                </>
+            );
+        }
     } else {
         body = <p className="text-xs text-muted-foreground">Unknown node</p>;
     }
 
     const canDelete = selected && selected.id !== TRIGGER_NODE_ID;
+    const regionLabel = !selected
+        ? 'Workflow properties'
+        : isTriggerNode(selected)
+          ? 'Trigger properties'
+          : 'Step properties';
 
     return (
         <aside
-            className={cn('flex flex-col h-full min-h-0', className)}
+            ref={panelRef}
+            tabIndex={-1}
+            role="region"
+            aria-label={regionLabel}
+            className={cn('flex flex-col h-full min-h-0 outline-none', className)}
             data-testid="workflow-editor-properties"
         >
             <div className="p-3 border-b shrink-0">

@@ -119,6 +119,7 @@ export function BaseStepNodeCard({
                     type="target"
                     position={Position.Left}
                     className="!h-2.5 !w-2.5 !border-2 !border-background !bg-muted-foreground"
+                    aria-label="Input"
                 />
             )}
 
@@ -193,6 +194,7 @@ export function BaseStepNodeCard({
                     type="source"
                     position={Position.Right}
                     className="!h-2.5 !w-2.5 !border-2 !border-background !bg-muted-foreground"
+                    aria-label="Output"
                 />
             )}
         </div>

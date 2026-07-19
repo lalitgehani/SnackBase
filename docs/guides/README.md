@@ -13,6 +13,7 @@ Practical guides for common development tasks when building with or extending Sn
 | [Writing Permission Rules](./writing-rules.md) | Define fine-grained access control rules | 33 |
 | [Testing Guide](./testing.md) | Write unit and integration tests | 23 |
 | [Extending SnackBase](./extending-snackbase.md) | Overview of extension methods and patterns | 23 |
+| [Workflows Visual Studio](./workflows-visual-studio.md) | Operator guide: templates, canvas wiring, runs, positions API | — |
 
 ---
 

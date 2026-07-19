@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import type { Edge, Node } from '@xyflow/react';
-import { validateConnection, applyConnection } from '../connectionRules';
+import {
+    validateConnection,
+    applyConnection,
+    getOutgoingTarget,
+    setOutgoingTarget,
+    defaultAutoConnectHandle,
+} from '../connectionRules';
 import { TRIGGER_NODE_ID } from '../../workflowConstants';
 
 const nodes: Node[] = [
@@ -110,5 +116,45 @@ describe('applyConnection', () => {
                 [],
             ),
         ).toBeNull();
+    });
+});
+
+describe('getOutgoingTarget / setOutgoingTarget', () => {
+    it('reads and clears default next edge', () => {
+        const edges: Edge[] = [{ id: 'a->b', source: 'a', target: 'b' }];
+        expect(getOutgoingTarget(edges, 'a')).toBe('b');
+        expect(getOutgoingTarget(edges, 'a', null)).toBe('b');
+        const cleared = setOutgoingTarget(nodes, edges, 'a', null);
+        expect(getOutgoingTarget(cleared, 'a')).toBeNull();
+    });
+
+    it('sets next and replaces existing', () => {
+        const edges: Edge[] = [{ id: 'a->b', source: 'a', target: 'b' }];
+        const next = setOutgoingTarget(nodes, edges, 'a', 'c');
+        expect(getOutgoingTarget(next, 'a')).toBe('c');
+        expect(next.filter((e) => e.source === 'a')).toHaveLength(1);
+    });
+
+    it('sets condition true/false independently', () => {
+        let edges: Edge[] = [];
+        edges = setOutgoingTarget(nodes, edges, 'c', 'a', 'true');
+        edges = setOutgoingTarget(nodes, edges, 'c', 'b', 'false');
+        expect(getOutgoingTarget(edges, 'c', 'true')).toBe('a');
+        expect(getOutgoingTarget(edges, 'c', 'false')).toBe('b');
+        expect(edges.find((e) => e.sourceHandle === 'true')?.label).toBe('true');
+        edges = setOutgoingTarget(nodes, edges, 'c', null, 'true');
+        expect(getOutgoingTarget(edges, 'c', 'true')).toBeNull();
+        expect(getOutgoingTarget(edges, 'c', 'false')).toBe('b');
+    });
+});
+
+describe('defaultAutoConnectHandle', () => {
+    it('returns true for condition sources', () => {
+        expect(defaultAutoConnectHandle(nodes, 'c')).toBe('true');
+    });
+
+    it('returns undefined for action/trigger', () => {
+        expect(defaultAutoConnectHandle(nodes, 'a')).toBeUndefined();
+        expect(defaultAutoConnectHandle(nodes, TRIGGER_NODE_ID)).toBeUndefined();
     });
 });

@@ -24,8 +24,11 @@ export function WaitProperties({ step, onChange, onRename }: Props) {
 
             {step.type === 'wait_delay' && (
                 <div className="space-y-1.5">
-                    <Label className="text-xs">Duration</Label>
+                    <Label htmlFor="prop-wait-duration" className="text-xs">
+                        Duration
+                    </Label>
                     <Input
+                        id="prop-wait-duration"
                         className="h-8 text-sm"
                         value={String(step.duration ?? '')}
                         onChange={(e) => onChange({ ...step, duration: e.target.value })}
@@ -38,8 +41,11 @@ export function WaitProperties({ step, onChange, onRename }: Props) {
             {step.type === 'wait_condition' && (
                 <>
                     <div className="space-y-1.5">
-                        <Label className="text-xs">Expression</Label>
+                        <Label htmlFor="prop-wait-expression" className="text-xs">
+                            Expression
+                        </Label>
                         <Input
+                            id="prop-wait-expression"
                             className="h-8 text-sm font-mono"
                             value={String(step.expression ?? '')}
                             onChange={(e) => onChange({ ...step, expression: e.target.value })}
@@ -47,8 +53,11 @@ export function WaitProperties({ step, onChange, onRename }: Props) {
                         />
                     </div>
                     <div className="space-y-1.5">
-                        <Label className="text-xs">Poll interval</Label>
+                        <Label htmlFor="prop-wait-poll" className="text-xs">
+                            Poll interval
+                        </Label>
                         <Input
+                            id="prop-wait-poll"
                             className="h-8 text-sm"
                             value={String(step.poll_interval ?? '')}
                             onChange={(e) => onChange({ ...step, poll_interval: e.target.value })}
@@ -56,8 +65,11 @@ export function WaitProperties({ step, onChange, onRename }: Props) {
                         />
                     </div>
                     <div className="space-y-1.5">
-                        <Label className="text-xs">Timeout</Label>
+                        <Label htmlFor="prop-wait-timeout" className="text-xs">
+                            Timeout
+                        </Label>
                         <Input
+                            id="prop-wait-timeout"
                             className="h-8 text-sm"
                             value={String(step.timeout ?? '')}
                             onChange={(e) => onChange({ ...step, timeout: e.target.value })}
@@ -70,12 +82,14 @@ export function WaitProperties({ step, onChange, onRename }: Props) {
             {step.type === 'wait_event' && (
                 <>
                     <div className="space-y-1.5">
-                        <Label className="text-xs">Event</Label>
+                        <Label htmlFor="prop-wait-event" className="text-xs">
+                            Event
+                        </Label>
                         <Select
                             value={String(step.event ?? 'records.create')}
                             onValueChange={(v) => onChange({ ...step, event: v })}
                         >
-                            <SelectTrigger className="h-8 text-sm">
+                            <SelectTrigger id="prop-wait-event" className="h-8 text-sm">
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -88,8 +102,11 @@ export function WaitProperties({ step, onChange, onRename }: Props) {
                         </Select>
                     </div>
                     <div className="space-y-1.5">
-                        <Label className="text-xs">Collection (optional)</Label>
+                        <Label htmlFor="prop-wait-collection" className="text-xs">
+                            Collection (optional)
+                        </Label>
                         <Input
+                            id="prop-wait-collection"
                             className="h-8 text-sm"
                             value={String(step.collection ?? '')}
                             onChange={(e) =>
@@ -101,8 +118,11 @@ export function WaitProperties({ step, onChange, onRename }: Props) {
                         />
                     </div>
                     <div className="space-y-1.5">
-                        <Label className="text-xs">Timeout</Label>
+                        <Label htmlFor="prop-wait-event-timeout" className="text-xs">
+                            Timeout
+                        </Label>
                         <Input
+                            id="prop-wait-event-timeout"
                             className="h-8 text-sm"
                             value={String(step.timeout ?? '')}
                             onChange={(e) => onChange({ ...step, timeout: e.target.value })}

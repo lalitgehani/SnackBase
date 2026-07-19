@@ -42,9 +42,15 @@ export function TriggerProperties({ trigger, onChange }: Props) {
     return (
         <div className="space-y-3" data-testid="properties-trigger">
             <div className="space-y-1.5">
-                <Label className="text-xs">Trigger type</Label>
+                <Label htmlFor="prop-trigger-type" className="text-xs">
+                    Trigger type
+                </Label>
                 <Select value={type} onValueChange={(v) => setType(v as TriggerType)}>
-                    <SelectTrigger className="h-8 text-sm" data-testid="properties-trigger-type">
+                    <SelectTrigger
+                        id="prop-trigger-type"
+                        className="h-8 text-sm"
+                        data-testid="properties-trigger-type"
+                    >
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -59,12 +65,14 @@ export function TriggerProperties({ trigger, onChange }: Props) {
             {type === 'event' && trigger.type === 'event' && (
                 <>
                     <div className="space-y-1.5">
-                        <Label className="text-xs">Event</Label>
+                        <Label htmlFor="prop-trigger-event" className="text-xs">
+                            Event
+                        </Label>
                         <Select
                             value={trigger.event}
                             onValueChange={(v) => onChange({ ...trigger, event: v })}
                         >
-                            <SelectTrigger className="h-8 text-sm">
+                            <SelectTrigger id="prop-trigger-event" className="h-8 text-sm">
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -77,8 +85,11 @@ export function TriggerProperties({ trigger, onChange }: Props) {
                         </Select>
                     </div>
                     <div className="space-y-1.5">
-                        <Label className="text-xs">Collection (optional)</Label>
+                        <Label htmlFor="prop-trigger-collection" className="text-xs">
+                            Collection (optional)
+                        </Label>
                         <Input
+                            id="prop-trigger-collection"
                             className="h-8 text-sm"
                             value={trigger.collection ?? ''}
                             onChange={(e) =>
@@ -91,8 +102,11 @@ export function TriggerProperties({ trigger, onChange }: Props) {
                         />
                     </div>
                     <div className="space-y-1.5">
-                        <Label className="text-xs">Condition (optional)</Label>
+                        <Label htmlFor="prop-trigger-condition" className="text-xs">
+                            Condition (optional)
+                        </Label>
                         <Input
+                            id="prop-trigger-condition"
                             className="h-8 text-sm font-mono"
                             value={trigger.condition ?? ''}
                             onChange={(e) =>
@@ -109,8 +123,11 @@ export function TriggerProperties({ trigger, onChange }: Props) {
 
             {type === 'schedule' && trigger.type === 'schedule' && (
                 <div className="space-y-1.5">
-                    <Label className="text-xs">Cron expression</Label>
+                    <Label htmlFor="prop-trigger-cron" className="text-xs">
+                        Cron expression
+                    </Label>
                     <Input
+                        id="prop-trigger-cron"
                         className="h-8 text-sm font-mono"
                         value={trigger.cron}
                         onChange={(e) => onChange({ type: 'schedule', cron: e.target.value })}

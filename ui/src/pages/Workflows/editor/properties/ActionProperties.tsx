@@ -41,12 +41,14 @@ export function ActionProperties({ step, onChange, onRename }: Props) {
         <div className="space-y-3" data-testid="properties-action">
             <StepNameField name={step.name} onRename={onRename} />
             <div className="space-y-1.5">
-                <Label className="text-xs">Action type</Label>
+                <Label htmlFor="prop-action-type" className="text-xs">
+                    Action type
+                </Label>
                 <Select
                     value={String(step.action_type ?? 'send_webhook')}
                     onValueChange={(v) => onChange({ ...step, action_type: v })}
                 >
-                    <SelectTrigger className="h-8 text-sm">
+                    <SelectTrigger id="prop-action-type" className="h-8 text-sm">
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -59,8 +61,11 @@ export function ActionProperties({ step, onChange, onRename }: Props) {
                 </Select>
             </div>
             <div className="space-y-1.5">
-                <Label className="text-xs">Config (JSON)</Label>
+                <Label htmlFor="prop-action-config" className="text-xs">
+                    Config (JSON)
+                </Label>
                 <Textarea
+                    id="prop-action-config"
                     className="text-xs font-mono min-h-[120px]"
                     value={configText}
                     onChange={(e) => applyConfig(e.target.value)}

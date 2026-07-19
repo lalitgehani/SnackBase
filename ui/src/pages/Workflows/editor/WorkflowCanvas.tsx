@@ -202,6 +202,7 @@ function CanvasInner({
                 nodesDraggable={!readOnly}
                 nodesConnectable={!readOnly}
                 elementsSelectable
+                onlyRenderVisibleElements
                 // Editor owns Delete/Backspace with focus guards (Phase 3)
                 deleteKeyCode={null}
                 proOptions={{ hideAttribution: true }}

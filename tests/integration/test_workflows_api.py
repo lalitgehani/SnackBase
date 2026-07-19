@@ -460,6 +460,69 @@ async def test_update_workflow_steps(client: AsyncClient, user_token: str) -> No
 
 
 @pytest.mark.asyncio
+async def test_create_branched_workflow_with_positions(
+    client: AsyncClient, user_token: str
+) -> None:
+    """Condition branches + positions round-trip on create/get."""
+    steps = [
+        {
+            "name": "gate",
+            "type": "condition",
+            "expression": 'status == "ok"',
+            "on_true": "approve",
+            "on_false": "reject",
+            "position_x": 200,
+            "position_y": 100,
+        },
+        {
+            "name": "approve",
+            "type": "action",
+            "action_type": "send_webhook",
+            "config": {"url": "https://example.com/yes"},
+            "position_x": 420,
+            "position_y": 40,
+        },
+        {
+            "name": "reject",
+            "type": "action",
+            "action_type": "send_webhook",
+            "config": {"url": "https://example.com/no"},
+            "position_x": 420,
+            "position_y": 160,
+        },
+    ]
+    create = await client.post(
+        "/api/v1/workflows",
+        json={
+            "name": "Branched Positioned Flow",
+            "trigger": {"type": "manual"},
+            "steps": steps,
+        },
+        headers=_auth(user_token),
+    )
+    assert create.status_code == 201, create.text
+    wf_id = create.json()["id"]
+    body_steps = create.json()["steps"]
+    gate = next(s for s in body_steps if s["name"] == "gate")
+    assert gate["on_true"] == "approve"
+    assert gate["on_false"] == "reject"
+    assert gate["position_x"] == 200
+    assert gate["position_y"] == 100
+
+    get_resp = await client.get(
+        f"/api/v1/workflows/{wf_id}", headers=_auth(user_token)
+    )
+    assert get_resp.status_code == 200
+    got = get_resp.json()["steps"]
+    g = next(s for s in got if s["name"] == "gate")
+    assert g["expression"] == 'status == "ok"'
+    assert g["on_true"] == "approve"
+    assert g["on_false"] == "reject"
+    assert g["position_x"] == 200
+    assert next(s for s in got if s["name"] == "approve")["position_y"] == 40
+
+
+@pytest.mark.asyncio
 async def test_create_workflow_with_step_positions(
     client: AsyncClient, user_token: str
 ) -> None:

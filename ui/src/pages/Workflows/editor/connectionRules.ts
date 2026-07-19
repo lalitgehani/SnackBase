@@ -91,12 +91,18 @@ export function applyConnection(
 
     let label: string | undefined;
     let style: Edge['style'] | undefined;
+    let labelStyle: Edge['labelStyle'] | undefined;
+    let labelBgStyle: Edge['labelBgStyle'] | undefined;
     if (isCondition && handle === 'true') {
         label = 'true';
         style = { stroke: 'var(--color-green-600, #16a34a)', strokeWidth: 1.75 };
+        labelStyle = { fill: 'var(--color-green-700, #15803d)', fontWeight: 600, fontSize: 11 };
+        labelBgStyle = { fill: 'var(--card, var(--background, #fff))', fillOpacity: 0.9 };
     } else if (isCondition && handle === 'false') {
         label = 'false';
         style = { stroke: 'var(--color-red-500, #ef4444)', strokeWidth: 1.75 };
+        labelStyle = { fill: 'var(--color-red-600, #dc2626)', fontWeight: 600, fontSize: 11 };
+        labelBgStyle = { fill: 'var(--card, var(--background, #fff))', fillOpacity: 0.9 };
     }
 
     const edgeId =
@@ -112,6 +118,8 @@ export function applyConnection(
         targetHandle: targetHandle ?? undefined,
         label,
         style,
+        labelStyle,
+        labelBgStyle,
         type: 'smoothstep',
     };
 
@@ -135,6 +143,15 @@ export function decorateEdge(edge: Edge, nodes: Node[]): Edge {
                 stroke: 'var(--color-green-600, #16a34a)',
                 strokeWidth: 1.75,
             },
+            labelStyle: edge.labelStyle ?? {
+                fill: 'var(--color-green-700, #15803d)',
+                fontWeight: 600,
+                fontSize: 11,
+            },
+            labelBgStyle: edge.labelBgStyle ?? {
+                fill: 'var(--card, var(--background, #fff))',
+                fillOpacity: 0.9,
+            },
         };
     }
     if (edge.sourceHandle === 'false') {
@@ -146,7 +163,93 @@ export function decorateEdge(edge: Edge, nodes: Node[]): Edge {
                 stroke: 'var(--color-red-500, #ef4444)',
                 strokeWidth: 1.75,
             },
+            labelStyle: edge.labelStyle ?? {
+                fill: 'var(--color-red-600, #dc2626)',
+                fontWeight: 600,
+                fontSize: 11,
+            },
+            labelBgStyle: edge.labelBgStyle ?? {
+                fill: 'var(--card, var(--background, #fff))',
+                fillOpacity: 0.9,
+            },
         };
     }
     return { ...edge, type: edge.type ?? 'smoothstep' };
+}
+
+/**
+ * Current target for a source handle (null if no outgoing edge).
+ * Pass `sourceHandle` as `'true' | 'false'` for condition branches; omit for default next.
+ */
+export function getOutgoingTarget(
+    edges: Edge[],
+    sourceId: string,
+    sourceHandle?: string | null,
+): string | null {
+    const edge = edges.find((e) => {
+        if (e.source !== sourceId) return false;
+        return (e.sourceHandle ?? null) === (sourceHandle ?? null);
+    });
+    return edge?.target ?? null;
+}
+
+/**
+ * Set or clear the outgoing edge for a source handle (properties-panel wiring).
+ * `targetId` null removes the edge for that handle.
+ * Reuses applyConnection replace policy when setting a target.
+ */
+export function setOutgoingTarget(
+    nodes: Node[],
+    edges: Edge[],
+    sourceId: string,
+    targetId: string | null,
+    sourceHandle?: string | null,
+): Edge[] {
+    const handle = sourceHandle ?? undefined;
+
+    if (!targetId) {
+        return edges.filter((e) => {
+            if (e.source !== sourceId) return true;
+            return (e.sourceHandle ?? null) !== (sourceHandle ?? null);
+        });
+    }
+
+    const connection: Connection = {
+        source: sourceId,
+        target: targetId,
+        sourceHandle: handle ?? null,
+        targetHandle: null,
+    };
+
+    // If same edge already exists, return unchanged
+    const existing = getOutgoingTarget(edges, sourceId, sourceHandle);
+    if (existing === targetId) {
+        // Still re-apply to ensure labels/styles
+        const without = edges.filter((e) => {
+            if (e.source !== sourceId) return true;
+            return (e.sourceHandle ?? null) !== (sourceHandle ?? null);
+        });
+        const next = applyConnection(connection, nodes, without);
+        return next ?? edges;
+    }
+
+    // Temporarily drop same-handle edges so validateConnection won't flag duplicate
+    // when target differs (applyConnection also filters, but validate runs first)
+    const withoutSameHandle = edges.filter((e) => {
+        if (e.source !== sourceId) return true;
+        return (e.sourceHandle ?? null) !== (sourceHandle ?? null);
+    });
+    const next = applyConnection(connection, nodes, withoutSameHandle);
+    return next ?? edges;
+}
+
+/**
+ * Default source handle when auto-wiring from a selected node after palette add.
+ * Conditions use the true branch; all other nodes use the default (next) handle.
+ */
+export function defaultAutoConnectHandle(nodes: Node[], sourceId: string): string | undefined {
+    if (isConditionNode(nodes, sourceId)) {
+        return 'true';
+    }
+    return undefined;
 }

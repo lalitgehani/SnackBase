@@ -22,8 +22,11 @@ export function LoopProperties({ step, otherStepNames, onChange, onRename }: Pro
         <div className="space-y-3" data-testid="properties-loop">
             <StepNameField name={step.name} onRename={onRename} />
             <div className="space-y-1.5">
-                <Label className="text-xs">Items expression</Label>
+                <Label htmlFor="prop-loop-items" className="text-xs">
+                    Items expression
+                </Label>
                 <Input
+                    id="prop-loop-items"
                     className="h-8 text-sm font-mono"
                     value={String(step.items ?? '')}
                     onChange={(e) => onChange({ ...step, items: e.target.value })}
@@ -31,14 +34,16 @@ export function LoopProperties({ step, otherStepNames, onChange, onRename }: Pro
                 />
             </div>
             <div className="space-y-1.5">
-                <Label className="text-xs">Body step</Label>
+                <Label htmlFor="prop-loop-body" className="text-xs">
+                    Body step
+                </Label>
                 <Select
                     value={String(step.step || '__none__')}
                     onValueChange={(v) =>
                         onChange({ ...step, step: v === '__none__' ? '' : v })
                     }
                 >
-                    <SelectTrigger className="h-8 text-sm">
+                    <SelectTrigger id="prop-loop-body" className="h-8 text-sm">
                         <SelectValue placeholder="Select step…" />
                     </SelectTrigger>
                     <SelectContent>

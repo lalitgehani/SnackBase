@@ -46,12 +46,19 @@ import {
     renameNode,
 } from './nodeDefaults';
 import { layoutGraph, shouldAutoLayoutOnLoad } from './autoLayout';
+import {
+    applyConnection,
+    defaultAutoConnectHandle,
+    setOutgoingTarget,
+} from './connectionRules';
 import { NodePalette } from './palette/NodePalette';
 import { PropertiesPanel } from './properties/PropertiesPanel';
 import { TemplatePickerDialog } from './templates/TemplatePickerDialog';
 import type { WorkflowTemplate } from './templates/workflowTemplates';
 import { ValidationIssuesPanel } from './ValidationIssuesPanel';
 import { useWorkflowEditorShortcuts } from './useWorkflowEditorShortcuts';
+
+const VALIDATION_DEBOUNCE_MS = 250;
 
 interface EditorMeta {
     name: string;
@@ -97,9 +104,20 @@ export default function WorkflowEditorPage() {
     nodesRef.current = nodes;
     edgesRef.current = edges;
 
+    /** Debounced issues for canvas badges + panel (save always validates sync). */
+    const [liveValidationIssues, setLiveValidationIssues] = useState<ValidationIssue[]>([]);
+
     const setMetaField = useCallback(<K extends keyof EditorMeta>(key: K, value: EditorMeta[K]) => {
         setMeta((prev) => ({ ...prev, [key]: value }));
     }, []);
+
+    // Debounce live validation so typing in properties does not recompute every keystroke
+    useEffect(() => {
+        const handle = window.setTimeout(() => {
+            setLiveValidationIssues(validateWorkflowGraph(nodes, edges));
+        }, VALIDATION_DEBOUNCE_MS);
+        return () => window.clearTimeout(handle);
+    }, [nodes, edges]);
 
     // Load existing workflow
     useEffect(() => {
@@ -163,18 +181,23 @@ export default function WorkflowEditorPage() {
         return () => window.removeEventListener('workflow-node-delete', handler);
     }, [setNodes, setEdges]);
 
-    const validationIssues = useMemo(
-        () => validateWorkflowGraph(nodes, edges),
-        [nodes, edges],
-    );
+    const validationIssues = liveValidationIssues;
 
     const displayNodes = useMemo(() => {
         return nodes.map((n) => {
-            const severity = nodeIssueSeverity(validationIssues, n.id);
-            const data = n.data && typeof n.data === 'object' ? { ...n.data, issueSeverity: severity } : n.data;
-            return { ...n, data };
+            const severity = nodeIssueSeverity(liveValidationIssues, n.id);
+            const prev =
+                n.data && typeof n.data === 'object'
+                    ? ((n.data as { issueSeverity?: string | null }).issueSeverity ?? null)
+                    : null;
+            if (prev === severity) return n;
+            if (n.data && typeof n.data === 'object') {
+                const nextData = { ...n.data, issueSeverity: severity };
+                return { ...n, data: nextData };
+            }
+            return n;
         });
-    }, [nodes, validationIssues]);
+    }, [nodes, liveValidationIssues]);
 
     const onSelectionChange = useCallback(({ nodes: selected, edges: selEdges }: OnSelectionChangeParams) => {
         setSelectedNodeId(selected[0]?.id ?? null);
@@ -182,46 +205,69 @@ export default function WorkflowEditorPage() {
     }, []);
 
     const addStepAt = useCallback(
-        (stepType: StepTypeValue, position: { x: number; y: number }) => {
-            setNodes((nds) => {
-                const name = generateUniqueStepName(
-                    stepType,
-                    nds.map((n) => n.id),
-                );
-                const step = createDefaultStep(stepType, name);
-                const node: Node = {
-                    id: name,
-                    type: stepType,
-                    position,
-                    selected: true,
-                    data: {
-                        kind: 'step',
-                        label: name,
-                        step,
-                    },
+        (stepType: StepTypeValue, position: { x: number; y: number }, connectFromId?: string | null) => {
+            const nds = nodesRef.current;
+            const eds = edgesRef.current;
+            const name = generateUniqueStepName(
+                stepType,
+                nds.map((n) => n.id),
+            );
+            const step = createDefaultStep(stepType, name);
+            const node: Node = {
+                id: name,
+                type: stepType,
+                position,
+                selected: true,
+                data: {
+                    kind: 'step',
+                    label: name,
+                    step,
+                },
+            };
+            const cleared = nds.map((n) => ({ ...n, selected: false }));
+            const nextNodes = [...cleared, node];
+
+            let nextEdges = eds;
+            if (connectFromId && nextNodes.some((n) => n.id === connectFromId)) {
+                const handle = defaultAutoConnectHandle(nextNodes, connectFromId);
+                const connection = {
+                    source: connectFromId,
+                    target: name,
+                    sourceHandle: handle ?? null,
+                    targetHandle: null,
                 };
-                const cleared = nds.map((n) => ({ ...n, selected: false }));
-                setSelectedNodeId(name);
-                return [...cleared, node];
-            });
+                const applied = applyConnection(connection, nextNodes, eds);
+                if (applied) nextEdges = applied;
+            }
+
+            setNodes(nextNodes);
+            setEdges(nextEdges);
+            setSelectedNodeId(name);
         },
-        [setNodes],
+        [setNodes, setEdges],
     );
 
     const handleAddFromPalette = useCallback(
         (stepType: StepTypeValue) => {
-            const xs = nodes.map((n) => n.position.x);
-            const ys = nodes.map((n) => n.position.y);
+            const nds = nodesRef.current;
+            const xs = nds.map((n) => n.position.x);
+            const ys = nds.map((n) => n.position.y);
             const x = xs.length ? Math.max(...xs) + 220 : 320;
             const y = ys.length ? ys.reduce((a, b) => a + b, 0) / ys.length : 120;
-            addStepAt(stepType, { x, y });
+            // Sequential auto-connect from currently selected node (keyboard-friendly)
+            const selected =
+                selectedNodeId && nds.some((n) => n.id === selectedNodeId)
+                    ? selectedNodeId
+                    : nds.find((n) => n.selected)?.id ?? null;
+            addStepAt(stepType, { x, y }, selected);
         },
-        [nodes, addStepAt],
+        [selectedNodeId, addStepAt],
     );
 
     const handleDropStepType = useCallback(
         (stepType: StepTypeValue, position: { x: number; y: number }) => {
-            addStepAt(stepType, position);
+            // Drop does not auto-connect (position is intentional)
+            addStepAt(stepType, position, null);
         },
         [addStepAt],
     );
@@ -229,6 +275,15 @@ export default function WorkflowEditorPage() {
     const handleConnectEdges = useCallback(
         (next: Edge[]) => {
             setEdges(next);
+        },
+        [setEdges],
+    );
+
+    const handleSetOutgoing = useCallback(
+        (sourceId: string, targetId: string | null, sourceHandle?: string | null) => {
+            setEdges((eds) =>
+                setOutgoingTarget(nodesRef.current, eds, sourceId, targetId, sourceHandle),
+            );
         },
         [setEdges],
     );
@@ -559,7 +614,7 @@ export default function WorkflowEditorPage() {
                 <p className="text-xs text-muted-foreground mt-0.5 truncate" title={title}>
                     {isEdit
                         ? `Editing · ${id}`
-                        : 'Drag steps from the palette · connect handles to set flow'}
+                        : 'Click palette to add · wire with properties or handles'}
                 </p>
             </div>
 
@@ -610,6 +665,7 @@ export default function WorkflowEditorPage() {
                         onUpdateStep={handleUpdateStep}
                         onRenameStep={handleRenameStep}
                         onDeleteNode={handleDeleteNode}
+                        onSetOutgoing={handleSetOutgoing}
                     />
                 </div>
             </div>

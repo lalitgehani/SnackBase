@@ -59,6 +59,7 @@ Welcome to the SnackBase documentation! This directory contains comprehensive gu
    - **[Writing Permission Rules](guides/writing-rules.md)** - Define access control logic
    - **[Testing Guide](guides/testing.md)** - Write unit and integration tests
    - **[Extending SnackBase](guides/extending-snackbase.md)** - Extension overview and patterns
+   - **[Workflows Visual Studio](guides/workflows-visual-studio.md)** - Design workflows in the React Flow studio
 
 6. **[API Examples](api-examples.md)**
    - Authentication (register, login, refresh)

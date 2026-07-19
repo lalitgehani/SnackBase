@@ -18,6 +18,7 @@ This guide covers the SnackBase React admin UI architecture, development pattern
 - [Styling](#styling)
 - [Dark / Light Mode](#dark--light-mode)
 - [Development Workflow](#development-workflow)
+- [Workflows Visual Studio](#workflows-visual-studio)
 - [Features](#features)
 
 ---
@@ -987,6 +988,54 @@ Unit tests mock `matchMedia` so Light / Dark / System selection is not flaky aga
 - Options: Light / Dark / System as `menuitemradio` with `aria-checked` selection (not color alone)
 - Keyboard operable (focus, open, select)
 - Focus rings from Radix/ShadCN remain visible in both themes
+
+---
+
+## Workflows Visual Studio
+
+The admin **Workflows** feature is a full-page React Flow studio (not dialog step lists). Implementation lives under `ui/src/pages/Workflows/`.
+
+### Routes
+
+| Route | Page |
+|-------|------|
+| `/admin/workflows` | List |
+| `/admin/workflows/new` | Create editor + template picker |
+| `/admin/workflows/:id` | Overview (read-only graph + runs) |
+| `/admin/workflows/:id/edit` | Edit editor |
+| `/admin/workflows/:id/runs/:instanceId` | Run detail + status overlay |
+
+### Architecture
+
+| Area | Location |
+|------|----------|
+| Graph ↔ API steps | `editor/graphMapper.ts` (`stepsToFlow` / `flowToSteps`) |
+| Validation | `editor/graphValidation.ts` (hard errors block save) |
+| Connections | `editor/connectionRules.ts` (incl. properties-panel `setOutgoingTarget`) |
+| Auto-layout | `editor/autoLayout.ts` (dagre LR) |
+| Templates | `editor/templates/workflowTemplates.ts` |
+| Custom nodes | `editor/nodes/*` (module-level `workflowNodeTypes`, `memo`) |
+| Run overlay | `editor/runStatusMapper.ts`, `buildReadonlyGraph.ts` |
+
+### Data contract
+
+- Node `id` === step `name` (renames rewrite edges).
+- Edges serialize to `next` / `on_true` / `on_false`.
+- Optional `position_x` / `position_y` on each step (UI only).
+- Trigger is a locked canvas node; stored as `trigger_type` / `trigger_config` on the workflow.
+
+### Accessibility & performance (maintainers)
+
+- Palette click-to-add; sequential auto-connect from selected node; properties **Next** / **On true** / **On false** for keyboard wiring.
+- Live validation debounced (~250ms); Save validates synchronously.
+- `onlyRenderVisibleElements` on React Flow; memoized node components.
+- Operator guide + a11y checklist: [workflows-visual-studio.md](guides/workflows-visual-studio.md).
+
+### Tests
+
+```bash
+cd ui && npm test -- --run src/pages/Workflows
+```
 
 ---
 

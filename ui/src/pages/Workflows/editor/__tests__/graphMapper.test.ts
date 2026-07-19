@@ -307,4 +307,131 @@ describe('stepsToFlow / flowToSteps', () => {
         expect(back[0].position_x).toBe(55.5);
         expect(back[0].position_y).toBe(99);
     });
+
+    it('round-trips full branched fixture with positions', () => {
+        const steps: WorkflowStep[] = [
+            {
+                type: 'condition',
+                name: 'gate',
+                expression: 'status == "ok"',
+                on_true: 'approve',
+                on_false: 'reject',
+                position_x: 200,
+                position_y: 100,
+            },
+            {
+                type: 'action',
+                name: 'approve',
+                action_type: 'send_webhook',
+                config: { url: 'https://ok.example' },
+                position_x: 420,
+                position_y: 40,
+            },
+            {
+                type: 'action',
+                name: 'reject',
+                action_type: 'send_email',
+                config: { to: 'ops@example.com' },
+                position_x: 420,
+                position_y: 160,
+            },
+        ];
+        const graph = stepsToFlow(steps, { type: 'manual' });
+        expect(graph.nodes.find((n) => n.id === 'gate')!.position).toEqual({
+            x: 200,
+            y: 100,
+        });
+        const back = flowToSteps(graph.nodes, graph.edges);
+        const gate = back.find((s) => s.name === 'gate')!;
+        expect(gate).toMatchObject({
+            type: 'condition',
+            expression: 'status == "ok"',
+            on_true: 'approve',
+            on_false: 'reject',
+            position_x: 200,
+            position_y: 100,
+        });
+        expect(back.find((s) => s.name === 'approve')!.position_x).toBe(420);
+        expect(back.find((s) => s.name === 'reject')!.position_y).toBe(160);
+    });
+
+    it('round-trips parallel multi-step branches with positions', () => {
+        const steps: WorkflowStep[] = [
+            {
+                type: 'parallel',
+                name: 'fanout',
+                branches: [
+                    ['left_a', 'left_b'],
+                    ['right_a'],
+                ],
+                next: 'join',
+                position_x: 100,
+                position_y: 50,
+            },
+            {
+                type: 'action',
+                name: 'left_a',
+                action_type: 'send_webhook',
+                config: { url: 'https://l.a' },
+                position_x: 250,
+                position_y: 0,
+            },
+            {
+                type: 'action',
+                name: 'left_b',
+                action_type: 'send_webhook',
+                config: { url: 'https://l.b' },
+                position_x: 400,
+                position_y: 0,
+            },
+            {
+                type: 'action',
+                name: 'right_a',
+                action_type: 'send_webhook',
+                config: { url: 'https://r.a' },
+                position_x: 250,
+                position_y: 100,
+            },
+            {
+                type: 'action',
+                name: 'join',
+                action_type: 'enqueue_job',
+                config: { handler: 'done' },
+                position_x: 550,
+                position_y: 50,
+            },
+        ];
+        const graph = stepsToFlow(steps);
+        const back = flowToSteps(graph.nodes, graph.edges);
+        const fan = back.find((s) => s.name === 'fanout')!;
+        expect(fan.type).toBe('parallel');
+        expect(fan.branches).toEqual([
+            ['left_a', 'left_b'],
+            ['right_a'],
+        ]);
+        expect(fan.next).toBe('join');
+        expect(fan.position_x).toBe(100);
+        expect(fan.position_y).toBe(50);
+    });
+
+    it('round-trips a 50-step linear graph with positions', () => {
+        const steps: WorkflowStep[] = Array.from({ length: 50 }, (_, i) => ({
+            type: 'action' as const,
+            name: `step_${i + 1}`,
+            action_type: 'send_webhook',
+            config: { url: `https://example.com/${i}` },
+            next: i < 49 ? `step_${i + 2}` : undefined,
+            position_x: i * 40,
+            position_y: (i % 5) * 20,
+        }));
+        const graph = stepsToFlow(steps);
+        expect(graph.nodes.filter((n) => n.id !== TRIGGER_NODE_ID)).toHaveLength(50);
+        const back = flowToSteps(graph.nodes, graph.edges);
+        expect(back).toHaveLength(50);
+        const byName = Object.fromEntries(back.map((s) => [s.name, s]));
+        expect(byName.step_1.next).toBe('step_2');
+        expect(byName.step_50.next).toBeUndefined();
+        expect(byName.step_26.position_x).toBe(25 * 40);
+        expect(byName.step_26.position_y).toBe((25 % 5) * 20);
+    });
 });
