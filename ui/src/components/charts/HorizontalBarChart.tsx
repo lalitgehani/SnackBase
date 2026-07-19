@@ -18,12 +18,15 @@ export interface HorizontalBarChartProps {
   data: RankedBarDatum[];
   height?: number;
   color?: string;
+  /** Called when a bar is clicked (payload is the datum for that bar). */
+  onBarClick?: (datum: RankedBarDatum) => void;
 }
 
 export function HorizontalBarChart({
   data,
   height = 280,
   color = CHART_COLORS.chart1,
+  onBarClick,
 }: HorizontalBarChartProps) {
   if (!data.length) {
     return null;
@@ -58,7 +61,20 @@ export function HorizontalBarChart({
               fontSize: 12,
             }}
           />
-          <Bar dataKey="value" fill={color} radius={[0, 4, 4, 0]} isAnimationActive={false} />
+          <Bar
+            dataKey="value"
+            fill={color}
+            radius={[0, 4, 4, 0]}
+            isAnimationActive={false}
+            cursor={onBarClick ? 'pointer' : undefined}
+            onClick={(item) => {
+              if (!onBarClick) return;
+              const payload = (item as { payload?: RankedBarDatum })?.payload;
+              if (payload) {
+                onBarClick(payload);
+              }
+            }}
+          />
         </BarChart>
       </ResponsiveContainer>
     </div>

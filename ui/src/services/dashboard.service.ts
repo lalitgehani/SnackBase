@@ -34,6 +34,18 @@ export interface TimeSeriesPoint {
   count: number;
 }
 
+export interface AuditOperationPoint {
+  date: string;
+  create: number;
+  update: number;
+  delete: number;
+}
+
+export interface CollectionRecordCount {
+  name: string;
+  count: number;
+}
+
 export interface PreviousPeriodStats {
   new_accounts: number;
   new_users: number;
@@ -42,6 +54,7 @@ export interface PreviousPeriodStats {
 export interface TimeSeriesStats {
   accounts_created: TimeSeriesPoint[];
   users_created: TimeSeriesPoint[];
+  audit_by_operation: AuditOperationPoint[];
 }
 
 export interface DashboardStats {
@@ -60,6 +73,7 @@ export interface DashboardStats {
   system_health: SystemHealthStats;
   active_sessions: number;
   public_collections_count: number;
+  records_by_collection: CollectionRecordCount[];
   recent_audit_logs: AuditLogItem[];
 }
 

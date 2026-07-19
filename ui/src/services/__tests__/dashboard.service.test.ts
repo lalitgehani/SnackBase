@@ -37,6 +37,15 @@ const mockDashboardStats: DashboardStats = {
       { date: '2026-07-18', count: 1 },
       { date: '2026-07-19', count: 1 },
     ],
+    audit_by_operation: [
+      { date: '2026-07-13', create: 1, update: 0, delete: 0 },
+      { date: '2026-07-14', create: 0, update: 2, delete: 0 },
+      { date: '2026-07-15', create: 0, update: 0, delete: 1 },
+      { date: '2026-07-16', create: 0, update: 0, delete: 0 },
+      { date: '2026-07-17', create: 3, update: 1, delete: 0 },
+      { date: '2026-07-18', create: 0, update: 0, delete: 0 },
+      { date: '2026-07-19', create: 1, update: 1, delete: 0 },
+    ],
   },
   recent_registrations: [
     {
@@ -54,6 +63,10 @@ const mockDashboardStats: DashboardStats = {
   },
   active_sessions: 7,
   public_collections_count: 3,
+  records_by_collection: [
+    { name: 'posts', count: 900 },
+    { name: 'comments', count: 600 },
+  ],
   recent_audit_logs: [],
 }
 

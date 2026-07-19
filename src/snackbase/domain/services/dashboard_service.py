@@ -16,6 +16,8 @@ from snackbase.core.config import get_settings
 from snackbase.domain.services.audit_log_service import AuditLogService
 from snackbase.infrastructure.api.schemas import (
     AuditLogResponse,
+    AuditOperationPoint,
+    CollectionRecordCount,
     DashboardStats,
     PreviousPeriodStats,
     RecentRegistration,
@@ -28,6 +30,9 @@ from snackbase.infrastructure.persistence.repositories import (
     CollectionRepository,
     RefreshTokenRepository,
     UserRepository,
+)
+from snackbase.infrastructure.persistence.repositories.audit_log_repository import (
+    AuditLogRepository,
 )
 from snackbase.infrastructure.persistence.repositories.collection_rule_repository import (
     CollectionRuleRepository,
@@ -57,6 +62,7 @@ class DashboardService:
         self.collection_repo = CollectionRepository(session)
         self.collection_rule_repo = CollectionRuleRepository(session)
         self.refresh_token_repo = RefreshTokenRepository(session)
+        self.audit_log_repo = AuditLogRepository(session)
         self.audit_log_service = AuditLogService(session)
 
     async def get_dashboard_stats(
@@ -84,7 +90,7 @@ class DashboardService:
         total_accounts = await self.account_repo.count_all()
         total_users = await self.user_repo.count_all()
         total_collections = await self.collection_repo.count_all()
-        total_records = await self._count_total_records()
+        total_records, records_by_collection = await self._count_records_by_collection()
 
         # Growth metrics for selected range (field names kept as *_7d for compatibility)
         new_accounts_7d = await self.account_repo.count_created_between(range_start, now)
@@ -100,9 +106,13 @@ class DashboardService:
         # Daily time series (exactly `days` points, zero-filled for continuous axes)
         accounts_by_day = await self.account_repo.count_created_by_day(range_start, now)
         users_by_day = await self.user_repo.count_created_by_day(range_start, now)
+        audit_by_day = await self.audit_log_repo.count_by_operation_by_day(
+            range_start, now
+        )
         time_series = TimeSeriesStats(
             accounts_created=self._zero_fill_series(accounts_by_day, days, now),
             users_created=self._zero_fill_series(users_by_day, days, now),
+            audit_by_operation=self._zero_fill_audit_series(audit_by_day, days, now),
         )
 
         # Get recent registrations
@@ -154,6 +164,7 @@ class DashboardService:
             system_health=system_health,
             active_sessions=active_sessions,
             public_collections_count=public_collections_count,
+            records_by_collection=records_by_collection,
             recent_audit_logs=recent_audit_logs,
         )
 
@@ -188,28 +199,106 @@ class DashboardService:
             current += timedelta(days=1)
         return points
 
+    def _zero_fill_audit_series(
+        self,
+        buckets: list[tuple[str, str, int]],
+        days: int,
+        end: datetime,
+    ) -> list[AuditOperationPoint]:
+        """Build a continuous daily audit series with create/update/delete counts.
+
+        Args:
+            buckets: Sparse (YYYY-MM-DD, operation, count) triples from the repository.
+            days: Number of calendar days to include (7, 30, or 90).
+            end: Reference datetime (typically now); last series day is end.date().
+
+        Returns:
+            Zero-filled list of AuditOperationPoint of length ``days``.
+        """
+        by_day: dict[str, dict[str, int]] = {}
+        for day, operation, count in buckets:
+            op = operation.upper()
+            if day not in by_day:
+                by_day[day] = {"create": 0, "update": 0, "delete": 0}
+            if op == "CREATE":
+                by_day[day]["create"] += count
+            elif op == "UPDATE":
+                by_day[day]["update"] += count
+            elif op == "DELETE":
+                by_day[day]["delete"] += count
+
+        end_day = end.date() if isinstance(end, datetime) else end
+        start_day = end_day - timedelta(days=days - 1)
+
+        points: list[AuditOperationPoint] = []
+        current = start_day
+        while current <= end_day:
+            key = current.isoformat()
+            day_counts = by_day.get(key, {"create": 0, "update": 0, "delete": 0})
+            points.append(
+                AuditOperationPoint(
+                    date=key,
+                    create=day_counts["create"],
+                    update=day_counts["update"],
+                    delete=day_counts["delete"],
+                )
+            )
+            current += timedelta(days=1)
+        return points
+
+    async def _count_records_by_collection(
+        self, top_n: int = 10
+    ) -> tuple[int, list[CollectionRecordCount]]:
+        """Count records across all dynamic collection tables.
+
+        Returns total count and a ranked top-N list (plus optional Other bucket).
+        Missing tables are skipped so one bad collection cannot fail the dashboard.
+
+        Args:
+            top_n: Maximum number of named collections to include before Other.
+
+        Returns:
+            Tuple of (total_records, records_by_collection).
+        """
+        collections = await self.session.execute(text("SELECT name FROM collections"))
+        collection_names = [row[0] for row in collections.fetchall()]
+
+        counts: list[tuple[str, int]] = []
+        total = 0
+        for collection_name in collection_names:
+            table_name = f"col_{collection_name.lower().replace(' ', '_')}"
+            try:
+                result = await self.session.execute(
+                    text(f"SELECT COUNT(*) FROM {table_name}")
+                )
+                count = int(result.scalar_one() or 0)
+                total += count
+                counts.append((collection_name, count))
+            except Exception:
+                # Table might not exist or other error; skip without failing
+                continue
+
+        counts.sort(key=lambda item: item[1], reverse=True)
+        top = counts[:top_n]
+        remainder = sum(c for _, c in counts[top_n:])
+
+        records_by_collection = [
+            CollectionRecordCount(name=name, count=count) for name, count in top
+        ]
+        if remainder > 0:
+            records_by_collection.append(
+                CollectionRecordCount(name="Other", count=remainder)
+            )
+
+        return total, records_by_collection
+
     async def _count_total_records(self) -> int:
         """Count total records across all dynamic collection tables.
 
         Returns:
             Total count of records.
         """
-        # Get all collections
-        collections = await self.session.execute(text("SELECT name FROM collections"))
-        collection_names = [row[0] for row in collections.fetchall()]
-
-        total = 0
-        for collection_name in collection_names:
-            # Generate table name (same logic as TableBuilder)
-            table_name = f"col_{collection_name.lower().replace(' ', '_')}"
-            try:
-                result = await self.session.execute(text(f"SELECT COUNT(*) FROM {table_name}"))
-                count = result.scalar_one()
-                total += count
-            except Exception:
-                # Table might not exist or other error, skip
-                continue
-
+        total, _ = await self._count_records_by_collection()
         return total
 
     async def _get_system_health(self) -> SystemHealthStats:

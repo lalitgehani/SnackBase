@@ -268,6 +268,48 @@ class AuditLogRepository:
         result = await self.session.execute(select(func.count(AuditLogModel.id)))
         return result.scalar_one() or 0
 
+    async def count_by_operation_by_day(
+        self, start: datetime, end: datetime
+    ) -> list[tuple[str, str, int]]:
+        """Count audit log rows per calendar day and operation in [start, end).
+
+        Counts raw audit_log rows (column-level entries). Multi-column changes
+        produce multiple rows and are counted individually — suitable for a
+        volume chart, not distinct transaction counts.
+
+        Args:
+            start: Inclusive start datetime (UTC).
+            end: Exclusive end datetime (UTC).
+
+        Returns:
+            List of (YYYY-MM-DD, operation, count) triples for days/ops with
+            activity. Missing days/operations are not included; callers should
+            zero-fill. Operation values are uppercase (CREATE, UPDATE, DELETE).
+        """
+        from sqlalchemy import cast, Date, String
+
+        bind = self.session.get_bind()
+        dialect_name = bind.dialect.name if bind is not None else "sqlite"
+
+        if dialect_name == "postgresql":
+            day_expr = cast(AuditLogModel.occurred_at, Date)
+            day_label = cast(day_expr, String)
+        else:
+            day_label = func.strftime("%Y-%m-%d", AuditLogModel.occurred_at)
+            day_expr = day_label
+
+        result = await self.session.execute(
+            select(day_label, AuditLogModel.operation, func.count(AuditLogModel.id))
+            .where(
+                AuditLogModel.occurred_at >= start,
+                AuditLogModel.occurred_at < end,
+            )
+            .group_by(day_expr, AuditLogModel.operation)
+            .order_by(day_expr)
+        )
+        rows = result.all()
+        return [(str(row[0])[:10], str(row[1]).upper(), int(row[2])) for row in rows]
+
     async def verify_integrity_chain(self) -> tuple[bool, list[str]]:
         """Verify the integrity of the audit log chain.
 

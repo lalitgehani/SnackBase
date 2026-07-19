@@ -41,6 +41,8 @@ from snackbase.infrastructure.api.schemas.collection_schemas import (
     UpdateCollectionRequest,
 )
 from snackbase.infrastructure.api.schemas.dashboard_schemas import (
+    AuditOperationPoint,
+    CollectionRecordCount,
     DashboardRange,
     DashboardStats,
     PreviousPeriodStats,
@@ -126,6 +128,8 @@ __all__ = [
     "CreateRoleRequest",
     "CurrentRevisionResponse",
     "CursorListResponse",
+    "AuditOperationPoint",
+    "CollectionRecordCount",
     "DashboardRange",
     "DashboardStats",
     "PreviousPeriodStats",

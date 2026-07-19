@@ -1,12 +1,16 @@
 """Unit tests for DashboardService."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from snackbase.domain.services import DashboardService
-from snackbase.infrastructure.api.schemas import DashboardStats
+from snackbase.infrastructure.api.schemas import (
+    CollectionRecordCount,
+    DashboardStats,
+    SystemHealthStats,
+)
 
 
 @pytest.fixture
@@ -21,11 +25,99 @@ def dashboard_service(mock_session):
     return DashboardService(mock_session)
 
 
+def _patch_empty_stats(dashboard_service):
+    """Context manager stacking common empty-stats repo mocks."""
+    from contextlib import ExitStack
+
+    stack = ExitStack()
+    stack.enter_context(patch.object(dashboard_service.account_repo, "count_all", return_value=0))
+    stack.enter_context(
+        patch.object(
+            dashboard_service.account_repo,
+            "count_created_between",
+            new_callable=AsyncMock,
+            side_effect=[0, 0],
+        )
+    )
+    stack.enter_context(
+        patch.object(
+            dashboard_service.account_repo,
+            "count_created_by_day",
+            new_callable=AsyncMock,
+            return_value=[],
+        )
+    )
+    stack.enter_context(patch.object(dashboard_service.user_repo, "count_all", return_value=0))
+    stack.enter_context(
+        patch.object(
+            dashboard_service.user_repo,
+            "count_created_between",
+            new_callable=AsyncMock,
+            side_effect=[0, 0],
+        )
+    )
+    stack.enter_context(
+        patch.object(
+            dashboard_service.user_repo,
+            "count_created_by_day",
+            new_callable=AsyncMock,
+            return_value=[],
+        )
+    )
+    stack.enter_context(
+        patch.object(
+            dashboard_service.user_repo,
+            "get_recent_registrations",
+            new_callable=AsyncMock,
+            return_value=[],
+        )
+    )
+    stack.enter_context(
+        patch.object(dashboard_service.collection_repo, "count_all", return_value=0)
+    )
+    stack.enter_context(
+        patch.object(
+            dashboard_service.refresh_token_repo, "count_active_sessions", return_value=0
+        )
+    )
+    stack.enter_context(
+        patch.object(
+            dashboard_service.collection_rule_repo, "count_public_collections", return_value=0
+        )
+    )
+    stack.enter_context(
+        patch.object(
+            dashboard_service.audit_log_repo,
+            "count_by_operation_by_day",
+            new_callable=AsyncMock,
+            return_value=[],
+        )
+    )
+    stack.enter_context(
+        patch.object(
+            dashboard_service.audit_log_service,
+            "list_logs",
+            new_callable=AsyncMock,
+            return_value=([], 0),
+        )
+    )
+    stack.enter_context(
+        patch.object(dashboard_service.audit_log_service, "mask_for_display", return_value=[])
+    )
+    stack.enter_context(
+        patch.object(
+            dashboard_service,
+            "_count_records_by_collection",
+            new_callable=AsyncMock,
+            return_value=(0, []),
+        )
+    )
+    return stack
+
+
 @pytest.mark.asyncio
 async def test_get_dashboard_stats_with_data(dashboard_service, mock_session):
     """Test get_dashboard_stats returns correct data when data exists."""
-    from snackbase.infrastructure.api.schemas import SystemHealthStats
-
     mock_user1 = MagicMock()
     mock_user1.id = "user1"
     mock_user1.email = "user1@example.com"
@@ -34,6 +126,11 @@ async def test_get_dashboard_stats_with_data(dashboard_service, mock_session):
     mock_user1.account = MagicMock()
     mock_user1.account.name = "Test Account"
     mock_user1.account.account_code = "AC0001"
+
+    ranked = [
+        CollectionRecordCount(name="posts", count=70),
+        CollectionRecordCount(name="comments", count=30),
+    ]
 
     with (
         patch.object(dashboard_service.account_repo, "count_all", return_value=5),
@@ -69,7 +166,18 @@ async def test_get_dashboard_stats_with_data(dashboard_service, mock_session):
         patch.object(
             dashboard_service.collection_rule_repo, "count_public_collections", return_value=1
         ),
-        patch.object(dashboard_service, "_count_total_records", return_value=100),
+        patch.object(
+            dashboard_service,
+            "_count_records_by_collection",
+            new_callable=AsyncMock,
+            return_value=(100, ranked),
+        ),
+        patch.object(
+            dashboard_service.audit_log_repo,
+            "count_by_operation_by_day",
+            new_callable=AsyncMock,
+            return_value=[],
+        ),
         patch.object(dashboard_service, "_get_system_health") as mock_health,
     ):
         dashboard_service.user_repo.get_recent_registrations = AsyncMock(
@@ -96,9 +204,17 @@ async def test_get_dashboard_stats_with_data(dashboard_service, mock_session):
         assert result.previous_period.new_users == 2
         assert len(result.time_series.accounts_created) == 7
         assert len(result.time_series.users_created) == 7
+        assert len(result.time_series.audit_by_operation) == 7
         assert all(p.count == 0 for p in result.time_series.accounts_created)
+        assert all(
+            p.create == 0 and p.update == 0 and p.delete == 0
+            for p in result.time_series.audit_by_operation
+        )
         assert result.active_sessions == 8
         assert result.public_collections_count == 1
+        assert len(result.records_by_collection) == 2
+        assert result.records_by_collection[0].name == "posts"
+        assert result.records_by_collection[0].count == 70
         assert len(result.recent_registrations) == 1
         assert result.recent_registrations[0].email == "user1@example.com"
         assert result.system_health.database_status == "connected"
@@ -109,58 +225,8 @@ async def test_get_dashboard_stats_with_data(dashboard_service, mock_session):
 @pytest.mark.asyncio
 async def test_get_dashboard_stats_empty_database(dashboard_service):
     """Test get_dashboard_stats with empty database."""
-    from snackbase.infrastructure.api.schemas import SystemHealthStats
-
     with (
-        patch.object(dashboard_service.account_repo, "count_all", return_value=0),
-        patch.object(
-            dashboard_service.account_repo,
-            "count_created_between",
-            new_callable=AsyncMock,
-            side_effect=[0, 0],
-        ),
-        patch.object(
-            dashboard_service.account_repo,
-            "count_created_by_day",
-            new_callable=AsyncMock,
-            return_value=[],
-        ),
-        patch.object(dashboard_service.user_repo, "count_all", return_value=0),
-        patch.object(
-            dashboard_service.user_repo,
-            "count_created_between",
-            new_callable=AsyncMock,
-            side_effect=[0, 0],
-        ),
-        patch.object(
-            dashboard_service.user_repo,
-            "count_created_by_day",
-            new_callable=AsyncMock,
-            return_value=[],
-        ),
-        patch.object(
-            dashboard_service.user_repo,
-            "get_recent_registrations",
-            new_callable=AsyncMock,
-            return_value=[],
-        ),
-        patch.object(dashboard_service.collection_repo, "count_all", return_value=0),
-        patch.object(
-            dashboard_service.refresh_token_repo, "count_active_sessions", return_value=0
-        ),
-        patch.object(
-            dashboard_service.collection_rule_repo, "count_public_collections", return_value=0
-        ),
-        patch.object(
-            dashboard_service.audit_log_service,
-            "list_logs",
-            new_callable=AsyncMock,
-            return_value=([], 0),
-        ),
-        patch.object(
-            dashboard_service.audit_log_service, "mask_for_display", return_value=[]
-        ),
-        patch.object(dashboard_service, "_count_total_records", return_value=0),
+        _patch_empty_stats(dashboard_service),
         patch.object(dashboard_service, "_get_system_health") as mock_health,
     ):
         mock_health.return_value = SystemHealthStats(
@@ -180,6 +246,8 @@ async def test_get_dashboard_stats_empty_database(dashboard_service):
         assert result.previous_period.new_users == 0
         assert len(result.time_series.accounts_created) == 7
         assert len(result.time_series.users_created) == 7
+        assert len(result.time_series.audit_by_operation) == 7
+        assert result.records_by_collection == []
         assert result.active_sessions == 0
         assert len(result.recent_registrations) == 0
         assert len(result.recent_audit_logs) == 0
@@ -193,59 +261,9 @@ async def test_get_dashboard_stats_empty_database(dashboard_service):
 async def test_get_dashboard_stats_range_series_length(
     dashboard_service, range_value, expected_days
 ):
-    """Test time series length matches selected range."""
-    from snackbase.infrastructure.api.schemas import SystemHealthStats
-
+    """Test time series length matches selected range including audit series."""
     with (
-        patch.object(dashboard_service.account_repo, "count_all", return_value=0),
-        patch.object(
-            dashboard_service.account_repo,
-            "count_created_between",
-            new_callable=AsyncMock,
-            side_effect=[0, 0],
-        ),
-        patch.object(
-            dashboard_service.account_repo,
-            "count_created_by_day",
-            new_callable=AsyncMock,
-            return_value=[],
-        ),
-        patch.object(dashboard_service.user_repo, "count_all", return_value=0),
-        patch.object(
-            dashboard_service.user_repo,
-            "count_created_between",
-            new_callable=AsyncMock,
-            side_effect=[0, 0],
-        ),
-        patch.object(
-            dashboard_service.user_repo,
-            "count_created_by_day",
-            new_callable=AsyncMock,
-            return_value=[],
-        ),
-        patch.object(
-            dashboard_service.user_repo,
-            "get_recent_registrations",
-            new_callable=AsyncMock,
-            return_value=[],
-        ),
-        patch.object(dashboard_service.collection_repo, "count_all", return_value=0),
-        patch.object(
-            dashboard_service.refresh_token_repo, "count_active_sessions", return_value=0
-        ),
-        patch.object(
-            dashboard_service.collection_rule_repo, "count_public_collections", return_value=0
-        ),
-        patch.object(
-            dashboard_service.audit_log_service,
-            "list_logs",
-            new_callable=AsyncMock,
-            return_value=([], 0),
-        ),
-        patch.object(
-            dashboard_service.audit_log_service, "mask_for_display", return_value=[]
-        ),
-        patch.object(dashboard_service, "_count_total_records", return_value=0),
+        _patch_empty_stats(dashboard_service),
         patch.object(dashboard_service, "_get_system_health") as mock_health,
     ):
         mock_health.return_value = SystemHealthStats(
@@ -259,13 +277,12 @@ async def test_get_dashboard_stats_range_series_length(
         assert result.range == range_value
         assert len(result.time_series.accounts_created) == expected_days
         assert len(result.time_series.users_created) == expected_days
+        assert len(result.time_series.audit_by_operation) == expected_days
 
 
 @pytest.mark.asyncio
 async def test_get_dashboard_stats_previous_period_math(dashboard_service):
     """Test previous period counts are returned correctly."""
-    from snackbase.infrastructure.api.schemas import SystemHealthStats
-
     with (
         patch.object(dashboard_service.account_repo, "count_all", return_value=10),
         patch.object(
@@ -307,6 +324,12 @@ async def test_get_dashboard_stats_previous_period_math(dashboard_service):
             dashboard_service.collection_rule_repo, "count_public_collections", return_value=0
         ),
         patch.object(
+            dashboard_service.audit_log_repo,
+            "count_by_operation_by_day",
+            new_callable=AsyncMock,
+            return_value=[],
+        ),
+        patch.object(
             dashboard_service.audit_log_service,
             "list_logs",
             new_callable=AsyncMock,
@@ -315,7 +338,12 @@ async def test_get_dashboard_stats_previous_period_math(dashboard_service):
         patch.object(
             dashboard_service.audit_log_service, "mask_for_display", return_value=[]
         ),
-        patch.object(dashboard_service, "_count_total_records", return_value=0),
+        patch.object(
+            dashboard_service,
+            "_count_records_by_collection",
+            new_callable=AsyncMock,
+            return_value=(0, []),
+        ),
         patch.object(dashboard_service, "_get_system_health") as mock_health,
     ):
         mock_health.return_value = SystemHealthStats(
@@ -330,6 +358,7 @@ async def test_get_dashboard_stats_previous_period_math(dashboard_service):
         assert result.previous_period.new_users == 4
         assert result.range == "30d"
         assert len(result.time_series.accounts_created) == 30
+        assert len(result.time_series.audit_by_operation) == 30
 
 
 def test_zero_fill_series_fills_missing_days(dashboard_service):
@@ -351,12 +380,144 @@ def test_zero_fill_series_fills_missing_days(dashboard_service):
     assert by_date["2026-07-13"] == 0
 
 
+def test_zero_fill_audit_series_fills_missing_days(dashboard_service):
+    """Test audit series zero-fill and operation aggregation."""
+    end = datetime(2026, 7, 19, 12, 0, 0, tzinfo=timezone.utc)
+    buckets = [
+        ("2026-07-17", "CREATE", 3),
+        ("2026-07-17", "UPDATE", 1),
+        ("2026-07-19", "DELETE", 2),
+        ("2026-07-19", "create", 1),  # case-insensitive merge
+    ]
+    points = dashboard_service._zero_fill_audit_series(buckets, days=7, end=end)
+
+    assert len(points) == 7
+    assert points[0].date == "2026-07-13"
+    assert points[-1].date == "2026-07-19"
+    by_date = {p.date: p for p in points}
+    assert by_date["2026-07-17"].create == 3
+    assert by_date["2026-07-17"].update == 1
+    assert by_date["2026-07-17"].delete == 0
+    assert by_date["2026-07-19"].create == 1
+    assert by_date["2026-07-19"].delete == 2
+    assert by_date["2026-07-18"].create == 0
+    assert by_date["2026-07-13"].update == 0
+
+
+@pytest.mark.asyncio
+async def test_get_dashboard_stats_audit_series_from_repo(dashboard_service):
+    """Test audit_by_operation is populated from repository buckets."""
+    end_day = datetime.now(timezone.utc).date().isoformat()
+    buckets = [(end_day, "CREATE", 4), (end_day, "UPDATE", 2)]
+
+    with (
+        patch.object(dashboard_service.account_repo, "count_all", return_value=0),
+        patch.object(
+            dashboard_service.account_repo,
+            "count_created_between",
+            new_callable=AsyncMock,
+            side_effect=[0, 0],
+        ),
+        patch.object(
+            dashboard_service.account_repo,
+            "count_created_by_day",
+            new_callable=AsyncMock,
+            return_value=[],
+        ),
+        patch.object(dashboard_service.user_repo, "count_all", return_value=0),
+        patch.object(
+            dashboard_service.user_repo,
+            "count_created_between",
+            new_callable=AsyncMock,
+            side_effect=[0, 0],
+        ),
+        patch.object(
+            dashboard_service.user_repo,
+            "count_created_by_day",
+            new_callable=AsyncMock,
+            return_value=[],
+        ),
+        patch.object(
+            dashboard_service.user_repo,
+            "get_recent_registrations",
+            new_callable=AsyncMock,
+            return_value=[],
+        ),
+        patch.object(dashboard_service.collection_repo, "count_all", return_value=0),
+        patch.object(
+            dashboard_service.refresh_token_repo, "count_active_sessions", return_value=0
+        ),
+        patch.object(
+            dashboard_service.collection_rule_repo, "count_public_collections", return_value=0
+        ),
+        patch.object(
+            dashboard_service.audit_log_repo,
+            "count_by_operation_by_day",
+            new_callable=AsyncMock,
+            return_value=buckets,
+        ),
+        patch.object(
+            dashboard_service.audit_log_service,
+            "list_logs",
+            new_callable=AsyncMock,
+            return_value=([], 0),
+        ),
+        patch.object(
+            dashboard_service.audit_log_service, "mask_for_display", return_value=[]
+        ),
+        patch.object(
+            dashboard_service,
+            "_count_records_by_collection",
+            new_callable=AsyncMock,
+            return_value=(0, []),
+        ),
+        patch.object(dashboard_service, "_get_system_health") as mock_health,
+    ):
+        mock_health.return_value = SystemHealthStats(
+            database_status="connected", storage_usage_mb=0.0
+        )
+
+        result = await dashboard_service.get_dashboard_stats(user_groups=[], range="7d")
+
+        assert len(result.time_series.audit_by_operation) == 7
+        last = result.time_series.audit_by_operation[-1]
+        assert last.date == end_day
+        assert last.create == 4
+        assert last.update == 2
+        assert last.delete == 0
+
+
+@pytest.mark.asyncio
+async def test_count_records_by_collection_top_n_and_other(dashboard_service, mock_session):
+    """Test ranking, top-N cap, and Other bucket."""
+    # 12 collections with decreasing counts
+    names = [(f"col{i}",) for i in range(12)]
+    mock_names = MagicMock()
+    mock_names.fetchall.return_value = names
+
+    count_results = []
+    for i in range(12):
+        count = MagicMock(scalar_one=lambda c=100 - i: c)
+        count_results.append(count)
+
+    mock_session.execute.side_effect = [mock_names] + count_results
+
+    total, ranked = await dashboard_service._count_records_by_collection(top_n=10)
+
+    assert total == sum(range(89, 101))  # 100+99+...+89
+    assert len(ranked) == 11  # 10 named + Other
+    assert ranked[0].name == "col0"
+    assert ranked[0].count == 100
+    assert ranked[9].name == "col9"
+    assert ranked[10].name == "Other"
+    assert ranked[10].count == 90 + 89  # col10 + col11
+
+
 @pytest.mark.asyncio
 async def test_count_total_records_multiple_collections(dashboard_service, mock_session):
     """Test _count_total_records counts across multiple collections."""
     mock_result = MagicMock()
     mock_result.fetchall.return_value = [("users",), ("posts",), ("comments",)]
-    mock_session.execute.return_value = mock_result
 
     count_results = [
         MagicMock(scalar_one=lambda: 10),
@@ -375,7 +536,6 @@ async def test_count_total_records_handles_errors(dashboard_service, mock_sessio
     """Test _count_total_records handles table errors gracefully."""
     mock_result = MagicMock()
     mock_result.fetchall.return_value = [("users",), ("invalid_table",)]
-    mock_session.execute.return_value = mock_result
 
     count_success = MagicMock(scalar_one=lambda: 10)
     mock_session.execute.side_effect = [
@@ -384,9 +544,12 @@ async def test_count_total_records_handles_errors(dashboard_service, mock_sessio
         Exception("Table not found"),
     ]
 
-    total = await dashboard_service._count_total_records()
+    total, ranked = await dashboard_service._count_records_by_collection()
 
     assert total == 10
+    assert len(ranked) == 1
+    assert ranked[0].name == "users"
+    assert ranked[0].count == 10
 
 
 @pytest.mark.asyncio

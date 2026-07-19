@@ -1,9 +1,9 @@
 /**
  * Dashboard page - main landing page after login
- * Shows system overview metrics, recent activity, and quick actions
+ * Phase 2: growth charts, platform composition, compact activity feed, quick actions
  */
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,18 +23,25 @@ import {
   Database,
   FileText,
   RefreshCw,
-  Plus,
   Activity,
   HardDrive,
   Globe,
   Building2,
   Layers,
+  Webhook,
+  Workflow,
+  Zap,
+  UserPlus,
 } from 'lucide-react';
-import AuditLogsTable from '@/components/audit-logs/AuditLogsTable';
-import { DataTable, type Column } from '@/components/common/DataTable';
-import { Sparkline } from '@/components/charts';
+import {
+  ChartContainer,
+  DonutChart,
+  HorizontalBarChart,
+  Sparkline,
+  StackedBarChart,
+  TimeSeriesAreaChart,
+} from '@/components/charts';
 import { CHART_COLORS } from '@/components/charts/theme';
-import type { AuditLogItem } from '@/services/audit.service';
 import {
   getDashboardStats,
   formatPeriodDelta,
@@ -42,7 +49,6 @@ import {
   isDashboardRange,
   type DashboardRange,
   type DashboardStats,
-  type RecentRegistration,
 } from '@/services/dashboard.service';
 import { handleApiError } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -61,8 +67,23 @@ const RANGE_OPTIONS: { value: DashboardRange; label: string }[] = [
   { value: '90d', label: 'Last 90 days' },
 ];
 
+const RANGE_LABELS: Record<DashboardRange, string> = {
+  '7d': 'Last 7 days',
+  '30d': 'Last 30 days',
+  '90d': 'Last 90 days',
+};
+
 const REFRESH_STORAGE_KEY = 'dashboard-refresh-frequency';
 const RANGE_STORAGE_KEY = 'dashboard-range';
+
+const QUICK_ACTIONS = [
+  { label: 'Create Account', path: '/admin/accounts', icon: Building2 },
+  { label: 'Create Collection', path: '/admin/collections/new', icon: Database },
+  { label: 'Invite User', path: '/admin/invitations', icon: UserPlus },
+  { label: 'Create Hook', path: '/admin/hooks', icon: Zap },
+  { label: 'Create Webhook', path: '/admin/webhooks', icon: Webhook },
+  { label: 'Create Workflow', path: '/admin/workflows', icon: Workflow },
+] as const;
 
 function readStoredRange(): DashboardRange {
   const stored = localStorage.getItem(RANGE_STORAGE_KEY);
@@ -70,6 +91,10 @@ function readStoredRange(): DashboardRange {
     return stored;
   }
   return '7d';
+}
+
+function formatDate(dateString: string) {
+  return new Date(dateString).toLocaleString();
 }
 
 interface KpiCardProps {
@@ -160,10 +185,6 @@ export default function DashboardPage() {
     return localStorage.getItem(REFRESH_STORAGE_KEY) || '0';
   });
   const [range, setRange] = useState<DashboardRange>(() => readStoredRange());
-  const [auditPage, setAuditPage] = useState(1);
-  const [auditPageSize, setAuditPageSize] = useState(10);
-  const [regPage, setRegPage] = useState(1);
-  const [regPageSize, setRegPageSize] = useState(10);
 
   const {
     data: stats,
@@ -179,7 +200,6 @@ export default function DashboardPage() {
       parseInt(refreshFrequency, 10) > 0 ? parseInt(refreshFrequency, 10) * 1000 : false,
   });
 
-  // Persist preferences
   useEffect(() => {
     localStorage.setItem(REFRESH_STORAGE_KEY, refreshFrequency);
   }, [refreshFrequency]);
@@ -191,34 +211,64 @@ export default function DashboardPage() {
   const errorMessage = isError ? handleApiError(error) : null;
   const showFullPageError = isError && !stats;
   const showKpiSkeletons = isLoading && !stats;
+  const rangeLabel = RANGE_LABELS[stats?.range ?? range];
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString();
-  };
+  const growthChartData = useMemo(() => {
+    if (!stats) return [];
+    const accounts = stats.time_series.accounts_created;
+    const users = stats.time_series.users_created;
+    const userByDate = new Map(users.map((p) => [p.date, p.count]));
+    return accounts.map((p) => ({
+      date: p.date,
+      accounts: p.count,
+      users: userByDate.get(p.date) ?? 0,
+    }));
+  }, [stats]);
 
-  const registrationColumns: Column<RecentRegistration>[] = [
-    {
-      header: 'Email',
-      accessorKey: 'email',
-      className: 'font-medium',
-    },
-    {
-      header: 'Account',
-      render: (reg) => (
-        <div className="flex flex-col">
-          <span className="text-sm">{reg.account_name}</span>
-          <span className="text-xs text-muted-foreground">{reg.account_code}</span>
-        </div>
-      ),
-    },
-    {
-      header: 'Registered At',
-      accessorKey: 'created_at',
-      render: (reg) => (
-        <span className="text-sm text-muted-foreground">{formatDate(reg.created_at)}</span>
-      ),
-    },
-  ];
+  const growthIsEmpty = useMemo(
+    () =>
+      growthChartData.length > 0 &&
+      growthChartData.every((d) => d.accounts === 0 && d.users === 0),
+    [growthChartData],
+  );
+
+  const auditChartData = useMemo(() => {
+    if (!stats?.time_series.audit_by_operation) return [];
+    return stats.time_series.audit_by_operation.map((p) => ({
+      name: p.date,
+      create: p.create,
+      update: p.update,
+      delete: p.delete,
+    }));
+  }, [stats]);
+
+  const auditIsEmpty = useMemo(
+    () =>
+      auditChartData.length > 0 &&
+      auditChartData.every((d) => d.create === 0 && d.update === 0 && d.delete === 0),
+    [auditChartData],
+  );
+
+  const recordsChartData = useMemo(() => {
+    if (!stats?.records_by_collection) return [];
+    return stats.records_by_collection.map((item) => ({
+      name: item.name,
+      value: item.count,
+    }));
+  }, [stats]);
+
+  const accessMixData = useMemo(() => {
+    if (!stats || stats.total_collections === 0) return [];
+    const publicCount = stats.public_collections_count;
+    const protectedCount = Math.max(0, stats.total_collections - publicCount);
+    return [
+      { name: 'Public', value: publicCount, color: CHART_COLORS.chart2 },
+      { name: 'Protected', value: protectedCount, color: CHART_COLORS.chart1 },
+    ].filter((d) => d.value > 0);
+  }, [stats]);
+
+  const recentRegistrations = stats?.recent_registrations?.slice(0, 10) ?? [];
+  const recentAuditLogs = stats?.recent_audit_logs?.slice(0, 10) ?? [];
 
   if (showFullPageError) {
     return (
@@ -369,115 +419,250 @@ export default function DashboardPage() {
         />
       </div>
 
+      {/* Growth + Access mix */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <ChartContainer
+          className="lg:col-span-2"
+          title="Growth"
+          description={`Accounts and users created · ${rangeLabel}`}
+          isLoading={showKpiSkeletons}
+          isEmpty={!showKpiSkeletons && (growthChartData.length === 0 || growthIsEmpty)}
+          emptyMessage="No growth in this period"
+          emptyHint="Create accounts or users, or try a wider time range."
+        >
+          <TimeSeriesAreaChart
+            data={growthChartData}
+            series={[
+              { key: 'accounts', label: 'Accounts', color: CHART_COLORS.chart1 },
+              { key: 'users', label: 'Users', color: CHART_COLORS.chart2 },
+            ]}
+            height={280}
+          />
+        </ChartContainer>
+
+        <ChartContainer
+          title="Collection Access"
+          description="Public vs protected collections"
+          isLoading={showKpiSkeletons}
+          isEmpty={!showKpiSkeletons && accessMixData.length === 0}
+          emptyMessage="No collections yet"
+          emptyHint="Create a collection to see access mix."
+          headerAction={
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs"
+              onClick={() => navigate('/admin/collections')}
+            >
+              View all
+            </Button>
+          }
+        >
+          <div
+            className="cursor-pointer"
+            onClick={() => navigate('/admin/collections')}
+            role="link"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                navigate('/admin/collections');
+              }
+            }}
+          >
+            <DonutChart data={accessMixData} height={240} />
+          </div>
+        </ChartContainer>
+      </div>
+
+      {/* Audit activity + Records by collection */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <ChartContainer
+          title="Audit Activity"
+          description={`CREATE / UPDATE / DELETE · ${rangeLabel}`}
+          isLoading={showKpiSkeletons}
+          isEmpty={!showKpiSkeletons && (auditChartData.length === 0 || auditIsEmpty)}
+          emptyMessage="No audit activity in this period"
+          emptyHint="Write operations will appear here once audit logging is active."
+          headerAction={
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs"
+              onClick={() => navigate('/admin/audit-logs')}
+            >
+              View all
+            </Button>
+          }
+        >
+          <StackedBarChart
+            data={auditChartData}
+            series={[
+              { key: 'create', label: 'CREATE', color: CHART_COLORS.chart2 },
+              { key: 'update', label: 'UPDATE', color: CHART_COLORS.chart3 },
+              { key: 'delete', label: 'DELETE', color: CHART_COLORS.chart5 },
+            ]}
+            height={280}
+          />
+        </ChartContainer>
+
+        <ChartContainer
+          title="Records by Collection"
+          description="Top collections by row count"
+          isLoading={showKpiSkeletons}
+          isEmpty={!showKpiSkeletons && recordsChartData.length === 0}
+          emptyMessage="No records yet"
+          emptyHint="Add data to collections to see distribution."
+        >
+          <HorizontalBarChart
+            data={recordsChartData}
+            height={280}
+            color={CHART_COLORS.chart1}
+            onBarClick={(datum) => {
+              if (datum.name === 'Other') return;
+              navigate(`/admin/collections/${encodeURIComponent(datum.name)}/data`);
+            }}
+          />
+        </ChartContainer>
+      </div>
+
       {/* System Health */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-1">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Activity className="h-5 w-5 text-primary" />
+            System Health
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {showKpiSkeletons ? (
+            <Skeleton className="h-6 w-40" />
+          ) : (
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Database</span>
+              <Badge
+                variant={
+                  stats?.system_health.database_status === 'connected'
+                    ? 'default'
+                    : 'destructive'
+                }
+              >
+                {stats?.system_health.database_status || 'Unknown'}
+              </Badge>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Compact activity feed */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Activity className="h-5 w-5 text-primary" />
-              System Health
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {showKpiSkeletons ? (
-              <Skeleton className="h-6 w-40" />
-            ) : (
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Database</span>
-                <Badge
-                  variant={
-                    stats?.system_health.database_status === 'connected'
-                      ? 'default'
-                      : 'destructive'
-                  }
-                >
-                  {stats?.system_health.database_status || 'Unknown'}
-                </Badge>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Users className="h-5 w-5 text-primary" />
+                  Recent Registrations
+                </CardTitle>
+                <CardDescription>Latest user signups</CardDescription>
               </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs"
+                onClick={() => navigate('/admin/users')}
+              >
+                View all
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {showKpiSkeletons ? (
+              <div className="space-y-3">
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+              </div>
+            ) : recentRegistrations.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                No recent registrations
+              </p>
+            ) : (
+              <ul className="divide-y" data-testid="registrations-feed">
+                {recentRegistrations.map((reg) => (
+                  <li key={reg.id} className="flex items-start justify-between gap-3 py-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{reg.email}</p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {reg.account_name} · {reg.account_code}
+                      </p>
+                    </div>
+                    <time className="shrink-0 text-xs text-muted-foreground">
+                      {formatDate(reg.created_at)}
+                    </time>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <FileText className="h-5 w-5 text-primary" />
+                  Recent Audit Activity
+                </CardTitle>
+                <CardDescription>Latest write operations</CardDescription>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs"
+                onClick={() => navigate('/admin/audit-logs')}
+              >
+                View all
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {showKpiSkeletons ? (
+              <div className="space-y-3">
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+              </div>
+            ) : recentAuditLogs.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                No recent audit logs
+              </p>
+            ) : (
+              <ul className="divide-y" data-testid="audit-feed">
+                {recentAuditLogs.map((log) => (
+                  <li key={log.id} className="flex items-start justify-between gap-3 py-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-[10px] font-normal">
+                          {log.operation}
+                        </Badge>
+                        <span className="truncate text-sm font-medium">{log.table_name}</span>
+                      </div>
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                        {log.user_email || log.user_name || '—'}
+                      </p>
+                    </div>
+                    <time className="shrink-0 text-xs text-muted-foreground">
+                      {formatDate(log.occurred_at)}
+                    </time>
+                  </li>
+                ))}
+              </ul>
             )}
           </CardContent>
         </Card>
       </div>
-
-      {/* Recent Registrations */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5 text-primary" />
-            Recent Registrations
-          </CardTitle>
-          <CardDescription>Last 10 user registrations</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <DataTable
-            data={stats?.recent_registrations || []}
-            columns={registrationColumns}
-            keyExtractor={(reg) => reg.id}
-            isLoading={showKpiSkeletons}
-            totalItems={stats?.recent_registrations?.length || 0}
-            pagination={{
-              page: regPage,
-              pageSize: regPageSize,
-              onPageChange: setRegPage,
-              onPageSizeChange: (size) => {
-                setRegPageSize(size);
-                setRegPage(1);
-              },
-            }}
-            noDataMessage="No recent registrations"
-          />
-        </CardContent>
-      </Card>
-
-      {/* Recent Audit Logs */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-primary" />
-                Recent Audit Logs
-              </CardTitle>
-              <CardDescription>Last 20 audit log entries</CardDescription>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate('/admin/audit-logs')}
-              className="text-xs"
-            >
-              View All
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {(() => {
-            const logs = stats?.recent_audit_logs || [];
-            const total = logs.length;
-            const startIndex = (auditPage - 1) * auditPageSize;
-            const paginatedLogs = logs.slice(startIndex, startIndex + auditPageSize);
-
-            return (
-              <AuditLogsTable
-                logs={paginatedLogs}
-                totalItems={total}
-                page={auditPage}
-                pageSize={auditPageSize}
-                onPageChange={setAuditPage}
-                onPageSizeChange={(newSize) => {
-                  setAuditPageSize(newSize);
-                  setAuditPage(1);
-                }}
-                sortBy="occurred_at"
-                sortOrder="desc"
-                onSort={() => {}}
-                onView={(log: AuditLogItem) => navigate(`/admin/audit-logs?id=${log.id}`)}
-                isLoading={showKpiSkeletons}
-              />
-            );
-          })()}
-        </CardContent>
-      </Card>
 
       {/* Quick Actions */}
       <Card>
@@ -486,22 +671,24 @@ export default function DashboardPage() {
             <LayoutDashboard className="h-5 w-5 text-primary" />
             Quick Actions
           </CardTitle>
-          <CardDescription>Common administrative tasks</CardDescription>
+          <CardDescription>Jump into common platform workflows</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex gap-3">
-            <Button onClick={() => navigate('/admin/accounts')} className="gap-2">
-              <Plus className="h-4 w-4" />
-              Create Account
-            </Button>
-            <Button
-              onClick={() => navigate('/admin/collections/new')}
-              variant="outline"
-              className="gap-2"
-            >
-              <Plus className="h-4 w-4" />
-              Create Collection
-            </Button>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            {QUICK_ACTIONS.map((action) => {
+              const Icon = action.icon;
+              return (
+                <Button
+                  key={action.path}
+                  variant="outline"
+                  className="h-auto flex-col gap-2 py-4"
+                  onClick={() => navigate(action.path)}
+                >
+                  <Icon className="h-5 w-5" />
+                  <span className="text-xs font-medium">{action.label}</span>
+                </Button>
+              );
+            })}
           </div>
         </CardContent>
       </Card>

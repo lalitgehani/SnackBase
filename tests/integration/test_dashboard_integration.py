@@ -98,6 +98,8 @@ async def test_dashboard_stats_endpoint_success(
     assert "system_health" in data
     assert "active_sessions" in data
     assert "recent_audit_logs" in data
+    assert "records_by_collection" in data
+    assert "audit_by_operation" in data["time_series"]
 
     # Check values (at least our test data)
     assert data["total_accounts"] >= 1
@@ -111,6 +113,8 @@ async def test_dashboard_stats_endpoint_success(
     assert "new_users" in data["previous_period"]
     assert len(data["time_series"]["accounts_created"]) == 7
     assert len(data["time_series"]["users_created"]) == 7
+    assert len(data["time_series"]["audit_by_operation"]) == 7
+    assert isinstance(data["records_by_collection"], list)
 
     # Check recent registrations
     assert isinstance(data["recent_registrations"], list)
@@ -155,7 +159,18 @@ async def test_dashboard_stats_endpoint_empty_database(
     assert data["previous_period"]["new_users"] >= 0
     assert len(data["time_series"]["accounts_created"]) == 7
     assert len(data["time_series"]["users_created"]) == 7
-    assert all(p["count"] == 0 or isinstance(p["count"], int) for p in data["time_series"]["accounts_created"])
+    assert len(data["time_series"]["audit_by_operation"]) == 7
+    assert all(
+        p["count"] == 0 or isinstance(p["count"], int)
+        for p in data["time_series"]["accounts_created"]
+    )
+    assert all(
+        isinstance(p["create"], int)
+        and isinstance(p["update"], int)
+        and isinstance(p["delete"], int)
+        for p in data["time_series"]["audit_by_operation"]
+    )
+    assert isinstance(data["records_by_collection"], list)
     assert data["recent_registrations"] == [] or isinstance(
         data["recent_registrations"], list
     )
@@ -334,11 +349,17 @@ async def test_dashboard_stats_range_series_length(
     assert data["range"] == range_value
     assert len(data["time_series"]["accounts_created"]) == expected_days
     assert len(data["time_series"]["users_created"]) == expected_days
+    assert len(data["time_series"]["audit_by_operation"]) == expected_days
     # Each point has date and count
     for point in data["time_series"]["accounts_created"]:
         assert "date" in point
         assert "count" in point
         assert isinstance(point["count"], int)
+    for point in data["time_series"]["audit_by_operation"]:
+        assert "date" in point
+        assert "create" in point
+        assert "update" in point
+        assert "delete" in point
 
 
 @pytest.mark.asyncio
@@ -387,3 +408,78 @@ async def test_dashboard_stats_time_series_sum_matches_period_counts(
     # Our seeded users should be included
     assert data["new_users_7d"] >= 3
     assert data["new_accounts_7d"] >= 1
+
+
+@pytest.mark.asyncio
+async def test_dashboard_stats_audit_by_operation_series(
+    client: AsyncClient, superadmin_token: str, db_session
+):
+    """Test audit_by_operation series shape and seeded operation totals."""
+    from snackbase.infrastructure.persistence.models.audit_log import AuditLogModel
+    from snackbase.infrastructure.persistence.repositories.audit_log_repository import (
+        AuditLogRepository,
+    )
+
+    now = datetime.now(timezone.utc)
+    repo = AuditLogRepository(db_session)
+
+    for i, operation in enumerate(["CREATE", "CREATE", "UPDATE", "DELETE"]):
+        entry = AuditLogModel(
+            account_id="SY0000",
+            operation=operation,
+            table_name="users",
+            record_id=f"rec-{i}",
+            column_name="email",
+            old_value=None if operation == "CREATE" else "old",
+            new_value="new" if operation != "DELETE" else None,
+            user_id="superadmin",
+            user_email="admin@test.com",
+            user_name="Admin",
+            occurred_at=now - timedelta(hours=i),
+        )
+        await repo.create(entry)
+    await db_session.commit()
+
+    response = await client.get(
+        "/api/v1/dashboard/stats",
+        params={"range": "7d"},
+        headers={"Authorization": f"Bearer {superadmin_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+
+    series = data["time_series"]["audit_by_operation"]
+    assert len(series) == 7
+    for point in series:
+        assert set(point.keys()) >= {"date", "create", "update", "delete"}
+
+    create_sum = sum(p["create"] for p in series)
+    update_sum = sum(p["update"] for p in series)
+    delete_sum = sum(p["delete"] for p in series)
+    assert create_sum >= 2
+    assert update_sum >= 1
+    assert delete_sum >= 1
+
+
+@pytest.mark.asyncio
+async def test_dashboard_stats_records_by_collection_present(
+    client: AsyncClient, superadmin_token: str, db_session
+):
+    """Test records_by_collection is present and total_records is consistent."""
+    response = await client.get(
+        "/api/v1/dashboard/stats",
+        headers={"Authorization": f"Bearer {superadmin_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+
+    assert "records_by_collection" in data
+    ranked = data["records_by_collection"]
+    assert isinstance(ranked, list)
+    ranked_sum = sum(item["count"] for item in ranked)
+    # Ranked list is top-N (+ Other); sum should equal total_records
+    assert ranked_sum == data["total_records"]
+    # If multiple entries, ensure descending order (excluding trailing Other)
+    named = [item for item in ranked if item["name"] != "Other"]
+    for i in range(1, len(named)):
+        assert named[i - 1]["count"] >= named[i]["count"]

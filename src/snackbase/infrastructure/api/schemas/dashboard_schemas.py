@@ -46,6 +46,26 @@ class TimeSeriesPoint(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class AuditOperationPoint(BaseModel):
+    """Daily audit log volume broken down by operation type."""
+
+    date: str = Field(..., description="Calendar day in YYYY-MM-DD (UTC)")
+    create: int = Field(0, description="CREATE operation row count for this day")
+    update: int = Field(0, description="UPDATE operation row count for this day")
+    delete: int = Field(0, description="DELETE operation row count for this day")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CollectionRecordCount(BaseModel):
+    """Record count for a single collection (or the Other bucket)."""
+
+    name: str = Field(..., description="Collection name, or 'Other' for remainder")
+    count: int = Field(..., description="Number of rows in the collection table")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class TimeSeriesStats(BaseModel):
     """Daily growth series for the selected range."""
 
@@ -56,6 +76,10 @@ class TimeSeriesStats(BaseModel):
     users_created: list[TimeSeriesPoint] = Field(
         default_factory=list,
         description="New users per day in the selected range (zero-filled)",
+    )
+    audit_by_operation: list[AuditOperationPoint] = Field(
+        default_factory=list,
+        description="Audit log volume by CREATE/UPDATE/DELETE per day (zero-filled)",
     )
 
     model_config = ConfigDict(from_attributes=True)
@@ -114,6 +138,12 @@ class DashboardStats(BaseModel):
     # Public collections count
     public_collections_count: int = Field(
         default=0, description="Collections with at least one public rule"
+    )
+
+    # Top collections by record count (descending); may include an "Other" bucket
+    records_by_collection: list[CollectionRecordCount] = Field(
+        default_factory=list,
+        description="Top collections by row count (default top 10 + optional Other)",
     )
 
     # Audit logs
