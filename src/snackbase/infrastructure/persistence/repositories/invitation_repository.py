@@ -177,3 +177,18 @@ class InvitationRepository:
             .limit(1)
         )
         return result.scalar_one_or_none() is not None
+
+    async def count_pending(self) -> int:
+        """Count pending invitations (not accepted, not expired) across all accounts."""
+        from sqlalchemy import func
+
+        now = datetime.now(timezone.utc)
+        result = await self.session.execute(
+            select(func.count(InvitationModel.id)).where(
+                and_(
+                    InvitationModel.accepted_at.is_(None),
+                    InvitationModel.expires_at > now,
+                )
+            )
+        )
+        return result.scalar_one() or 0

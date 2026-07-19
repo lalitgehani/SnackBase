@@ -99,6 +99,13 @@ class MacroRepository:
         result = await self.session.execute(stmt)
         return result.scalars().all()
 
+    async def count_all(self) -> int:
+        """Count all macros (superadmin dashboard)."""
+        from sqlalchemy import func
+
+        result = await self.session.execute(select(func.count(MacroModel.id)))
+        return result.scalar_one() or 0
+
     async def update(
         self,
         macro_id: int,

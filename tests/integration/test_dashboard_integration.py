@@ -101,6 +101,34 @@ async def test_dashboard_stats_endpoint_success(
     assert "records_by_collection" in data
     assert "audit_by_operation" in data["time_series"]
 
+    # Phase 3: automation and integrations health
+    assert "feature_counts" in data
+    assert "jobs_by_status" in data
+    assert "hook_executions_summary" in data
+    assert "webhook_deliveries_summary" in data
+    for key in (
+        "hooks",
+        "hooks_enabled",
+        "webhooks",
+        "webhooks_enabled",
+        "workflows",
+        "endpoints",
+        "macros",
+        "api_keys_active",
+        "invitations_pending",
+    ):
+        assert key in data["feature_counts"]
+        assert data["feature_counts"][key] >= 0
+    for key in ("pending", "running", "completed", "failed", "retrying", "dead"):
+        assert key in data["jobs_by_status"]
+        assert data["jobs_by_status"][key] >= 0
+    for key in ("success", "failed", "partial"):
+        assert key in data["hook_executions_summary"]
+        assert data["hook_executions_summary"][key] >= 0
+    for key in ("delivered", "failed", "pending", "retrying"):
+        assert key in data["webhook_deliveries_summary"]
+        assert data["webhook_deliveries_summary"][key] >= 0
+
     # Check values (at least our test data)
     assert data["total_accounts"] >= 1
     assert data["total_users"] >= 2

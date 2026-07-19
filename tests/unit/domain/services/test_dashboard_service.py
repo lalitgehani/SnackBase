@@ -9,7 +9,11 @@ from snackbase.domain.services import DashboardService
 from snackbase.infrastructure.api.schemas import (
     CollectionRecordCount,
     DashboardStats,
+    FeatureCounts,
+    HookExecutionsSummary,
+    JobsByStatus,
     SystemHealthStats,
+    WebhookDeliveriesSummary,
 )
 
 
@@ -112,6 +116,39 @@ def _patch_empty_stats(dashboard_service):
             return_value=(0, []),
         )
     )
+    # Phase 3 automation aggregates (zero defaults)
+    stack.enter_context(
+        patch.object(
+            dashboard_service,
+            "_get_feature_counts",
+            new_callable=AsyncMock,
+            return_value=FeatureCounts(),
+        )
+    )
+    stack.enter_context(
+        patch.object(
+            dashboard_service,
+            "_get_jobs_by_status",
+            new_callable=AsyncMock,
+            return_value=JobsByStatus(),
+        )
+    )
+    stack.enter_context(
+        patch.object(
+            dashboard_service,
+            "_get_hook_executions_summary",
+            new_callable=AsyncMock,
+            return_value=HookExecutionsSummary(),
+        )
+    )
+    stack.enter_context(
+        patch.object(
+            dashboard_service,
+            "_get_webhook_deliveries_summary",
+            new_callable=AsyncMock,
+            return_value=WebhookDeliveriesSummary(),
+        )
+    )
     return stack
 
 
@@ -178,6 +215,30 @@ async def test_get_dashboard_stats_with_data(dashboard_service, mock_session):
             new_callable=AsyncMock,
             return_value=[],
         ),
+        patch.object(
+            dashboard_service,
+            "_get_feature_counts",
+            new_callable=AsyncMock,
+            return_value=FeatureCounts(),
+        ),
+        patch.object(
+            dashboard_service,
+            "_get_jobs_by_status",
+            new_callable=AsyncMock,
+            return_value=JobsByStatus(),
+        ),
+        patch.object(
+            dashboard_service,
+            "_get_hook_executions_summary",
+            new_callable=AsyncMock,
+            return_value=HookExecutionsSummary(),
+        ),
+        patch.object(
+            dashboard_service,
+            "_get_webhook_deliveries_summary",
+            new_callable=AsyncMock,
+            return_value=WebhookDeliveriesSummary(),
+        ),
         patch.object(dashboard_service, "_get_system_health") as mock_health,
     ):
         dashboard_service.user_repo.get_recent_registrations = AsyncMock(
@@ -220,6 +281,11 @@ async def test_get_dashboard_stats_with_data(dashboard_service, mock_session):
         assert result.system_health.database_status == "connected"
         assert result.system_health.storage_usage_mb == 10.5
         assert result.recent_audit_logs == []
+        # Phase 3 fields present (graceful defaults when not mocked with data)
+        assert result.feature_counts.hooks == 0
+        assert result.jobs_by_status.pending == 0
+        assert result.hook_executions_summary.success == 0
+        assert result.webhook_deliveries_summary.delivered == 0
 
 
 @pytest.mark.asyncio
@@ -251,6 +317,10 @@ async def test_get_dashboard_stats_empty_database(dashboard_service):
         assert result.active_sessions == 0
         assert len(result.recent_registrations) == 0
         assert len(result.recent_audit_logs) == 0
+        assert result.feature_counts.hooks == 0
+        assert result.jobs_by_status.dead == 0
+        assert result.hook_executions_summary.failed == 0
+        assert result.webhook_deliveries_summary.failed == 0
 
 
 @pytest.mark.asyncio
@@ -343,6 +413,30 @@ async def test_get_dashboard_stats_previous_period_math(dashboard_service):
             "_count_records_by_collection",
             new_callable=AsyncMock,
             return_value=(0, []),
+        ),
+        patch.object(
+            dashboard_service,
+            "_get_feature_counts",
+            new_callable=AsyncMock,
+            return_value=FeatureCounts(),
+        ),
+        patch.object(
+            dashboard_service,
+            "_get_jobs_by_status",
+            new_callable=AsyncMock,
+            return_value=JobsByStatus(),
+        ),
+        patch.object(
+            dashboard_service,
+            "_get_hook_executions_summary",
+            new_callable=AsyncMock,
+            return_value=HookExecutionsSummary(),
+        ),
+        patch.object(
+            dashboard_service,
+            "_get_webhook_deliveries_summary",
+            new_callable=AsyncMock,
+            return_value=WebhookDeliveriesSummary(),
         ),
         patch.object(dashboard_service, "_get_system_health") as mock_health,
     ):
@@ -470,6 +564,30 @@ async def test_get_dashboard_stats_audit_series_from_repo(dashboard_service):
             "_count_records_by_collection",
             new_callable=AsyncMock,
             return_value=(0, []),
+        ),
+        patch.object(
+            dashboard_service,
+            "_get_feature_counts",
+            new_callable=AsyncMock,
+            return_value=FeatureCounts(),
+        ),
+        patch.object(
+            dashboard_service,
+            "_get_jobs_by_status",
+            new_callable=AsyncMock,
+            return_value=JobsByStatus(),
+        ),
+        patch.object(
+            dashboard_service,
+            "_get_hook_executions_summary",
+            new_callable=AsyncMock,
+            return_value=HookExecutionsSummary(),
+        ),
+        patch.object(
+            dashboard_service,
+            "_get_webhook_deliveries_summary",
+            new_callable=AsyncMock,
+            return_value=WebhookDeliveriesSummary(),
         ),
         patch.object(dashboard_service, "_get_system_health") as mock_health,
     ):
@@ -606,3 +724,208 @@ def test_get_storage_usage_no_storage_path(dashboard_service):
         usage_mb = dashboard_service._get_storage_usage()
 
         assert usage_mb == 0.0
+
+
+@pytest.mark.asyncio
+async def test_get_feature_counts_from_repos(dashboard_service):
+    """Test feature_counts aggregates from repository count helpers."""
+    with (
+        patch.object(
+            dashboard_service.hook_repo, "count_all", new_callable=AsyncMock, return_value=10
+        ),
+        patch.object(
+            dashboard_service.hook_repo,
+            "count_enabled",
+            new_callable=AsyncMock,
+            return_value=7,
+        ),
+        patch.object(
+            dashboard_service.webhook_repo,
+            "count_all",
+            new_callable=AsyncMock,
+            return_value=5,
+        ),
+        patch.object(
+            dashboard_service.webhook_repo,
+            "count_enabled",
+            new_callable=AsyncMock,
+            return_value=4,
+        ),
+        patch.object(
+            dashboard_service.workflow_repo,
+            "count_all",
+            new_callable=AsyncMock,
+            return_value=3,
+        ),
+        patch.object(
+            dashboard_service.endpoint_repo,
+            "count_all",
+            new_callable=AsyncMock,
+            return_value=8,
+        ),
+        patch.object(
+            dashboard_service.macro_repo, "count_all", new_callable=AsyncMock, return_value=2
+        ),
+        patch.object(
+            dashboard_service.api_key_repo,
+            "count_active",
+            new_callable=AsyncMock,
+            return_value=6,
+        ),
+        patch.object(
+            dashboard_service.invitation_repo,
+            "count_pending",
+            new_callable=AsyncMock,
+            return_value=1,
+        ),
+    ):
+        counts = await dashboard_service._get_feature_counts()
+
+    assert counts.hooks == 10
+    assert counts.hooks_enabled == 7
+    assert counts.webhooks == 5
+    assert counts.webhooks_enabled == 4
+    assert counts.workflows == 3
+    assert counts.endpoints == 8
+    assert counts.macros == 2
+    assert counts.api_keys_active == 6
+    assert counts.invitations_pending == 1
+
+
+@pytest.mark.asyncio
+async def test_get_feature_counts_graceful_degrade(dashboard_service):
+    """Test feature_counts returns zeros when a repository raises."""
+    with patch.object(
+        dashboard_service.hook_repo,
+        "count_all",
+        new_callable=AsyncMock,
+        side_effect=Exception("table missing"),
+    ):
+        counts = await dashboard_service._get_feature_counts()
+
+    assert counts == FeatureCounts()
+
+
+@pytest.mark.asyncio
+async def test_get_jobs_by_status(dashboard_service):
+    """Test jobs_by_status maps JobRepository.get_stats keys."""
+    with patch.object(
+        dashboard_service.job_repo,
+        "get_stats",
+        new_callable=AsyncMock,
+        return_value={
+            "pending": 1,
+            "running": 2,
+            "completed": 10,
+            "failed": 3,
+            "retrying": 1,
+            "dead": 2,
+        },
+    ):
+        result = await dashboard_service._get_jobs_by_status()
+
+    assert result.pending == 1
+    assert result.running == 2
+    assert result.completed == 10
+    assert result.failed == 3
+    assert result.retrying == 1
+    assert result.dead == 2
+
+
+@pytest.mark.asyncio
+async def test_get_jobs_by_status_graceful_degrade(dashboard_service):
+    """Test jobs_by_status returns zeros on failure."""
+    with patch.object(
+        dashboard_service.job_repo,
+        "get_stats",
+        new_callable=AsyncMock,
+        side_effect=Exception("db error"),
+    ):
+        result = await dashboard_service._get_jobs_by_status()
+
+    assert result == JobsByStatus()
+
+
+@pytest.mark.asyncio
+async def test_get_hook_executions_summary(dashboard_service):
+    """Test hook execution summary from range-scoped aggregation."""
+    with patch.object(
+        dashboard_service.hook_execution_repo,
+        "count_by_status_between",
+        new_callable=AsyncMock,
+        return_value={"success": 20, "failed": 3, "partial": 1},
+    ):
+        start = datetime.now(timezone.utc)
+        end = start
+        result = await dashboard_service._get_hook_executions_summary(start, end)
+
+    assert result.success == 20
+    assert result.failed == 3
+    assert result.partial == 1
+
+
+@pytest.mark.asyncio
+async def test_get_webhook_deliveries_summary(dashboard_service):
+    """Test webhook delivery summary from range-scoped aggregation."""
+    with patch.object(
+        dashboard_service.webhook_delivery_repo,
+        "count_by_status_between",
+        new_callable=AsyncMock,
+        return_value={"delivered": 15, "failed": 2, "pending": 1, "retrying": 0},
+    ):
+        start = datetime.now(timezone.utc)
+        end = start
+        result = await dashboard_service._get_webhook_deliveries_summary(start, end)
+
+    assert result.delivered == 15
+    assert result.failed == 2
+    assert result.pending == 1
+    assert result.retrying == 0
+
+
+@pytest.mark.asyncio
+async def test_get_dashboard_stats_includes_phase3_automation(dashboard_service):
+    """Test full stats payload includes Phase 3 automation fields with data."""
+    with (
+        _patch_empty_stats(dashboard_service),
+        patch.object(dashboard_service, "_get_system_health") as mock_health,
+        patch.object(
+            dashboard_service,
+            "_get_feature_counts",
+            new_callable=AsyncMock,
+            return_value=FeatureCounts(hooks=4, hooks_enabled=3, webhooks=2),
+        ),
+        patch.object(
+            dashboard_service,
+            "_get_jobs_by_status",
+            new_callable=AsyncMock,
+            return_value=JobsByStatus(dead=2, completed=5),
+        ),
+        patch.object(
+            dashboard_service,
+            "_get_hook_executions_summary",
+            new_callable=AsyncMock,
+            return_value=HookExecutionsSummary(success=9, failed=1),
+        ),
+        patch.object(
+            dashboard_service,
+            "_get_webhook_deliveries_summary",
+            new_callable=AsyncMock,
+            return_value=WebhookDeliveriesSummary(delivered=4, failed=1),
+        ),
+    ):
+        mock_health.return_value = SystemHealthStats(
+            database_status="connected", storage_usage_mb=1.0
+        )
+
+        result = await dashboard_service.get_dashboard_stats(user_groups=[], range="7d")
+
+    assert result.feature_counts.hooks == 4
+    assert result.feature_counts.hooks_enabled == 3
+    assert result.feature_counts.webhooks == 2
+    assert result.jobs_by_status.dead == 2
+    assert result.jobs_by_status.completed == 5
+    assert result.hook_executions_summary.success == 9
+    assert result.hook_executions_summary.failed == 1
+    assert result.webhook_deliveries_summary.delivered == 4
+    assert result.webhook_deliveries_summary.failed == 1

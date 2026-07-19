@@ -13,21 +13,29 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.core.config import get_settings
+from snackbase.core.logging import get_logger
 from snackbase.domain.services.audit_log_service import AuditLogService
 from snackbase.infrastructure.api.schemas import (
     AuditLogResponse,
     AuditOperationPoint,
     CollectionRecordCount,
     DashboardStats,
+    FeatureCounts,
+    HookExecutionsSummary,
+    JobsByStatus,
     PreviousPeriodStats,
     RecentRegistration,
     SystemHealthStats,
     TimeSeriesPoint,
     TimeSeriesStats,
+    WebhookDeliveriesSummary,
 )
 from snackbase.infrastructure.persistence.repositories import (
     AccountRepository,
+    APIKeyRepository,
     CollectionRepository,
+    InvitationRepository,
+    MacroRepository,
     RefreshTokenRepository,
     UserRepository,
 )
@@ -37,6 +45,27 @@ from snackbase.infrastructure.persistence.repositories.audit_log_repository impo
 from snackbase.infrastructure.persistence.repositories.collection_rule_repository import (
     CollectionRuleRepository,
 )
+from snackbase.infrastructure.persistence.repositories.endpoint_repository import (
+    EndpointRepository,
+)
+from snackbase.infrastructure.persistence.repositories.hook_execution_repository import (
+    HookExecutionRepository,
+)
+from snackbase.infrastructure.persistence.repositories.hook_repository import (
+    HookRepository,
+)
+from snackbase.infrastructure.persistence.repositories.job_repository import (
+    JobRepository,
+)
+from snackbase.infrastructure.persistence.repositories.webhook_repository import (
+    WebhookDeliveryRepository,
+    WebhookRepository,
+)
+from snackbase.infrastructure.persistence.repositories.workflow_repository import (
+    WorkflowRepository,
+)
+
+logger = get_logger(__name__)
 
 DashboardRange = Literal["7d", "30d", "90d"]
 
@@ -64,6 +93,17 @@ class DashboardService:
         self.refresh_token_repo = RefreshTokenRepository(session)
         self.audit_log_repo = AuditLogRepository(session)
         self.audit_log_service = AuditLogService(session)
+        # Phase 3 automation / integrations repos
+        self.job_repo = JobRepository(session)
+        self.hook_repo = HookRepository(session)
+        self.hook_execution_repo = HookExecutionRepository(session)
+        self.webhook_repo = WebhookRepository(session)
+        self.webhook_delivery_repo = WebhookDeliveryRepository(session)
+        self.workflow_repo = WorkflowRepository(session)
+        self.endpoint_repo = EndpointRepository(session)
+        self.macro_repo = MacroRepository(session)
+        self.api_key_repo = APIKeyRepository(session)
+        self.invitation_repo = InvitationRepository(session)
 
     async def get_dashboard_stats(
         self,
@@ -138,6 +178,16 @@ class DashboardService:
         # Get active sessions count
         active_sessions = await self.refresh_token_repo.count_active_sessions()
 
+        # Phase 3: automation and integrations (graceful degrade to zeros)
+        feature_counts = await self._get_feature_counts()
+        jobs_by_status = await self._get_jobs_by_status()
+        hook_executions_summary = await self._get_hook_executions_summary(
+            range_start, now
+        )
+        webhook_deliveries_summary = await self._get_webhook_deliveries_summary(
+            range_start, now
+        )
+
         # Get recent audit logs (last 20) - with PII masking (returns dicts)
         logs, _ = await self.audit_log_service.list_logs(
             limit=20, sort_by="occurred_at", sort_order="desc"
@@ -165,8 +215,86 @@ class DashboardService:
             active_sessions=active_sessions,
             public_collections_count=public_collections_count,
             records_by_collection=records_by_collection,
+            feature_counts=feature_counts,
+            jobs_by_status=jobs_by_status,
+            hook_executions_summary=hook_executions_summary,
+            webhook_deliveries_summary=webhook_deliveries_summary,
             recent_audit_logs=recent_audit_logs,
         )
+
+    async def _get_feature_counts(self) -> FeatureCounts:
+        """Aggregate platform feature adoption counts.
+
+        Returns zeros if any underlying table is missing or query fails.
+        """
+        try:
+            return FeatureCounts(
+                hooks=await self.hook_repo.count_all(),
+                hooks_enabled=await self.hook_repo.count_enabled(),
+                webhooks=await self.webhook_repo.count_all(),
+                webhooks_enabled=await self.webhook_repo.count_enabled(),
+                workflows=await self.workflow_repo.count_all(),
+                endpoints=await self.endpoint_repo.count_all(),
+                macros=await self.macro_repo.count_all(),
+                api_keys_active=await self.api_key_repo.count_active(),
+                invitations_pending=await self.invitation_repo.count_pending(),
+            )
+        except Exception:
+            logger.warning(
+                "dashboard_feature_counts_failed",
+                exc_info=True,
+            )
+            return FeatureCounts()
+
+    async def _get_jobs_by_status(self) -> JobsByStatus:
+        """Get live job queue composition by status."""
+        try:
+            stats = await self.job_repo.get_stats()
+            return JobsByStatus(
+                pending=stats.get("pending", 0),
+                running=stats.get("running", 0),
+                completed=stats.get("completed", 0),
+                failed=stats.get("failed", 0),
+                retrying=stats.get("retrying", 0),
+                dead=stats.get("dead", 0),
+            )
+        except Exception:
+            logger.warning("dashboard_jobs_by_status_failed", exc_info=True)
+            return JobsByStatus()
+
+    async def _get_hook_executions_summary(
+        self, start: datetime, end: datetime
+    ) -> HookExecutionsSummary:
+        """Get hook execution outcomes for the selected range."""
+        try:
+            stats = await self.hook_execution_repo.count_by_status_between(start, end)
+            return HookExecutionsSummary(
+                success=stats.get("success", 0),
+                failed=stats.get("failed", 0),
+                partial=stats.get("partial", 0),
+            )
+        except Exception:
+            logger.warning("dashboard_hook_executions_summary_failed", exc_info=True)
+            return HookExecutionsSummary()
+
+    async def _get_webhook_deliveries_summary(
+        self, start: datetime, end: datetime
+    ) -> WebhookDeliveriesSummary:
+        """Get webhook delivery outcomes for the selected range."""
+        try:
+            stats = await self.webhook_delivery_repo.count_by_status_between(start, end)
+            return WebhookDeliveriesSummary(
+                delivered=stats.get("delivered", 0),
+                failed=stats.get("failed", 0),
+                pending=stats.get("pending", 0),
+                retrying=stats.get("retrying", 0),
+            )
+        except Exception:
+            logger.warning(
+                "dashboard_webhook_deliveries_summary_failed",
+                exc_info=True,
+            )
+            return WebhookDeliveriesSummary()
 
     def _zero_fill_series(
         self,

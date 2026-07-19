@@ -100,6 +100,24 @@ class WebhookRepository:
         )
         return result.scalar_one() or 0
 
+    async def count_all(self) -> int:
+        """Count all webhooks across all accounts (superadmin dashboard)."""
+        from sqlalchemy import func
+
+        result = await self.session.execute(select(func.count(WebhookModel.id)))
+        return result.scalar_one() or 0
+
+    async def count_enabled(self) -> int:
+        """Count enabled webhooks across all accounts (superadmin dashboard)."""
+        from sqlalchemy import func
+
+        result = await self.session.execute(
+            select(func.count(WebhookModel.id)).where(
+                WebhookModel.enabled == True  # noqa: E712
+            )
+        )
+        return result.scalar_one() or 0
+
 
 class WebhookDeliveryRepository:
     """Repository for webhook delivery tracking database operations."""
@@ -179,3 +197,39 @@ class WebhookDeliveryRepository:
         )
         await self.session.flush()
         return result.rowcount > 0
+
+    async def count_by_status_between(
+        self, start: datetime, end: datetime
+    ) -> dict[str, int]:
+        """Count deliveries by status in the half-open interval [start, end).
+
+        Args:
+            start: Inclusive start datetime (UTC).
+            end: Exclusive end datetime (UTC).
+
+        Returns:
+            Zero-filled map of status → count for delivered, failed, pending, retrying.
+        """
+        from sqlalchemy import func
+
+        result = await self.session.execute(
+            select(
+                WebhookDeliveryModel.status,
+                func.count(WebhookDeliveryModel.id).label("count"),
+            )
+            .where(
+                WebhookDeliveryModel.created_at >= start,
+                WebhookDeliveryModel.created_at < end,
+            )
+            .group_by(WebhookDeliveryModel.status)
+        )
+        stats: dict[str, int] = {
+            "delivered": 0,
+            "failed": 0,
+            "pending": 0,
+            "retrying": 0,
+        }
+        for row in result.all():
+            if row.status in stats:
+                stats[row.status] = int(row.count)
+        return stats

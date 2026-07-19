@@ -153,3 +153,14 @@ class APIKeyRepository:
             )
         )
         return result.scalar_one() or 0
+
+    async def count_active(self) -> int:
+        """Count all active (non-revoked) API keys (superadmin dashboard)."""
+        from sqlalchemy import func
+
+        result = await self.session.execute(
+            select(func.count(APIKeyModel.id)).where(
+                APIKeyModel.is_active == True  # noqa: E712
+            )
+        )
+        return result.scalar_one() or 0

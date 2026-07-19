@@ -150,6 +150,11 @@ class EndpointRepository:
         )
         return result.scalar_one()
 
+    async def count_all(self) -> int:
+        """Count all endpoints across all accounts (superadmin dashboard)."""
+        result = await self._session.execute(select(func.count(EndpointModel.id)))
+        return result.scalar_one() or 0
+
     async def exists_by_path_and_method(
         self,
         account_id: str,

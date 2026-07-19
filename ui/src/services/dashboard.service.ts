@@ -57,6 +57,78 @@ export interface TimeSeriesStats {
   audit_by_operation: AuditOperationPoint[];
 }
 
+/** Platform feature adoption counts (global, not range-scoped). */
+export interface FeatureCounts {
+  hooks: number;
+  hooks_enabled: number;
+  webhooks: number;
+  webhooks_enabled: number;
+  workflows: number;
+  endpoints: number;
+  macros: number;
+  api_keys_active: number;
+  invitations_pending: number;
+}
+
+/** Live job queue composition (current snapshot). */
+export interface JobsByStatus {
+  pending: number;
+  running: number;
+  completed: number;
+  failed: number;
+  retrying: number;
+  dead: number;
+}
+
+/** Hook execution outcomes for the selected range. */
+export interface HookExecutionsSummary {
+  success: number;
+  failed: number;
+  partial: number;
+}
+
+/** Webhook delivery outcomes for the selected range. */
+export interface WebhookDeliveriesSummary {
+  delivered: number;
+  failed: number;
+  pending: number;
+  retrying: number;
+}
+
+export const EMPTY_FEATURE_COUNTS: FeatureCounts = {
+  hooks: 0,
+  hooks_enabled: 0,
+  webhooks: 0,
+  webhooks_enabled: 0,
+  workflows: 0,
+  endpoints: 0,
+  macros: 0,
+  api_keys_active: 0,
+  invitations_pending: 0,
+};
+
+export const EMPTY_JOBS_BY_STATUS: JobsByStatus = {
+  pending: 0,
+  running: 0,
+  completed: 0,
+  failed: 0,
+  retrying: 0,
+  dead: 0,
+};
+
+export const EMPTY_HOOK_EXECUTIONS: HookExecutionsSummary = {
+  success: 0,
+  failed: 0,
+  partial: 0,
+};
+
+export const EMPTY_WEBHOOK_DELIVERIES: WebhookDeliveriesSummary = {
+  delivered: 0,
+  failed: 0,
+  pending: 0,
+  retrying: 0,
+};
+
 export interface DashboardStats {
   total_accounts: number;
   total_users: number;
@@ -74,6 +146,10 @@ export interface DashboardStats {
   active_sessions: number;
   public_collections_count: number;
   records_by_collection: CollectionRecordCount[];
+  feature_counts: FeatureCounts;
+  jobs_by_status: JobsByStatus;
+  hook_executions_summary: HookExecutionsSummary;
+  webhook_deliveries_summary: WebhookDeliveriesSummary;
   recent_audit_logs: AuditLogItem[];
 }
 

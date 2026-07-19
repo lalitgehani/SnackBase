@@ -67,6 +67,36 @@ const mockDashboardStats: DashboardStats = {
     { name: 'posts', count: 900 },
     { name: 'comments', count: 600 },
   ],
+  feature_counts: {
+    hooks: 4,
+    hooks_enabled: 3,
+    webhooks: 2,
+    webhooks_enabled: 2,
+    workflows: 1,
+    endpoints: 5,
+    macros: 2,
+    api_keys_active: 3,
+    invitations_pending: 1,
+  },
+  jobs_by_status: {
+    pending: 1,
+    running: 0,
+    completed: 10,
+    failed: 1,
+    retrying: 0,
+    dead: 0,
+  },
+  hook_executions_summary: {
+    success: 20,
+    failed: 1,
+    partial: 0,
+  },
+  webhook_deliveries_summary: {
+    delivered: 15,
+    failed: 0,
+    pending: 1,
+    retrying: 0,
+  },
   recent_audit_logs: [],
 }
 

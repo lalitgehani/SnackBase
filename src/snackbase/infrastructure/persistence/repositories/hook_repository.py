@@ -244,3 +244,17 @@ class HookRepository:
             1 for t in triggers
             if isinstance(t, dict) and t.get("type") == "schedule"
         )
+
+    async def count_all(self) -> int:
+        """Count all hooks across all accounts (superadmin dashboard)."""
+        result = await self._session.execute(select(func.count(HookModel.id)))
+        return result.scalar_one() or 0
+
+    async def count_enabled(self) -> int:
+        """Count enabled hooks across all accounts (superadmin dashboard)."""
+        result = await self._session.execute(
+            select(func.count(HookModel.id)).where(
+                HookModel.enabled == True  # noqa: E712
+            )
+        )
+        return result.scalar_one() or 0

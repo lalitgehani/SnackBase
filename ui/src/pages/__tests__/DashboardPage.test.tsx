@@ -93,6 +93,36 @@ const mockDashboardStats = {
     { name: 'comments', count: 400 },
     { name: 'products', count: 223 },
   ],
+  feature_counts: {
+    hooks: 4,
+    hooks_enabled: 3,
+    webhooks: 2,
+    webhooks_enabled: 2,
+    workflows: 1,
+    endpoints: 5,
+    macros: 2,
+    api_keys_active: 3,
+    invitations_pending: 1,
+  },
+  jobs_by_status: {
+    pending: 1,
+    running: 0,
+    completed: 10,
+    failed: 1,
+    retrying: 0,
+    dead: 0,
+  },
+  hook_executions_summary: {
+    success: 20,
+    failed: 1,
+    partial: 0,
+  },
+  webhook_deliveries_summary: {
+    delivered: 15,
+    failed: 0,
+    pending: 1,
+    retrying: 0,
+  },
   recent_registrations: [
     {
       id: 'reg-1',
@@ -257,15 +287,15 @@ describe('DashboardPage', () => {
       await waitFor(() => {
         expect(screen.getByText('Active Sessions')).toBeInTheDocument()
       })
-      expect(screen.getByText('5')).toBeInTheDocument()
+      expect(screen.getByText('Currently active user sessions')).toBeInTheDocument()
     })
 
     it('renders Storage with formatted usage', async () => {
       renderDashboard()
       await waitFor(() => {
-        expect(screen.getByText('Storage')).toBeInTheDocument()
+        expect(screen.getAllByText('Storage').length).toBeGreaterThan(0)
       })
-      expect(screen.getByText('42.75 MB')).toBeInTheDocument()
+      expect(screen.getAllByText('42.75 MB').length).toBeGreaterThan(0)
     })
 
     it('renders period deltas for accounts and users', async () => {
@@ -374,7 +404,8 @@ describe('DashboardPage', () => {
       await waitFor(() => {
         expect(screen.getByText('Collection Access')).toBeInTheDocument()
       })
-      expect(screen.getByTestId('donut-chart')).toBeInTheDocument()
+      // Multiple donuts exist (access mix + automation health)
+      expect(screen.getAllByTestId('donut-chart').length).toBeGreaterThan(0)
     })
 
     it('shows growth empty state when all series are zero', async () => {
@@ -412,6 +443,7 @@ describe('DashboardPage', () => {
     it('renders System Health section', async () => {
       renderDashboard()
       await waitFor(() => {
+        expect(screen.getByTestId('system-health-panel')).toBeInTheDocument()
         expect(screen.getByText('System Health')).toBeInTheDocument()
       })
     })
@@ -423,6 +455,15 @@ describe('DashboardPage', () => {
       })
     })
 
+    it('shows storage usage in the system health panel', async () => {
+      renderDashboard()
+      await waitFor(() => {
+        expect(screen.getByTestId('system-health-panel')).toBeInTheDocument()
+      })
+      // Storage appears in KPI strip and system health panel
+      expect(screen.getAllByText(/42\.75 MB/).length).toBeGreaterThan(0)
+    })
+
     it('shows disconnected badge when database is down', async () => {
       setupSuccessHandler({
         system_health: { database_status: 'disconnected', storage_usage_mb: 0 },
@@ -431,6 +472,178 @@ describe('DashboardPage', () => {
       await waitFor(() => {
         expect(screen.getByText('disconnected')).toBeInTheDocument()
       })
+    })
+  })
+
+  describe('feature counts strip', () => {
+    it('renders feature count cards', async () => {
+      renderDashboard()
+      await waitFor(() => {
+        expect(screen.getByTestId('feature-counts-strip')).toBeInTheDocument()
+      })
+      expect(screen.getByTestId('feature-count-hooks')).toBeInTheDocument()
+      expect(screen.getByTestId('feature-count-webhooks')).toBeInTheDocument()
+      expect(screen.getByTestId('feature-count-workflows')).toBeInTheDocument()
+      expect(screen.getByTestId('feature-count-endpoints')).toBeInTheDocument()
+      expect(screen.getByTestId('feature-count-macros')).toBeInTheDocument()
+      expect(screen.getByTestId('feature-count-api_keys')).toBeInTheDocument()
+      expect(screen.getByTestId('feature-count-invitations')).toBeInTheDocument()
+    })
+
+    it.each([
+      ['feature-count-hooks', '/admin/hooks'],
+      ['feature-count-webhooks', '/admin/webhooks'],
+      ['feature-count-workflows', '/admin/workflows'],
+      ['feature-count-endpoints', '/admin/endpoints'],
+      ['feature-count-macros', '/admin/macros'],
+      ['feature-count-api_keys', '/admin/api-keys'],
+      ['feature-count-invitations', '/admin/invitations'],
+    ])('navigates from %s to %s', async (testId, path) => {
+      renderDashboard()
+      await waitFor(() => {
+        expect(screen.getByTestId(testId)).toBeInTheDocument()
+      })
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      await user.click(screen.getByTestId(testId))
+      expect(mockNavigate).toHaveBeenCalledWith(path)
+    })
+  })
+
+  describe('automation health charts', () => {
+    it('renders Jobs, Hook Executions, and Webhook Deliveries sections', async () => {
+      renderDashboard()
+      await waitFor(() => {
+        expect(screen.getByTestId('automation-health')).toBeInTheDocument()
+      })
+      expect(screen.getByText('Jobs')).toBeInTheDocument()
+      expect(screen.getByText('Hook Executions')).toBeInTheDocument()
+      expect(screen.getByText('Webhook Deliveries')).toBeInTheDocument()
+    })
+
+    it('shows empty state for jobs when all status counts are zero', async () => {
+      setupSuccessHandler({
+        jobs_by_status: {
+          pending: 0,
+          running: 0,
+          completed: 0,
+          failed: 0,
+          retrying: 0,
+          dead: 0,
+        },
+      })
+      renderDashboard()
+      await waitFor(() => {
+        expect(screen.getByText('No jobs yet')).toBeInTheDocument()
+      })
+    })
+  })
+
+  describe('automation alert strip', () => {
+    beforeEach(() => {
+      sessionStorage.removeItem('dashboard-automation-alert-dismissed')
+    })
+
+    it('shows alert when there are dead jobs', async () => {
+      setupSuccessHandler({
+        jobs_by_status: {
+          pending: 0,
+          running: 0,
+          completed: 5,
+          failed: 0,
+          retrying: 0,
+          dead: 2,
+        },
+      })
+      renderDashboard()
+      await waitFor(() => {
+        expect(screen.getByTestId('automation-alert')).toBeInTheDocument()
+      })
+      expect(screen.getByText(/2 dead jobs need attention/i)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /view jobs/i })).toBeInTheDocument()
+    })
+
+    it('shows alert when there are failed webhook deliveries', async () => {
+      setupSuccessHandler({
+        webhook_deliveries_summary: {
+          delivered: 5,
+          failed: 3,
+          pending: 0,
+          retrying: 0,
+        },
+      })
+      renderDashboard()
+      await waitFor(() => {
+        expect(screen.getByTestId('automation-alert')).toBeInTheDocument()
+      })
+      expect(screen.getByText(/3 failed webhook deliveries/i)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /view webhooks/i })).toBeInTheDocument()
+    })
+
+    it('hides alert when automation is healthy', async () => {
+      setupSuccessHandler({
+        jobs_by_status: {
+          pending: 1,
+          running: 0,
+          completed: 10,
+          failed: 0,
+          retrying: 0,
+          dead: 0,
+        },
+        webhook_deliveries_summary: {
+          delivered: 15,
+          failed: 0,
+          pending: 0,
+          retrying: 0,
+        },
+      })
+      renderDashboard()
+      await waitFor(() => {
+        expect(screen.getByText('Total Accounts')).toBeInTheDocument()
+      })
+      expect(screen.queryByTestId('automation-alert')).not.toBeInTheDocument()
+    })
+
+    it('dismisses alert for the session', async () => {
+      setupSuccessHandler({
+        jobs_by_status: {
+          pending: 0,
+          running: 0,
+          completed: 0,
+          failed: 0,
+          retrying: 0,
+          dead: 1,
+        },
+      })
+      renderDashboard()
+      await waitFor(() => {
+        expect(screen.getByTestId('automation-alert')).toBeInTheDocument()
+      })
+
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      await user.click(screen.getByLabelText('Dismiss automation alert'))
+
+      expect(screen.queryByTestId('automation-alert')).not.toBeInTheDocument()
+      expect(sessionStorage.getItem('dashboard-automation-alert-dismissed')).toBe('1')
+    })
+
+    it('navigates to jobs from the alert', async () => {
+      setupSuccessHandler({
+        jobs_by_status: {
+          pending: 0,
+          running: 0,
+          completed: 0,
+          failed: 0,
+          retrying: 0,
+          dead: 1,
+        },
+      })
+      renderDashboard()
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /view jobs/i })).toBeInTheDocument()
+      })
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      await user.click(screen.getByRole('button', { name: /view jobs/i }))
+      expect(mockNavigate).toHaveBeenCalledWith('/admin/jobs')
     })
   })
 

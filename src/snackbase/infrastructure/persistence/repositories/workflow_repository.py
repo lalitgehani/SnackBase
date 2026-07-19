@@ -113,6 +113,11 @@ class WorkflowRepository:
         )
         return result.scalar_one()
 
+    async def count_all(self) -> int:
+        """Count all workflows across all accounts (superadmin dashboard)."""
+        result = await self._session.execute(select(func.count(WorkflowModel.id)))
+        return result.scalar_one() or 0
+
     async def update(self, workflow: WorkflowModel) -> WorkflowModel:
         await self._session.flush()
         return workflow

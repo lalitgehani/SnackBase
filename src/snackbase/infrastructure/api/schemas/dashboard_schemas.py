@@ -94,6 +94,58 @@ class PreviousPeriodStats(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class FeatureCounts(BaseModel):
+    """Platform feature adoption counts (global, not range-scoped)."""
+
+    hooks: int = Field(0, description="Total hooks across all accounts")
+    hooks_enabled: int = Field(0, description="Enabled hooks")
+    webhooks: int = Field(0, description="Total webhooks across all accounts")
+    webhooks_enabled: int = Field(0, description="Enabled webhooks")
+    workflows: int = Field(0, description="Total workflows")
+    endpoints: int = Field(0, description="Total custom endpoints")
+    macros: int = Field(0, description="Total SQL macros")
+    api_keys_active: int = Field(0, description="Active (non-revoked) API keys")
+    invitations_pending: int = Field(
+        0, description="Pending invitations (not accepted, not expired)"
+    )
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class JobsByStatus(BaseModel):
+    """Live job queue composition (current snapshot, not range-scoped)."""
+
+    pending: int = 0
+    running: int = 0
+    completed: int = 0
+    failed: int = 0
+    retrying: int = 0
+    dead: int = 0
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class HookExecutionsSummary(BaseModel):
+    """Hook execution outcomes for the selected time range (via executed_at)."""
+
+    success: int = 0
+    failed: int = 0
+    partial: int = 0
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class WebhookDeliveriesSummary(BaseModel):
+    """Webhook delivery outcomes for the selected time range (via created_at)."""
+
+    delivered: int = 0
+    failed: int = 0
+    pending: int = 0
+    retrying: int = 0
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class DashboardStats(BaseModel):
     """Dashboard statistics response."""
 
@@ -144,6 +196,24 @@ class DashboardStats(BaseModel):
     records_by_collection: list[CollectionRecordCount] = Field(
         default_factory=list,
         description="Top collections by row count (default top 10 + optional Other)",
+    )
+
+    # Phase 3: automation and integrations health
+    feature_counts: FeatureCounts = Field(
+        default_factory=FeatureCounts,
+        description="Platform feature adoption counts",
+    )
+    jobs_by_status: JobsByStatus = Field(
+        default_factory=JobsByStatus,
+        description="Live job queue composition by status",
+    )
+    hook_executions_summary: HookExecutionsSummary = Field(
+        default_factory=HookExecutionsSummary,
+        description="Hook execution outcomes in the selected range",
+    )
+    webhook_deliveries_summary: WebhookDeliveriesSummary = Field(
+        default_factory=WebhookDeliveriesSummary,
+        description="Webhook delivery outcomes in the selected range",
     )
 
     # Audit logs

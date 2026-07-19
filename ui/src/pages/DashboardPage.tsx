@@ -1,6 +1,6 @@
 /**
  * Dashboard page - main landing page after login
- * Phase 2: growth charts, platform composition, compact activity feed, quick actions
+ * Phase 3: automation health (jobs/hooks/webhooks), feature counts, alert strip
  */
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   LayoutDashboard,
   Users,
@@ -32,6 +33,11 @@ import {
   Workflow,
   Zap,
   UserPlus,
+  KeyRound,
+  Terminal,
+  Route,
+  AlertTriangle,
+  X,
 } from 'lucide-react';
 import {
   ChartContainer,
@@ -47,6 +53,10 @@ import {
   formatPeriodDelta,
   formatStorageUsage,
   isDashboardRange,
+  EMPTY_FEATURE_COUNTS,
+  EMPTY_JOBS_BY_STATUS,
+  EMPTY_HOOK_EXECUTIONS,
+  EMPTY_WEBHOOK_DELIVERIES,
   type DashboardRange,
   type DashboardStats,
 } from '@/services/dashboard.service';
@@ -75,6 +85,7 @@ const RANGE_LABELS: Record<DashboardRange, string> = {
 
 const REFRESH_STORAGE_KEY = 'dashboard-refresh-frequency';
 const RANGE_STORAGE_KEY = 'dashboard-range';
+const ALERT_DISMISS_KEY = 'dashboard-automation-alert-dismissed';
 
 const QUICK_ACTIONS = [
   { label: 'Create Account', path: '/admin/accounts', icon: Building2 },
@@ -83,6 +94,61 @@ const QUICK_ACTIONS = [
   { label: 'Create Hook', path: '/admin/hooks', icon: Zap },
   { label: 'Create Webhook', path: '/admin/webhooks', icon: Webhook },
   { label: 'Create Workflow', path: '/admin/workflows', icon: Workflow },
+] as const;
+
+const FEATURE_COUNT_ITEMS = [
+  {
+    key: 'hooks',
+    label: 'Hooks',
+    path: '/admin/hooks',
+    icon: Zap,
+    value: (s: DashboardStats) => s.feature_counts.hooks,
+    subtitle: (s: DashboardStats) => `${s.feature_counts.hooks_enabled} enabled`,
+  },
+  {
+    key: 'webhooks',
+    label: 'Webhooks',
+    path: '/admin/webhooks',
+    icon: Webhook,
+    value: (s: DashboardStats) => s.feature_counts.webhooks,
+    subtitle: (s: DashboardStats) => `${s.feature_counts.webhooks_enabled} enabled`,
+  },
+  {
+    key: 'workflows',
+    label: 'Workflows',
+    path: '/admin/workflows',
+    icon: Workflow,
+    value: (s: DashboardStats) => s.feature_counts.workflows,
+  },
+  {
+    key: 'endpoints',
+    label: 'Endpoints',
+    path: '/admin/endpoints',
+    icon: Route,
+    value: (s: DashboardStats) => s.feature_counts.endpoints,
+  },
+  {
+    key: 'macros',
+    label: 'Macros',
+    path: '/admin/macros',
+    icon: Terminal,
+    value: (s: DashboardStats) => s.feature_counts.macros,
+  },
+  {
+    key: 'api_keys',
+    label: 'API Keys',
+    path: '/admin/api-keys',
+    icon: KeyRound,
+    value: (s: DashboardStats) => s.feature_counts.api_keys_active,
+  },
+  {
+    key: 'invitations',
+    label: 'Invitations',
+    path: '/admin/invitations',
+    icon: UserPlus,
+    value: (s: DashboardStats) => s.feature_counts.invitations_pending,
+    subtitle: () => 'pending',
+  },
 ] as const;
 
 function readStoredRange(): DashboardRange {
@@ -185,6 +251,9 @@ export default function DashboardPage() {
     return localStorage.getItem(REFRESH_STORAGE_KEY) || '0';
   });
   const [range, setRange] = useState<DashboardRange>(() => readStoredRange());
+  const [alertDismissed, setAlertDismissed] = useState(() => {
+    return sessionStorage.getItem(ALERT_DISMISS_KEY) === '1';
+  });
 
   const {
     data: stats,
@@ -212,6 +281,21 @@ export default function DashboardPage() {
   const showFullPageError = isError && !stats;
   const showKpiSkeletons = isLoading && !stats;
   const rangeLabel = RANGE_LABELS[stats?.range ?? range];
+
+  const featureCounts = stats?.feature_counts ?? EMPTY_FEATURE_COUNTS;
+  const jobsByStatus = stats?.jobs_by_status ?? EMPTY_JOBS_BY_STATUS;
+  const hookExecutions = stats?.hook_executions_summary ?? EMPTY_HOOK_EXECUTIONS;
+  const webhookDeliveries = stats?.webhook_deliveries_summary ?? EMPTY_WEBHOOK_DELIVERIES;
+
+  const deadJobs = jobsByStatus.dead;
+  const failedWebhooks = webhookDeliveries.failed;
+  const showAutomationAlert =
+    !alertDismissed && !showKpiSkeletons && (deadJobs > 0 || failedWebhooks > 0);
+
+  const dismissAlert = () => {
+    sessionStorage.setItem(ALERT_DISMISS_KEY, '1');
+    setAlertDismissed(true);
+  };
 
   const growthChartData = useMemo(() => {
     if (!stats) return [];
@@ -266,6 +350,41 @@ export default function DashboardPage() {
       { name: 'Protected', value: protectedCount, color: CHART_COLORS.chart1 },
     ].filter((d) => d.value > 0);
   }, [stats]);
+
+  const jobsChartData = useMemo(
+    () => [
+      { name: 'Pending', value: jobsByStatus.pending, color: CHART_COLORS.chart3 },
+      { name: 'Running', value: jobsByStatus.running, color: CHART_COLORS.chart1 },
+      { name: 'Completed', value: jobsByStatus.completed, color: CHART_COLORS.chart2 },
+      { name: 'Failed', value: jobsByStatus.failed, color: CHART_COLORS.chart4 },
+      { name: 'Retrying', value: jobsByStatus.retrying, color: CHART_COLORS.chart3 },
+      { name: 'Dead', value: jobsByStatus.dead, color: CHART_COLORS.chart5 },
+    ],
+    [jobsByStatus],
+  );
+
+  const hooksChartData = useMemo(
+    () => [
+      { name: 'Success', value: hookExecutions.success, color: CHART_COLORS.chart2 },
+      { name: 'Partial', value: hookExecutions.partial, color: CHART_COLORS.chart3 },
+      { name: 'Failed', value: hookExecutions.failed, color: CHART_COLORS.chart5 },
+    ],
+    [hookExecutions],
+  );
+
+  const webhooksChartData = useMemo(
+    () => [
+      { name: 'Delivered', value: webhookDeliveries.delivered, color: CHART_COLORS.chart2 },
+      { name: 'Pending', value: webhookDeliveries.pending, color: CHART_COLORS.chart3 },
+      { name: 'Retrying', value: webhookDeliveries.retrying, color: CHART_COLORS.chart4 },
+      { name: 'Failed', value: webhookDeliveries.failed, color: CHART_COLORS.chart5 },
+    ],
+    [webhookDeliveries],
+  );
+
+  const jobsIsEmpty = jobsChartData.every((d) => d.value === 0);
+  const hooksIsEmpty = hooksChartData.every((d) => d.value === 0);
+  const webhooksIsEmpty = webhooksChartData.every((d) => d.value === 0);
 
   const recentRegistrations = stats?.recent_registrations?.slice(0, 10) ?? [];
   const recentAuditLogs = stats?.recent_audit_logs?.slice(0, 10) ?? [];
@@ -361,6 +480,64 @@ export default function DashboardPage() {
         </div>
       ) : null}
 
+      {/* Automation health alert strip */}
+      {showAutomationAlert ? (
+        <Alert
+          variant="destructive"
+          className="relative"
+          data-testid="automation-alert"
+        >
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Automation attention needed</AlertTitle>
+          <AlertDescription>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-1 text-sm">
+                {deadJobs > 0 ? (
+                  <p>
+                    {deadJobs} dead job{deadJobs === 1 ? '' : 's'} need attention
+                  </p>
+                ) : null}
+                {failedWebhooks > 0 ? (
+                  <p>
+                    {failedWebhooks} failed webhook deliver
+                    {failedWebhooks === 1 ? 'y' : 'ies'} in this period
+                  </p>
+                ) : null}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {deadJobs > 0 ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => navigate('/admin/jobs')}
+                  >
+                    View Jobs
+                  </Button>
+                ) : null}
+                {failedWebhooks > 0 ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => navigate('/admin/webhooks')}
+                  >
+                    View Webhooks
+                  </Button>
+                ) : null}
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-8 w-8"
+                  onClick={dismissAlert}
+                  aria-label="Dismiss automation alert"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
       {/* Hero KPI strip */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
         <KpiCard
@@ -417,6 +594,58 @@ export default function DashboardPage() {
           icon={<HardDrive className="h-4 w-4" />}
           isLoading={showKpiSkeletons}
         />
+      </div>
+
+      {/* Feature counts strip */}
+      <div data-testid="feature-counts-strip">
+        <h2 className="mb-3 text-sm font-medium text-muted-foreground">
+          Platform features
+        </h2>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+          {FEATURE_COUNT_ITEMS.map((item) => {
+            const Icon = item.icon;
+            const value = stats ? item.value(stats) : 0;
+            const subtitle =
+              stats && 'subtitle' in item && item.subtitle
+                ? item.subtitle(stats)
+                : undefined;
+            return (
+              <Card
+                key={item.key}
+                className="cursor-pointer transition-colors hover:bg-muted/50"
+                onClick={() => navigate(item.path)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    navigate(item.path);
+                  }
+                }}
+                data-testid={`feature-count-${item.key}`}
+              >
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3">
+                  <CardTitle className="text-xs font-medium text-muted-foreground">
+                    {item.label}
+                  </CardTitle>
+                  <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+                </CardHeader>
+                <CardContent className="pb-3">
+                  {showKpiSkeletons ? (
+                    <Skeleton className="h-7 w-10" />
+                  ) : (
+                    <>
+                      <div className="text-xl font-bold">{value}</div>
+                      {subtitle ? (
+                        <p className="text-[11px] text-muted-foreground">{subtitle}</p>
+                      ) : null}
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
       </div>
 
       {/* Growth + Access mix */}
@@ -526,30 +755,154 @@ export default function DashboardPage() {
         </ChartContainer>
       </div>
 
+      {/* Automation health: Jobs / Hooks / Webhooks */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3" data-testid="automation-health">
+        <ChartContainer
+          title="Jobs"
+          description="Queue status composition"
+          isLoading={showKpiSkeletons}
+          isEmpty={!showKpiSkeletons && jobsIsEmpty}
+          emptyMessage="No jobs yet"
+          emptyHint="Background jobs will appear here when enqueued."
+          headerAction={
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs"
+              onClick={() => navigate('/admin/jobs')}
+            >
+              View all
+            </Button>
+          }
+        >
+          <div
+            className="cursor-pointer"
+            onClick={() => navigate('/admin/jobs')}
+            role="link"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                navigate('/admin/jobs');
+              }
+            }}
+          >
+            <DonutChart data={jobsChartData} height={220} />
+          </div>
+        </ChartContainer>
+
+        <ChartContainer
+          title="Hook Executions"
+          description={`Success vs failure · ${rangeLabel}`}
+          isLoading={showKpiSkeletons}
+          isEmpty={!showKpiSkeletons && hooksIsEmpty}
+          emptyMessage="No hook executions in this period"
+          emptyHint={
+            featureCounts.hooks_enabled > 0
+              ? `${featureCounts.hooks_enabled} hooks enabled — waiting for activity.`
+              : 'Create and enable hooks to track execution health.'
+          }
+          headerAction={
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs"
+              onClick={() => navigate('/admin/hooks')}
+            >
+              View all
+            </Button>
+          }
+        >
+          <div
+            className="cursor-pointer"
+            onClick={() => navigate('/admin/hooks')}
+            role="link"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                navigate('/admin/hooks');
+              }
+            }}
+          >
+            <DonutChart data={hooksChartData} height={220} />
+          </div>
+        </ChartContainer>
+
+        <ChartContainer
+          title="Webhook Deliveries"
+          description={`Delivery health · ${rangeLabel}`}
+          isLoading={showKpiSkeletons}
+          isEmpty={!showKpiSkeletons && webhooksIsEmpty}
+          emptyMessage="No webhook deliveries in this period"
+          emptyHint="Outbound webhook deliveries will show delivery status here."
+          headerAction={
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs"
+              onClick={() => navigate('/admin/webhooks')}
+            >
+              View all
+            </Button>
+          }
+        >
+          <div
+            className="cursor-pointer"
+            onClick={() => navigate('/admin/webhooks')}
+            role="link"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                navigate('/admin/webhooks');
+              }
+            }}
+          >
+            <DonutChart data={webhooksChartData} height={220} />
+          </div>
+        </ChartContainer>
+      </div>
+
       {/* System Health */}
-      <Card>
+      <Card data-testid="system-health-panel">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Activity className="h-5 w-5 text-primary" />
             System Health
           </CardTitle>
+          <CardDescription>Database connectivity and file storage</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-4">
           {showKpiSkeletons ? (
-            <Skeleton className="h-6 w-40" />
+            <>
+              <Skeleton className="h-6 w-40" />
+              <Skeleton className="h-6 w-48" />
+            </>
           ) : (
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Database</span>
-              <Badge
-                variant={
-                  stats?.system_health.database_status === 'connected'
-                    ? 'default'
-                    : 'destructive'
-                }
-              >
-                {stats?.system_health.database_status || 'Unknown'}
-              </Badge>
-            </div>
+            <>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Database</span>
+                <Badge
+                  variant={
+                    stats?.system_health.database_status === 'connected'
+                      ? 'default'
+                      : 'destructive'
+                  }
+                >
+                  {stats?.system_health.database_status || 'Unknown'}
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <HardDrive className="h-4 w-4" />
+                  Storage
+                </span>
+                <span className="text-sm font-medium">
+                  {formatStorageUsage(stats?.system_health.storage_usage_mb ?? 0)}
+                </span>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
