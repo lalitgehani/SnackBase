@@ -19,6 +19,7 @@ function ParallelNode({ id, data, selected }: NodeProps<ParallelFlowNode>) {
             icon={GitFork}
             selected={selected}
             invalid={isStepInvalid(step)}
+            issueSeverity={data.issueSeverity ?? null}
             onDelete={() => emitNodeDelete(id)}
             testId="workflow-node-parallel"
         />

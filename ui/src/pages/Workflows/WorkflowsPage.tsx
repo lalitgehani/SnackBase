@@ -178,13 +178,16 @@ export default function WorkflowsPage() {
                     ))}
                 </div>
             ) : workflows.length === 0 ? (
-                <div className="text-center py-24 border rounded-lg">
+                <div className="text-center py-24 border rounded-lg" data-testid="workflows-empty-state">
                     <GitMerge className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                     <p className="text-lg font-medium mb-1">No workflows yet</p>
                     <p className="text-muted-foreground text-sm mb-6">
                         Create a workflow to automate multi-step processes triggered by events, schedules, or API calls.
                     </p>
-                    <Button onClick={() => navigate('/admin/workflows/new')}>
+                    <Button
+                        onClick={() => navigate('/admin/workflows/new')}
+                        data-testid="workflows-empty-create"
+                    >
                         <Plus className="h-4 w-4 mr-2" />
                         New Workflow
                     </Button>
@@ -197,16 +200,39 @@ export default function WorkflowsPage() {
                             <TableHead>Trigger</TableHead>
                             <TableHead>Steps</TableHead>
                             <TableHead>Status</TableHead>
-                            <TableHead>Created</TableHead>
+                            <TableHead>Updated</TableHead>
                             <TableHead className="w-10"></TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {workflows.map((wf) => (
-                            <TableRow key={wf.id}>
+                            <TableRow
+                                key={wf.id}
+                                className="cursor-pointer"
+                                data-testid={`workflow-row-${wf.id}`}
+                                onClick={(e) => {
+                                    // Ignore interactive controls inside the row
+                                    const target = e.target as HTMLElement;
+                                    if (
+                                        target.closest(
+                                            'button, a, input, [role="switch"], [role="menuitem"], [data-radix-collection-item]',
+                                        )
+                                    ) {
+                                        return;
+                                    }
+                                    navigate(`/admin/workflows/${wf.id}/edit`);
+                                }}
+                            >
                                 <TableCell>
                                     <div>
-                                        <p className="font-medium">{wf.name}</p>
+                                        <button
+                                            type="button"
+                                            className="font-medium text-left hover:underline"
+                                            onClick={() => navigate(`/admin/workflows/${wf.id}/edit`)}
+                                            data-testid={`workflow-edit-link-${wf.id}`}
+                                        >
+                                            {wf.name}
+                                        </button>
                                         {wf.description && (
                                             <p className="text-xs text-muted-foreground truncate max-w-[220px]">
                                                 {wf.description}
@@ -250,7 +276,7 @@ export default function WorkflowsPage() {
                                     </div>
                                 </TableCell>
                                 <TableCell className="text-sm text-muted-foreground">
-                                    {formatDate(wf.created_at)}
+                                    {formatDate(wf.updated_at ?? wf.created_at)}
                                 </TableCell>
                                 <TableCell>
                                     <DropdownMenu>

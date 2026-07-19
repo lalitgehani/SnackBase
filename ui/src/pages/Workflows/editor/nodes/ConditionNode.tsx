@@ -20,6 +20,7 @@ function ConditionNode({ id, data, selected }: NodeProps<ConditionFlowNode>) {
             selected={selected}
             showSourceHandle={false}
             invalid={isStepInvalid(step)}
+            issueSeverity={data.issueSeverity ?? null}
             onDelete={() => emitNodeDelete(id)}
             testId="workflow-node-condition"
             customSourceHandles={

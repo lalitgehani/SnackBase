@@ -4,7 +4,7 @@
 
 import { memo, type ReactNode } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
-import { X, AlertCircle, type LucideIcon } from 'lucide-react';
+import { X, AlertCircle, AlertTriangle, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export type NodeAccent =
@@ -44,7 +44,9 @@ export interface BaseStepNodeProps {
     showSourceHandle?: boolean;
     /** When true, no delete control. */
     locked?: boolean;
+    /** Field or graph validation: error shows red icon, warning amber. */
     invalid?: boolean;
+    issueSeverity?: 'error' | 'warning' | null;
     onDelete?: () => void;
     /** Extra content below subtitle (e.g. condition handles area). */
     children?: ReactNode;
@@ -65,17 +67,23 @@ export function BaseStepNodeCard({
     showSourceHandle = true,
     locked = false,
     invalid = false,
+    issueSeverity = null,
     onDelete,
     children,
     customSourceHandles,
     className,
     testId,
 }: BaseStepNodeProps) {
+    const severity: 'error' | 'warning' | null =
+        issueSeverity ?? (invalid ? 'error' : null);
+
     return (
         <div
             className={cn(
                 'relative min-w-[180px] max-w-[240px] rounded-lg border bg-card text-card-foreground shadow-sm group',
                 selected && 'ring-2 ring-primary border-primary',
+                severity === 'error' && !selected && 'border-destructive/50',
+                severity === 'warning' && !selected && 'border-amber-500/50',
                 className,
             )}
             data-testid={testId}
@@ -96,10 +104,16 @@ export function BaseStepNodeCard({
                     <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
                             <p className="text-sm font-medium truncate leading-tight">{title || 'Unnamed'}</p>
-                            {invalid && (
+                            {severity === 'error' && (
                                 <AlertCircle
                                     className="h-3.5 w-3.5 text-destructive shrink-0"
-                                    aria-label="Validation issue"
+                                    aria-label="Validation error"
+                                />
+                            )}
+                            {severity === 'warning' && (
+                                <AlertTriangle
+                                    className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0"
+                                    aria-label="Validation warning"
                                 />
                             )}
                         </div>

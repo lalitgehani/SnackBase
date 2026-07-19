@@ -19,6 +19,7 @@ function WaitEventNode({ id, data, selected }: NodeProps<WaitEventFlowNode>) {
             icon={Radio}
             selected={selected}
             invalid={isStepInvalid(step)}
+            issueSeverity={data.issueSeverity ?? null}
             onDelete={() => emitNodeDelete(id)}
             testId="workflow-node-wait_event"
         />

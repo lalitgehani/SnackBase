@@ -19,6 +19,7 @@ function WaitDelayNode({ id, data, selected }: NodeProps<WaitDelayFlowNode>) {
             icon={Timer}
             selected={selected}
             invalid={isStepInvalid(step)}
+            issueSeverity={data.issueSeverity ?? null}
             onDelete={() => emitNodeDelete(id)}
             testId="workflow-node-wait_delay"
         />

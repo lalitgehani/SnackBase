@@ -20,6 +20,7 @@ function TriggerNode({ data, selected }: NodeProps<TriggerFlowNode>) {
             showTargetHandle={false}
             showSourceHandle={true}
             locked
+            issueSeverity={data.issueSeverity ?? null}
             testId="workflow-node-trigger"
         />
     );

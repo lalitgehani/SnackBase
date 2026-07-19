@@ -5,6 +5,8 @@ import { Route, Routes } from 'react-router';
 import WorkflowEditorPage from '../WorkflowEditorPage';
 import { workflowsService } from '@/services/workflows.service';
 
+const toastMock = vi.fn();
+
 vi.mock('@/services/workflows.service', () => ({
     workflowsService: {
         get: vi.fn(),
@@ -14,7 +16,7 @@ vi.mock('@/services/workflows.service', () => ({
 }));
 
 vi.mock('@/hooks/use-toast', () => ({
-    useToast: () => ({ toast: vi.fn() }),
+    useToast: () => ({ toast: toastMock }),
 }));
 
 // React Flow ResizeObserver in jsdom
@@ -36,13 +38,43 @@ function renderEditor(path: string) {
     );
 }
 
+async function chooseEmptyTemplate(user: ReturnType<typeof userEvent.setup>) {
+    expect(await screen.findByTestId('workflow-template-picker')).toBeInTheDocument();
+    await user.click(screen.getByTestId('workflow-template-empty'));
+    await waitFor(() => {
+        expect(screen.queryByTestId('workflow-template-picker')).not.toBeInTheDocument();
+    });
+}
+
 describe('WorkflowEditorPage', () => {
     beforeEach(() => {
         vi.clearAllMocks();
     });
 
-    it('renders new workflow editor shell with trigger and palette', async () => {
+    it('shows template picker on new route', async () => {
         renderEditor('/admin/workflows/new');
+        expect(await screen.findByTestId('workflow-template-picker')).toBeInTheDocument();
+        expect(screen.getByTestId('workflow-template-empty')).toBeInTheDocument();
+        expect(screen.getByTestId('workflow-template-record-lifecycle')).toBeInTheDocument();
+    });
+
+    it('hydrates canvas from record-lifecycle template', async () => {
+        const user = userEvent.setup();
+        renderEditor('/admin/workflows/new');
+        await screen.findByTestId('workflow-template-picker');
+        await user.click(screen.getByTestId('workflow-template-record-lifecycle'));
+
+        expect(await screen.findByTestId('workflow-canvas')).toBeInTheDocument();
+        expect(screen.getByTestId('workflow-node-trigger')).toBeInTheDocument();
+        expect(screen.getByTestId('workflow-node-condition')).toBeInTheDocument();
+        expect(screen.getAllByTestId('workflow-node-action').length).toBeGreaterThanOrEqual(2);
+        expect(screen.getByTestId('workflow-editor-name')).toHaveValue('Record lifecycle');
+    });
+
+    it('renders new workflow editor shell with trigger and palette after template', async () => {
+        const user = userEvent.setup();
+        renderEditor('/admin/workflows/new');
+        await chooseEmptyTemplate(user);
 
         expect(await screen.findByTestId('workflow-editor-page')).toBeInTheDocument();
         expect(screen.getByTestId('workflow-editor-name')).toBeInTheDocument();
@@ -53,11 +85,13 @@ describe('WorkflowEditorPage', () => {
         expect(screen.getByTestId('workflow-node-trigger')).toBeInTheDocument();
         expect(screen.getByTestId('palette-item-action')).toBeInTheDocument();
         expect(screen.getByTestId('palette-item-condition')).toBeInTheDocument();
+        expect(screen.getByTestId('workflow-canvas-toolbar')).toBeInTheDocument();
     });
 
     it('adds a step from palette click', async () => {
         const user = userEvent.setup();
         renderEditor('/admin/workflows/new');
+        await chooseEmptyTemplate(user);
         await screen.findByTestId('workflow-editor-page');
 
         await user.click(screen.getByTestId('palette-item-condition'));
@@ -65,7 +99,7 @@ describe('WorkflowEditorPage', () => {
         expect(screen.getByTestId('properties-condition')).toBeInTheDocument();
     });
 
-    it('loads existing workflow on edit route', async () => {
+    it('loads existing workflow on edit route without template picker', async () => {
         vi.mocked(workflowsService.get).mockResolvedValue({
             id: 'wf-1',
             account_id: 'AB1234',
@@ -95,6 +129,7 @@ describe('WorkflowEditorPage', () => {
             expect(workflowsService.get).toHaveBeenCalledWith('wf-1');
         });
 
+        expect(screen.queryByTestId('workflow-template-picker')).not.toBeInTheDocument();
         expect(await screen.findByTestId('workflow-editor-page')).toBeInTheDocument();
         const nameInput = screen.getByTestId('workflow-editor-name') as HTMLInputElement;
         await waitFor(() => {
@@ -117,7 +152,7 @@ describe('WorkflowEditorPage', () => {
         );
     });
 
-    it('calls create on save for new workflow', async () => {
+    it('calls create on save for new workflow after empty template', async () => {
         const user = userEvent.setup();
         vi.mocked(workflowsService.create).mockResolvedValue({
             id: 'new-id',
@@ -134,6 +169,7 @@ describe('WorkflowEditorPage', () => {
         });
 
         renderEditor('/admin/workflows/new');
+        await chooseEmptyTemplate(user);
 
         await screen.findByTestId('workflow-editor-page');
         const nameInput = screen.getByTestId('workflow-editor-name');
@@ -152,7 +188,46 @@ describe('WorkflowEditorPage', () => {
         expect(payload.enabled).toBe(true);
     });
 
-    it('calls update on save for edit workflow', async () => {
+    it('does not call API when graph has hard validation errors', async () => {
+        const user = userEvent.setup();
+        vi.mocked(workflowsService.get).mockResolvedValue({
+            id: 'wf-bad',
+            account_id: 'AB1234',
+            name: 'Bad Flow',
+            description: null,
+            trigger_type: 'manual',
+            trigger_config: { type: 'manual' },
+            steps: [
+                {
+                    type: 'action',
+                    name: 'notify',
+                    action_type: 'send_webhook',
+                    config: {}, // missing url → hard error
+                    position_x: 40,
+                    position_y: 80,
+                },
+            ],
+            enabled: true,
+            created_at: '2026-01-01T00:00:00Z',
+            updated_at: '2026-01-01T00:00:00Z',
+            created_by: null,
+        });
+
+        renderEditor('/admin/workflows/wf-bad/edit');
+        await waitFor(() => {
+            expect(screen.getByTestId('workflow-editor-name')).toHaveValue('Bad Flow');
+        });
+
+        await user.click(screen.getByTestId('workflow-editor-save'));
+
+        await waitFor(() => {
+            expect(toastMock).toHaveBeenCalled();
+        });
+        expect(workflowsService.update).not.toHaveBeenCalled();
+        expect(await screen.findByTestId('workflow-validation-panel')).toBeInTheDocument();
+    });
+
+    it('calls update on save for edit workflow with valid steps', async () => {
         const user = userEvent.setup();
         vi.mocked(workflowsService.get).mockResolvedValue({
             id: 'wf-2',
@@ -166,7 +241,7 @@ describe('WorkflowEditorPage', () => {
                     type: 'action',
                     name: 's1',
                     action_type: 'send_webhook',
-                    config: {},
+                    config: { url: 'https://example.com' },
                     position_x: 1,
                     position_y: 2,
                 },

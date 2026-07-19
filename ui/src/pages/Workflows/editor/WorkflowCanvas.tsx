@@ -1,6 +1,6 @@
 /**
  * React Flow host for the workflow visual editor.
- * Phase 2: custom nodes, connections, palette drop target.
+ * Phase 2–3: custom nodes, connections, palette drop, toolbar.
  */
 
 import { useCallback, useEffect, useMemo, useRef } from 'react';
@@ -25,6 +25,7 @@ import '@xyflow/react/dist/style.css';
 import { workflowNodeTypes } from './nodes';
 import { applyConnection, validateConnection } from './connectionRules';
 import { PALETTE_DND_TYPE, type StepTypeValue } from '../workflowConstants';
+import { CanvasToolbar } from './CanvasToolbar';
 
 export interface WorkflowCanvasProps {
     nodes: Node[];
@@ -34,14 +35,27 @@ export interface WorkflowCanvasProps {
     onConnectEdges?: (edges: Edge[]) => void;
     onSelectionChange?: OnSelectionChangeFunc;
     onDropStepType?: (stepType: StepTypeValue, position: { x: number; y: number }) => void;
+    onAutoLayout?: () => void;
+    onDeleteSelected?: () => void;
+    canDelete?: boolean;
+    /** Bump to re-run fitView (e.g. after template load or auto-layout). */
+    fitViewToken?: number;
     nodeTypes?: NodeTypes;
     className?: string;
     readOnly?: boolean;
+    showToolbar?: boolean;
 }
 
-function FitViewOnLoad({ nodeCount }: { nodeCount: number }) {
+function FitViewOnLoad({
+    nodeCount,
+    fitViewToken,
+}: {
+    nodeCount: number;
+    fitViewToken?: number;
+}) {
     const { fitView } = useReactFlow();
     const fittedFor = useRef<number | null>(null);
+    const lastToken = useRef<number | undefined>(undefined);
 
     useEffect(() => {
         // Fit only when graph first gains nodes or count changes from empty
@@ -56,6 +70,16 @@ function FitViewOnLoad({ nodeCount }: { nodeCount: number }) {
             fittedFor.current = null;
         }
     }, [nodeCount, fitView]);
+
+    useEffect(() => {
+        if (fitViewToken === undefined) return;
+        if (lastToken.current === fitViewToken) return;
+        lastToken.current = fitViewToken;
+        const id = requestAnimationFrame(() => {
+            fitView({ padding: 0.2, duration: 200 });
+        });
+        return () => cancelAnimationFrame(id);
+    }, [fitViewToken, fitView]);
 
     return null;
 }
@@ -106,9 +130,14 @@ function CanvasInner({
     onConnectEdges,
     onSelectionChange,
     onDropStepType,
+    onAutoLayout,
+    onDeleteSelected,
+    canDelete = false,
+    fitViewToken,
     nodeTypes,
     className,
     readOnly = false,
+    showToolbar = true,
 }: WorkflowCanvasProps) {
     const types = nodeTypes ?? workflowNodeTypes;
 
@@ -151,6 +180,14 @@ function CanvasInner({
                 ['--xy-node-border' as string]: '1px solid var(--border)',
             }}
         >
+            {showToolbar && onAutoLayout && onDeleteSelected && (
+                <CanvasToolbar
+                    onAutoLayout={onAutoLayout}
+                    onDeleteSelected={onDeleteSelected}
+                    canDelete={canDelete}
+                    readOnly={readOnly}
+                />
+            )}
             <ReactFlow
                 nodes={nodes}
                 edges={edges}
@@ -165,7 +202,8 @@ function CanvasInner({
                 nodesDraggable={!readOnly}
                 nodesConnectable={!readOnly}
                 elementsSelectable
-                deleteKeyCode={readOnly ? null : ['Backspace', 'Delete']}
+                // Editor owns Delete/Backspace with focus guards (Phase 3)
+                deleteKeyCode={null}
                 proOptions={{ hideAttribution: true }}
                 minZoom={0.25}
                 maxZoom={2}
@@ -183,7 +221,7 @@ function CanvasInner({
                     maskColor="color-mix(in oklab, var(--foreground) 10%, transparent)"
                     nodeColor="var(--muted-foreground)"
                 />
-                <FitViewOnLoad nodeCount={nodes.length} />
+                <FitViewOnLoad nodeCount={nodes.length} fitViewToken={fitViewToken} />
                 <CanvasDropTarget onDropStepType={onDropStepType} readOnly={readOnly} />
             </ReactFlow>
         </div>

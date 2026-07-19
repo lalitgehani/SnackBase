@@ -1,6 +1,6 @@
 /**
  * Full-page workflow visual editor (create + edit).
- * Phase 2: trigger node, custom cards, palette, properties, edge wiring.
+ * Phase 2–3: nodes, palette, properties, templates, validation, layout, shortcuts.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -26,23 +26,32 @@ import {
     type WorkflowTriggerConfig,
 } from '@/services/workflows.service';
 import type { StepTypeValue } from '../workflowConstants';
+import { TRIGGER_NODE_ID } from '../workflowConstants';
 import { WorkflowCanvas } from './WorkflowCanvas';
 import {
     stepsToFlow,
     flowToPayload,
-    createEmptyFlow,
-    isStepNodeData,
     isTriggerNodeData,
 } from './graphMapper';
-import { validateStepNames, validateGraphEdges } from './graphValidation';
+import {
+    validateWorkflowGraph,
+    hasHardErrors,
+    nodeIssueSeverity,
+    type ValidationIssue,
+} from './graphValidation';
 import {
     createDefaultStep,
     generateUniqueStepName,
     removeNodeAndEdges,
     renameNode,
 } from './nodeDefaults';
+import { layoutGraph, shouldAutoLayoutOnLoad } from './autoLayout';
 import { NodePalette } from './palette/NodePalette';
 import { PropertiesPanel } from './properties/PropertiesPanel';
+import { TemplatePickerDialog } from './templates/TemplatePickerDialog';
+import type { WorkflowTemplate } from './templates/workflowTemplates';
+import { ValidationIssuesPanel } from './ValidationIssuesPanel';
+import { useWorkflowEditorShortcuts } from './useWorkflowEditorShortcuts';
 
 interface EditorMeta {
     name: string;
@@ -74,9 +83,14 @@ export default function WorkflowEditorPage() {
     const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
     const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+    const [selectedEdgeIds, setSelectedEdgeIds] = useState<string[]>([]);
     const [loading, setLoading] = useState(isEdit);
     const [saving, setSaving] = useState(false);
     const [loadError, setLoadError] = useState<string | null>(null);
+    /** Create flow: must pick a template (including Empty) before editing. */
+    const [templateChosen, setTemplateChosen] = useState(isEdit);
+    const [showValidationPanel, setShowValidationPanel] = useState(false);
+    const [fitViewToken, setFitViewToken] = useState(0);
 
     const nodesRef = useRef(nodes);
     const edgesRef = useRef(edges);
@@ -87,32 +101,40 @@ export default function WorkflowEditorPage() {
         setMeta((prev) => ({ ...prev, [key]: value }));
     }, []);
 
-    // Load existing workflow or seed new graph
+    // Load existing workflow
     useEffect(() => {
         if (!id) {
             setLoading(false);
             setLoadError(null);
             setMeta(DEFAULT_META);
-            const empty = createEmptyFlow({ type: 'manual' });
-            setNodes(empty.nodes);
-            setEdges(empty.edges);
+            setNodes([]);
+            setEdges([]);
             setSelectedNodeId(null);
+            setTemplateChosen(false);
             return;
         }
 
         let cancelled = false;
         setLoading(true);
         setLoadError(null);
+        setTemplateChosen(true);
 
         (async () => {
             try {
                 const wf = await workflowsService.get(id);
                 if (cancelled) return;
                 setMeta(workflowToMeta(wf));
-                const graph = stepsToFlow(wf.steps, wf.trigger_config);
+                let graph = stepsToFlow(wf.steps, wf.trigger_config);
+                if (shouldAutoLayoutOnLoad(graph.nodes)) {
+                    graph = {
+                        nodes: layoutGraph(graph.nodes, graph.edges),
+                        edges: graph.edges,
+                    };
+                }
                 setNodes(graph.nodes);
                 setEdges(graph.edges);
                 setSelectedNodeId(null);
+                setFitViewToken((t) => t + 1);
             } catch {
                 if (!cancelled) {
                     setLoadError('Workflow not found or failed to load.');
@@ -141,8 +163,22 @@ export default function WorkflowEditorPage() {
         return () => window.removeEventListener('workflow-node-delete', handler);
     }, [setNodes, setEdges]);
 
-    const onSelectionChange = useCallback(({ nodes: selected }: OnSelectionChangeParams) => {
+    const validationIssues = useMemo(
+        () => validateWorkflowGraph(nodes, edges),
+        [nodes, edges],
+    );
+
+    const displayNodes = useMemo(() => {
+        return nodes.map((n) => {
+            const severity = nodeIssueSeverity(validationIssues, n.id);
+            const data = n.data && typeof n.data === 'object' ? { ...n.data, issueSeverity: severity } : n.data;
+            return { ...n, data };
+        });
+    }, [nodes, validationIssues]);
+
+    const onSelectionChange = useCallback(({ nodes: selected, edges: selEdges }: OnSelectionChangeParams) => {
         setSelectedNodeId(selected[0]?.id ?? null);
+        setSelectedEdgeIds(selEdges.map((e) => e.id));
     }, []);
 
     const addStepAt = useCallback(
@@ -164,7 +200,6 @@ export default function WorkflowEditorPage() {
                         step,
                     },
                 };
-                // Deselect others
                 const cleared = nds.map((n) => ({ ...n, selected: false }));
                 setSelectedNodeId(name);
                 return [...cleared, node];
@@ -175,7 +210,6 @@ export default function WorkflowEditorPage() {
 
     const handleAddFromPalette = useCallback(
         (stepType: StepTypeValue) => {
-            // Place near center-right of existing content
             const xs = nodes.map((n) => n.position.x);
             const ys = nodes.map((n) => n.position.y);
             const x = xs.length ? Math.max(...xs) + 220 : 320;
@@ -241,7 +275,6 @@ export default function WorkflowEditorPage() {
         (nodeId: string, newName: string) => {
             const trimmed = newName.trim();
             if (!trimmed || trimmed === nodeId) {
-                // Still sync label if only whitespace difference on empty attempt
                 if (!trimmed) return;
             }
             setNodes((nds) => {
@@ -271,52 +304,105 @@ export default function WorkflowEditorPage() {
         [nodes, edges, setNodes, setEdges],
     );
 
+    const handleDeleteSelected = useCallback(() => {
+        const nds = nodesRef.current;
+        const eds = edgesRef.current;
+        const selectedSteps = nds.filter(
+            (n) => n.selected && n.id !== TRIGGER_NODE_ID && n.type !== 'trigger',
+        );
+        let nextNodes = nds;
+        let nextEdges = eds;
+        for (const n of selectedSteps) {
+            const result = removeNodeAndEdges(nextNodes, nextEdges, n.id);
+            nextNodes = result.nodes;
+            nextEdges = result.edges;
+        }
+        const selectedEdgeIdSet = new Set([
+            ...eds.filter((e) => e.selected).map((e) => e.id),
+            ...selectedEdgeIds,
+        ]);
+        nextEdges = nextEdges.filter((e) => !e.selected && !selectedEdgeIdSet.has(e.id));
+
+        setNodes(nextNodes.map((n) => ({ ...n, selected: false })));
+        setEdges(nextEdges.map((e) => ({ ...e, selected: false })));
+        setSelectedNodeId(null);
+        setSelectedEdgeIds([]);
+    }, [selectedEdgeIds, setNodes, setEdges]);
+
+    const handleAutoLayout = useCallback(() => {
+        setNodes((nds) => layoutGraph(nds, edgesRef.current));
+        setFitViewToken((t) => t + 1);
+    }, [setNodes]);
+
+    const handleSelectIssue = useCallback((issue: ValidationIssue) => {
+        if (!issue.nodeId) return;
+        setSelectedNodeId(issue.nodeId);
+        setNodes((nds) =>
+            nds.map((n) => ({
+                ...n,
+                selected: n.id === issue.nodeId,
+            })),
+        );
+        setFitViewToken((t) => t + 1);
+    }, [setNodes]);
+
+    const handleTemplateSelect = useCallback(
+        (template: WorkflowTemplate) => {
+            const built = template.build();
+            setNodes(built.nodes);
+            setEdges(built.edges);
+            setMeta({
+                name: built.suggestedName ?? '',
+                description: built.suggestedDescription ?? '',
+                enabled: true,
+            });
+            setSelectedNodeId(null);
+            setTemplateChosen(true);
+            setFitViewToken((t) => t + 1);
+        },
+        [setNodes, setEdges],
+    );
+
+    const handleTemplateCancel = useCallback(() => {
+        navigate('/admin/workflows');
+    }, [navigate]);
+
     const title = useMemo(() => {
         if (isEdit) return meta.name || 'Edit Workflow';
         return 'New Workflow';
     }, [isEdit, meta.name]);
 
-    const handleSave = async () => {
+    const canDeleteSelection = useMemo(() => {
+        const hasStep = nodes.some(
+            (n) => n.selected && n.id !== TRIGGER_NODE_ID && n.type !== 'trigger',
+        );
+        const hasEdge = edges.some((e) => e.selected) || selectedEdgeIds.length > 0;
+        return hasStep || hasEdge;
+    }, [nodes, edges, selectedEdgeIds]);
+
+    const handleSave = useCallback(async () => {
         if (!meta.name.trim()) {
             toast({ title: 'Name is required', variant: 'destructive' });
             return;
         }
 
+        const issues = validateWorkflowGraph(nodes, edges);
+        if (hasHardErrors(issues)) {
+            setShowValidationPanel(true);
+            toast({
+                title: 'Cannot save',
+                description: issues.find((i) => i.severity === 'error')?.message ?? 'Fix validation errors',
+                variant: 'destructive',
+            });
+            return;
+        }
+
+        // Surface warnings but allow save
+        if (issues.some((i) => i.severity === 'warning')) {
+            setShowValidationPanel(true);
+        }
+
         const { trigger, steps } = flowToPayload(nodes, edges);
-        const nameError = validateStepNames(steps);
-        if (nameError) {
-            toast({ title: nameError, variant: 'destructive' });
-            return;
-        }
-        const edgeError = validateGraphEdges(edges);
-        if (edgeError) {
-            toast({ title: edgeError, variant: 'destructive' });
-            return;
-        }
-
-        // Validate action configs are objects
-        for (const s of steps) {
-            if (s.type === 'action' && s.config != null && typeof s.config !== 'object') {
-                toast({
-                    title: `Action "${s.name}" has invalid config JSON`,
-                    variant: 'destructive',
-                });
-                return;
-            }
-        }
-
-        // Flag action nodes still holding invalid JSON in panel: config must be object
-        for (const n of nodes) {
-            if (!isStepNodeData(n.data) || n.data.step.type !== 'action') continue;
-            const cfg = n.data.step.config;
-            if (cfg !== undefined && cfg !== null && (typeof cfg !== 'object' || Array.isArray(cfg))) {
-                toast({
-                    title: `Action "${n.id}" has invalid config`,
-                    variant: 'destructive',
-                });
-                return;
-            }
-        }
 
         setSaving(true);
         try {
@@ -346,7 +432,23 @@ export default function WorkflowEditorPage() {
         } finally {
             setSaving(false);
         }
-    };
+    }, [meta, nodes, edges, isEdit, id, toast, navigate]);
+
+    const handleEscape = useCallback(() => {
+        setSelectedNodeId(null);
+        setSelectedEdgeIds([]);
+        setNodes((nds) => nds.map((n) => ({ ...n, selected: false })));
+        setEdges((eds) => eds.map((e) => ({ ...e, selected: false })));
+    }, [setNodes, setEdges]);
+
+    useWorkflowEditorShortcuts({
+        enabled: templateChosen && !loading && !loadError,
+        onSave: () => {
+            void handleSave();
+        },
+        onDeleteSelection: handleDeleteSelected,
+        onEscape: handleEscape,
+    });
 
     if (loading) {
         return (
@@ -371,11 +473,25 @@ export default function WorkflowEditorPage() {
         );
     }
 
+    // Show panel when there are errors (live) or after save attempt (warnings too)
+    const visibleIssues =
+        showValidationPanel || validationIssues.some((i) => i.severity === 'error')
+            ? validationIssues
+            : [];
+
     return (
         <div
             className="flex flex-col h-full min-h-0 bg-background"
             data-testid="workflow-editor-page"
         >
+            {!isEdit && (
+                <TemplatePickerDialog
+                    open={!templateChosen}
+                    onSelect={handleTemplateSelect}
+                    onCancel={handleTemplateCancel}
+                />
+            )}
+
             <header className="flex flex-wrap items-center gap-3 border-b px-4 py-3 shrink-0 bg-background">
                 <Button variant="ghost" size="sm" asChild>
                     <Link to="/admin/workflows" className="gap-1.5">
@@ -398,6 +514,7 @@ export default function WorkflowEditorPage() {
                             placeholder="Workflow name"
                             className="h-9 font-medium"
                             data-testid="workflow-editor-name"
+                            disabled={!templateChosen}
                         />
                     </div>
 
@@ -406,6 +523,7 @@ export default function WorkflowEditorPage() {
                             id="wf-enabled"
                             checked={meta.enabled}
                             onCheckedChange={(v) => setMetaField('enabled', v)}
+                            disabled={!templateChosen}
                         />
                         <Label htmlFor="wf-enabled" className="text-sm text-muted-foreground">
                             Enabled
@@ -417,7 +535,12 @@ export default function WorkflowEditorPage() {
                     <Button variant="outline" size="sm" asChild>
                         <Link to="/admin/workflows">Cancel</Link>
                     </Button>
-                    <Button size="sm" onClick={handleSave} disabled={saving} data-testid="workflow-editor-save">
+                    <Button
+                        size="sm"
+                        onClick={() => void handleSave()}
+                        disabled={saving || !templateChosen}
+                        data-testid="workflow-editor-save"
+                    >
                         <Save className="h-4 w-4 mr-1.5" />
                         {saving ? 'Saving…' : 'Save'}
                     </Button>
@@ -431,6 +554,7 @@ export default function WorkflowEditorPage() {
                     placeholder="Description (optional)"
                     className="h-8 text-sm border-0 shadow-none px-0 focus-visible:ring-0"
                     data-testid="workflow-editor-description"
+                    disabled={!templateChosen}
                 />
                 <p className="text-xs text-muted-foreground mt-0.5 truncate" title={title}>
                     {isEdit
@@ -439,22 +563,40 @@ export default function WorkflowEditorPage() {
                 </p>
             </div>
 
+            {visibleIssues.length > 0 && (
+                <ValidationIssuesPanel
+                    issues={visibleIssues}
+                    onSelectIssue={handleSelectIssue}
+                    onDismiss={() => setShowValidationPanel(false)}
+                />
+            )}
+
             <div className="flex flex-1 min-h-0">
                 <div className="w-[220px] shrink-0 border-r bg-muted/20">
                     <NodePalette onAddStep={handleAddFromPalette} />
                 </div>
 
                 <main className="flex-1 min-w-0 min-h-0 relative">
-                    <WorkflowCanvas
-                        nodes={nodes}
-                        edges={edges}
-                        onNodesChange={onNodesChange}
-                        onEdgesChange={onEdgesChange}
-                        onConnectEdges={handleConnectEdges}
-                        onSelectionChange={onSelectionChange}
-                        onDropStepType={handleDropStepType}
-                        className="absolute inset-0"
-                    />
+                    {templateChosen ? (
+                        <WorkflowCanvas
+                            nodes={displayNodes}
+                            edges={edges}
+                            onNodesChange={onNodesChange}
+                            onEdgesChange={onEdgesChange}
+                            onConnectEdges={handleConnectEdges}
+                            onSelectionChange={onSelectionChange}
+                            onDropStepType={handleDropStepType}
+                            onAutoLayout={handleAutoLayout}
+                            onDeleteSelected={handleDeleteSelected}
+                            canDelete={canDeleteSelection}
+                            fitViewToken={fitViewToken}
+                            className="absolute inset-0"
+                        />
+                    ) : (
+                        <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">
+                            Choose a template to start
+                        </div>
+                    )}
                 </main>
 
                 <div className="w-[300px] shrink-0 border-l bg-muted/20">

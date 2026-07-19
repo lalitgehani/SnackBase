@@ -19,6 +19,7 @@ function LoopNode({ id, data, selected }: NodeProps<LoopFlowNode>) {
             icon={Repeat}
             selected={selected}
             invalid={isStepInvalid(step)}
+            issueSeverity={data.issueSeverity ?? null}
             onDelete={() => emitNodeDelete(id)}
             testId="workflow-node-loop"
         />

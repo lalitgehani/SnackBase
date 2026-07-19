@@ -19,6 +19,7 @@ function WaitConditionNode({ id, data, selected }: NodeProps<WaitConditionFlowNo
             icon={Hourglass}
             selected={selected}
             invalid={isStepInvalid(step)}
+            issueSeverity={data.issueSeverity ?? null}
             onDelete={() => emitNodeDelete(id)}
             testId="workflow-node-wait_condition"
         />

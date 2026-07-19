@@ -25,6 +25,8 @@ export interface StepNodeData extends Record<string, unknown> {
     kind: 'step';
     label: string;
     step: WorkflowStep;
+    /** Graph/field validation severity for node badge (Phase 3). */
+    issueSeverity?: 'error' | 'warning' | null;
 }
 
 /** Trigger payload stored on the single trigger node. */
@@ -32,6 +34,7 @@ export interface TriggerNodeData extends Record<string, unknown> {
     kind: 'trigger';
     label: string;
     trigger: WorkflowTriggerConfig;
+    issueSeverity?: 'error' | 'warning' | null;
 }
 
 export type WorkflowNodeData = StepNodeData | TriggerNodeData;

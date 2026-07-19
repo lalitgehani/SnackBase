@@ -19,6 +19,7 @@ function ActionNode({ id, data, selected }: NodeProps<ActionFlowNode>) {
             icon={Play}
             selected={selected}
             invalid={isStepInvalid(step)}
+            issueSeverity={data.issueSeverity ?? null}
             onDelete={() => emitNodeDelete(id)}
             testId="workflow-node-action"
         />
