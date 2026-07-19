@@ -75,10 +75,10 @@ function HttpStatusBadge({ status }: { status: number }) {
         status < 300
             ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200'
             : status < 400
-            ? 'bg-blue-100 text-blue-700'
+            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
             : status < 500
-            ? 'bg-yellow-100 text-yellow-700'
-            : 'bg-red-100 text-red-700';
+            ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-200'
+            : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200';
     return (
         <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-bold ${color}`}>
             {status}
@@ -282,7 +282,12 @@ export function ViewEndpointDialog({ endpoint, open, onOpenChange, accountSlug, 
                                 {endpoint.auth_required ? (
                                     <Badge variant="secondary">Auth Required</Badge>
                                 ) : (
-                                    <Badge variant="outline" className="text-green-600 border-green-300">Public</Badge>
+                                    <Badge
+                                        variant="outline"
+                                        className="text-green-700 border-green-300 dark:text-green-400 dark:border-green-800"
+                                    >
+                                        Public
+                                    </Badge>
                                 )}
                             </span>
 

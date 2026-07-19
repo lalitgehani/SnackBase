@@ -51,7 +51,7 @@ function TriggerBadge({ triggerType }: { triggerType: string }) {
         manual: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
         webhook: 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300',
     };
-    const cls = map[triggerType] ?? 'bg-gray-100 text-gray-700';
+    const cls = map[triggerType] ?? 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300';
     return (
         <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium capitalize ${cls}`}>
             {triggerType}

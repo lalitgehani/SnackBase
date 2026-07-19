@@ -275,7 +275,7 @@ export default function CollectionBrowserRail() {
                     {c.has_public_access && (
                       <Badge
                         variant="outline"
-                        className="shrink-0 text-[10px] px-1 py-0 border-green-500 text-green-600"
+                        className="shrink-0 text-[10px] px-1 py-0 border-green-500 text-green-600 dark:text-green-400 dark:border-green-700"
                       >
                         Public
                       </Badge>

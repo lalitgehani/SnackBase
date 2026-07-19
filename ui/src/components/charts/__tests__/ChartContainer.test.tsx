@@ -48,4 +48,27 @@ describe('ChartContainer', () => {
       'Accounts created: 3. Users created: 11. Period: Last 7 days.',
     )
   })
+
+  it('wraps chart children with a theme key for remount on theme flip', () => {
+    document.documentElement.classList.remove('dark')
+    const { container, rerender } = render(
+      <ChartContainer title="Growth">
+        <div data-testid="chart-body">chart</div>
+      </ChartContainer>,
+    )
+    const themeWrap = container.querySelector('[data-theme]')
+    expect(themeWrap).toBeTruthy()
+    expect(themeWrap).toHaveAttribute('data-theme', 'light')
+    expect(screen.getByTestId('chart-body')).toBeInTheDocument()
+
+    document.documentElement.classList.add('dark')
+    // Force observer-driven remount path is async; re-render still shows themed wrapper
+    rerender(
+      <ChartContainer title="Growth">
+        <div data-testid="chart-body">chart</div>
+      </ChartContainer>,
+    )
+    expect(container.querySelector('[data-theme]')).toBeTruthy()
+    document.documentElement.classList.remove('dark')
+  })
 })

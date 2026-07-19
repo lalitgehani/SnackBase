@@ -62,7 +62,7 @@ export default function CollectionsTable({
                 <span className="flex items-center gap-2">
                     <span className="font-medium">{collection.name}</span>
                     {collection.has_public_access && (
-                        <Badge variant="outline" className="text-xs border-green-500 text-green-600">
+                        <Badge variant="outline" className="text-xs border-green-500 text-green-600 dark:text-green-400 dark:border-green-700">
                             Public
                         </Badge>
                     )}

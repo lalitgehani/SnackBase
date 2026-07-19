@@ -120,7 +120,7 @@ export default function CollectionDetailLayout() {
                 {(listItem?.has_public_access || false) && (
                   <Badge
                     variant="outline"
-                    className="border-green-500 text-green-600"
+                    className="border-green-500 text-green-600 dark:text-green-400 dark:border-green-700"
                   >
                     Public
                   </Badge>

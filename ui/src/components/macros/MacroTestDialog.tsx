@@ -132,8 +132,8 @@ export default function MacroTestDialog({
 
                 {/* Results */}
                 {testResult && (
-                    <div className="space-y-4 p-4 border rounded-lg bg-green-50/30 border-green-100">
-                        <div className="flex items-center gap-2 text-green-700 font-semibold">
+                    <div className="space-y-4 p-4 border rounded-lg bg-green-50/30 border-green-100 dark:bg-green-950/30 dark:border-green-800">
+                        <div className="flex items-center gap-2 text-green-700 dark:text-green-400 font-semibold">
                             <CheckCircle2 className="h-5 w-5" />
                             <span>Execution Successful</span>
                         </div>

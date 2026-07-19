@@ -114,8 +114,8 @@ export function EditWebhookDialog({ webhook, open, onOpenChange, onUpdated }: Ed
             }
         >
             <div className="space-y-4">
-                <Alert className="bg-blue-50 border-blue-200 text-blue-900">
-                    <Info className="h-4 w-4 text-blue-600" />
+                <Alert className="bg-blue-50 border-blue-200 text-blue-900 dark:bg-blue-950/30 dark:border-blue-800 dark:text-blue-200">
+                    <Info className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                     <AlertDescription>
                         The signing secret cannot be viewed again. Use "Regenerate Secret" if you need a new one (not yet implemented — contact support).
                     </AlertDescription>

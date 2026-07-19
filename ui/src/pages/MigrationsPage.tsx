@@ -105,7 +105,7 @@ export default function MigrationsPage() {
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-green-600">{appliedMigrations}</div>
+                        <div className="text-2xl font-bold text-green-600 dark:text-green-400">{appliedMigrations}</div>
                         <p className="text-xs text-muted-foreground mt-1">Successfully applied</p>
                     </CardContent>
                 </Card>
@@ -117,7 +117,7 @@ export default function MigrationsPage() {
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-yellow-600">{pendingMigrations}</div>
+                        <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{pendingMigrations}</div>
                         <p className="text-xs text-muted-foreground mt-1">Not yet applied</p>
                     </CardContent>
                 </Card>

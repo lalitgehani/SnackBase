@@ -177,7 +177,7 @@ export default function ImportDialog({
 			{stage === 'preview' && (
 				<div className="space-y-4">
 					<div className="flex items-center gap-2 text-sm">
-						<CheckCircle2 className="h-4 w-4 text-green-600" />
+						<CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
 						<span>
 							<strong>{records.length}</strong> record{records.length === 1 ? '' : 's'} ready to import
 						</span>
@@ -213,7 +213,7 @@ export default function ImportDialog({
 					</div>
 
 					<div className="flex items-start gap-2 text-sm text-muted-foreground bg-muted rounded-lg p-3">
-						<AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-amber-600" />
+						<AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
 						All {records.length} records will be imported atomically per batch of {CHUNK_SIZE}.
 						If any record in a batch fails validation, that batch will be rolled back.
 					</div>
@@ -239,7 +239,7 @@ export default function ImportDialog({
 			{/* done */}
 			{stage === 'done' && (
 				<div className="flex flex-col items-center gap-3 py-6">
-					<CheckCircle2 className="h-10 w-10 text-green-600" />
+					<CheckCircle2 className="h-10 w-10 text-green-600 dark:text-green-400" />
 					<p className="text-base font-semibold">Import complete</p>
 					<p className="text-sm text-muted-foreground">
 						{importedCount} record{importedCount === 1 ? '' : 's'} imported successfully into{' '}

@@ -287,7 +287,7 @@ export default function DynamicFieldInput({
 							checked={Boolean(value) || false}
 							onChange={(e) => onChange(e.target.checked)}
 							disabled={disabled}
-							className="h-4 w-4 rounded border-gray-300"
+							className="h-4 w-4 rounded border-border"
 						/>
 						<Label htmlFor={`field-${field.name}`} className="cursor-pointer">
 							{value ? 'Yes' : 'No'}

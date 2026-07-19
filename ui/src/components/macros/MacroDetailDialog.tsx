@@ -121,6 +121,7 @@ export default function MacroDetailDialog({
                         <Code2 className="h-3.5 w-3.5" />
                         SQL Implementation
                     </Label>
+                    {/* Intentional always-dark terminal surface (theme exception — do not swap to light tokens). */}
                     <div className="bg-slate-950 text-slate-50 p-4 rounded-lg font-mono text-sm overflow-x-auto whitespace-pre leading-relaxed shadow-inner">
                         {macro.sql_query}
                     </div>

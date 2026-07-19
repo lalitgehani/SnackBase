@@ -5,9 +5,10 @@
  * - Wrap chart primitives (TimeSeriesAreaChart, DonutChart, etc.)
  * - Pass isLoading / isEmpty so Recharts never mounts on empty data
  * - Optional summary renders as visually-hidden text for screen readers
+ * - Remounts chart children when the html.dark class flips so CSS-var strokes/fills re-bind
  */
 
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { BarChart3 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -28,6 +29,26 @@ export interface ChartContainerProps {
   children: ReactNode;
 }
 
+/** Observe `document.documentElement` class so charts remount when next-themes flips `.dark`. */
+function useDocumentThemeKey(): string {
+  const [themeKey, setThemeKey] = useState(() =>
+    typeof document !== 'undefined' && document.documentElement.classList.contains('dark')
+      ? 'dark'
+      : 'light',
+  );
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const sync = () => setThemeKey(root.classList.contains('dark') ? 'dark' : 'light');
+    sync();
+    const observer = new MutationObserver(sync);
+    observer.observe(root, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+
+  return themeKey;
+}
+
 export function ChartContainer({
   title,
   description,
@@ -41,6 +62,8 @@ export function ChartContainer({
   headerAction,
   children,
 }: ChartContainerProps) {
+  const themeKey = useDocumentThemeKey();
+
   return (
     <Card className={cn(className)}>
       <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
@@ -78,7 +101,9 @@ export function ChartContainer({
             ) : null}
           </div>
         ) : (
-          children
+          <div key={themeKey} data-theme={themeKey}>
+            {children}
+          </div>
         )}
       </CardContent>
     </Card>

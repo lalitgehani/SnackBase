@@ -32,7 +32,11 @@ function DeliveryStatusBadge({ status }: { status: string }) {
         return <Badge variant="destructive" className="gap-1"><XCircle className="h-3 w-3" />Failed</Badge>;
     }
     if (status === 'retrying') {
-        return <Badge className="gap-1 border-transparent bg-amber-100 text-amber-800"><AlertCircle className="h-3 w-3" />Retrying</Badge>;
+        return (
+            <Badge className="gap-1 border-transparent bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+                <AlertCircle className="h-3 w-3" />Retrying
+            </Badge>
+        );
     }
     return <Badge variant="outline" className="gap-1 text-muted-foreground"><Clock className="h-3 w-3" />Pending</Badge>;
 }
@@ -50,7 +54,13 @@ function DeliveryRow({ delivery }: { delivery: WebhookDelivery }) {
                 <TableCell><DeliveryStatusBadge status={delivery.status} /></TableCell>
                 <TableCell className="text-center">
                     {delivery.response_status ? (
-                        <span className={delivery.response_status < 300 ? 'text-green-600' : 'text-red-600'}>
+                        <span
+                            className={
+                                delivery.response_status < 300
+                                    ? 'text-green-600 dark:text-green-400'
+                                    : 'text-red-600 dark:text-red-400'
+                            }
+                        >
                             {delivery.response_status}
                         </span>
                     ) : '—'}
@@ -164,7 +174,13 @@ export function ViewWebhookDialog({ webhook, open, onOpenChange }: ViewWebhookDi
                         {isTesting ? 'Sending...' : 'Test Webhook'}
                     </Button>
                     {testResult && (
-                        <span className={`text-sm ${testResult.success ? 'text-green-600' : 'text-red-600'}`}>
+                        <span
+                            className={`text-sm ${
+                                testResult.success
+                                    ? 'text-green-600 dark:text-green-400'
+                                    : 'text-red-600 dark:text-red-400'
+                            }`}
+                        >
                             {testResult.success
                                 ? `Success (${testResult.status_code})`
                                 : testResult.error || `Failed (${testResult.status_code})`}

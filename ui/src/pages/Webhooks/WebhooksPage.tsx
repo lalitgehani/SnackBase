@@ -208,7 +208,7 @@ export function WebhooksPage() {
                                                     <Button
                                                         variant="ghost"
                                                         size="sm"
-                                                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                                        className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-950/30"
                                                         onClick={() => openDelete(webhook)}
                                                         title="Delete"
                                                     >

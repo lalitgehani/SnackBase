@@ -149,13 +149,41 @@ export default function InvitationsPage() {
     const getStatusBadge = (status: string) => {
         switch (status) {
             case 'accepted':
-                return <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50"><CheckCircle2 className="w-3 h-3 mr-1" /> Accepted</Badge>;
+                return (
+                    <Badge
+                        variant="outline"
+                        className="text-green-700 border-green-200 bg-green-50 dark:text-green-400 dark:border-green-800 dark:bg-green-950/30"
+                    >
+                        <CheckCircle2 className="w-3 h-3 mr-1" /> Accepted
+                    </Badge>
+                );
             case 'expired':
-                return <Badge variant="outline" className="text-red-600 border-red-200 bg-red-50"><XCircle className="w-3 h-3 mr-1" /> Expired</Badge>;
+                return (
+                    <Badge
+                        variant="outline"
+                        className="text-red-700 border-red-200 bg-red-50 dark:text-red-400 dark:border-red-800 dark:bg-red-950/30"
+                    >
+                        <XCircle className="w-3 h-3 mr-1" /> Expired
+                    </Badge>
+                );
             case 'cancelled':
-                return <Badge variant="outline" className="text-gray-600 border-gray-200 bg-gray-50"><XCircle className="w-3 h-3 mr-1" /> Cancelled</Badge>;
+                return (
+                    <Badge
+                        variant="outline"
+                        className="text-muted-foreground border-border bg-muted/50"
+                    >
+                        <XCircle className="w-3 h-3 mr-1" /> Cancelled
+                    </Badge>
+                );
             default:
-                return <Badge variant="outline" className="text-blue-600 border-blue-200 bg-blue-50"><Clock className="w-3 h-3 mr-1" /> Pending</Badge>;
+                return (
+                    <Badge
+                        variant="outline"
+                        className="text-blue-700 border-blue-200 bg-blue-50 dark:text-blue-400 dark:border-blue-800 dark:bg-blue-950/30"
+                    >
+                        <Clock className="w-3 h-3 mr-1" /> Pending
+                    </Badge>
+                );
         }
     };
 

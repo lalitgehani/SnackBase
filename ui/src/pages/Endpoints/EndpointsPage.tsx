@@ -206,7 +206,10 @@ export default function EndpointsPage() {
                                     {endpoint.auth_required ? (
                                         <Badge variant="secondary" className="text-xs">Auth Required</Badge>
                                     ) : (
-                                        <Badge variant="outline" className="text-xs text-green-600 border-green-300">
+                                        <Badge
+                                            variant="outline"
+                                            className="text-xs text-green-700 border-green-300 dark:text-green-400 dark:border-green-800"
+                                        >
                                             Public
                                         </Badge>
                                     )}

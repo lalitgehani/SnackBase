@@ -175,7 +175,7 @@ export default function CollectionRulesTab({
 
         {hasPublicAccess && (
           <Alert className="border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800">
-            <Globe className="h-4 w-4 text-amber-600" />
+            <Globe className="h-4 w-4 text-amber-600 dark:text-amber-400" />
             <AlertTitle className="text-amber-800 dark:text-amber-400">
               Public access enabled
             </AlertTitle>
@@ -324,7 +324,7 @@ export default function CollectionRulesTab({
 
       {publicOps.length > 0 && (
         <Alert className="border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800">
-          <Globe className="h-4 w-4 text-amber-600" />
+          <Globe className="h-4 w-4 text-amber-600 dark:text-amber-400" />
           <AlertTitle className="text-amber-800 dark:text-amber-400">
             Public access enabled
           </AlertTitle>

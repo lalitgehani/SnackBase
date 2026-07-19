@@ -21,6 +21,9 @@ Colors come from CSS variables in `App.css` via `CHART_COLORS` / `SERIES_COLORS`
 
 - `--chart-1` … `--chart-5` (light and dark modes)
 - Axis ticks use `var(--muted-foreground)` for contrast on both themes
+- Tooltips use `var(--card)` / `var(--border)` for dual-theme surfaces
+- `ChartContainer` remounts chart children when `html.dark` flips so Recharts rebinds CSS-var strokes/fills without a hard reload
+- Prefer live `var(--…)` strings over caching `resolveCssColor()` results
 
 Always pass **named series / slice labels** so status is not color-only.
 

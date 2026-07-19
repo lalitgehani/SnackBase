@@ -73,15 +73,18 @@ export const CreateApiKeyDialog = ({
                 }
             >
                 <div className="space-y-4">
-                    <Alert variant="destructive" className="bg-amber-50 border-amber-200 text-amber-900">
-                        <AlertTriangle className="h-4 w-4 text-amber-600" />
+                    <Alert
+                        variant="destructive"
+                        className="bg-amber-50 border-amber-200 text-amber-900 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-200"
+                    >
+                        <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                         <AlertTitle>Important Security Warning</AlertTitle>
                         <AlertDescription>
                             This key provides full superadmin access. Store it securely and never share it.
                         </AlertDescription>
                     </Alert>
 
-                    <div className="flex items-center space-x-2 bg-slate-100 p-3 rounded border font-mono text-sm break-all">
+                    <div className="flex items-center space-x-2 bg-muted p-3 rounded border font-mono text-sm break-all">
                         <span className="flex-1 select-all">{createdKey.key}</span>
                         <CopyToClipboardButton value={createdKey.key} label="API Key" />
                     </div>
@@ -142,8 +145,11 @@ export const CreateApiKeyDialog = ({
                     </Field>
                 )}
 
-                <Alert variant="default" className="bg-blue-50 border-blue-200 text-blue-900">
-                    <Info className="h-4 w-4 text-blue-600" />
+                <Alert
+                    variant="default"
+                    className="bg-blue-50 border-blue-200 text-blue-900 dark:bg-blue-950/30 dark:border-blue-800 dark:text-blue-200"
+                >
+                    <Info className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                     <AlertDescription>
                         API keys allow bypassing JWT authentication for automated tasks.
                     </AlertDescription>

@@ -449,6 +449,7 @@ export const EmailTemplateEditDialog = ({
                                 </div>
                             ) : bodyFormat === 'html' ? (
                                 previewHtml ? (
+                                    // Intentional light email canvas (theme exception — HTML email previews use a white background).
                                     <iframe
                                         srcDoc={previewHtml}
                                         title="Email HTML Preview"

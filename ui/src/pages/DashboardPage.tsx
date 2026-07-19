@@ -750,7 +750,7 @@ export default function DashboardPage() {
           badge={
             stats != null ? (
               <Badge variant="secondary" className="gap-1 text-xs font-normal">
-                <Globe className="h-3 w-3 text-green-600" />
+                <Globe className="h-3 w-3 text-green-600 dark:text-green-400" />
                 {stats.public_collections_count} public
               </Badge>
             ) : undefined

@@ -156,8 +156,8 @@ export default function MacroEditorDialog({
                         className="font-mono min-h-[150px]"
                         disabled={isSubmitting}
                     />
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground bg-blue-50/50 p-2 rounded">
-                        <Info className="h-3 w-3" />
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground bg-blue-50/50 dark:bg-blue-950/30 p-2 rounded border border-transparent dark:border-blue-900/40">
+                        <Info className="h-3 w-3 text-blue-600 dark:text-blue-400" />
                         <span>Available variables: record.*, user.*, :your_param</span>
                     </div>
                 </div>

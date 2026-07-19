@@ -525,7 +525,7 @@ export default function RecordsPage({ embedded = false }: RecordsPageProps) {
                     className="flex flex-wrap items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3"
                     data-testid="broken-filter-hint"
                 >
-                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
                     <div className="min-w-0 flex-1 space-y-1">
                         <p className="text-sm font-medium">
                             Filter references unknown field

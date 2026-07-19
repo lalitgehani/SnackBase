@@ -223,12 +223,18 @@ export default function UsersPage() {
       render: (user) => (
         <div className="flex items-center gap-1.5">
           {user.email_verified ? (
-            <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50 gap-1 pl-1">
+            <Badge
+              variant="outline"
+              className="text-green-700 border-green-200 bg-green-50 gap-1 pl-1 dark:text-green-400 dark:border-green-800 dark:bg-green-950/30"
+            >
               <CheckCircle2 className="h-3 w-3" />
               Verified
             </Badge>
           ) : (
-            <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50 gap-1 pl-1">
+            <Badge
+              variant="outline"
+              className="text-amber-700 border-amber-200 bg-amber-50 gap-1 pl-1 dark:text-amber-400 dark:border-amber-800 dark:bg-amber-950/30"
+            >
               <AlertTriangle className="h-3 w-3" />
               Pending
             </Badge>
@@ -301,7 +307,7 @@ export default function UsersPage() {
                   handleVerifyUser(user.id);
                 }}
                 title="Verify user manually"
-                className="text-green-600 hover:text-green-700"
+                className="text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
               >
                 <CheckCircle2 className="h-4 w-4" />
               </Button>
@@ -313,7 +319,7 @@ export default function UsersPage() {
                   handleResendVerification(user.id);
                 }}
                 title="Resend verification email"
-                className="text-blue-600 hover:text-blue-700"
+                className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
               >
                 <Mail className="h-4 w-4" />
               </Button>

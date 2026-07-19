@@ -74,7 +74,7 @@ export default function AcceptInvitationPage() {
 
     if (loading) {
         return (
-            <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-900">
+            <div className="flex min-h-screen items-center justify-center bg-background">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
         );
@@ -82,12 +82,12 @@ export default function AcceptInvitationPage() {
 
     if (success) {
         return (
-            <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
+            <div className="flex min-h-screen items-center justify-center bg-background p-4">
                 <Card className="w-full max-w-md mx-auto shadow-lg border-green-500/50">
                     <CardContent className="pt-6 text-center space-y-4">
-                        <div className="mx-auto w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+                        <div className="mx-auto w-12 h-12 rounded-full bg-green-100 dark:bg-green-950/30 flex items-center justify-center">
                             <svg
-                                className="w-6 h-6 text-green-600"
+                                className="w-6 h-6 text-green-600 dark:text-green-400"
                                 fill="none"
                                 stroke="currentColor"
                                 viewBox="0 0 24 24"
@@ -101,17 +101,17 @@ export default function AcceptInvitationPage() {
                                 />
                             </svg>
                         </div>
-                        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Welcome to SnackBase!</h2>
+                        <h2 className="text-2xl font-bold text-foreground">Welcome to SnackBase!</h2>
                         <p className="text-muted-foreground">
                             Your account has been successfully created and you have joined <strong>{invitation?.account_name}</strong>.
                         </p>
-                        <Alert className="bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-900">
+                        <Alert className="bg-blue-50 border-blue-200 dark:bg-blue-950/30 dark:border-blue-800">
                             <AlertDescription className="text-blue-800 dark:text-blue-200">
                                 You can now log in to the application using your credentials.
                             </AlertDescription>
                         </Alert>
                         <div className="pt-2">
-                            <p className="text-sm text-gray-500">
+                            <p className="text-sm text-muted-foreground">
                                 (This is an admin portal. As a regular user, you may not have access to the dashboard features here.)
                             </p>
                         </div>
@@ -123,7 +123,7 @@ export default function AcceptInvitationPage() {
 
     if (error || !invitation) {
         return (
-            <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
+            <div className="flex min-h-screen items-center justify-center bg-background p-4">
                 <Card className="w-full max-w-md mx-auto shadow-lg border-destructive/50">
                     <CardContent className="pt-6">
                         <Alert variant="destructive">
@@ -141,7 +141,7 @@ export default function AcceptInvitationPage() {
     }
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
+        <div className="flex min-h-screen items-center justify-center bg-background p-4">
             <InvitationPasswordForm
                 email={invitation.email}
                 accountName={invitation.account_name}

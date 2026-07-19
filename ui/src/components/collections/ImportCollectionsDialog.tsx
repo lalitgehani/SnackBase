@@ -320,19 +320,19 @@ export default function ImportCollectionsDialog({
                     {/* Summary */}
                     <div className="grid grid-cols-4 gap-4">
                         <div className="bg-green-50 dark:bg-green-950/20 rounded-lg p-4 text-center">
-                            <p className="text-2xl font-bold text-green-600">{importResult.imported_count}</p>
+                            <p className="text-2xl font-bold text-green-600 dark:text-green-400">{importResult.imported_count}</p>
                             <p className="text-sm text-muted-foreground">Imported</p>
                         </div>
                         <div className="bg-blue-50 dark:bg-blue-950/20 rounded-lg p-4 text-center">
-                            <p className="text-2xl font-bold text-blue-600">{importResult.updated_count}</p>
+                            <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{importResult.updated_count}</p>
                             <p className="text-sm text-muted-foreground">Updated</p>
                         </div>
                         <div className="bg-yellow-50 dark:bg-yellow-950/20 rounded-lg p-4 text-center">
-                            <p className="text-2xl font-bold text-yellow-600">{importResult.skipped_count}</p>
+                            <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{importResult.skipped_count}</p>
                             <p className="text-sm text-muted-foreground">Skipped</p>
                         </div>
                         <div className="bg-red-50 dark:bg-red-950/20 rounded-lg p-4 text-center">
-                            <p className="text-2xl font-bold text-red-600">{importResult.failed_count}</p>
+                            <p className="text-2xl font-bold text-red-600 dark:text-red-400">{importResult.failed_count}</p>
                             <p className="text-sm text-muted-foreground">Failed</p>
                         </div>
                     </div>
