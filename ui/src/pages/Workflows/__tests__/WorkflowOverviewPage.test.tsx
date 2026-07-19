@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@/test/utils';
+import { render, screen } from '@/test/utils';
 import { Route, Routes } from 'react-router';
 import WorkflowOverviewPage from '../WorkflowOverviewPage';
 import { workflowsService } from '@/services/workflows.service';

@@ -104,17 +104,6 @@ function setupSuccessHandlers(
   )
 }
 
-function setupErrorHandler() {
-  server.use(
-    http.get('/api/v1/admin/email/templates', () =>
-      HttpResponse.json({ detail: 'Server error' }, { status: 500 }),
-    ),
-    http.get('/api/v1/admin/email/logs', () =>
-      HttpResponse.json({ logs: [], total: 0, page: 1, page_size: 10 }),
-    ),
-  )
-}
-
 // ---------------------------------------------------------------------------
 // Setup / Teardown
 // ---------------------------------------------------------------------------

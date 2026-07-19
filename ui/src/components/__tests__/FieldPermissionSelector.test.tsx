@@ -99,9 +99,6 @@ describe('FieldPermissionSelector', () => {
   describe('specific fields mode', () => {
     it('shows checked fields when value is JSON array', () => {
       renderSelector({ value: JSON.stringify(['title', 'price']) })
-      const titleCheckbox = screen.getAllByRole('checkbox').find(
-        (cb) => cb.closest('[data-field="title"]') || cb.getAttribute('data-field') === 'title'
-      )
       // At least the checkboxes render
       const checkboxes = screen.getAllByRole('checkbox')
       expect(checkboxes.length).toBeGreaterThan(0)

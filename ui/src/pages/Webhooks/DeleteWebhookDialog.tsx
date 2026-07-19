@@ -9,6 +9,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { handleApiError } from '@/lib/api';
 import { webhooksService, type WebhookListItem } from '@/services/webhooks.service';
 import { useToast } from '@/hooks/use-toast';
 
@@ -36,10 +37,10 @@ export function DeleteWebhookDialog({
             toast({ title: 'Webhook deleted' });
             onDeleted();
             onOpenChange(false);
-        } catch (error: any) {
+        } catch (error: unknown) {
             toast({
                 title: 'Error deleting webhook',
-                description: error.response?.data?.detail || 'Something went wrong',
+                description: handleApiError(error) || 'Something went wrong',
                 variant: 'destructive',
             });
         } finally {

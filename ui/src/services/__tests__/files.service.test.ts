@@ -1,6 +1,4 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { server } from '@/test/mocks/server'
-import { http, HttpResponse } from 'msw'
 import { uploadFile, getFileDownloadUrl } from '../files.service'
 import * as apiModule from '@/lib/api'
 import type { FileMetadata, FileUploadResponse } from '../files.service'

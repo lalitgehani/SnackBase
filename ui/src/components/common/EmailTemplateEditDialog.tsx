@@ -14,6 +14,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { handleApiError } from '@/lib/api';
 import { emailService, type EmailTemplate, type EmailTemplateUpdate } from '@/services/email.service';
 import { adminService, type Configuration } from '@/services/admin.service';
 import { useQuery } from '@tanstack/react-query';
@@ -122,10 +123,10 @@ export const EmailTemplateEditDialog = ({
             });
             onOpenChange(false);
         },
-        onError: (error: any) => {
+        onError: (error: unknown) => {
             toast({
                 title: 'Error',
-                description: error.response?.data?.detail || 'Failed to update template.',
+                description: handleApiError(error) || 'Failed to update template.',
                 variant: 'destructive',
             });
         },
@@ -144,10 +145,10 @@ export const EmailTemplateEditDialog = ({
             // Clear message after 5 seconds
             setTimeout(() => setTestResult(null), 5000);
         },
-        onError: (error: any) => {
+        onError: (error: unknown) => {
             setTestResult({
                 success: false,
-                message: error.response?.data?.detail || 'Failed to send test email.'
+                message: handleApiError(error) || 'Failed to send test email.'
             });
         },
     });
@@ -204,7 +205,7 @@ export const EmailTemplateEditDialog = ({
 
             setPreviewHtml(response.html_body);
             setPreviewText(response.text_body);
-        } catch (error: any) {
+        } catch {
             toast({
                 title: 'Preview Failed',
                 description: 'Could not generate preview.',
@@ -229,6 +230,8 @@ export const EmailTemplateEditDialog = ({
             setPreviewText('');
             handlePreview(initialData);
         }
+        // Intentionally only re-run when dialog opens or template identity changes.
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- avoid re-preview loop while editing form fields
     }, [template, open]);
 
     const bodyField = bodyFormat === 'html' ? 'html_body' : 'text_body';

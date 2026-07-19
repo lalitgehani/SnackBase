@@ -3,7 +3,6 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Globe, ListFilter } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 interface FieldPermissionSelectorProps {
     label: string;

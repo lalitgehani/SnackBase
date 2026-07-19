@@ -97,7 +97,7 @@ test.describe.serial('FT4.3: Collection & Record Management E2E Flow', () => {
 
   test('superadmin can create a new collection with schema fields', async ({
     page,
-    authenticatedPage,
+    authenticatedPage: _auth,
     collectionsPage,
   }) => {
     await collectionsPage.navigate()
@@ -116,7 +116,7 @@ test.describe.serial('FT4.3: Collection & Record Management E2E Flow', () => {
   // ── 2. Collection appears in list ──────────────────────────────────────────
 
   test('created collection appears in the collections list', async ({
-    authenticatedPage,
+    authenticatedPage: _auth,
     collectionsPage,
   }) => {
     await collectionsPage.navigate()
@@ -131,7 +131,7 @@ test.describe.serial('FT4.3: Collection & Record Management E2E Flow', () => {
 
   test('user can navigate to the collection records page', async ({
     page,
-    authenticatedPage,
+    authenticatedPage: _auth,
     collectionsPage,
     recordsPage,
   }) => {
@@ -153,7 +153,7 @@ test.describe.serial('FT4.3: Collection & Record Management E2E Flow', () => {
 
   test('user can create a record with valid data', async ({
     page,
-    authenticatedPage,
+    authenticatedPage: _auth,
     recordsPage,
   }) => {
     const rp = recordsPage(COLLECTION_NAME)
@@ -178,7 +178,7 @@ test.describe.serial('FT4.3: Collection & Record Management E2E Flow', () => {
   // ── 5. Record appears in list ──────────────────────────────────────────────
 
   test('created record appears in the records list', async ({
-    authenticatedPage,
+    authenticatedPage: _auth,
     recordsPage,
   }) => {
     const rp = recordsPage(COLLECTION_NAME)
@@ -192,7 +192,7 @@ test.describe.serial('FT4.3: Collection & Record Management E2E Flow', () => {
   // ── 6. Edit a record ───────────────────────────────────────────────────────
 
   test('user can edit a record and see updated values', async ({
-    authenticatedPage,
+    authenticatedPage: _auth,
     recordsPage,
   }) => {
     const rp = recordsPage(COLLECTION_NAME)
@@ -215,7 +215,7 @@ test.describe.serial('FT4.3: Collection & Record Management E2E Flow', () => {
   // ── 7. Delete a record ─────────────────────────────────────────────────────
 
   test('user can delete a record with confirmation', async ({
-    authenticatedPage,
+    authenticatedPage: _auth,
     recordsPage,
   }) => {
     const rp = recordsPage(COLLECTION_NAME)
@@ -235,7 +235,7 @@ test.describe.serial('FT4.3: Collection & Record Management E2E Flow', () => {
 
   test('user can delete the collection (cleanup)', async ({
     page,
-    authenticatedPage,
+    authenticatedPage: _auth,
     collectionsPage,
   }) => {
     await collectionsPage.navigate()

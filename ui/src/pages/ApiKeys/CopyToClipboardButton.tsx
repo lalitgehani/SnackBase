@@ -22,7 +22,7 @@ export const CopyToClipboardButton = ({ value, label, className }: CopyToClipboa
                 variant: 'default',
             });
             setTimeout(() => setCopied(false), 2000);
-        } catch (err) {
+        } catch {
             toast({
                 title: 'Failed to copy',
                 description: 'Please try selecting and copying manually.',

@@ -366,8 +366,10 @@ export function AppSidebar() {
         buildInitialOpenState(location.pathname),
     )
 
-    // Keep the active section expanded when the route changes
+    // Keep the active section expanded when the route changes.
+    // setState here is intentional: merge route-driven expansion with user toggles.
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- expand active nav group on route change without clobbering user collapses until next navigation
         setOpenGroups((prev) => {
             let changed = false
             const next = { ...prev }

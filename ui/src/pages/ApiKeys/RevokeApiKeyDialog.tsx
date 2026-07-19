@@ -8,6 +8,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { handleApiError } from '@/lib/api';
 import { apiKeysService } from '@/services/api-keys.service';
 import type { APIKeyListItem } from '@/services/api-keys.service';
 import { useToast } from '@/hooks/use-toast';
@@ -41,10 +42,10 @@ export const RevokeApiKeyDialog = ({
             });
             onRevoked();
             onOpenChange(false);
-        } catch (error: any) {
+        } catch (error: unknown) {
             toast({
                 title: 'Error revoking API key',
-                description: error.response?.data?.detail || 'Something went wrong',
+                description: handleApiError(error) || 'Something went wrong',
                 variant: 'destructive',
             });
         } finally {

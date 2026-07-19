@@ -111,14 +111,6 @@ function setupErrorHandler(status = 500, detail = 'Internal server error') {
   )
 }
 
-function setupCancelHandler() {
-  server.use(
-    http.delete('/api/v1/invitations/:id', () =>
-      new HttpResponse(null, { status: 204 }),
-    ),
-  )
-}
-
 function renderPage() {
   return render(<InvitationsPage />)
 }

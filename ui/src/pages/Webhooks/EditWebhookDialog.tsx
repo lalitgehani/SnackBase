@@ -14,10 +14,11 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Field, FieldLabel, FieldContent } from '@/components/ui/field';
+import { handleApiError } from '@/lib/api';
 import { webhooksService, type WebhookListItem } from '@/services/webhooks.service';
 import { getCollections, type CollectionListItem } from '@/services/collections.service';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Trash2, Info, AlertTriangle } from 'lucide-react';
+import { Plus, Trash2, Info } from 'lucide-react';
 
 interface EditWebhookDialogProps {
     webhook: WebhookListItem | null;
@@ -81,10 +82,10 @@ export function EditWebhookDialog({ webhook, open, onOpenChange, onUpdated }: Ed
             toast({ title: 'Webhook updated' });
             onUpdated();
             onOpenChange(false);
-        } catch (error: any) {
+        } catch (error: unknown) {
             toast({
                 title: 'Error updating webhook',
-                description: error.response?.data?.detail || 'Something went wrong',
+                description: handleApiError(error) || 'Something went wrong',
                 variant: 'destructive',
             });
         } finally {

@@ -80,14 +80,6 @@ function setupSuccessHandler(override: Partial<typeof mockApiKeys> = {}) {
   )
 }
 
-function setupErrorHandler(status = 500, detail = 'Internal server error') {
-  server.use(
-    http.get('/api/v1/admin/api-keys', () =>
-      HttpResponse.json({ detail }, { status }),
-    ),
-  )
-}
-
 // ---------------------------------------------------------------------------
 // Setup / Teardown
 // ---------------------------------------------------------------------------
@@ -139,8 +131,6 @@ describe('ApiKeysPage', () => {
         }),
       )
       renderPage()
-      // Skeleton elements are present during loading
-      const skeletons = document.querySelectorAll('[class*="skeleton"], [data-slot="skeleton"]')
       // The page renders skeletons or at least doesn't crash
       expect(document.body).toBeInTheDocument()
     })

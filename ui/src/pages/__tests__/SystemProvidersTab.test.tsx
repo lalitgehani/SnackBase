@@ -316,7 +316,6 @@ describe('SystemProvidersTab', () => {
       })
 
       // First row (Google OAuth) is builtin - its delete button should be disabled
-      const deleteButtons = document.querySelectorAll('[title*="delete"], button[disabled]')
       const rows = document.querySelectorAll('tbody tr')
       expect(rows.length).toBeGreaterThan(0)
     })
@@ -328,12 +327,6 @@ describe('SystemProvidersTab', () => {
       })
 
       const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
-      // Find all delete (trash) icon buttons
-      const allButtons = screen.getAllByRole('button')
-      // SendGrid row delete button — find the enabled delete button
-      const trashButtons = allButtons.filter(
-        (btn) => !btn.hasAttribute('disabled') && btn.querySelector('svg'),
-      )
       // The delete button for SendGrid (non-builtin) should be clickable
       // Click the trash icon in the second row
       const rows = document.querySelectorAll('tbody tr')

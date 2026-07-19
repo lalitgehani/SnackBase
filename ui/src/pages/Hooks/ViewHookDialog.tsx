@@ -70,13 +70,25 @@ export function ViewHookDialog({ hook, open, onOpenChange }: Props) {
 
     useEffect(() => {
         if (!open) return;
+        let cancelled = false;
+        // Load execution history when the dialog opens (async fetch pattern).
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- reset loading flags before async listExecutions
         setExecLoading(true);
         setExecError(null);
         hooksService
             .listExecutions(hook.id)
-            .then((res) => setExecutions(res.items))
-            .catch(() => setExecError('Failed to load execution history.'))
-            .finally(() => setExecLoading(false));
+            .then((res) => {
+                if (!cancelled) setExecutions(res.items);
+            })
+            .catch(() => {
+                if (!cancelled) setExecError('Failed to load execution history.');
+            })
+            .finally(() => {
+                if (!cancelled) setExecLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
     }, [open, hook.id]);
 
     return (

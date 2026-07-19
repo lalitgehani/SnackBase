@@ -7,7 +7,6 @@ import { apiClient } from '@/lib/api';
 import type {
 	RecordDetail,
 	RecordData,
-	RecordListResponse,
 	GetRecordsParams,
 	ListResponse,
 	BatchUpdateItem,

@@ -93,7 +93,7 @@ const PAGE_TITLES: Record<string, string> = {
 // ---------------------------------------------------------------------------
 
 test.describe('Sidebar navigation links', () => {
-  test('all nav links resolve to correct pages', async ({ page, authenticatedPage }) => {
+  test('all nav links resolve to correct pages', async ({ page, authenticatedPage: _auth }) => {
     await expandAllSidebarSections(page)
 
     for (const item of NAV_ITEMS) {
@@ -106,7 +106,7 @@ test.describe('Sidebar navigation links', () => {
     }
   })
 
-  test('active sidebar link is highlighted for current page', async ({ page, authenticatedPage }) => {
+  test('active sidebar link is highlighted for current page', async ({ page, authenticatedPage: _auth }) => {
     // Navigate to Accounts and verify the link has the active state
     await page.goto('/admin/accounts')
     await page.waitForURL('**/admin/accounts', { timeout: 10_000 })
@@ -129,7 +129,7 @@ test.describe('Sidebar navigation links', () => {
 test.describe('Pages render without console errors', () => {
   test('navigating through all pages produces no JavaScript errors', async ({
     page,
-    authenticatedPage,
+    authenticatedPage: _auth,
   }) => {
     const jsErrors: string[] = []
 
@@ -164,7 +164,7 @@ test.describe('Pages render without console errors', () => {
 
 test.describe('Page header titles', () => {
   for (const [url, expectedTitle] of Object.entries(PAGE_TITLES)) {
-    test(`header shows "${expectedTitle}" when on ${url}`, async ({ page, authenticatedPage }) => {
+    test(`header shows "${expectedTitle}" when on ${url}`, async ({ page, authenticatedPage: _auth }) => {
       await page.goto(url)
       await page.waitForURL(`**${url}`, { timeout: 10_000 })
       await page.waitForLoadState('networkidle')
@@ -183,14 +183,14 @@ test.describe('Page header titles', () => {
 test.describe('Responsive sidebar toggle', () => {
   test.use({ viewport: { width: 375, height: 812 } })
 
-  test('sidebar trigger button is visible on mobile', async ({ page, authenticatedPage }) => {
+  test('sidebar trigger button is visible on mobile', async ({ page, authenticatedPage: _auth }) => {
     const trigger = page.locator('[data-sidebar="trigger"]')
     await expect(trigger).toBeVisible()
   })
 
   test('clicking sidebar trigger opens the sidebar on mobile', async ({
     page,
-    authenticatedPage,
+    authenticatedPage: _auth,
   }) => {
     // On mobile the sidebar is rendered as a Sheet (off-canvas); it starts closed.
     const mobileSheet = page.locator('[data-mobile="true"]')
@@ -206,7 +206,7 @@ test.describe('Responsive sidebar toggle', () => {
 
   test('pressing Escape closes the sidebar on mobile', async ({
     page,
-    authenticatedPage,
+    authenticatedPage: _auth,
   }) => {
     const mobileSheet = page.locator('[data-mobile="true"]')
 
@@ -222,7 +222,7 @@ test.describe('Responsive sidebar toggle', () => {
 
   test('clicking the sheet overlay closes the sidebar on mobile', async ({
     page,
-    authenticatedPage,
+    authenticatedPage: _auth,
   }) => {
     const mobileSheet = page.locator('[data-mobile="true"]')
     const overlay = page.locator('[data-slot="sheet-overlay"]')
@@ -242,7 +242,7 @@ test.describe('Responsive sidebar toggle', () => {
     await expect(mobileSheet).toBeHidden({ timeout: 5_000 })
   })
 
-  test('sidebar nav links work on mobile viewport', async ({ page, authenticatedPage }) => {
+  test('sidebar nav links work on mobile viewport', async ({ page, authenticatedPage: _auth }) => {
     // Open sidebar
     await page.locator('[data-sidebar="trigger"]').click()
     const mobileSheet = page.locator('[data-mobile="true"]')
@@ -265,7 +265,7 @@ test.describe('Responsive sidebar toggle', () => {
 test.describe('Back navigation', () => {
   test('browser back button navigates from collections to previous page', async ({
     page,
-    authenticatedPage,
+    authenticatedPage: _auth,
   }) => {
     // Start on dashboard
     await page.goto('/admin/dashboard')
@@ -281,7 +281,7 @@ test.describe('Back navigation', () => {
     await expect(page).toHaveURL(/admin\/dashboard/)
   })
 
-  test('browser forward button works after going back', async ({ page, authenticatedPage }) => {
+  test('browser forward button works after going back', async ({ page, authenticatedPage: _auth }) => {
     await page.goto('/admin/dashboard')
     await page.waitForURL('**/admin/dashboard', { timeout: 10_000 })
 
@@ -300,7 +300,7 @@ test.describe('Back navigation', () => {
 
   test('sidebar Collections link returns to list from collection data tab', async ({
     page,
-    authenticatedPage,
+    authenticatedPage: _auth,
   }) => {
     // Use the collection seeded by global-setup (e2e_test_items).
     // Workspace embeds RecordsPage without the old standalone "← Collections" chrome;

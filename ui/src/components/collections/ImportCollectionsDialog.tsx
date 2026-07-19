@@ -77,7 +77,7 @@ export default function ImportCollectionsDialog({
 
             setExportData(data);
             setStep('preview');
-        } catch (err) {
+        } catch {
             setError('Failed to parse JSON file');
         }
     };

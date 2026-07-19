@@ -52,7 +52,7 @@ test.describe('Authentication E2E Flow', () => {
   // Navigation (requires authenticated session)
   // ---------------------------------------------------------------------------
 
-  test('logged-in user can navigate between pages', async ({ page, authenticatedPage }) => {
+  test('logged-in user can navigate between pages', async ({ page, authenticatedPage: _auth }) => {
     // Start on dashboard after login
     await expect(page).toHaveURL(/admin\/dashboard/)
 
@@ -76,7 +76,7 @@ test.describe('Authentication E2E Flow', () => {
   // Logout
   // ---------------------------------------------------------------------------
 
-  test('logout clears session and redirects to login', async ({ page, authenticatedPage }) => {
+  test('logout clears session and redirects to login', async ({ page, authenticatedPage: _auth }) => {
     await expect(page).toHaveURL(/admin\/dashboard/)
 
     // Open the user menu in the sidebar footer and click "Log out"
@@ -93,7 +93,7 @@ test.describe('Authentication E2E Flow', () => {
     await expect(page).toHaveURL(/admin\/login/)
   })
 
-  test('logout clears auth state in localStorage', async ({ page, authenticatedPage }) => {
+  test('logout clears auth state in localStorage', async ({ page, authenticatedPage: _auth }) => {
     // Verify we are authenticated before logout
     const beforeLogout = await page.evaluate(() => {
       const raw = localStorage.getItem('auth-storage')
@@ -156,7 +156,7 @@ test.describe('Authentication E2E Flow', () => {
   // Session persistence
   // ---------------------------------------------------------------------------
 
-  test('session persists across page refresh', async ({ page, authenticatedPage }) => {
+  test('session persists across page refresh', async ({ page, authenticatedPage: _auth }) => {
     await expect(page).toHaveURL(/admin\/dashboard/)
 
     // Reload — Zustand persist middleware should restore session from localStorage
@@ -167,7 +167,7 @@ test.describe('Authentication E2E Flow', () => {
     await expect(page).toHaveURL(/admin\/dashboard/)
   })
 
-  test('session persists after navigating away and back', async ({ page, authenticatedPage }) => {
+  test('session persists after navigating away and back', async ({ page, authenticatedPage: _auth }) => {
     // Navigate to a different page
     await page.goto('/admin/accounts')
     await page.waitForURL('**/admin/accounts', { timeout: 10_000 })

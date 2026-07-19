@@ -14,6 +14,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Field, FieldLabel, FieldContent } from '@/components/ui/field';
+import { handleApiError } from '@/lib/api';
 import { webhooksService, type WebhookCreateResponse } from '@/services/webhooks.service';
 import { getCollections, type CollectionListItem } from '@/services/collections.service';
 import { useToast } from '@/hooks/use-toast';
@@ -82,10 +83,10 @@ export function CreateWebhookDialog({ open, onOpenChange, onCreated }: CreateWeb
             });
             setCreatedWebhook(result);
             onCreated();
-        } catch (error: any) {
+        } catch (error: unknown) {
             toast({
                 title: 'Error creating webhook',
-                description: error.response?.data?.detail || 'Something went wrong',
+                description: handleApiError(error) || 'Something went wrong',
                 variant: 'destructive',
             });
         } finally {

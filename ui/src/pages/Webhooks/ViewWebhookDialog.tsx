@@ -12,7 +12,7 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { handleApiError } from '@/lib/api';
 import { webhooksService, type WebhookListItem, type WebhookDelivery } from '@/services/webhooks.service';
 import { useToast } from '@/hooks/use-toast';
 import { format, formatDistanceToNow } from 'date-fns';
@@ -143,10 +143,10 @@ export function ViewWebhookDialog({ webhook, open, onOpenChange }: ViewWebhookDi
                     variant: 'destructive',
                 });
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
             toast({
                 title: 'Test request failed',
-                description: error.response?.data?.detail || 'Something went wrong',
+                description: handleApiError(error) || 'Something went wrong',
                 variant: 'destructive',
             });
         } finally {

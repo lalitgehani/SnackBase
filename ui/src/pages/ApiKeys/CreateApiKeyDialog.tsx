@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Field, FieldLabel, FieldContent } from '@/components/ui/field';
 import { Checkbox } from '@/components/ui/checkbox';
+import { handleApiError } from '@/lib/api';
 import { apiKeysService } from '@/services/api-keys.service';
 import type { APIKeyCreateResponse } from '@/services/api-keys.service';
 import { useToast } from '@/hooks/use-toast';
@@ -41,10 +42,10 @@ export const CreateApiKeyDialog = ({
             });
             setCreatedKey(response);
             onCreated();
-        } catch (error: any) {
+        } catch (error: unknown) {
             toast({
                 title: 'Error creating API key',
-                description: error.response?.data?.detail || 'Something went wrong',
+                description: handleApiError(error) || 'Something went wrong',
                 variant: 'destructive',
             });
         } finally {

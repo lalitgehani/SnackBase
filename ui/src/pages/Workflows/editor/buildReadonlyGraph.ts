@@ -2,7 +2,7 @@
  * Build a locked, display-ready React Flow graph from a workflow definition.
  */
 
-import type { Edge, Node } from '@xyflow/react';
+import type { Node } from '@xyflow/react';
 import type { Workflow, WorkflowStep, WorkflowTriggerConfig } from '@/services/workflows.service';
 import { stepsToFlow, type FlowGraph, type StepNodeData, type TriggerNodeData } from './graphMapper';
 import { layoutGraph, shouldAutoLayoutOnLoad } from './autoLayout';
@@ -46,7 +46,9 @@ export function buildReadonlyGraph(
         triggerConfig = workflowOrSteps.trigger_config ?? trigger;
     }
 
-    let { nodes, edges } = stepsToFlow(steps, triggerConfig);
+    const flow = stepsToFlow(steps, triggerConfig);
+    let { nodes } = flow;
+    const { edges } = flow;
 
     if (options.forceLayout || shouldAutoLayoutOnLoad(nodes)) {
         nodes = layoutGraph(nodes, edges);

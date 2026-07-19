@@ -86,7 +86,6 @@ describe('DeleteAccountDialog', () => {
     })
 
     it('Delete Account button is disabled when wrong name is typed', async () => {
-      const user = userEvent.setup()
       renderDialog()
 
       const input = screen.getByLabelText(/type.*to confirm/i)

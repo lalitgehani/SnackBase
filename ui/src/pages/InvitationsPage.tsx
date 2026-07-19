@@ -118,7 +118,7 @@ export default function InvitationsPage() {
                 title: "Copied",
                 description: "Invitation link copied to clipboard",
             });
-        } catch (err) {
+        } catch {
             toast({
                 variant: "destructive",
                 title: "Error",

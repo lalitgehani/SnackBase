@@ -142,7 +142,7 @@ test.describe.serial('FT4.4: User Management E2E Flow', () => {
 
   test('superadmin can create a new account', async ({
     page,
-    authenticatedPage,
+    authenticatedPage: _auth,
     accountsPage,
   }) => {
     await accountsPage.navigate()
@@ -158,7 +158,7 @@ test.describe.serial('FT4.4: User Management E2E Flow', () => {
 
   test('superadmin can create a user in that account', async ({
     page,
-    authenticatedPage,
+    authenticatedPage: _auth,
     usersPage,
   }) => {
     await usersPage.navigate()
@@ -178,8 +178,7 @@ test.describe.serial('FT4.4: User Management E2E Flow', () => {
   // ── 3. Create role and assign to user ──────────────────────────────────────
 
   test('superadmin can create and assign a role', async ({
-    page,
-    authenticatedPage,
+    authenticatedPage: _auth,
     rolesPage,
     usersPage,
   }) => {
@@ -205,7 +204,7 @@ test.describe.serial('FT4.4: User Management E2E Flow', () => {
 
   test('superadmin can send an invitation', async ({
     page,
-    authenticatedPage,
+    authenticatedPage: _auth,
     invitationsPage,
   }) => {
     await invitationsPage.navigate()
@@ -219,7 +218,7 @@ test.describe.serial('FT4.4: User Management E2E Flow', () => {
   // ── 5. Invitation appears in list ──────────────────────────────────────────
 
   test('invitation appears in the invitations list', async ({
-    authenticatedPage,
+    authenticatedPage: _auth,
     invitationsPage,
   }) => {
     await invitationsPage.navigate()
@@ -234,7 +233,7 @@ test.describe.serial('FT4.4: User Management E2E Flow', () => {
   // ── 6. Cancel invitation ───────────────────────────────────────────────────
 
   test('superadmin can cancel an invitation', async ({
-    authenticatedPage,
+    authenticatedPage: _auth,
     invitationsPage,
   }) => {
     await invitationsPage.navigate()
@@ -264,7 +263,7 @@ test.describe.serial('FT4.4: User Management E2E Flow', () => {
 
   test('superadmin can delete the test account (cleanup)', async ({
     page,
-    authenticatedPage,
+    authenticatedPage: _auth,
     accountsPage,
   }) => {
     await accountsPage.navigate()

@@ -1,12 +1,26 @@
 
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
+import axios from "axios";
 import { getInvitation, acceptInvitation, type InvitationPublicResponse } from "@/services/invitations.service";
 import { InvitationPasswordForm } from "@/components/invitations/InvitationPasswordForm";
 import { useAuthStore } from "@/stores/auth.store";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertTriangle, Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+
+/** Prefer API body message/error fields; otherwise use a page-specific fallback (not axios generic status text). */
+function invitationApiMessage(err: unknown, fallback: string): string {
+    if (axios.isAxiosError(err)) {
+        const data = err.response?.data as
+            | { message?: string; error?: string; detail?: string }
+            | undefined;
+        if (typeof data?.message === "string" && data.message.trim()) return data.message;
+        if (typeof data?.error === "string" && data.error.trim()) return data.error;
+        if (typeof data?.detail === "string" && data.detail.trim()) return data.detail;
+    }
+    return fallback;
+}
 
 export default function AcceptInvitationPage() {
     const [searchParams] = useSearchParams();
@@ -32,10 +46,9 @@ export default function AcceptInvitationPage() {
             try {
                 const data = await getInvitation(token);
                 setInvitation(data);
-            } catch (err: any) {
+            } catch (err: unknown) {
                 // Handle specific errors from backend
-                const message = err.response?.data?.message || "Invalid or expired invitation.";
-                setError(message);
+                setError(invitationApiMessage(err, "Invalid or expired invitation."));
             } finally {
                 setLoading(false);
             }
@@ -63,10 +76,11 @@ export default function AcceptInvitationPage() {
             } else {
                 setSuccess(true);
             }
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("Failed to accept invitation:", err);
-            const message = err.response?.data?.message || err.response?.data?.error || "Failed to accept invitation. Please try again.";
-            setSubmitError(message);
+            setSubmitError(
+                invitationApiMessage(err, "Failed to accept invitation. Please try again."),
+            );
         } finally {
             setSubmitting(false);
         }

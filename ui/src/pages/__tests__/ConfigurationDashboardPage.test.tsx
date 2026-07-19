@@ -97,15 +97,6 @@ function setupSuccessHandlers(
   )
 }
 
-function setupStatsErrorHandler() {
-  server.use(
-    http.get('/api/v1/admin/configuration/stats', () =>
-      HttpResponse.json({ detail: 'Stats unavailable' }, { status: 500 }),
-    ),
-    http.get('/api/v1/admin/configuration/recent', () => HttpResponse.json([])),
-  )
-}
-
 // ---------------------------------------------------------------------------
 // Setup / Teardown
 // ---------------------------------------------------------------------------
