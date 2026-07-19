@@ -16,6 +16,7 @@ This guide covers the SnackBase React admin UI architecture, development pattern
 - [Routing](#routing)
 - [Adding New Pages](#adding-new-pages)
 - [Styling](#styling)
+- [Dark / Light Mode](#dark--light-mode)
 - [Development Workflow](#development-workflow)
 - [Features](#features)
 
@@ -41,6 +42,7 @@ The SnackBase admin UI is built with modern, production-ready technologies:
 | **React Hook Form** | 7.69.0 | Form state management |
 | **date-fns** | 4.1.0 | Date manipulation |
 | **Lucide React** | 0.562.0 | Icon library |
+| **next-themes** | 0.4.x | Light / Dark / System theme preference |
 
 ---
 
@@ -78,8 +80,11 @@ ui/
 │   │
 │   ├── components/              # Reusable components
 │   │   ├── ui/                  # ShadCN components (DO NOT EDIT; install via CLI)
+│   │   ├── theme-provider.tsx   # next-themes wrapper (class strategy)
+│   │   ├── mode-toggle.tsx      # ModeToggle, ThemeMenuItems, ThemeToggleButton
 │   │   ├── accounts/            # Account-related components
 │   │   ├── audit-logs/          # Audit log components
+│   │   ├── charts/              # Dashboard charts + theme helpers
 │   │   ├── collections/         # Schema editor, rules, import/export
 │   │   ├── common/              # Shared components (ProviderLogo, ConfigurationForm, etc.)
 │   │   ├── groups/              # Group components
@@ -88,7 +93,7 @@ ui/
 │   │   ├── records/             # Record CRUD components
 │   │   ├── roles/               # Role management components
 │   │   ├── users/               # User management components
-│   │   ├── AppSidebar.tsx       # Main navigation sidebar
+│   │   ├── AppSidebar.tsx       # Main navigation sidebar (includes ThemeMenuItems)
 │   │   └── ProtectedRoute.tsx   # Auth wrapper component
 │   │
 │   ├── layouts/                 # Layout components
@@ -885,6 +890,103 @@ The project uses the "new-york" style variant configured in `components.json`:
   }
 }
 ```
+
+### Prefer semantic tokens
+
+When adding UI, use design-system tokens rather than hard-coded light-only greys:
+
+```tsx
+// Prefer
+<div className="bg-card text-card-foreground border border-border rounded-lg p-4">
+
+// Avoid for chrome that should flip with theme
+<div className="bg-white text-gray-900 border-gray-200">
+```
+
+For status colors that need both themes, pair with `dark:` variants (for example `bg-green-50 text-green-800 dark:bg-green-950/40 dark:text-green-200`).
+
+Tokens are raw `oklch(...)` values. Use `var(--background)`, not `hsl(var(--background))`.
+
+---
+
+## Dark / Light Mode
+
+Appearance is **client-only** (no API, no user-profile field). Full requirements live in [`PRD_DARK_LIGHT_MODE.md`](../PRD_DARK_LIGHT_MODE.md).
+
+### Runtime
+
+| Piece | Location | Notes |
+|-------|----------|--------|
+| Provider | `ui/src/components/theme-provider.tsx` | Thin `next-themes` wrapper |
+| App wiring | `ui/src/main.tsx` | `attribute="class"`, `storageKey="snackbase.theme"`, `defaultTheme="system"`, `enableSystem`, `disableTransitionOnChange` |
+| FOUC boot | `ui/index.html` `<head>` script | Same storage key; sets/removes `html.dark` before React paints |
+| Palette | `ui/src/App.css` | `:root` light, `.dark` dark oklch variables |
+| Base styles | `ui/src/index.css` | Body uses `var(--background)` / `var(--foreground)` |
+
+```tsx
+// ui/src/main.tsx (conceptual)
+<ThemeProvider
+  attribute="class"
+  defaultTheme="system"
+  enableSystem
+  storageKey="snackbase.theme"
+  disableTransitionOnChange
+>
+  <BrowserRouter>
+    <App />
+  </BrowserRouter>
+</ThemeProvider>
+```
+
+`localStorage` key: **`snackbase.theme`**. Values: `light` | `dark` | `system`. Clearing the key returns to System (OS `prefers-color-scheme`).
+
+### Controls
+
+| UI | Component | File |
+|----|-----------|------|
+| Admin header icon | `ModeToggle` | `layouts/AdminLayout.tsx` |
+| Sidebar account menu | `ThemeMenuItems` | `components/AppSidebar.tsx` |
+| Login page | `ModeToggle` | `pages/LoginPage.tsx` |
+
+```tsx
+import { useTheme } from 'next-themes'
+import { ModeToggle, ThemeMenuItems } from '@/components/mode-toggle'
+
+// Always under ThemeProvider. ModeToggle includes a mount gate to avoid icon flicker.
+```
+
+Do **not** store theme in the auth Zustand store or Configuration APIs.
+
+### Charts
+
+Dashboard charts resolve colors from CSS variables (`--chart-*`). `ChartContainer` remounts when the resolved theme flips so Recharts rebinds live values. Helpers live in `ui/src/components/charts/theme.ts`.
+
+### Intentional non-theme surfaces
+
+These stay fixed by design (do not “fix” to semantic theme tokens):
+
+| Surface | Why |
+|---------|-----|
+| Email template HTML preview | Realistic light email canvas |
+| Macro SQL / code terminal blocks | Always-dark IDE contrast |
+| Dialog / sheet / alert-dialog overlays | Always `bg-black/50` scrim |
+
+### Testing theme behavior
+
+```bash
+cd ui
+npm run test -- src/components/__tests__/theme-provider.test.tsx src/components/__tests__/mode-toggle.test.tsx
+npm run test:e2e -- e2e/tests/theme.test.ts   # needs Vite; suite globalSetup expects backend
+```
+
+Unit tests mock `matchMedia` so Light / Dark / System selection is not flaky against the host OS. E2E covers reload persistence and keyboard reachability of the login toggle.
+
+### Accessibility expectations
+
+- Trigger accessible name: “Toggle theme” (header/login) or “Theme” (sidebar submenu)
+- Options: Light / Dark / System as `menuitemradio` with `aria-checked` selection (not color alone)
+- Keyboard operable (focus, open, select)
+- Focus rings from Radix/ShadCN remain visible in both themes
 
 ---
 

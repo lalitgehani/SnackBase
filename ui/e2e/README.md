@@ -50,11 +50,21 @@ E2E_BACKEND_URL=http://localhost:9000 npm run test:e2e
 
 | File | PRD Ref | What it covers |
 |------|---------|----------------|
-| `tests/smoke.test.ts` | — | Playwright setup sanity check (no backend needed) |
+| `tests/smoke.test.ts` | — | Playwright setup sanity check (no backend needed for the assertions; globalSetup still runs) |
+| `tests/theme.test.ts` | Dark/Light F4.2–F4.3 | Theme toggle on login, `snackbase.theme` persistence across reload, System + clear storage, keyboard a11y |
 | `tests/auth.test.ts` | FT4.2 | Login, logout, protected route redirects, session persistence |
 | `tests/collections.test.ts` | FT4.3 | Collection + record full CRUD lifecycle |
 | `tests/user-management.test.ts` | FT4.4 | Accounts, users, roles, invitations |
 | `tests/navigation.test.ts` | FT4.5 | Sidebar nav, console errors, page titles, mobile sidebar, back/forward |
+
+### Theme persistence only
+
+```bash
+# From ui/ — still requires globalSetup (backend) for the suite lifecycle
+npm run test:e2e -- e2e/tests/theme.test.ts
+```
+
+Theme smoke exercises the **login page** `ModeToggle` (no auth required for the assertions). Storage key must remain `snackbase.theme` to match `ThemeProvider` and the FOUC script in `index.html`.
 
 ## Global Setup & Teardown
 

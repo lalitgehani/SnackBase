@@ -1,73 +1,132 @@
-# React + TypeScript + Vite
+# SnackBase Admin UI
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React admin console for [SnackBase](../README.md) — the open-source, self-hosted Backend-as-a-Service.
 
-Currently, two official plugins are available:
+## Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+| Technology | Purpose |
+|------------|---------|
+| React 19 + TypeScript | UI |
+| Vite 7 | Dev server and production build |
+| TailwindCSS 4 + ShadCN/Radix | Design system |
+| TanStack Query | Server state |
+| Zustand | Client auth state |
+| next-themes | Light / Dark / System appearance |
+| Vitest + Testing Library | Unit tests |
+| Playwright | E2E tests |
 
-## React Compiler
+## Quick start
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```bash
+# From repo root — backend
+uv run python -m snackbase serve --reload
 
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+# From ui/
+npm install
+npm run dev        # http://localhost:5173
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Proxy: Vite forwards `/api` to `http://localhost:8000` (see `vite.config.ts`).
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Scripts
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Vite dev server |
+| `npm run build` | Typecheck + production build |
+| `npm run lint` | ESLint |
+| `npm run test` | Vitest unit suite |
+| `npm run test:coverage` | Unit tests with coverage |
+| `npm run test:e2e` | Playwright E2E (backend required for most suites) |
+| `npm run preview` | Preview production build |
+
+## Dark / light mode
+
+Theme preference is **client-only** (no backend API). Users choose **Light**, **Dark**, or **System**.
+
+### How it works
+
+1. **`ThemeProvider`** (`src/components/theme-provider.tsx`) wraps the app in `src/main.tsx` via `next-themes`.
+2. **Class strategy**: `attribute="class"` toggles `class="dark"` on `<html>`, matching Tailwind’s `@custom-variant dark (&:is(.dark *))` in `src/App.css`.
+3. **Persistence**: `localStorage` key **`snackbase.theme`** (`defaultTheme="system"`, `enableSystem`).
+4. **FOUC prevention**: inline boot script in `index.html` reads the same key before React paints and applies/removes `dark` on `document.documentElement`.
+5. **Palette source of truth**: light tokens on `:root` and dark tokens under `.dark` in `src/App.css` (oklch CSS variables). Do not invent ad-hoc hex palettes for chrome.
+
+### Where toggles live
+
+| Control | Component | Placement |
+|---------|-----------|-----------|
+| Header icon menu | `ModeToggle` / `ThemeToggleButton` | `AdminLayout` header |
+| Account submenu | `ThemeMenuItems` | `AppSidebar` user dropdown |
+| Login | `ModeToggle` | `LoginPage` |
+
+Accept-invitation page theme control is intentionally deferred; theme still applies via the root provider and FOUC script.
+
+### Contributor guidance
+
+- Prefer **semantic tokens**: `bg-background`, `text-foreground`, `bg-card`, `border-border`, `text-muted-foreground`, etc.
+- For status/alert colors that need both themes, pair utilities with **`dark:`** variants (or use design-system tokens that already flip under `.dark`).
+- **Do not** wrap oklch tokens in `hsl(var(--…))` — tokens are raw `oklch(...)` values (`var(--background)` is correct).
+- Charts: use helpers in `src/components/charts/theme.ts`; `ChartContainer` remounts on theme flip so Recharts rebinds CSS variables.
+- **Intentional non-theme surfaces** (leave as-is):
+  - Email HTML preview iframe canvas (`EmailTemplateEditDialog`) — realistic light email canvas
+  - Macro SQL / terminal blocks (`MacroDetailDialog`) — always-dark IDE contrast
+  - Modal overlays (`dialog` / `sheet` / `alert-dialog`) — always `bg-black/50`
+
+### Tests
+
+- Unit: `src/components/__tests__/theme-provider.test.tsx`, `src/components/__tests__/mode-toggle.test.tsx`
+- E2E: `e2e/tests/theme.test.ts` (login-page toggle, reload persistence, system preference, a11y smoke)
+
+### Accessibility checklist (theme controls)
+
+- [x] Trigger has accessible name (`aria-label="Toggle theme"` / menu item “Theme”)
+- [x] Options labeled Light / Dark / System (`menuitemradio`)
+- [x] Selected state via radio `aria-checked` + indicator (not color alone)
+- [x] Keyboard: focus trigger, Enter/Space opens menu, options selectable
+- [x] Focus styles from ShadCN/Radix in both themes
+
+### Manual QA (optional)
+
+1. Hard reload with `snackbase.theme=dark` — no light flash.
+2. Switch Light / Dark / System from header and sidebar; preference survives reload.
+3. Clear `localStorage` key → default System follows OS.
+4. Spot-check primary sidebar destinations in dark mode (dashboard, collections, users, roles, macros, migrations, audit logs, configuration).
+
+Full product requirements: [`PRD_DARK_LIGHT_MODE.md`](../PRD_DARK_LIGHT_MODE.md).
+
+## Project layout
+
+See [`docs/frontend.md`](../docs/frontend.md) for architecture, services, routing, and patterns.
+
 ```
+ui/src/
+  main.tsx                 # ThemeProvider + QueryClient + Router
+  App.tsx                  # Routes
+  App.css                  # Design tokens (light/dark)
+  components/
+    theme-provider.tsx
+    mode-toggle.tsx
+    ui/                    # ShadCN (install via CLI, do not hand-edit)
+  layouts/AdminLayout.tsx
+  pages/
+  services/
+  stores/
+e2e/                       # Playwright
+```
+
+## ShadCN
+
+Use existing components under `src/components/ui/`. Install new ones only via:
+
+```bash
+npx shadcn@latest add <component>
+```
+
+Never hand-create ShadCN component files.
+
+## Further reading
+
+- [Frontend developer guide](../docs/frontend.md)
+- [E2E testing](./e2e/README.md)
+- [Root project docs](../docs/README.md)

@@ -115,4 +115,67 @@ describe('ThemeProvider', () => {
 
     expect(localStorage.getItem(STORAGE_KEY)).toBe('light')
   })
+
+  it('setTheme("system") resolves from mocked prefers-color-scheme', async () => {
+    mockMatchMedia(true) // OS dark
+    renderWithTheme(<ThemeProbe />, { defaultTheme: 'light' })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('theme')).toHaveTextContent('light')
+    })
+
+    await act(async () => {
+      screen.getByRole('button', { name: 'set-system' }).click()
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('theme')).toHaveTextContent('system')
+      expect(screen.getByTestId('resolved')).toHaveTextContent('dark')
+      expect(document.documentElement.classList.contains('dark')).toBe(true)
+    })
+
+    expect(localStorage.getItem(STORAGE_KEY)).toBe('system')
+  })
+
+  it('restores preference from localStorage on mount', async () => {
+    localStorage.setItem(STORAGE_KEY, 'dark')
+    mockMatchMedia(false)
+
+    renderWithTheme(<ThemeProbe />, { defaultTheme: 'system' })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('theme')).toHaveTextContent('dark')
+      expect(document.documentElement.classList.contains('dark')).toBe(true)
+    })
+  })
+
+  it('defaults to system when storage is empty', async () => {
+    mockMatchMedia(false)
+    renderWithTheme(<ThemeProbe />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('theme')).toHaveTextContent('system')
+      expect(screen.getByTestId('resolved')).toHaveTextContent('light')
+      expect(document.documentElement.classList.contains('dark')).toBe(false)
+    })
+  })
+
+  it('uses storage key snackbase.theme (not a generic theme key)', async () => {
+    renderWithTheme(<ThemeProbe />, { defaultTheme: 'light' })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('theme')).toHaveTextContent('light')
+    })
+
+    await act(async () => {
+      screen.getByRole('button', { name: 'set-dark' }).click()
+    })
+
+    await waitFor(() => {
+      expect(localStorage.getItem(STORAGE_KEY)).toBe('dark')
+    })
+
+    // Must not write to the default next-themes key
+    expect(localStorage.getItem('theme')).toBeNull()
+  })
 })

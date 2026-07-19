@@ -3,7 +3,11 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@/components/theme-provider'
-import { ModeToggle, ThemeMenuItems } from '@/components/mode-toggle'
+import {
+  ModeToggle,
+  ThemeMenuItems,
+  ThemeToggleButton,
+} from '@/components/mode-toggle'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,6 +15,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 
+/** Must match ThemeProvider storageKey and FOUC script in index.html */
 const STORAGE_KEY = 'snackbase.theme'
 
 function mockMatchMedia(matches: boolean) {
@@ -43,6 +48,14 @@ function renderWithTheme(ui: ReactNode, options?: { defaultTheme?: string }) {
   )
 }
 
+async function waitForThemeToggleReady() {
+  await waitFor(() => {
+    expect(
+      screen.getByRole('button', { name: /toggle theme/i }),
+    ).not.toBeDisabled()
+  })
+}
+
 describe('ModeToggle', () => {
   beforeEach(() => {
     localStorage.removeItem(STORAGE_KEY)
@@ -50,25 +63,34 @@ describe('ModeToggle', () => {
     mockMatchMedia(false)
   })
 
-  it('exposes an accessible toggle trigger', async () => {
+  it('exposes an accessible toggle trigger with name "Toggle theme"', async () => {
     renderWithTheme(<ModeToggle />, { defaultTheme: 'light' })
 
+    const trigger = await screen.findByRole('button', { name: /toggle theme/i })
     await waitFor(() => {
-      expect(
-        screen.getByRole('button', { name: /toggle theme/i }),
-      ).not.toBeDisabled()
+      expect(trigger).not.toBeDisabled()
     })
+    expect(trigger).toHaveAttribute('aria-label', 'Toggle theme')
+  })
+
+  it('always exposes an accessible name and becomes interactive after mount gate', async () => {
+    // Mounted gate avoids theme/icon flicker: first paint may be a disabled
+    // placeholder, then the live control. Tests wait for readiness so they
+    // do not flake on the first render frame.
+    renderWithTheme(<ModeToggle />, { defaultTheme: 'light' })
+
+    const trigger = screen.getByRole('button', { name: /toggle theme/i })
+    expect(trigger).toHaveAttribute('aria-label', 'Toggle theme')
+    expect(trigger).toHaveTextContent(/toggle theme/i) // sr-only label
+
+    await waitForThemeToggleReady()
+    expect(trigger).not.toBeDisabled()
   })
 
   it('selecting Dark applies dark class and persists preference', async () => {
     const user = userEvent.setup()
     renderWithTheme(<ModeToggle />, { defaultTheme: 'light' })
-
-    await waitFor(() => {
-      expect(
-        screen.getByRole('button', { name: /toggle theme/i }),
-      ).not.toBeDisabled()
-    })
+    await waitForThemeToggleReady()
 
     await user.click(screen.getByRole('button', { name: /toggle theme/i }))
     await user.click(await screen.findByRole('menuitemradio', { name: /dark/i }))
@@ -85,12 +107,7 @@ describe('ModeToggle', () => {
     document.documentElement.classList.add('dark')
 
     renderWithTheme(<ModeToggle />, { defaultTheme: 'dark' })
-
-    await waitFor(() => {
-      expect(
-        screen.getByRole('button', { name: /toggle theme/i }),
-      ).not.toBeDisabled()
-    })
+    await waitForThemeToggleReady()
 
     await user.click(screen.getByRole('button', { name: /toggle theme/i }))
     await user.click(await screen.findByRole('menuitemradio', { name: /light/i }))
@@ -101,17 +118,12 @@ describe('ModeToggle', () => {
     })
   })
 
-  it('selecting System follows OS preference and persists', async () => {
+  it('selecting System follows OS dark preference and persists', async () => {
     const user = userEvent.setup()
     mockMatchMedia(true) // OS prefers dark
 
     renderWithTheme(<ModeToggle />, { defaultTheme: 'light' })
-
-    await waitFor(() => {
-      expect(
-        screen.getByRole('button', { name: /toggle theme/i }),
-      ).not.toBeDisabled()
-    })
+    await waitForThemeToggleReady()
 
     await user.click(screen.getByRole('button', { name: /toggle theme/i }))
     await user.click(
@@ -124,15 +136,30 @@ describe('ModeToggle', () => {
     })
   })
 
-  it('indicates the active preference with a radio check', async () => {
+  it('selecting System follows OS light preference and persists', async () => {
     const user = userEvent.setup()
-    renderWithTheme(<ModeToggle />, { defaultTheme: 'light' })
+    mockMatchMedia(false) // OS prefers light
+    localStorage.setItem(STORAGE_KEY, 'dark')
+    document.documentElement.classList.add('dark')
+
+    renderWithTheme(<ModeToggle />, { defaultTheme: 'dark' })
+    await waitForThemeToggleReady()
+
+    await user.click(screen.getByRole('button', { name: /toggle theme/i }))
+    await user.click(
+      await screen.findByRole('menuitemradio', { name: /system/i }),
+    )
 
     await waitFor(() => {
-      expect(
-        screen.getByRole('button', { name: /toggle theme/i }),
-      ).not.toBeDisabled()
+      expect(localStorage.getItem(STORAGE_KEY)).toBe('system')
+      expect(document.documentElement.classList.contains('dark')).toBe(false)
     })
+  })
+
+  it('indicates the active preference with aria-checked (non-color cue)', async () => {
+    const user = userEvent.setup()
+    renderWithTheme(<ModeToggle />, { defaultTheme: 'light' })
+    await waitForThemeToggleReady()
 
     await user.click(screen.getByRole('button', { name: /toggle theme/i }))
 
@@ -143,6 +170,38 @@ describe('ModeToggle', () => {
 
     const darkItem = screen.getByRole('menuitemradio', { name: /dark/i })
     expect(darkItem).toHaveAttribute('aria-checked', 'false')
+
+    const systemItem = screen.getByRole('menuitemradio', { name: /system/i })
+    expect(systemItem).toHaveAttribute('aria-checked', 'false')
+  })
+
+  it('is operable via keyboard (open menu, select Dark)', async () => {
+    const user = userEvent.setup()
+    renderWithTheme(<ModeToggle />, { defaultTheme: 'light' })
+    await waitForThemeToggleReady()
+
+    const trigger = screen.getByRole('button', { name: /toggle theme/i })
+    trigger.focus()
+    expect(trigger).toHaveFocus()
+
+    await user.keyboard('{Enter}')
+    const darkItem = await screen.findByRole('menuitemradio', { name: /dark/i })
+    expect(darkItem).toBeInTheDocument()
+
+    await user.click(darkItem)
+
+    await waitFor(() => {
+      expect(localStorage.getItem(STORAGE_KEY)).toBe('dark')
+      expect(document.documentElement.classList.contains('dark')).toBe(true)
+    })
+  })
+
+  it('ThemeToggleButton is an alias of ModeToggle', async () => {
+    renderWithTheme(<ThemeToggleButton />, { defaultTheme: 'light' })
+    await waitForThemeToggleReady()
+    expect(
+      screen.getByRole('button', { name: /toggle theme/i }),
+    ).toBeInTheDocument()
   })
 })
 
