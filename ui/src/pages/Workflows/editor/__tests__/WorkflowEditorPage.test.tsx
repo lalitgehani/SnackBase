@@ -41,7 +41,7 @@ describe('WorkflowEditorPage', () => {
         vi.clearAllMocks();
     });
 
-    it('renders new workflow editor shell', async () => {
+    it('renders new workflow editor shell with trigger and palette', async () => {
         renderEditor('/admin/workflows/new');
 
         expect(await screen.findByTestId('workflow-editor-page')).toBeInTheDocument();
@@ -50,6 +50,19 @@ describe('WorkflowEditorPage', () => {
         expect(screen.getByTestId('workflow-editor-palette')).toBeInTheDocument();
         expect(screen.getByTestId('workflow-editor-properties')).toBeInTheDocument();
         expect(screen.getByTestId('workflow-canvas')).toBeInTheDocument();
+        expect(screen.getByTestId('workflow-node-trigger')).toBeInTheDocument();
+        expect(screen.getByTestId('palette-item-action')).toBeInTheDocument();
+        expect(screen.getByTestId('palette-item-condition')).toBeInTheDocument();
+    });
+
+    it('adds a step from palette click', async () => {
+        const user = userEvent.setup();
+        renderEditor('/admin/workflows/new');
+        await screen.findByTestId('workflow-editor-page');
+
+        await user.click(screen.getByTestId('palette-item-condition'));
+        expect(await screen.findByTestId('workflow-node-condition')).toBeInTheDocument();
+        expect(screen.getByTestId('properties-condition')).toBeInTheDocument();
     });
 
     it('loads existing workflow on edit route', async () => {

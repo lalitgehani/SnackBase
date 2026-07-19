@@ -1,17 +1,16 @@
 /**
  * Full-page workflow visual editor (create + edit).
- * Phase 1: shell, canvas, header metadata, save/load via graphMapper.
- * Trigger is workflow-level (not a canvas node until Phase 2.1).
- * Step palette/properties panels are placeholders until Phase 2.
+ * Phase 2: trigger node, custom cards, palette, properties, edge wiring.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import {
     useNodesState,
     useEdgesState,
     type Node,
     type Edge,
+    type OnSelectionChangeParams,
 } from '@xyflow/react';
 import { ArrowLeft, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -19,77 +18,49 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import {
     workflowsService,
     type Workflow,
+    type WorkflowStep,
     type WorkflowTriggerConfig,
 } from '@/services/workflows.service';
-import { WORKFLOW_EVENTS } from '../WorkflowFormFields';
+import type { StepTypeValue } from '../workflowConstants';
 import { WorkflowCanvas } from './WorkflowCanvas';
-import { stepsToFlow, flowToSteps } from './graphMapper';
+import {
+    stepsToFlow,
+    flowToPayload,
+    createEmptyFlow,
+    isStepNodeData,
+    isTriggerNodeData,
+} from './graphMapper';
 import { validateStepNames, validateGraphEdges } from './graphValidation';
-
-type TriggerType = 'event' | 'schedule' | 'manual' | 'webhook';
+import {
+    createDefaultStep,
+    generateUniqueStepName,
+    removeNodeAndEdges,
+    renameNode,
+} from './nodeDefaults';
+import { NodePalette } from './palette/NodePalette';
+import { PropertiesPanel } from './properties/PropertiesPanel';
 
 interface EditorMeta {
     name: string;
     description: string;
     enabled: boolean;
-    triggerType: TriggerType;
-    triggerEvent: string;
-    triggerCollection: string;
-    triggerCondition: string;
-    triggerCron: string;
 }
 
 const DEFAULT_META: EditorMeta = {
     name: '',
     description: '',
     enabled: true,
-    triggerType: 'manual',
-    triggerEvent: 'records.create',
-    triggerCollection: '',
-    triggerCondition: '',
-    triggerCron: '0 9 * * *',
 };
 
-function metaToTrigger(meta: EditorMeta): WorkflowTriggerConfig {
-    switch (meta.triggerType) {
-        case 'event':
-            return {
-                type: 'event',
-                event: meta.triggerEvent,
-                ...(meta.triggerCollection ? { collection: meta.triggerCollection } : {}),
-                ...(meta.triggerCondition ? { condition: meta.triggerCondition } : {}),
-            };
-        case 'schedule':
-            return { type: 'schedule', cron: meta.triggerCron };
-        case 'webhook':
-            return { type: 'webhook' };
-        default:
-            return { type: 'manual' };
-    }
-}
-
 function workflowToMeta(wf: Workflow): EditorMeta {
-    const tc = wf.trigger_config;
     return {
         name: wf.name,
         description: wf.description ?? '',
         enabled: wf.enabled,
-        triggerType: (wf.trigger_type as TriggerType) || 'manual',
-        triggerEvent: tc.type === 'event' ? tc.event : 'records.create',
-        triggerCollection: tc.type === 'event' ? (tc.collection ?? '') : '',
-        triggerCondition: tc.type === 'event' ? (tc.condition ?? '') : '',
-        triggerCron: tc.type === 'schedule' ? tc.cron : '0 9 * * *',
     };
 }
 
@@ -102,22 +73,30 @@ export default function WorkflowEditorPage() {
     const [meta, setMeta] = useState<EditorMeta>(DEFAULT_META);
     const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+    const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
     const [loading, setLoading] = useState(isEdit);
     const [saving, setSaving] = useState(false);
     const [loadError, setLoadError] = useState<string | null>(null);
+
+    const nodesRef = useRef(nodes);
+    const edgesRef = useRef(edges);
+    nodesRef.current = nodes;
+    edgesRef.current = edges;
 
     const setMetaField = useCallback(<K extends keyof EditorMeta>(key: K, value: EditorMeta[K]) => {
         setMeta((prev) => ({ ...prev, [key]: value }));
     }, []);
 
-    // Load existing workflow in edit mode
+    // Load existing workflow or seed new graph
     useEffect(() => {
         if (!id) {
             setLoading(false);
             setLoadError(null);
             setMeta(DEFAULT_META);
-            setNodes([]);
-            setEdges([]);
+            const empty = createEmptyFlow({ type: 'manual' });
+            setNodes(empty.nodes);
+            setEdges(empty.edges);
+            setSelectedNodeId(null);
             return;
         }
 
@@ -133,6 +112,7 @@ export default function WorkflowEditorPage() {
                 const graph = stepsToFlow(wf.steps, wf.trigger_config);
                 setNodes(graph.nodes);
                 setEdges(graph.edges);
+                setSelectedNodeId(null);
             } catch {
                 if (!cancelled) {
                     setLoadError('Workflow not found or failed to load.');
@@ -147,6 +127,150 @@ export default function WorkflowEditorPage() {
         };
     }, [id, setNodes, setEdges]);
 
+    // Listen for delete from node card hover control
+    useEffect(() => {
+        const handler = (e: Event) => {
+            const detail = (e as CustomEvent<{ nodeId: string }>).detail;
+            if (!detail?.nodeId) return;
+            const result = removeNodeAndEdges(nodesRef.current, edgesRef.current, detail.nodeId);
+            setNodes(result.nodes);
+            setEdges(result.edges);
+            setSelectedNodeId((cur) => (cur === detail.nodeId ? null : cur));
+        };
+        window.addEventListener('workflow-node-delete', handler);
+        return () => window.removeEventListener('workflow-node-delete', handler);
+    }, [setNodes, setEdges]);
+
+    const onSelectionChange = useCallback(({ nodes: selected }: OnSelectionChangeParams) => {
+        setSelectedNodeId(selected[0]?.id ?? null);
+    }, []);
+
+    const addStepAt = useCallback(
+        (stepType: StepTypeValue, position: { x: number; y: number }) => {
+            setNodes((nds) => {
+                const name = generateUniqueStepName(
+                    stepType,
+                    nds.map((n) => n.id),
+                );
+                const step = createDefaultStep(stepType, name);
+                const node: Node = {
+                    id: name,
+                    type: stepType,
+                    position,
+                    selected: true,
+                    data: {
+                        kind: 'step',
+                        label: name,
+                        step,
+                    },
+                };
+                // Deselect others
+                const cleared = nds.map((n) => ({ ...n, selected: false }));
+                setSelectedNodeId(name);
+                return [...cleared, node];
+            });
+        },
+        [setNodes],
+    );
+
+    const handleAddFromPalette = useCallback(
+        (stepType: StepTypeValue) => {
+            // Place near center-right of existing content
+            const xs = nodes.map((n) => n.position.x);
+            const ys = nodes.map((n) => n.position.y);
+            const x = xs.length ? Math.max(...xs) + 220 : 320;
+            const y = ys.length ? ys.reduce((a, b) => a + b, 0) / ys.length : 120;
+            addStepAt(stepType, { x, y });
+        },
+        [nodes, addStepAt],
+    );
+
+    const handleDropStepType = useCallback(
+        (stepType: StepTypeValue, position: { x: number; y: number }) => {
+            addStepAt(stepType, position);
+        },
+        [addStepAt],
+    );
+
+    const handleConnectEdges = useCallback(
+        (next: Edge[]) => {
+            setEdges(next);
+        },
+        [setEdges],
+    );
+
+    const handleUpdateTrigger = useCallback(
+        (trigger: WorkflowTriggerConfig) => {
+            setNodes((nds) =>
+                nds.map((n) => {
+                    if (!isTriggerNodeData(n.data) && n.type !== 'trigger') return n;
+                    return {
+                        ...n,
+                        data: {
+                            kind: 'trigger' as const,
+                            label: 'Trigger',
+                            trigger,
+                        },
+                    };
+                }),
+            );
+        },
+        [setNodes],
+    );
+
+    const handleUpdateStep = useCallback(
+        (nodeId: string, step: WorkflowStep) => {
+            setNodes((nds) =>
+                nds.map((n) => {
+                    if (n.id !== nodeId) return n;
+                    return {
+                        ...n,
+                        data: {
+                            kind: 'step' as const,
+                            label: step.name || n.id,
+                            step: { ...step, name: step.name || n.id },
+                        },
+                    };
+                }),
+            );
+        },
+        [setNodes],
+    );
+
+    const handleRenameStep = useCallback(
+        (nodeId: string, newName: string) => {
+            const trimmed = newName.trim();
+            if (!trimmed || trimmed === nodeId) {
+                // Still sync label if only whitespace difference on empty attempt
+                if (!trimmed) return;
+            }
+            setNodes((nds) => {
+                const result = renameNode(
+                    nds as { id: string; data?: Record<string, unknown>; [k: string]: unknown }[],
+                    edges as { id: string; source: string; target: string; [k: string]: unknown }[],
+                    nodeId,
+                    trimmed,
+                );
+                setEdges(result.edges as Edge[]);
+                if (trimmed !== nodeId) {
+                    setSelectedNodeId(trimmed);
+                }
+                return result.nodes as Node[];
+            });
+        },
+        [edges, setNodes, setEdges],
+    );
+
+    const handleDeleteNode = useCallback(
+        (nodeId: string) => {
+            const result = removeNodeAndEdges(nodes, edges, nodeId);
+            setNodes(result.nodes);
+            setEdges(result.edges);
+            setSelectedNodeId((cur) => (cur === nodeId ? null : cur));
+        },
+        [nodes, edges, setNodes, setEdges],
+    );
+
     const title = useMemo(() => {
         if (isEdit) return meta.name || 'Edit Workflow';
         return 'New Workflow';
@@ -158,7 +282,7 @@ export default function WorkflowEditorPage() {
             return;
         }
 
-        const steps = flowToSteps(nodes, edges);
+        const { trigger, steps } = flowToPayload(nodes, edges);
         const nameError = validateStepNames(steps);
         if (nameError) {
             toast({ title: nameError, variant: 'destructive' });
@@ -170,9 +294,32 @@ export default function WorkflowEditorPage() {
             return;
         }
 
+        // Validate action configs are objects
+        for (const s of steps) {
+            if (s.type === 'action' && s.config != null && typeof s.config !== 'object') {
+                toast({
+                    title: `Action "${s.name}" has invalid config JSON`,
+                    variant: 'destructive',
+                });
+                return;
+            }
+        }
+
+        // Flag action nodes still holding invalid JSON in panel: config must be object
+        for (const n of nodes) {
+            if (!isStepNodeData(n.data) || n.data.step.type !== 'action') continue;
+            const cfg = n.data.step.config;
+            if (cfg !== undefined && cfg !== null && (typeof cfg !== 'object' || Array.isArray(cfg))) {
+                toast({
+                    title: `Action "${n.id}" has invalid config`,
+                    variant: 'destructive',
+                });
+                return;
+            }
+        }
+
         setSaving(true);
         try {
-            const trigger = metaToTrigger(meta);
             if (isEdit && id) {
                 await workflowsService.update(id, {
                     name: meta.name.trim(),
@@ -182,7 +329,6 @@ export default function WorkflowEditorPage() {
                     enabled: meta.enabled,
                 });
                 toast({ title: 'Workflow updated' });
-                // Re-hydrate from local state is fine; optionally re-fetch
             } else {
                 const created = await workflowsService.create({
                     name: meta.name.trim(),
@@ -230,7 +376,6 @@ export default function WorkflowEditorPage() {
             className="flex flex-col h-full min-h-0 bg-background"
             data-testid="workflow-editor-page"
         >
-            {/* Editor chrome */}
             <header className="flex flex-wrap items-center gap-3 border-b px-4 py-3 shrink-0 bg-background">
                 <Button variant="ghost" size="sm" asChild>
                     <Link to="/admin/workflows" className="gap-1.5">
@@ -266,60 +411,6 @@ export default function WorkflowEditorPage() {
                             Enabled
                         </Label>
                     </div>
-
-                    <div className="flex items-center gap-2">
-                        <Label className="text-xs text-muted-foreground shrink-0">Trigger</Label>
-                        <Select
-                            value={meta.triggerType}
-                            onValueChange={(v) => setMetaField('triggerType', v as TriggerType)}
-                        >
-                            <SelectTrigger className="w-32 h-9" data-testid="workflow-editor-trigger-type">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="manual">Manual</SelectItem>
-                                <SelectItem value="event">Event</SelectItem>
-                                <SelectItem value="schedule">Schedule</SelectItem>
-                                <SelectItem value="webhook">Webhook</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    {meta.triggerType === 'event' && (
-                        <Select
-                            value={meta.triggerEvent}
-                            onValueChange={(v) => setMetaField('triggerEvent', v)}
-                        >
-                            <SelectTrigger className="w-48 h-9">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {WORKFLOW_EVENTS.map((ev) => (
-                                    <SelectItem key={ev.value} value={ev.value}>
-                                        {ev.label}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    )}
-
-                    {meta.triggerType === 'event' && (
-                        <Input
-                            className="h-9 w-36"
-                            placeholder="Collection"
-                            value={meta.triggerCollection}
-                            onChange={(e) => setMetaField('triggerCollection', e.target.value)}
-                        />
-                    )}
-
-                    {meta.triggerType === 'schedule' && (
-                        <Input
-                            className="h-9 w-36 font-mono text-xs"
-                            placeholder="Cron"
-                            value={meta.triggerCron}
-                            onChange={(e) => setMetaField('triggerCron', e.target.value)}
-                        />
-                    )}
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
@@ -333,7 +424,6 @@ export default function WorkflowEditorPage() {
                 </div>
             </header>
 
-            {/* Optional description row */}
             <div className="border-b px-4 py-2 shrink-0">
                 <Input
                     value={meta.description}
@@ -343,61 +433,43 @@ export default function WorkflowEditorPage() {
                     data-testid="workflow-editor-description"
                 />
                 <p className="text-xs text-muted-foreground mt-0.5 truncate" title={title}>
-                    {isEdit ? `Editing · ${id}` : 'Create a new workflow · drag nodes once steps are loaded'}
+                    {isEdit
+                        ? `Editing · ${id}`
+                        : 'Drag steps from the palette · connect handles to set flow'}
                 </p>
             </div>
 
-            {/* Three-pane body */}
             <div className="flex flex-1 min-h-0">
-                {/* Left palette placeholder */}
-                <aside
-                    className="w-[220px] shrink-0 border-r bg-muted/20 p-4 flex flex-col gap-2"
-                    data-testid="workflow-editor-palette"
-                >
-                    <p className="text-sm font-medium">Palette</p>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                        Step types will appear here in a later release. For now, open an existing
-                        workflow to reposition steps, or create an empty workflow and add steps via
-                        the API / legacy tools.
-                    </p>
-                </aside>
+                <div className="w-[220px] shrink-0 border-r bg-muted/20">
+                    <NodePalette onAddStep={handleAddFromPalette} />
+                </div>
 
-                {/* Center canvas */}
                 <main className="flex-1 min-w-0 min-h-0 relative">
                     <WorkflowCanvas
                         nodes={nodes}
                         edges={edges}
                         onNodesChange={onNodesChange}
                         onEdgesChange={onEdgesChange}
+                        onConnectEdges={handleConnectEdges}
+                        onSelectionChange={onSelectionChange}
+                        onDropStepType={handleDropStepType}
                         className="absolute inset-0"
                     />
                 </main>
 
-                {/* Right properties placeholder */}
-                <aside
-                    className="w-[280px] shrink-0 border-l bg-muted/20 p-4 flex flex-col gap-2"
-                    data-testid="workflow-editor-properties"
-                >
-                    <p className="text-sm font-medium">Properties</p>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                        Select a node to edit its configuration here (coming soon). Workflow name,
-                        enabled state, and trigger are edited in the header.
-                    </p>
-                    {nodes.length > 0 && (
-                        <div className="mt-4 space-y-1">
-                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                                Steps ({nodes.length})
-                            </p>
-                            <ul className="text-xs space-y-1 max-h-48 overflow-y-auto">
-                                {nodes.map((n) => (
-                                    <li key={n.id} className="font-mono truncate">
-                                        {n.id}
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
-                    )}
-                </aside>
+                <div className="w-[300px] shrink-0 border-l bg-muted/20">
+                    <PropertiesPanel
+                        nodes={nodes}
+                        edges={edges}
+                        selectedNodeId={selectedNodeId}
+                        meta={meta}
+                        onMetaChange={setMetaField}
+                        onUpdateTrigger={handleUpdateTrigger}
+                        onUpdateStep={handleUpdateStep}
+                        onRenameStep={handleRenameStep}
+                        onDeleteNode={handleDeleteNode}
+                    />
+                </div>
             </div>
         </div>
     );

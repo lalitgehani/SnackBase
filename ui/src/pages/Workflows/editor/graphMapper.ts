@@ -1,26 +1,40 @@
 /**
  * Bidirectional mapping between backend workflow steps and React Flow graph state.
  *
- * Node identity: React Flow node `id` equals step `name`. Renames rewrite the id
- * and all edges that reference it (Phase 2 will surface rename UI).
+ * Node identity: React Flow node `id` equals step `name` for steps.
+ * Trigger uses fixed id TRIGGER_NODE_ID and is never serialized into steps[].
  *
- * Trigger remains API-level fields in Phase 1; `trigger` is accepted for F2.1
- * compatibility but does not emit a canvas node yet.
+ * Control flow is rebuilt exclusively from edges → next / on_true / on_false.
  */
 
 import type { Edge, Node } from '@xyflow/react';
 import type { WorkflowStep, WorkflowTriggerConfig } from '@/services/workflows.service';
+import {
+    DEFAULT_TRIGGER_POSITION,
+    TRIGGER_NODE_ID,
+} from '../workflowConstants';
+import { decorateEdge } from './connectionRules';
 
 export interface FlowGraph {
     nodes: Node[];
     edges: Edge[];
 }
 
-/** Step payload stored on each RF node for round-trip fidelity. */
+/** Step payload stored on each RF step node. */
 export interface StepNodeData extends Record<string, unknown> {
+    kind: 'step';
     label: string;
     step: WorkflowStep;
 }
+
+/** Trigger payload stored on the single trigger node. */
+export interface TriggerNodeData extends Record<string, unknown> {
+    kind: 'trigger';
+    label: string;
+    trigger: WorkflowTriggerConfig;
+}
+
+export type WorkflowNodeData = StepNodeData | TriggerNodeData;
 
 const CONTROL_FLOW_KEYS = new Set(['next', 'on_true', 'on_false', 'position_x', 'position_y']);
 
@@ -28,27 +42,102 @@ function asNumber(value: unknown, fallback = 0): number {
     return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
 
+export function isTriggerNode(node: Node): boolean {
+    return node.id === TRIGGER_NODE_ID || node.type === 'trigger';
+}
+
+export function isStepNodeData(data: unknown): data is StepNodeData {
+    return (
+        typeof data === 'object' &&
+        data !== null &&
+        (data as StepNodeData).kind === 'step' &&
+        typeof (data as StepNodeData).step === 'object'
+    );
+}
+
+export function isTriggerNodeData(data: unknown): data is TriggerNodeData {
+    return (
+        typeof data === 'object' &&
+        data !== null &&
+        (data as TriggerNodeData).kind === 'trigger' &&
+        typeof (data as TriggerNodeData).trigger === 'object'
+    );
+}
+
+/** Human-readable subtitle for a trigger config. */
+export function triggerSummary(trigger: WorkflowTriggerConfig): string {
+    switch (trigger.type) {
+        case 'event': {
+            const parts = [trigger.event];
+            if (trigger.collection) parts.push(trigger.collection);
+            return `Event · ${parts.join(' · ')}`;
+        }
+        case 'schedule':
+            return `Schedule · ${trigger.cron}`;
+        case 'webhook':
+            return 'Webhook';
+        case 'manual':
+        default:
+            return 'Manual';
+    }
+}
+
+function createTriggerNode(
+    trigger: WorkflowTriggerConfig,
+    position: { x: number; y: number } = DEFAULT_TRIGGER_POSITION,
+): Node {
+    return {
+        id: TRIGGER_NODE_ID,
+        type: 'trigger',
+        position,
+        deletable: false,
+        data: {
+            kind: 'trigger',
+            label: 'Trigger',
+            trigger,
+        } satisfies TriggerNodeData,
+    };
+}
+
 /**
- * Convert backend steps to React Flow nodes/edges.
- * Missing positions default to 0,0.
+ * Convert backend steps (+ optional trigger) to React Flow nodes/edges.
+ * Always emits a trigger node when `trigger` is provided; defaults to manual.
  */
 export function stepsToFlow(
     steps: WorkflowStep[],
-    _trigger?: WorkflowTriggerConfig | null,
+    trigger?: WorkflowTriggerConfig | null,
 ): FlowGraph {
-    const nodes: Node[] = steps.map((step, index) => {
+    const triggerConfig: WorkflowTriggerConfig = trigger ?? { type: 'manual' };
+
+    // Place trigger left of first step when steps exist with positions
+    let triggerPos = { ...DEFAULT_TRIGGER_POSITION };
+    if (steps.length > 0) {
+        const xs = steps.map((s) => asNumber(s.position_x, 0));
+        const ys = steps.map((s) => asNumber(s.position_y, 0));
+        const minX = Math.min(...xs);
+        const avgY = ys.reduce((a, b) => a + b, 0) / ys.length;
+        triggerPos = { x: minX - 220, y: avgY };
+        if (!Number.isFinite(triggerPos.x)) triggerPos = { ...DEFAULT_TRIGGER_POSITION };
+        if (!Number.isFinite(triggerPos.y)) triggerPos.y = DEFAULT_TRIGGER_POSITION.y;
+    }
+
+    const triggerNode = createTriggerNode(triggerConfig, triggerPos);
+
+    const stepNodes: Node[] = steps.map((step, index) => {
         const name = step.name || `step_${index}`;
+        const stepType = typeof step.type === 'string' && step.type ? step.type : 'action';
         return {
             id: name,
+            type: stepType,
             position: {
                 x: asNumber(step.position_x, 0),
                 y: asNumber(step.position_y, 0),
             },
             data: {
+                kind: 'step',
                 label: name,
-                step: { ...step },
+                step: { ...step, name, type: stepType },
             } satisfies StepNodeData,
-            // Default RF node type until Phase 2 custom cards
         };
     });
 
@@ -67,6 +156,7 @@ export function stepsToFlow(
                     target: onTrue,
                     sourceHandle: 'true',
                     label: 'true',
+                    type: 'smoothstep',
                 });
             }
             if (typeof onFalse === 'string' && onFalse) {
@@ -76,9 +166,9 @@ export function stepsToFlow(
                     target: onFalse,
                     sourceHandle: 'false',
                     label: 'false',
+                    type: 'smoothstep',
                 });
             }
-            // Condition steps may also have `next` in some legacy data; ignore if branches exist
             continue;
         }
 
@@ -88,33 +178,77 @@ export function stepsToFlow(
                 id: `${name}->${next}`,
                 source: name,
                 target: next,
+                type: 'smoothstep',
             });
         }
     }
 
-    return { nodes, edges };
+    // Optional heuristic: if exactly one step has no inbound edges, connect trigger → that step
+    const stepIds = new Set(stepNodes.map((n) => n.id));
+    const inbound = new Set(edges.map((e) => e.target));
+    const roots = [...stepIds].filter((id) => !inbound.has(id));
+    if (roots.length === 1) {
+        const root = roots[0];
+        edges.unshift({
+            id: `${TRIGGER_NODE_ID}->${root}`,
+            source: TRIGGER_NODE_ID,
+            target: root,
+            type: 'smoothstep',
+        });
+    }
+
+    const nodes = [triggerNode, ...stepNodes];
+    const decorated = edges.map((e) => decorateEdge(e, nodes));
+
+    return { nodes, edges: decorated };
 }
 
 /**
- * Convert React Flow state back to backend steps.
- * Control flow is rebuilt exclusively from edges.
- * Positions are written as position_x / position_y.
+ * Seed graph for a new workflow (trigger only).
+ */
+export function createEmptyFlow(
+    trigger: WorkflowTriggerConfig = { type: 'manual' },
+): FlowGraph {
+    return {
+        nodes: [createTriggerNode(trigger)],
+        edges: [],
+    };
+}
+
+/**
+ * Extract trigger config from the canvas trigger node.
+ */
+export function extractTriggerFromFlow(nodes: Node[]): WorkflowTriggerConfig {
+    const t = nodes.find((n) => isTriggerNode(n));
+    if (t && isTriggerNodeData(t.data)) {
+        return t.data.trigger;
+    }
+    return { type: 'manual' };
+}
+
+/**
+ * Convert React Flow state back to backend steps (excludes trigger).
+ * Control flow is rebuilt exclusively from edges among step nodes.
  */
 export function flowToSteps(nodes: Node[], edges: Edge[]): WorkflowStep[] {
-    // Stable order: original index in data if present, else y then x
-    const sorted = [...nodes].sort((a, b) => {
+    const stepNodes = nodes.filter((n) => !isTriggerNode(n));
+
+    // Stable order: y then x
+    const sorted = [...stepNodes].sort((a, b) => {
         const ay = a.position.y;
         const by = b.position.y;
         if (ay !== by) return ay - by;
         return a.position.x - b.position.x;
     });
 
+    // Ignore edges from/to trigger for step control-flow fields
+    const stepEdges = edges.filter(
+        (e) => e.source !== TRIGGER_NODE_ID && e.target !== TRIGGER_NODE_ID,
+    );
+
     const edgesBySource = new Map<string, Edge[]>();
-    for (const edge of edges) {
-        if (edge.source === edge.target) {
-            // Skip self-edges; validation surfaces them separately
-            continue;
-        }
+    for (const edge of stepEdges) {
+        if (edge.source === edge.target) continue;
         const list = edgesBySource.get(edge.source) ?? [];
         list.push(edge);
         edgesBySource.set(edge.source, list);
@@ -126,16 +260,17 @@ export function flowToSteps(nodes: Node[], edges: Edge[]): WorkflowStep[] {
             data?.step && typeof data.step === 'object'
                 ? { ...data.step }
                 : {
-                      type: 'action',
+                      type: (node.type as string) || 'action',
                       name: node.id,
                   };
 
-        // Ensure name matches node id (canonical identity)
         baseStep.name = node.id;
+        if (!baseStep.type) {
+            baseStep.type = (node.type as string) || 'action';
+        }
         baseStep.position_x = node.position.x;
         baseStep.position_y = node.position.y;
 
-        // Strip old control-flow keys then rebuild from edges
         delete baseStep.next;
         delete baseStep.on_true;
         delete baseStep.on_false;
@@ -148,21 +283,18 @@ export function flowToSteps(nodes: Node[], edges: Edge[]): WorkflowStep[] {
                 } else if (edge.sourceHandle === 'false') {
                     baseStep.on_false = edge.target;
                 } else if (!baseStep.on_true) {
-                    // Fallback: unlabeled first edge as true branch
                     baseStep.on_true = edge.target;
                 } else if (!baseStep.on_false) {
                     baseStep.on_false = edge.target;
                 }
             }
         } else {
-            // Linear next: prefer single unlabeled edge; if multiple, first wins
             const linear = outgoing.find((e) => !e.sourceHandle) ?? outgoing[0];
             if (linear) {
                 baseStep.next = linear.target;
             }
         }
 
-        // Drop undefined control-flow leftovers that might confuse equality tests
         for (const key of CONTROL_FLOW_KEYS) {
             if (key === 'position_x' || key === 'position_y') continue;
             if (baseStep[key] === undefined) {
@@ -172,4 +304,15 @@ export function flowToSteps(nodes: Node[], edges: Edge[]): WorkflowStep[] {
 
         return baseStep;
     });
+}
+
+/** Convenience for save: trigger + steps from canvas. */
+export function flowToPayload(
+    nodes: Node[],
+    edges: Edge[],
+): { trigger: WorkflowTriggerConfig; steps: WorkflowStep[] } {
+    return {
+        trigger: extractTriggerFromFlow(nodes),
+        steps: flowToSteps(nodes, edges),
+    };
 }

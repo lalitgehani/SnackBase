@@ -26,15 +26,25 @@ describe('WorkflowCanvas', () => {
         expect(screen.getByTestId('workflow-canvas')).toBeInTheDocument();
     });
 
-    it('renders nodes when provided', () => {
+    it('renders action card nodes when provided', () => {
         render(
             <div style={{ width: 800, height: 600 }}>
                 <WorkflowCanvas
                     nodes={[
                         {
                             id: 'step_a',
+                            type: 'action',
                             position: { x: 0, y: 0 },
-                            data: { label: 'step_a' },
+                            data: {
+                                kind: 'step',
+                                label: 'step_a',
+                                step: {
+                                    type: 'action',
+                                    name: 'step_a',
+                                    action_type: 'send_webhook',
+                                    config: {},
+                                },
+                            },
                         },
                     ]}
                     edges={[]}
@@ -45,7 +55,39 @@ describe('WorkflowCanvas', () => {
         );
 
         expect(screen.getByTestId('workflow-canvas')).toBeInTheDocument();
-        // RF renders node labels in the DOM
+        expect(screen.getByTestId('workflow-node-action')).toBeInTheDocument();
         expect(screen.getByText('step_a')).toBeInTheDocument();
+    });
+
+    it('renders condition with dual handles', () => {
+        render(
+            <div style={{ width: 800, height: 600 }}>
+                <WorkflowCanvas
+                    nodes={[
+                        {
+                            id: 'check',
+                            type: 'condition',
+                            position: { x: 0, y: 0 },
+                            data: {
+                                kind: 'step',
+                                label: 'check',
+                                step: {
+                                    type: 'condition',
+                                    name: 'check',
+                                    expression: 'x > 1',
+                                },
+                            },
+                        },
+                    ]}
+                    edges={[]}
+                    onNodesChange={() => {}}
+                    onEdgesChange={() => {}}
+                />
+            </div>,
+        );
+
+        expect(screen.getByTestId('workflow-node-condition')).toBeInTheDocument();
+        expect(screen.getByTestId('condition-handle-true')).toBeInTheDocument();
+        expect(screen.getByTestId('condition-handle-false')).toBeInTheDocument();
     });
 });

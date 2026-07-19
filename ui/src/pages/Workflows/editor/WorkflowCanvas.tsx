@@ -1,9 +1,9 @@
 /**
  * React Flow host for the workflow visual editor.
- * Phase 1: default nodes, Background grid, Controls, MiniMap.
+ * Phase 2: custom nodes, connections, palette drop target.
  */
 
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
     ReactFlow,
     ReactFlowProvider,
@@ -16,36 +16,86 @@ import {
     type Edge,
     type OnNodesChange,
     type OnEdgesChange,
+    type OnConnect,
+    type OnSelectionChangeFunc,
     type NodeTypes,
+    type Connection,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import { workflowNodeTypes } from './nodes';
+import { applyConnection, validateConnection } from './connectionRules';
+import { PALETTE_DND_TYPE, type StepTypeValue } from '../workflowConstants';
 
 export interface WorkflowCanvasProps {
     nodes: Node[];
     edges: Edge[];
     onNodesChange: OnNodesChange;
     onEdgesChange: OnEdgesChange;
-    /** Optional custom node types (Phase 2). */
+    onConnectEdges?: (edges: Edge[]) => void;
+    onSelectionChange?: OnSelectionChangeFunc;
+    onDropStepType?: (stepType: StepTypeValue, position: { x: number; y: number }) => void;
     nodeTypes?: NodeTypes;
     className?: string;
-    /** When true, nodes/edges are not editable (future overview). */
     readOnly?: boolean;
 }
 
 function FitViewOnLoad({ nodeCount }: { nodeCount: number }) {
     const { fitView } = useReactFlow();
+    const fittedFor = useRef<number | null>(null);
 
     useEffect(() => {
-        if (nodeCount > 0) {
-            // Small delay so layout has measured node sizes
+        // Fit only when graph first gains nodes or count changes from empty
+        if (nodeCount > 0 && fittedFor.current !== nodeCount && fittedFor.current === null) {
             const id = requestAnimationFrame(() => {
                 fitView({ padding: 0.2, duration: 200 });
+                fittedFor.current = nodeCount;
             });
             return () => cancelAnimationFrame(id);
+        }
+        if (nodeCount === 0) {
+            fittedFor.current = null;
         }
     }, [nodeCount, fitView]);
 
     return null;
+}
+
+function CanvasDropTarget({
+    onDropStepType,
+    readOnly,
+}: {
+    onDropStepType?: (stepType: StepTypeValue, position: { x: number; y: number }) => void;
+    readOnly: boolean;
+}) {
+    const { screenToFlowPosition } = useReactFlow();
+    const wrapperRef = useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        const el = wrapperRef.current?.parentElement;
+        if (!el || readOnly || !onDropStepType) return;
+
+        const onDragOver = (e: DragEvent) => {
+            e.preventDefault();
+            if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+        };
+
+        const onDrop = (e: DragEvent) => {
+            e.preventDefault();
+            const stepType = e.dataTransfer?.getData(PALETTE_DND_TYPE) as StepTypeValue | undefined;
+            if (!stepType) return;
+            const position = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+            onDropStepType(stepType, position);
+        };
+
+        el.addEventListener('dragover', onDragOver);
+        el.addEventListener('drop', onDrop);
+        return () => {
+            el.removeEventListener('dragover', onDragOver);
+            el.removeEventListener('drop', onDrop);
+        };
+    }, [onDropStepType, readOnly, screenToFlowPosition]);
+
+    return <div ref={wrapperRef} className="hidden" aria-hidden />;
 }
 
 function CanvasInner({
@@ -53,27 +103,44 @@ function CanvasInner({
     edges,
     onNodesChange,
     onEdgesChange,
+    onConnectEdges,
+    onSelectionChange,
+    onDropStepType,
     nodeTypes,
     className,
     readOnly = false,
 }: WorkflowCanvasProps) {
+    const types = nodeTypes ?? workflowNodeTypes;
+
     const defaultEdgeOptions = useMemo(
         () => ({
+            type: 'smoothstep' as const,
             style: { stroke: 'var(--muted-foreground)', strokeWidth: 1.5 },
         }),
         [],
     );
 
-    const onInit = useCallback(() => {
-        // no-op; FitViewOnLoad handles fit
-    }, []);
+    const isValidConnection = useCallback(
+        (connection: Connection | Edge) => {
+            return validateConnection(connection, nodes, edges).ok;
+        },
+        [nodes, edges],
+    );
+
+    const onConnect: OnConnect = useCallback(
+        (connection) => {
+            if (readOnly || !onConnectEdges) return;
+            const next = applyConnection(connection, nodes, edges);
+            if (next) onConnectEdges(next);
+        },
+        [readOnly, onConnectEdges, nodes, edges],
+    );
 
     return (
         <div
             className={className ?? 'h-full w-full'}
             data-testid="workflow-canvas"
             style={{
-                // Theme-friendly canvas chrome
                 ['--xy-background-color' as string]: 'var(--background)',
                 ['--xy-minimap-background-color' as string]: 'var(--card, var(--background))',
                 ['--xy-controls-button-background-color' as string]: 'var(--card, var(--background))',
@@ -89,13 +156,16 @@ function CanvasInner({
                 edges={edges}
                 onNodesChange={readOnly ? undefined : onNodesChange}
                 onEdgesChange={readOnly ? undefined : onEdgesChange}
-                nodeTypes={nodeTypes}
+                onConnect={readOnly ? undefined : onConnect}
+                isValidConnection={isValidConnection}
+                onSelectionChange={onSelectionChange}
+                nodeTypes={types}
                 defaultEdgeOptions={defaultEdgeOptions}
                 fitView
-                onInit={onInit}
                 nodesDraggable={!readOnly}
                 nodesConnectable={!readOnly}
-                elementsSelectable={!readOnly}
+                elementsSelectable
+                deleteKeyCode={readOnly ? null : ['Backspace', 'Delete']}
                 proOptions={{ hideAttribution: true }}
                 minZoom={0.25}
                 maxZoom={2}
@@ -114,6 +184,7 @@ function CanvasInner({
                     nodeColor="var(--muted-foreground)"
                 />
                 <FitViewOnLoad nodeCount={nodes.length} />
+                <CanvasDropTarget onDropStepType={onDropStepType} readOnly={readOnly} />
             </ReactFlow>
         </div>
     );
