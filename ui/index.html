@@ -5,6 +5,21 @@
     <link rel="icon" type="image/svg+xml" href="/snackbase.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SnackBase Admin Panel</title>
+    <!-- FOUC prevention: apply dark class before React paints (key must match ThemeProvider storageKey) -->
+    <script>
+      (function () {
+        try {
+          var key = 'snackbase.theme';
+          var theme = localStorage.getItem(key);
+          var isDark =
+            theme === 'dark' ||
+            ((theme === 'system' || theme == null) &&
+              window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (isDark) document.documentElement.classList.add('dark');
+          else document.documentElement.classList.remove('dark');
+        } catch (_) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

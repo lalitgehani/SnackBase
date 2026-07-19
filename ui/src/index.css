@@ -5,7 +5,7 @@
 }
 
 body {
-  color: hsl(var(--foreground));
-  background: hsl(var(--background));
+  color: var(--foreground);
+  background: var(--background);
   font-feature-settings: "rlig" 1, "calt" 1;
 }

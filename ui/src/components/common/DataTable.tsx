@@ -137,7 +137,7 @@ export function DataTable<T>({
     // Background + optional right border for frozen columns
     const getFrozenClass = (col: Column<T>) =>
         col.frozen
-            ? cn('bg-background', col.frozenBorderRight && 'border-r shadow-[1px_0_4px_0_hsl(var(--border))]')
+            ? cn('bg-background', col.frozenBorderRight && 'border-r shadow-[1px_0_4px_0_var(--border)]')
             : '';
 
     // Helper to resolve cell content
