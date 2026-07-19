@@ -998,6 +998,23 @@ class AbortHookException(Exception):
 
 ---
 
+## Admin UI (API-defined Hooks)
+
+The admin console manages **account-scoped, declarative hooks** (event + manual triggers) separately from the Python `@app.hook` registry documented above.
+
+| Surface | Path | Purpose |
+|---------|------|---------|
+| List | `/admin/hooks` | Event + manual hooks only (server-side `trigger_type` filters) |
+| Create | `/admin/hooks/new` | Full-page editor with template picker |
+| Edit | `/admin/hooks/:id/edit` | Structured three-region editor |
+| Overview | `/admin/hooks/:id` | Read-only config + expandable executions |
+
+**Scheduled Tasks** (`trigger.type === schedule`) use `/admin/scheduled-tasks`, not the Hooks list.
+
+Authoring is full-page only (list → overview → editor). Delete remains a confirmation dialog. There is no create/edit/view modal for hooks.
+
+---
+
 ## Support
 
 For questions and issues:

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -29,36 +30,42 @@ import {
     Eye,
 } from 'lucide-react';
 import { hooksService, type Hook } from '@/services/hooks.service';
-import { CreateHookDialog } from './CreateHookDialog';
-import { EditHookDialog } from './EditHookDialog';
-import { ViewHookDialog } from './ViewHookDialog';
 import { DeleteHookDialog } from './DeleteHookDialog';
+import { formatHookDate, TriggerBadge, triggerSummary } from './HookStatusBadge';
 import { useToast } from '@/hooks/use-toast';
 
-function formatDate(dateStr: string | null): string {
-    if (!dateStr) return '—';
-    return new Date(dateStr).toLocaleString();
+function isInteractiveTarget(target: EventTarget | null): boolean {
+    if (!(target instanceof Element)) return false;
+    return Boolean(
+        target.closest(
+            'button, a, input, [role="switch"], [role="menuitem"], [data-radix-collection-item]',
+        ),
+    );
 }
 
 function TriggerCell({ hook }: { hook: Hook }) {
     if (hook.trigger.type === 'manual') {
-        return <Badge variant="outline" className="text-xs">Manual</Badge>;
+        return <TriggerBadge triggerType="manual" />;
     }
     const t = hook.trigger as { type: 'event'; event: string; collection?: string };
     return (
-        <div>
-            <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{t.event}</code>
-            {t.collection && (
-                <p className="text-xs text-muted-foreground mt-0.5">
-                    on <strong>{t.collection}</strong>
-                </p>
-            )}
+        <div className="space-y-1">
+            <TriggerBadge triggerType="event" />
+            <div>
+                <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{t.event}</code>
+                {t.collection && (
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                        on <strong>{t.collection}</strong>
+                    </p>
+                )}
+            </div>
         </div>
     );
 }
 
 export default function HooksPage() {
     const { toast } = useToast();
+    const navigate = useNavigate();
     const [hooks, setHooks] = useState<Hook[]>([]);
     const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(true);
@@ -67,14 +74,12 @@ export default function HooksPage() {
     const [togglingId, setTogglingId] = useState<string | null>(null);
     const [triggeringId, setTriggeringId] = useState<string | null>(null);
 
-    const [createOpen, setCreateOpen] = useState(false);
-    const [viewHook, setViewHook] = useState<Hook | null>(null);
-    const [editHook, setEditHook] = useState<Hook | null>(null);
     const [deleteHook, setDeleteHook] = useState<Hook | null>(null);
 
     const fetchHooks = useCallback(async () => {
         setError(null);
         try {
+            // Server-side event + manual filters (merged in service)
             const response = await hooksService.list();
             setHooks(response.items);
             setTotal(response.total);
@@ -115,6 +120,8 @@ export default function HooksPage() {
                 title: result.status === 'success' ? 'Hook executed' : 'Hook triggered',
                 description: result.error ?? result.message ?? `${result.actions_executed} action(s) executed`,
             });
+            // Refresh list so last_run_at updates
+            await fetchHooks();
         } catch {
             toast({ title: 'Error', description: 'Failed to trigger hook', variant: 'destructive' });
         } finally {
@@ -126,7 +133,7 @@ export default function HooksPage() {
     const disabledCount = hooks.length - enabledCount;
 
     return (
-        <div className="p-8 space-y-6">
+        <div className="p-8 space-y-6" data-testid="hooks-page">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
@@ -135,7 +142,7 @@ export default function HooksPage() {
                         Hooks
                     </h1>
                     <p className="text-muted-foreground mt-1">
-                        Automate business logic with event-driven and manual hooks
+                        Event-driven and manual automations
                     </p>
                 </div>
                 <div className="flex gap-2">
@@ -143,7 +150,11 @@ export default function HooksPage() {
                         <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
                         Refresh
                     </Button>
-                    <Button size="sm" onClick={() => setCreateOpen(true)}>
+                    <Button
+                        size="sm"
+                        onClick={() => navigate('/admin/hooks/new')}
+                        data-testid="hooks-new"
+                    >
                         <Plus className="h-4 w-4 mr-2" />
                         New Hook
                     </Button>
@@ -152,7 +163,7 @@ export default function HooksPage() {
 
             {/* Stats row */}
             {!loading && hooks.length > 0 && (
-                <div className="flex gap-4 text-sm text-muted-foreground">
+                <div className="flex gap-4 text-sm text-muted-foreground" data-testid="hooks-stats">
                     <span>{total} total</span>
                     <span className="text-green-600 dark:text-green-400">{enabledCount} enabled</span>
                     <span>{disabledCount} disabled</span>
@@ -174,13 +185,16 @@ export default function HooksPage() {
                     ))}
                 </div>
             ) : hooks.length === 0 ? (
-                <div className="text-center py-24 border rounded-lg">
+                <div className="text-center py-24 border rounded-lg" data-testid="hooks-empty-state">
                     <Zap className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                     <p className="text-lg font-medium mb-1">No hooks yet</p>
                     <p className="text-muted-foreground text-sm mb-6">
                         Create a hook to run actions when events occur or trigger them manually.
                     </p>
-                    <Button onClick={() => setCreateOpen(true)}>
+                    <Button
+                        onClick={() => navigate('/admin/hooks/new')}
+                        data-testid="hooks-empty-create"
+                    >
                         <Plus className="h-4 w-4 mr-2" />
                         New Hook
                     </Button>
@@ -200,10 +214,25 @@ export default function HooksPage() {
                     </TableHeader>
                     <TableBody>
                         {hooks.map((hook) => (
-                            <TableRow key={hook.id}>
+                            <TableRow
+                                key={hook.id}
+                                className="cursor-pointer"
+                                data-testid={`hook-row-${hook.id}`}
+                                onClick={(e) => {
+                                    if (isInteractiveTarget(e.target)) return;
+                                    navigate(`/admin/hooks/${hook.id}/edit`);
+                                }}
+                            >
                                 <TableCell>
                                     <div>
-                                        <p className="font-medium">{hook.name}</p>
+                                        <button
+                                            type="button"
+                                            className="font-medium text-left hover:underline"
+                                            data-testid={`hook-edit-link-${hook.id}`}
+                                            onClick={() => navigate(`/admin/hooks/${hook.id}/edit`)}
+                                        >
+                                            {hook.name}
+                                        </button>
                                         {hook.description && (
                                             <p className="text-xs text-muted-foreground truncate max-w-[200px]">
                                                 {hook.description}
@@ -213,6 +242,7 @@ export default function HooksPage() {
                                 </TableCell>
                                 <TableCell>
                                     <TriggerCell hook={hook} />
+                                    <span className="sr-only">{triggerSummary(hook)}</span>
                                 </TableCell>
                                 <TableCell>
                                     {hook.condition ? (
@@ -234,6 +264,7 @@ export default function HooksPage() {
                                             checked={hook.enabled}
                                             disabled={togglingId === hook.id}
                                             onCheckedChange={() => handleToggle(hook)}
+                                            data-testid={`hook-toggle-${hook.id}`}
                                         />
                                         <Badge variant={hook.enabled ? 'default' : 'secondary'}>
                                             {hook.enabled ? 'Enabled' : 'Disabled'}
@@ -241,7 +272,7 @@ export default function HooksPage() {
                                     </div>
                                 </TableCell>
                                 <TableCell className="text-sm text-muted-foreground">
-                                    {formatDate(hook.last_run_at)}
+                                    {formatHookDate(hook.last_run_at)}
                                 </TableCell>
                                 <TableCell>
                                     <DropdownMenu>
@@ -259,11 +290,15 @@ export default function HooksPage() {
                                                 <Play className="h-4 w-4 mr-2" />
                                                 Run Now
                                             </DropdownMenuItem>
-                                            <DropdownMenuItem onClick={() => setViewHook(hook)}>
+                                            <DropdownMenuItem
+                                                onClick={() => navigate(`/admin/hooks/${hook.id}`)}
+                                            >
                                                 <Eye className="h-4 w-4 mr-2" />
                                                 View
                                             </DropdownMenuItem>
-                                            <DropdownMenuItem onClick={() => setEditHook(hook)}>
+                                            <DropdownMenuItem
+                                                onClick={() => navigate(`/admin/hooks/${hook.id}/edit`)}
+                                            >
                                                 <Pencil className="h-4 w-4 mr-2" />
                                                 Edit
                                             </DropdownMenuItem>
@@ -282,30 +317,6 @@ export default function HooksPage() {
                         ))}
                     </TableBody>
                 </Table>
-            )}
-
-            {/* Dialogs */}
-            <CreateHookDialog
-                open={createOpen}
-                onOpenChange={setCreateOpen}
-                onCreated={fetchHooks}
-            />
-
-            {viewHook && (
-                <ViewHookDialog
-                    hook={viewHook}
-                    open={viewHook !== null}
-                    onOpenChange={(open) => { if (!open) setViewHook(null); }}
-                />
-            )}
-
-            {editHook && (
-                <EditHookDialog
-                    hook={editHook}
-                    open={editHook !== null}
-                    onOpenChange={(open) => { if (!open) setEditHook(null); }}
-                    onUpdated={() => { setEditHook(null); fetchHooks(); }}
-                />
             )}
 
             {deleteHook && (

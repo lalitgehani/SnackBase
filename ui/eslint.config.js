@@ -44,7 +44,7 @@ export default defineConfig([
       'src/components/ui/**/*.{ts,tsx}',
       'src/components/records/FilterBuilderPanel.tsx',
       'src/pages/Endpoints/EndpointFormFields.tsx',
-      'src/pages/Hooks/HookFormFields.tsx',
+      'src/pages/Hooks/HookStatusBadge.tsx',
       'src/pages/Workflows/InstanceStatusBadge.tsx',
       'src/test/utils.tsx',
     ],

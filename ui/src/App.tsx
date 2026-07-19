@@ -27,6 +27,8 @@ import WebhooksPage from '@/pages/Webhooks/WebhooksPage';
 import JobsPage from '@/pages/Jobs/JobsPage';
 import ScheduledTasksPage from '@/pages/ScheduledTasks/ScheduledTasksPage';
 import HooksPage from '@/pages/Hooks/HooksPage';
+import HookEditorPage from '@/pages/Hooks/editor/HookEditorPage';
+import HookOverviewPage from '@/pages/Hooks/HookOverviewPage';
 import EndpointsPage from '@/pages/Endpoints/EndpointsPage';
 import WorkflowsPage from '@/pages/Workflows/WorkflowsPage';
 import WorkflowEditorPage from '@/pages/Workflows/editor/WorkflowEditorPage';
@@ -87,6 +89,9 @@ function App() {
           <Route path="jobs" element={<JobsPage />} />
           <Route path="scheduled-tasks" element={<ScheduledTasksPage />} />
           <Route path="hooks" element={<HooksPage />} />
+          <Route path="hooks/new" element={<HookEditorPage />} />
+          <Route path="hooks/:id/edit" element={<HookEditorPage />} />
+          <Route path="hooks/:id" element={<HookOverviewPage />} />
           <Route path="endpoints" element={<EndpointsPage />} />
           <Route path="workflows" element={<WorkflowsPage />} />
           <Route path="workflows/new" element={<WorkflowEditorPage />} />

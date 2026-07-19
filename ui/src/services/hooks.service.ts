@@ -37,6 +37,13 @@ export interface HookListResponse {
   total: number;
 }
 
+export interface HookListParams {
+  limit?: number;
+  offset?: number;
+  enabled?: boolean;
+  trigger_type?: 'event' | 'manual' | 'schedule' | string;
+}
+
 export interface HookExecution {
   id: string;
   hook_id: string;
@@ -46,6 +53,7 @@ export interface HookExecution {
   error_message: string | null;
   duration_ms: number | null;
   executed_at: string;
+  execution_context?: Record<string, unknown> | null;
 }
 
 export interface HookExecutionListResponse {
@@ -71,15 +79,58 @@ export interface UpdateHookRequest {
   enabled?: boolean;
 }
 
+function sortHooksByUpdatedAtDesc(items: Hook[]): Hook[] {
+  return [...items].sort((a, b) => {
+    const ta = new Date(a.updated_at).getTime();
+    const tb = new Date(b.updated_at).getTime();
+    return tb - ta;
+  });
+}
+
 export const hooksService = {
-  list: async (): Promise<HookListResponse> => {
-    const response = await apiClient.get<HookListResponse>('/hooks', {
-      params: { limit: 200 },
-    });
-    // Filter out schedule-triggered hooks (those belong to Scheduled Tasks page)
-    const all = response.data;
-    const filtered = all.items.filter((h) => h.trigger.type !== 'schedule');
-    return { items: filtered, total: filtered.length };
+  /**
+   * List hooks. When `trigger_type` is omitted, loads event + manual in parallel
+   * (Hooks admin page). Pass `trigger_type` for a single filtered request.
+   */
+  list: async (params?: HookListParams): Promise<HookListResponse> => {
+    if (params?.trigger_type) {
+      const response = await apiClient.get<HookListResponse>('/hooks', {
+        params: {
+          limit: params.limit ?? 200,
+          offset: params.offset ?? 0,
+          ...(params.enabled !== undefined ? { enabled: params.enabled } : {}),
+          trigger_type: params.trigger_type,
+        },
+      });
+      return response.data;
+    }
+
+    // Default: server-side event + manual only (never unfiltered / schedule-inclusive dump)
+    const limit = params?.limit ?? 200;
+    const offset = params?.offset ?? 0;
+    const enabled = params?.enabled;
+    const common = {
+      limit,
+      offset,
+      ...(enabled !== undefined ? { enabled } : {}),
+    };
+
+    const [eventRes, manualRes] = await Promise.all([
+      apiClient.get<HookListResponse>('/hooks', {
+        params: { ...common, trigger_type: 'event' },
+      }),
+      apiClient.get<HookListResponse>('/hooks', {
+        params: { ...common, trigger_type: 'manual' },
+      }),
+    ]);
+
+    const byId = new Map<string, Hook>();
+    for (const item of [...eventRes.data.items, ...manualRes.data.items]) {
+      byId.set(item.id, item);
+    }
+    const items = sortHooksByUpdatedAtDesc(Array.from(byId.values()));
+    const total = (eventRes.data.total ?? 0) + (manualRes.data.total ?? 0);
+    return { items, total };
   },
 
   get: async (id: string): Promise<Hook> => {
