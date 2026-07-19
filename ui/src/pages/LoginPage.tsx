@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/field';
 import { useAuthStore } from '@/stores/auth.store';
 import { handleApiError } from '@/lib/api';
+import { ModeToggle } from '@/components/mode-toggle';
 
 // Validation schema
 const loginSchema = z.object({
@@ -56,7 +57,10 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
+        <div className="relative flex min-h-svh w-full items-center justify-center p-6 md:p-10">
+            <div className="absolute right-4 top-4 md:right-6 md:top-6">
+                <ModeToggle />
+            </div>
             <div className="w-full max-w-sm">
                 <Card>
                     <CardHeader className="text-left py-4">

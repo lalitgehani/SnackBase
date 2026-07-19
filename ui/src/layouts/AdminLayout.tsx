@@ -5,6 +5,7 @@
 import { Outlet, useLocation } from 'react-router';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/AppSidebar';
+import { ModeToggle } from '@/components/mode-toggle';
 
 export default function AdminLayout() {
     const location = useLocation();
@@ -43,6 +44,9 @@ export default function AdminLayout() {
                     <h2 className="text-lg font-semibold">
                         {getPageTitle()}
                     </h2>
+                    <div className="ml-auto">
+                        <ModeToggle />
+                    </div>
                 </header>
 
                 {/* Page content — collections workspace uses full-bleed shell */}

@@ -60,6 +60,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { ThemeMenuItems } from "@/components/mode-toggle"
 
 interface NavItem {
     title: string
@@ -507,6 +508,8 @@ export function AppSidebar() {
                                         </div>
                                     </div>
                                 </DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                <ThemeMenuItems />
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem onClick={handleLogout}>
                                     <LogOut className="mr-2 h-4 w-4" />
