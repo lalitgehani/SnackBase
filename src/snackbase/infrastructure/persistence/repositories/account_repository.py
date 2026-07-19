@@ -156,13 +156,70 @@ class AccountRepository:
         Returns:
             Count of accounts created since the given datetime.
         """
-        from datetime import datetime
         from sqlalchemy import func
 
         result = await self.session.execute(
             select(func.count(AccountModel.id)).where(AccountModel.created_at >= since)
         )
         return result.scalar_one() or 0
+
+    async def count_created_between(self, start: "datetime", end: "datetime") -> int:
+        """Count accounts created in the half-open interval [start, end).
+
+        Args:
+            start: Inclusive start datetime (UTC).
+            end: Exclusive end datetime (UTC).
+
+        Returns:
+            Count of accounts created in the interval.
+        """
+        from sqlalchemy import func
+
+        result = await self.session.execute(
+            select(func.count(AccountModel.id)).where(
+                AccountModel.created_at >= start,
+                AccountModel.created_at < end,
+            )
+        )
+        return result.scalar_one() or 0
+
+    async def count_created_by_day(
+        self, start: "datetime", end: "datetime"
+    ) -> list[tuple[str, int]]:
+        """Count accounts created per calendar day in [start, end).
+
+        Args:
+            start: Inclusive start datetime (UTC).
+            end: Exclusive end datetime (UTC).
+
+        Returns:
+            List of (YYYY-MM-DD, count) pairs for days with activity.
+            Missing days are not included; callers should zero-fill.
+        """
+        from sqlalchemy import cast, Date, func, String
+
+        bind = self.session.get_bind()
+        dialect_name = bind.dialect.name if bind is not None else "sqlite"
+
+        if dialect_name == "postgresql":
+            day_expr = cast(AccountModel.created_at, Date)
+            day_label = cast(day_expr, String)
+        else:
+            # SQLite and other dialects: strftime yields YYYY-MM-DD text
+            day_label = func.strftime("%Y-%m-%d", AccountModel.created_at)
+            day_expr = day_label
+
+        result = await self.session.execute(
+            select(day_label, func.count(AccountModel.id))
+            .where(
+                AccountModel.created_at >= start,
+                AccountModel.created_at < end,
+            )
+            .group_by(day_expr)
+            .order_by(day_expr)
+        )
+        rows = result.all()
+        return [(str(row[0])[:10], int(row[1])) for row in rows]
 
     async def get_all_paginated(
         self,

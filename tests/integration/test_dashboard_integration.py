@@ -91,6 +91,9 @@ async def test_dashboard_stats_endpoint_success(
     assert "total_records" in data
     assert "new_accounts_7d" in data
     assert "new_users_7d" in data
+    assert "range" in data
+    assert "previous_period" in data
+    assert "time_series" in data
     assert "recent_registrations" in data
     assert "system_health" in data
     assert "active_sessions" in data
@@ -103,6 +106,11 @@ async def test_dashboard_stats_endpoint_success(
     assert data["new_accounts_7d"] >= 1  # Created 3 days ago
     assert data["new_users_7d"] >= 1  # user2 created 1 day ago
     assert data["active_sessions"] >= 1
+    assert data["range"] == "7d"
+    assert "new_accounts" in data["previous_period"]
+    assert "new_users" in data["previous_period"]
+    assert len(data["time_series"]["accounts_created"]) == 7
+    assert len(data["time_series"]["users_created"]) == 7
 
     # Check recent registrations
     assert isinstance(data["recent_registrations"], list)
@@ -142,6 +150,12 @@ async def test_dashboard_stats_endpoint_empty_database(
     assert data["total_records"] == 0
     assert isinstance(data["new_accounts_7d"], int)
     assert isinstance(data["new_users_7d"], int)
+    assert data["range"] == "7d"
+    assert data["previous_period"]["new_accounts"] >= 0
+    assert data["previous_period"]["new_users"] >= 0
+    assert len(data["time_series"]["accounts_created"]) == 7
+    assert len(data["time_series"]["users_created"]) == 7
+    assert all(p["count"] == 0 or isinstance(p["count"], int) for p in data["time_series"]["accounts_created"])
     assert data["recent_registrations"] == [] or isinstance(
         data["recent_registrations"], list
     )
@@ -289,3 +303,87 @@ async def test_dashboard_stats_active_sessions_count(
     # Active sessions should only count the active token
     # (plus any from test fixtures)
     assert data["active_sessions"] >= 1
+
+
+@pytest.mark.asyncio
+async def test_dashboard_stats_invalid_range_returns_422(
+    client: AsyncClient, superadmin_token: str
+):
+    """Test invalid range query param returns 422."""
+    response = await client.get(
+        "/api/v1/dashboard/stats",
+        params={"range": "1y"},
+        headers={"Authorization": f"Bearer {superadmin_token}"},
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("range_value,expected_days", [("7d", 7), ("30d", 30), ("90d", 90)])
+async def test_dashboard_stats_range_series_length(
+    client: AsyncClient, superadmin_token: str, range_value: str, expected_days: int
+):
+    """Test time series length matches each supported range."""
+    response = await client.get(
+        "/api/v1/dashboard/stats",
+        params={"range": range_value},
+        headers={"Authorization": f"Bearer {superadmin_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["range"] == range_value
+    assert len(data["time_series"]["accounts_created"]) == expected_days
+    assert len(data["time_series"]["users_created"]) == expected_days
+    # Each point has date and count
+    for point in data["time_series"]["accounts_created"]:
+        assert "date" in point
+        assert "count" in point
+        assert isinstance(point["count"], int)
+
+
+@pytest.mark.asyncio
+async def test_dashboard_stats_time_series_sum_matches_period_counts(
+    client: AsyncClient, superadmin_token: str, db_session
+):
+    """Test series totals align with new_*_7d for seeded same-window data."""
+    now = datetime.now(timezone.utc)
+    account = AccountModel(
+        id="TS0099",
+        account_code="TS0099",
+        name="Series Account",
+        slug="series-account",
+        created_at=now - timedelta(days=2),
+    )
+    db_session.add(account)
+    role = (
+        await db_session.execute(select(RoleModel).where(RoleModel.name == "user"))
+    ).scalar_one()
+    users = [
+        UserModel(
+            id=f"series_user_{i}",
+            email=f"series{i}@test.com",
+            account_id="TS0099",
+            password_hash=f"hash{i}",
+            role=role,
+            created_at=now - timedelta(days=i),
+        )
+        for i in range(3)  # today, 1d ago, 2d ago — all within 7d
+    ]
+    db_session.add_all(users)
+    await db_session.commit()
+
+    response = await client.get(
+        "/api/v1/dashboard/stats",
+        params={"range": "7d"},
+        headers={"Authorization": f"Bearer {superadmin_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+
+    accounts_sum = sum(p["count"] for p in data["time_series"]["accounts_created"])
+    users_sum = sum(p["count"] for p in data["time_series"]["users_created"])
+    assert accounts_sum == data["new_accounts_7d"]
+    assert users_sum == data["new_users_7d"]
+    # Our seeded users should be included
+    assert data["new_users_7d"] >= 3
+    assert data["new_accounts_7d"] >= 1

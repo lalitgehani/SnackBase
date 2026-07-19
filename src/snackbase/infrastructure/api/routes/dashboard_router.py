@@ -3,16 +3,17 @@
 Provides endpoints for dashboard statistics and metrics.
 """
 
-from fastapi import APIRouter, Depends, status
+from typing import Annotated, Literal
+
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from snackbase.domain.services import DashboardService
 from snackbase.infrastructure.api.dependencies import SuperadminUser
 from snackbase.infrastructure.api.schemas import DashboardStats
 from snackbase.infrastructure.persistence.database import get_db_session
-from snackbase.domain.services import DashboardService
 
 router = APIRouter()
-
 
 @router.get(
     "/stats",
@@ -20,17 +21,24 @@ router = APIRouter()
     response_model=DashboardStats,
     responses={
         403: {"description": "Superadmin access required"},
+        422: {"description": "Invalid range parameter"},
     },
 )
 async def get_dashboard_stats(
     current_user: SuperadminUser,
     session: AsyncSession = Depends(get_db_session),
+    range: Annotated[
+        Literal["7d", "30d", "90d"],
+        Query(description="Time range for growth metrics and time series (7d, 30d, or 90d)"),
+    ] = "7d",
 ) -> DashboardStats:
     """Get dashboard statistics.
 
     Returns comprehensive dashboard metrics including:
     - Total counts (accounts, users, collections, records)
-    - Growth metrics (new accounts/users in last 7 days)
+    - Growth metrics for the selected range (new accounts/users)
+    - Previous-period comparison counts
+    - Daily time series for accounts and users (zero-filled)
     - Recent registrations (last 10 users)
     - System health (database status, storage usage)
     - Active sessions count
@@ -41,5 +49,7 @@ async def get_dashboard_stats(
     """
     dashboard_service = DashboardService(session)
     return await dashboard_service.get_dashboard_stats(
-        user_groups=current_user.groups, account_id=current_user.account_id
+        user_groups=current_user.groups,
+        account_id=current_user.account_id,
+        range=range,
     )

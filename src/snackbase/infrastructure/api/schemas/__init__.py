@@ -41,9 +41,13 @@ from snackbase.infrastructure.api.schemas.collection_schemas import (
     UpdateCollectionRequest,
 )
 from snackbase.infrastructure.api.schemas.dashboard_schemas import (
+    DashboardRange,
     DashboardStats,
+    PreviousPeriodStats,
     RecentRegistration,
     SystemHealthStats,
+    TimeSeriesPoint,
+    TimeSeriesStats,
 )
 from snackbase.infrastructure.api.schemas.email_schemas import (
     EmailTemplateRenderRequest,
@@ -122,7 +126,11 @@ __all__ = [
     "CreateRoleRequest",
     "CurrentRevisionResponse",
     "CursorListResponse",
+    "DashboardRange",
     "DashboardStats",
+    "PreviousPeriodStats",
+    "TimeSeriesPoint",
+    "TimeSeriesStats",
     "EmailTemplateRenderRequest",
     "EmailTemplateRenderResponse",
     "EmailTemplateResponse",

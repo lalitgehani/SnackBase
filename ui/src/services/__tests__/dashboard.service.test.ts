@@ -1,7 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import { http, HttpResponse } from 'msw'
 import { server } from '@/test/mocks/server'
-import { getDashboardStats } from '../dashboard.service'
+import {
+  getDashboardStats,
+  formatStorageUsage,
+  formatPeriodDelta,
+  isDashboardRange,
+} from '../dashboard.service'
 import type { DashboardStats } from '../dashboard.service'
 
 const mockDashboardStats: DashboardStats = {
@@ -11,6 +16,28 @@ const mockDashboardStats: DashboardStats = {
   total_records: 1500,
   new_accounts_7d: 2,
   new_users_7d: 8,
+  range: '7d',
+  previous_period: { new_accounts: 1, new_users: 3 },
+  time_series: {
+    accounts_created: [
+      { date: '2026-07-13', count: 0 },
+      { date: '2026-07-14', count: 1 },
+      { date: '2026-07-15', count: 0 },
+      { date: '2026-07-16', count: 0 },
+      { date: '2026-07-17', count: 1 },
+      { date: '2026-07-18', count: 0 },
+      { date: '2026-07-19', count: 0 },
+    ],
+    users_created: [
+      { date: '2026-07-13', count: 1 },
+      { date: '2026-07-14', count: 2 },
+      { date: '2026-07-15', count: 1 },
+      { date: '2026-07-16', count: 0 },
+      { date: '2026-07-17', count: 2 },
+      { date: '2026-07-18', count: 1 },
+      { date: '2026-07-19', count: 1 },
+    ],
+  },
   recent_registrations: [
     {
       id: 'user-1',
@@ -36,23 +63,38 @@ const mockDashboardStats: DashboardStats = {
 
 describe('Dashboard Service', () => {
   describe('getDashboardStats()', () => {
-    it('sends GET to /dashboard/stats', async () => {
-      let requestReceived = false
+    it('sends GET to /dashboard/stats with default range', async () => {
+      let requestUrl = ''
 
       server.use(
-        http.get('/api/v1/dashboard/stats', () => {
-          requestReceived = true
+        http.get('/api/v1/dashboard/stats', ({ request }) => {
+          requestUrl = request.url
           return HttpResponse.json(mockDashboardStats)
-        })
+        }),
       )
 
       await getDashboardStats()
-      expect(requestReceived).toBe(true)
+      expect(requestUrl).toContain('/api/v1/dashboard/stats')
+      expect(requestUrl).toContain('range=7d')
+    })
+
+    it('serializes the range query parameter', async () => {
+      let requestUrl = ''
+
+      server.use(
+        http.get('/api/v1/dashboard/stats', ({ request }) => {
+          requestUrl = request.url
+          return HttpResponse.json({ ...mockDashboardStats, range: '30d' })
+        }),
+      )
+
+      await getDashboardStats('30d')
+      expect(requestUrl).toContain('range=30d')
     })
 
     it('returns dashboard stats on success', async () => {
       server.use(
-        http.get('/api/v1/dashboard/stats', () => HttpResponse.json(mockDashboardStats))
+        http.get('/api/v1/dashboard/stats', () => HttpResponse.json(mockDashboardStats)),
       )
 
       const result = await getDashboardStats()
@@ -61,17 +103,19 @@ describe('Dashboard Service', () => {
 
     it('returns correct account and user counts', async () => {
       server.use(
-        http.get('/api/v1/dashboard/stats', () => HttpResponse.json(mockDashboardStats))
+        http.get('/api/v1/dashboard/stats', () => HttpResponse.json(mockDashboardStats)),
       )
 
       const result = await getDashboardStats()
       expect(result.total_accounts).toBe(5)
       expect(result.total_users).toBe(42)
+      expect(result.previous_period.new_accounts).toBe(1)
+      expect(result.time_series.accounts_created).toHaveLength(7)
     })
 
     it('returns system health status', async () => {
       server.use(
-        http.get('/api/v1/dashboard/stats', () => HttpResponse.json(mockDashboardStats))
+        http.get('/api/v1/dashboard/stats', () => HttpResponse.json(mockDashboardStats)),
       )
 
       const result = await getDashboardStats()
@@ -80,7 +124,7 @@ describe('Dashboard Service', () => {
 
     it('returns recent registrations array', async () => {
       server.use(
-        http.get('/api/v1/dashboard/stats', () => HttpResponse.json(mockDashboardStats))
+        http.get('/api/v1/dashboard/stats', () => HttpResponse.json(mockDashboardStats)),
       )
 
       const result = await getDashboardStats()
@@ -91,11 +135,48 @@ describe('Dashboard Service', () => {
     it('propagates API errors', async () => {
       server.use(
         http.get('/api/v1/dashboard/stats', () =>
-          HttpResponse.json({ detail: 'Forbidden' }, { status: 403 })
-        )
+          HttpResponse.json({ detail: 'Forbidden' }, { status: 403 }),
+        ),
       )
 
       await expect(getDashboardStats()).rejects.toThrow()
+    })
+  })
+
+  describe('formatStorageUsage()', () => {
+    it('formats MB values', () => {
+      expect(formatStorageUsage(42.75)).toBe('42.75 MB')
+    })
+
+    it('formats GB for large values', () => {
+      expect(formatStorageUsage(2048)).toBe('2.00 GB')
+    })
+
+    it('formats small values as KB', () => {
+      expect(formatStorageUsage(0.005)).toBe('5.1 KB')
+    })
+  })
+
+  describe('formatPeriodDelta()', () => {
+    it('formats positive deltas', () => {
+      expect(formatPeriodDelta(11, 5, '7d')).toBe('+6 vs previous 7d')
+    })
+
+    it('formats negative deltas', () => {
+      expect(formatPeriodDelta(2, 5, '30d')).toBe('-3 vs previous 30d')
+    })
+  })
+
+  describe('isDashboardRange()', () => {
+    it('accepts valid ranges', () => {
+      expect(isDashboardRange('7d')).toBe(true)
+      expect(isDashboardRange('30d')).toBe(true)
+      expect(isDashboardRange('90d')).toBe(true)
+    })
+
+    it('rejects invalid ranges', () => {
+      expect(isDashboardRange('1y')).toBe(false)
+      expect(isDashboardRange('')).toBe(false)
     })
   })
 })

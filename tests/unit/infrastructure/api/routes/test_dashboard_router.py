@@ -1,17 +1,28 @@
 """Unit tests for dashboard router."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from fastapi import status
 
 from snackbase.infrastructure.api.routes.dashboard_router import get_dashboard_stats
 from snackbase.infrastructure.api.schemas import (
     DashboardStats,
+    PreviousPeriodStats,
     RecentRegistration,
     SystemHealthStats,
+    TimeSeriesPoint,
+    TimeSeriesStats,
 )
+
+
+def _empty_time_series(days: int = 7) -> TimeSeriesStats:
+    today = datetime.now(timezone.utc).date()
+    points = [
+        TimeSeriesPoint(date=(today - timedelta(days=i)).isoformat(), count=0)
+        for i in range(days - 1, -1, -1)
+    ]
+    return TimeSeriesStats(accounts_created=points, users_created=points)
 
 
 @pytest.fixture
@@ -26,6 +37,7 @@ def mock_superadmin():
     user = MagicMock()
     user.user_id = "superadmin-123"
     user.account_id = "SY0000"
+    user.groups = []
     return user
 
 
@@ -39,6 +51,9 @@ def sample_dashboard_stats():
         total_records=500,
         new_accounts_7d=2,
         new_users_7d=5,
+        range="7d",
+        previous_period=PreviousPeriodStats(new_accounts=1, new_users=2),
+        time_series=_empty_time_series(7),
         recent_registrations=[
             RecentRegistration(
                 id="user1",
@@ -65,14 +80,11 @@ async def test_get_dashboard_stats_success(
     with patch(
         "snackbase.infrastructure.api.routes.dashboard_router.DashboardService"
     ) as mock_service_class:
-        # Mock service instance and method
         mock_service = mock_service_class.return_value
         mock_service.get_dashboard_stats = AsyncMock(return_value=sample_dashboard_stats)
 
-        # Execute
         result = await get_dashboard_stats(mock_superadmin, mock_session)
 
-        # Verify
         assert isinstance(result, DashboardStats)
         assert result.total_accounts == 5
         assert result.total_users == 20
@@ -80,13 +92,40 @@ async def test_get_dashboard_stats_success(
         assert result.total_records == 500
         assert result.new_accounts_7d == 2
         assert result.new_users_7d == 5
+        assert result.range == "7d"
+        assert result.previous_period.new_accounts == 1
         assert result.active_sessions == 10
         assert len(result.recent_registrations) == 1
         assert result.system_health.database_status == "connected"
 
-        # Verify service was called correctly
         mock_service_class.assert_called_once_with(mock_session)
-        mock_service.get_dashboard_stats.assert_called_once()
+        mock_service.get_dashboard_stats.assert_called_once_with(
+            user_groups=mock_superadmin.groups,
+            account_id=mock_superadmin.account_id,
+            range="7d",
+        )
+
+
+@pytest.mark.asyncio
+async def test_get_dashboard_stats_passes_range(
+    mock_superadmin, mock_session, sample_dashboard_stats
+):
+    """Test range query param is forwarded to the service."""
+    sample_dashboard_stats.range = "30d"
+    with patch(
+        "snackbase.infrastructure.api.routes.dashboard_router.DashboardService"
+    ) as mock_service_class:
+        mock_service = mock_service_class.return_value
+        mock_service.get_dashboard_stats = AsyncMock(return_value=sample_dashboard_stats)
+
+        result = await get_dashboard_stats(mock_superadmin, mock_session, range="30d")
+
+        assert result.range == "30d"
+        mock_service.get_dashboard_stats.assert_called_once_with(
+            user_groups=mock_superadmin.groups,
+            account_id=mock_superadmin.account_id,
+            range="30d",
+        )
 
 
 @pytest.mark.asyncio
@@ -99,6 +138,9 @@ async def test_get_dashboard_stats_empty_data(mock_superadmin, mock_session):
         total_records=0,
         new_accounts_7d=0,
         new_users_7d=0,
+        range="7d",
+        previous_period=PreviousPeriodStats(new_accounts=0, new_users=0),
+        time_series=_empty_time_series(7),
         recent_registrations=[],
         system_health=SystemHealthStats(
             database_status="connected", storage_usage_mb=0.0
@@ -113,28 +155,22 @@ async def test_get_dashboard_stats_empty_data(mock_superadmin, mock_session):
         mock_service = mock_service_class.return_value
         mock_service.get_dashboard_stats = AsyncMock(return_value=empty_stats)
 
-        # Execute
         result = await get_dashboard_stats(mock_superadmin, mock_session)
 
-        # Verify
         assert result.total_accounts == 0
         assert result.total_users == 0
         assert len(result.recent_registrations) == 0
         assert len(result.recent_audit_logs) == 0
+        assert len(result.time_series.accounts_created) == 7
 
 
 @pytest.mark.asyncio
 async def test_get_dashboard_stats_requires_superadmin():
     """Test that endpoint requires superadmin authentication."""
-    # This test verifies the dependency is correctly specified
-    # The actual authentication is tested via integration tests
     from snackbase.infrastructure.api.routes.dashboard_router import router
 
-    # Get the route
     routes = [r for r in router.routes if r.path == "/stats"]
     assert len(routes) == 1
 
     route = routes[0]
-    # Verify the route has the SuperadminUser dependency
-    # This is implicit in the function signature, verified by type checking
     assert route.endpoint == get_dashboard_stats

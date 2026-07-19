@@ -1,0 +1,37 @@
+import { describe, it, expect } from 'vitest'
+import { render, screen } from '@/test/utils'
+import { ChartContainer } from '../ChartContainer'
+
+describe('ChartContainer', () => {
+  it('renders title and children when data is present', () => {
+    render(
+      <ChartContainer title="Growth" description="Last 7 days">
+        <div data-testid="chart-body">chart</div>
+      </ChartContainer>,
+    )
+    expect(screen.getByText('Growth')).toBeInTheDocument()
+    expect(screen.getByText('Last 7 days')).toBeInTheDocument()
+    expect(screen.getByTestId('chart-body')).toBeInTheDocument()
+  })
+
+  it('shows loading skeleton', () => {
+    render(
+      <ChartContainer title="Growth" isLoading>
+        <div>hidden</div>
+      </ChartContainer>,
+    )
+    expect(screen.getByTestId('chart-loading')).toBeInTheDocument()
+    expect(screen.queryByText('hidden')).not.toBeInTheDocument()
+  })
+
+  it('shows empty state without rendering children', () => {
+    render(
+      <ChartContainer title="Growth" isEmpty emptyMessage="Nothing here">
+        <div>hidden</div>
+      </ChartContainer>,
+    )
+    expect(screen.getByTestId('chart-empty')).toBeInTheDocument()
+    expect(screen.getByText('Nothing here')).toBeInTheDocument()
+    expect(screen.queryByText('hidden')).not.toBeInTheDocument()
+  })
+})

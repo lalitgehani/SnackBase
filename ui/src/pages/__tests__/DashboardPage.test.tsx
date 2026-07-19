@@ -1,14 +1,16 @@
 /**
- * Tests for DashboardPage component (FT3.2)
+ * Tests for DashboardPage component (Phase 1 dashboard redesign)
  *
  * Verifies:
- * - Renders dashboard stats cards (accounts, users, collections, records, public collections)
- * - Displays loading state while fetching stats
+ * - Renders KPI strip (accounts, users, collections, records, sessions, storage)
+ * - Public collections badge remains discoverable
+ * - Displays loading skeletons while fetching stats
  * - Handles API error gracefully with error message
  * - Stat values match mocked API response
+ * - Range selector and period deltas
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
@@ -16,9 +18,40 @@ import { render } from '@/test/utils'
 import { server } from '@/test/mocks/server'
 import DashboardPage from '../DashboardPage'
 
+const mockNavigate = vi.fn()
+
+vi.mock('react-router', async () => {
+  const actual = await vi.importActual<typeof import('react-router')>('react-router')
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate,
+  }
+})
+
 // ---------------------------------------------------------------------------
 // Fixtures
 // ---------------------------------------------------------------------------
+
+const mockTimeSeries = {
+  accounts_created: [
+    { date: '2026-07-13', count: 0 },
+    { date: '2026-07-14', count: 1 },
+    { date: '2026-07-15', count: 0 },
+    { date: '2026-07-16', count: 0 },
+    { date: '2026-07-17', count: 1 },
+    { date: '2026-07-18', count: 1 },
+    { date: '2026-07-19', count: 0 },
+  ],
+  users_created: [
+    { date: '2026-07-13', count: 1 },
+    { date: '2026-07-14', count: 2 },
+    { date: '2026-07-15', count: 1 },
+    { date: '2026-07-16', count: 0 },
+    { date: '2026-07-17', count: 3 },
+    { date: '2026-07-18', count: 2 },
+    { date: '2026-07-19', count: 2 },
+  ],
+}
 
 const mockDashboardStats = {
   total_accounts: 12,
@@ -27,6 +60,9 @@ const mockDashboardStats = {
   total_records: 1523,
   new_accounts_7d: 3,
   new_users_7d: 11,
+  range: '7d' as const,
+  previous_period: { new_accounts: 1, new_users: 5 },
+  time_series: mockTimeSeries,
   public_collections_count: 2,
   active_sessions: 5,
   system_health: {
@@ -77,9 +113,15 @@ function renderDashboard() {
 
 function setupSuccessHandler(overrides: Partial<typeof mockDashboardStats> = {}) {
   server.use(
-    http.get('/api/v1/dashboard/stats', () =>
-      HttpResponse.json({ ...mockDashboardStats, ...overrides }),
-    ),
+    http.get('/api/v1/dashboard/stats', ({ request }) => {
+      const url = new URL(request.url)
+      const range = url.searchParams.get('range') || '7d'
+      return HttpResponse.json({
+        ...mockDashboardStats,
+        ...overrides,
+        range: overrides.range ?? range,
+      })
+    }),
   )
 }
 
@@ -97,12 +139,11 @@ function setupErrorHandler(status = 500, detail = 'Internal server error') {
 
 beforeEach(() => {
   localStorage.clear()
+  mockNavigate.mockClear()
   vi.useFakeTimers({ shouldAdvanceTime: true })
   setupSuccessHandler()
 })
 
-// Restore real timers after each test so they don't leak
-import { afterEach } from 'vitest'
 afterEach(() => {
   vi.useRealTimers()
 })
@@ -112,13 +153,8 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('DashboardPage', () => {
-  // -------------------------------------------------------------------------
-  // Loading state
-  // -------------------------------------------------------------------------
-
   describe('loading state', () => {
-    it('displays a loading spinner before stats are fetched', () => {
-      // Don't let the request resolve yet — intercept and hold it
+    it('displays loading skeletons before stats are fetched', () => {
       server.use(
         http.get('/api/v1/dashboard/stats', async () => {
           await new Promise(() => {}) // never resolves
@@ -127,25 +163,19 @@ describe('DashboardPage', () => {
 
       renderDashboard()
 
-      // The spinner is rendered via an <svg> with the animate-spin class
-      const spinner = document.querySelector('.animate-spin')
-      expect(spinner).toBeInTheDocument()
+      expect(screen.getByText('Total Accounts')).toBeInTheDocument()
+      // Skeletons render for KPI values
+      expect(document.querySelectorAll('[data-slot="skeleton"], .animate-pulse').length).toBeGreaterThan(0)
     })
 
-    it('removes the loading spinner after stats load', async () => {
+    it('shows KPI values after stats load', async () => {
       renderDashboard()
 
       await waitFor(() => {
-        expect(screen.getByText('Total Accounts')).toBeInTheDocument()
+        expect(screen.getByText('12')).toBeInTheDocument()
       })
-
-      expect(document.querySelector('.animate-spin')).not.toBeInTheDocument()
     })
   })
-
-  // -------------------------------------------------------------------------
-  // Stats cards
-  // -------------------------------------------------------------------------
 
   describe('stat cards', () => {
     it('renders the Total Accounts card with the correct value', async () => {
@@ -180,28 +210,11 @@ describe('DashboardPage', () => {
       expect(screen.getByText('1523')).toBeInTheDocument()
     })
 
-    it('renders the Public Collections card with the correct value', async () => {
+    it('renders public collections as a discoverable badge', async () => {
       renderDashboard()
       await waitFor(() => {
-        expect(screen.getByText('Public Collections')).toBeInTheDocument()
+        expect(screen.getByText(/2 public/i)).toBeInTheDocument()
       })
-      expect(screen.getByText('2')).toBeInTheDocument()
-    })
-
-    it('renders New Accounts (7 days) growth metric', async () => {
-      renderDashboard()
-      await waitFor(() => {
-        expect(screen.getByText('New Accounts (7 days)')).toBeInTheDocument()
-      })
-      expect(screen.getByText('+3')).toBeInTheDocument()
-    })
-
-    it('renders New Users (7 days) growth metric', async () => {
-      renderDashboard()
-      await waitFor(() => {
-        expect(screen.getByText('New Users (7 days)')).toBeInTheDocument()
-      })
-      expect(screen.getByText('+11')).toBeInTheDocument()
     })
 
     it('renders Active Sessions count', async () => {
@@ -211,11 +224,92 @@ describe('DashboardPage', () => {
       })
       expect(screen.getByText('5')).toBeInTheDocument()
     })
+
+    it('renders Storage with formatted usage', async () => {
+      renderDashboard()
+      await waitFor(() => {
+        expect(screen.getByText('Storage')).toBeInTheDocument()
+      })
+      expect(screen.getByText('42.75 MB')).toBeInTheDocument()
+    })
+
+    it('renders period deltas for accounts and users', async () => {
+      renderDashboard()
+      await waitFor(() => {
+        // +2 vs previous 7d (3 current - 1 previous)
+        expect(screen.getByText('+2 vs previous 7d')).toBeInTheDocument()
+        // +6 vs previous 7d (11 current - 5 previous)
+        expect(screen.getByText('+6 vs previous 7d')).toBeInTheDocument()
+      })
+    })
   })
 
-  // -------------------------------------------------------------------------
-  // System health
-  // -------------------------------------------------------------------------
+  describe('navigation', () => {
+    it('navigates to accounts when Total Accounts is clicked', async () => {
+      renderDashboard()
+      await waitFor(() => {
+        expect(screen.getByText('Total Accounts')).toBeInTheDocument()
+      })
+
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      await user.click(screen.getByText('Total Accounts'))
+      expect(mockNavigate).toHaveBeenCalledWith('/admin/accounts')
+    })
+
+    it('navigates to users when Total Users is clicked', async () => {
+      renderDashboard()
+      await waitFor(() => {
+        expect(screen.getByText('Total Users')).toBeInTheDocument()
+      })
+
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      await user.click(screen.getByText('Total Users'))
+      expect(mockNavigate).toHaveBeenCalledWith('/admin/users')
+    })
+
+    it('navigates to collections when Total Collections is clicked', async () => {
+      renderDashboard()
+      await waitFor(() => {
+        expect(screen.getByText('Total Collections')).toBeInTheDocument()
+      })
+
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      await user.click(screen.getByText('Total Collections'))
+      expect(mockNavigate).toHaveBeenCalledWith('/admin/collections')
+    })
+  })
+
+  describe('range selector', () => {
+    it('renders the time range selector with default 7d', async () => {
+      renderDashboard()
+      await waitFor(() => {
+        expect(screen.getByText('Last 7 days')).toBeInTheDocument()
+      })
+    })
+
+    it('persists selected range in localStorage', async () => {
+      renderDashboard()
+      await waitFor(() => {
+        expect(screen.getByText('Last 7 days')).toBeInTheDocument()
+      })
+
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      await user.click(screen.getByLabelText('Time range'))
+      await user.click(screen.getByRole('option', { name: 'Last 30 days' }))
+
+      await waitFor(() => {
+        expect(localStorage.getItem('dashboard-range')).toBe('30d')
+      })
+    })
+
+    it('restores range from localStorage', async () => {
+      localStorage.setItem('dashboard-range', '90d')
+      renderDashboard()
+      await waitFor(() => {
+        expect(screen.getByText('Last 90 days')).toBeInTheDocument()
+      })
+    })
+  })
 
   describe('system health', () => {
     it('renders System Health section', async () => {
@@ -232,13 +326,6 @@ describe('DashboardPage', () => {
       })
     })
 
-    it('shows storage usage in MB', async () => {
-      renderDashboard()
-      await waitFor(() => {
-        expect(screen.getByText(/42\.75 MB/i)).toBeInTheDocument()
-      })
-    })
-
     it('shows disconnected badge when database is down', async () => {
       setupSuccessHandler({
         system_health: { database_status: 'disconnected', storage_usage_mb: 0 },
@@ -249,10 +336,6 @@ describe('DashboardPage', () => {
       })
     })
   })
-
-  // -------------------------------------------------------------------------
-  // Recent registrations
-  // -------------------------------------------------------------------------
 
   describe('recent registrations table', () => {
     it('renders the Recent Registrations section heading', async () => {
@@ -287,10 +370,6 @@ describe('DashboardPage', () => {
     })
   })
 
-  // -------------------------------------------------------------------------
-  // Recent audit logs
-  // -------------------------------------------------------------------------
-
   describe('recent audit logs section', () => {
     it('renders the Recent Audit Logs heading', async () => {
       renderDashboard()
@@ -306,10 +385,6 @@ describe('DashboardPage', () => {
       })
     })
   })
-
-  // -------------------------------------------------------------------------
-  // Quick actions
-  // -------------------------------------------------------------------------
 
   describe('quick actions', () => {
     it('renders the Quick Actions section', async () => {
@@ -333,10 +408,6 @@ describe('DashboardPage', () => {
       })
     })
   })
-
-  // -------------------------------------------------------------------------
-  // Error state
-  // -------------------------------------------------------------------------
 
   describe('error state', () => {
     it('displays an error message when the API fails', async () => {
@@ -385,7 +456,6 @@ describe('DashboardPage', () => {
         expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument()
       })
 
-      // Now make the retry succeed
       setupSuccessHandler()
 
       const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
@@ -397,19 +467,13 @@ describe('DashboardPage', () => {
     })
   })
 
-  // -------------------------------------------------------------------------
-  // Refresh controls
-  // -------------------------------------------------------------------------
-
   describe('refresh controls', () => {
     it('renders the manual refresh button', async () => {
       renderDashboard()
       await waitFor(() => {
         expect(screen.getByText('Total Accounts')).toBeInTheDocument()
       })
-      // The refresh button is an icon-only button; find by its role
-      const buttons = screen.getAllByRole('button')
-      expect(buttons.length).toBeGreaterThan(0)
+      expect(screen.getByLabelText('Refresh dashboard')).toBeInTheDocument()
     })
 
     it('renders the refresh frequency selector', async () => {
@@ -419,10 +483,6 @@ describe('DashboardPage', () => {
       })
     })
   })
-
-  // -------------------------------------------------------------------------
-  // Stat values match API response
-  // -------------------------------------------------------------------------
 
   describe('stat values match API response', () => {
     it('displays zeros when all counts are 0', async () => {
@@ -434,7 +494,9 @@ describe('DashboardPage', () => {
         public_collections_count: 0,
         new_accounts_7d: 0,
         new_users_7d: 0,
+        previous_period: { new_accounts: 0, new_users: 0 },
         active_sessions: 0,
+        system_health: { database_status: 'connected', storage_usage_mb: 0 },
       })
       renderDashboard()
 
@@ -442,7 +504,6 @@ describe('DashboardPage', () => {
         expect(screen.getByText('Total Accounts')).toBeInTheDocument()
       })
 
-      // There should be multiple '0' values rendered
       const zeros = screen.getAllByText('0')
       expect(zeros.length).toBeGreaterThan(0)
     })
