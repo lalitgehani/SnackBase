@@ -32,6 +32,8 @@ export default function AdminLayout() {
         if (location.pathname.startsWith('/admin/scheduled-tasks')) return 'Scheduled Tasks';
         if (location.pathname === '/admin/workflows/new') return 'New Workflow';
         if (location.pathname.match(/^\/admin\/workflows\/[^/]+\/edit$/)) return 'Edit Workflow';
+        if (location.pathname.match(/^\/admin\/workflows\/[^/]+\/runs\/[^/]+$/)) return 'Workflow Run';
+        if (location.pathname.match(/^\/admin\/workflows\/[^/]+$/)) return 'Workflow Overview';
         if (location.pathname.startsWith('/admin/workflows')) return 'Workflows';
         if (location.pathname.startsWith('/admin/jobs')) return 'Jobs';
         if (location.pathname.startsWith('/admin/webhooks')) return 'Webhooks';

@@ -6,6 +6,7 @@ import { memo, type ReactNode } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { X, AlertCircle, AlertTriangle, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import type { NodeRunStatus } from '../graphMapper';
 
 export type NodeAccent =
     | 'slate'
@@ -33,6 +34,24 @@ const ACCENT_ICON: Record<NodeAccent, string> = {
     indigo: 'text-indigo-600 dark:text-indigo-400',
 };
 
+const RUN_STATUS_BORDER: Record<NodeRunStatus, string> = {
+    pending: 'border-muted-foreground/30 opacity-80',
+    running: 'border-blue-500 ring-2 ring-blue-500/40 shadow-sm',
+    waiting: 'border-amber-500 ring-2 ring-amber-500/30',
+    completed: 'border-green-500/70',
+    failed: 'border-destructive ring-2 ring-destructive/30',
+    skipped: 'border-dashed border-muted-foreground/40 opacity-70',
+};
+
+const RUN_STATUS_BADGE: Record<NodeRunStatus, string> = {
+    pending: 'bg-muted text-muted-foreground',
+    running: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
+    waiting: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
+    completed: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
+    failed: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
+    skipped: 'bg-muted text-muted-foreground',
+};
+
 export interface BaseStepNodeProps {
     title: string;
     subtitle?: string;
@@ -47,6 +66,8 @@ export interface BaseStepNodeProps {
     /** Field or graph validation: error shows red icon, warning amber. */
     invalid?: boolean;
     issueSeverity?: 'error' | 'warning' | null;
+    /** Runtime status overlay (run detail). */
+    runStatus?: NodeRunStatus | null;
     onDelete?: () => void;
     /** Extra content below subtitle (e.g. condition handles area). */
     children?: ReactNode;
@@ -68,6 +89,7 @@ export function BaseStepNodeCard({
     locked = false,
     invalid = false,
     issueSeverity = null,
+    runStatus = null,
     onDelete,
     children,
     customSourceHandles,
@@ -82,11 +104,13 @@ export function BaseStepNodeCard({
             className={cn(
                 'relative min-w-[180px] max-w-[240px] rounded-lg border bg-card text-card-foreground shadow-sm group',
                 selected && 'ring-2 ring-primary border-primary',
-                severity === 'error' && !selected && 'border-destructive/50',
-                severity === 'warning' && !selected && 'border-amber-500/50',
+                !runStatus && severity === 'error' && !selected && 'border-destructive/50',
+                !runStatus && severity === 'warning' && !selected && 'border-amber-500/50',
+                runStatus && !selected && RUN_STATUS_BORDER[runStatus],
                 className,
             )}
             data-testid={testId}
+            data-run-status={runStatus ?? undefined}
         >
             <div className={cn('absolute left-0 top-0 bottom-0 w-1 rounded-l-lg', ACCENT_BAR[accent])} />
 
@@ -102,18 +126,35 @@ export function BaseStepNodeCard({
                 <div className="flex items-start gap-2">
                     <Icon className={cn('h-4 w-4 shrink-0 mt-0.5', ACCENT_ICON[accent])} />
                     <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                             <p className="text-sm font-medium truncate leading-tight">{title || 'Unnamed'}</p>
-                            {severity === 'error' && (
+                            {runStatus && (
+                                <span
+                                    className={cn(
+                                        'inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium capitalize',
+                                        RUN_STATUS_BADGE[runStatus],
+                                    )}
+                                    data-testid="workflow-node-run-status"
+                                >
+                                    {runStatus}
+                                </span>
+                            )}
+                            {!runStatus && severity === 'error' && (
                                 <AlertCircle
                                     className="h-3.5 w-3.5 text-destructive shrink-0"
                                     aria-label="Validation error"
                                 />
                             )}
-                            {severity === 'warning' && (
+                            {!runStatus && severity === 'warning' && (
                                 <AlertTriangle
                                     className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0"
                                     aria-label="Validation warning"
+                                />
+                            )}
+                            {runStatus === 'failed' && (
+                                <AlertCircle
+                                    className="h-3.5 w-3.5 text-destructive shrink-0"
+                                    aria-label="Step failed"
                                 />
                             )}
                         </div>

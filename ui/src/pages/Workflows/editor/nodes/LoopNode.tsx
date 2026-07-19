@@ -10,6 +10,7 @@ export type LoopFlowNode = Node<StepNodeData, 'loop'>;
 
 function LoopNode({ id, data, selected }: NodeProps<LoopFlowNode>) {
     const step = data.step;
+    const locked = Boolean(data.locked);
     return (
         <BaseStepNodeCard
             title={step.name || data.label || 'Loop'}
@@ -20,7 +21,9 @@ function LoopNode({ id, data, selected }: NodeProps<LoopFlowNode>) {
             selected={selected}
             invalid={isStepInvalid(step)}
             issueSeverity={data.issueSeverity ?? null}
-            onDelete={() => emitNodeDelete(id)}
+            runStatus={data.runStatus ?? null}
+            locked={locked}
+            onDelete={locked ? undefined : () => emitNodeDelete(id)}
             testId="workflow-node-loop"
         />
     );

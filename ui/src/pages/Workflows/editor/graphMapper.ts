@@ -15,6 +15,15 @@ import {
 } from '../workflowConstants';
 import { decorateEdge } from './connectionRules';
 
+/** Runtime status overlay for run detail (Phase 4). Kept here to avoid circular imports. */
+export type NodeRunStatus =
+    | 'pending'
+    | 'running'
+    | 'waiting'
+    | 'completed'
+    | 'failed'
+    | 'skipped';
+
 export interface FlowGraph {
     nodes: Node[];
     edges: Edge[];
@@ -27,6 +36,10 @@ export interface StepNodeData extends Record<string, unknown> {
     step: WorkflowStep;
     /** Graph/field validation severity for node badge (Phase 3). */
     issueSeverity?: 'error' | 'warning' | null;
+    /** When true, hide delete control (read-only views). */
+    locked?: boolean;
+    /** Runtime status overlay for run detail (Phase 4). */
+    runStatus?: NodeRunStatus | null;
 }
 
 /** Trigger payload stored on the single trigger node. */
@@ -35,6 +48,8 @@ export interface TriggerNodeData extends Record<string, unknown> {
     label: string;
     trigger: WorkflowTriggerConfig;
     issueSeverity?: 'error' | 'warning' | null;
+    locked?: boolean;
+    runStatus?: NodeRunStatus | null;
 }
 
 export type WorkflowNodeData = StepNodeData | TriggerNodeData;

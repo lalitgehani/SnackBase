@@ -30,7 +30,6 @@ import {
     Eye,
 } from 'lucide-react';
 import { workflowsService, type Workflow } from '@/services/workflows.service';
-import { ViewWorkflowDialog } from './ViewWorkflowDialog';
 import { DeleteWorkflowDialog } from './DeleteWorkflowDialog';
 import { useToast } from '@/hooks/use-toast';
 
@@ -73,7 +72,6 @@ export default function WorkflowsPage() {
     const [togglingId, setTogglingId] = useState<string | null>(null);
     const [triggeringId, setTriggeringId] = useState<string | null>(null);
 
-    const [viewWorkflow, setViewWorkflow] = useState<Workflow | null>(null);
     const [deleteWorkflow, setDeleteWorkflow] = useState<Workflow | null>(null);
 
     const fetchWorkflows = useCallback(async () => {
@@ -294,7 +292,9 @@ export default function WorkflowsPage() {
                                                 <Play className="h-4 w-4 mr-2" />
                                                 Run Now
                                             </DropdownMenuItem>
-                                            <DropdownMenuItem onClick={() => setViewWorkflow(wf)}>
+                                            <DropdownMenuItem
+                                                onClick={() => navigate(`/admin/workflows/${wf.id}`)}
+                                            >
                                                 <Eye className="h-4 w-4 mr-2" />
                                                 View
                                             </DropdownMenuItem>
@@ -321,15 +321,7 @@ export default function WorkflowsPage() {
                 </Table>
             )}
 
-            {/* Dialogs — create/edit use full-page routes; view/delete remain dialogs */}
-            {viewWorkflow && (
-                <ViewWorkflowDialog
-                    workflow={viewWorkflow}
-                    open={viewWorkflow !== null}
-                    onOpenChange={(open) => { if (!open) setViewWorkflow(null); }}
-                />
-            )}
-
+            {/* Dialogs — create/edit/view use full-page routes; delete remains a dialog */}
             {deleteWorkflow && (
                 <DeleteWorkflowDialog
                     workflow={deleteWorkflow}

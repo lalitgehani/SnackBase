@@ -10,6 +10,7 @@ export type ConditionFlowNode = Node<StepNodeData, 'condition'>;
 
 function ConditionNode({ id, data, selected }: NodeProps<ConditionFlowNode>) {
     const step = data.step;
+    const locked = Boolean(data.locked);
     return (
         <BaseStepNodeCard
             title={step.name || data.label || 'Condition'}
@@ -21,7 +22,9 @@ function ConditionNode({ id, data, selected }: NodeProps<ConditionFlowNode>) {
             showSourceHandle={false}
             invalid={isStepInvalid(step)}
             issueSeverity={data.issueSeverity ?? null}
-            onDelete={() => emitNodeDelete(id)}
+            runStatus={data.runStatus ?? null}
+            locked={locked}
+            onDelete={locked ? undefined : () => emitNodeDelete(id)}
             testId="workflow-node-condition"
             customSourceHandles={
                 <>

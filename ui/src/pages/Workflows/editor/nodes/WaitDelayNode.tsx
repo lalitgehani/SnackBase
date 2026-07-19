@@ -10,6 +10,7 @@ export type WaitDelayFlowNode = Node<StepNodeData, 'wait_delay'>;
 
 function WaitDelayNode({ id, data, selected }: NodeProps<WaitDelayFlowNode>) {
     const step = data.step;
+    const locked = Boolean(data.locked);
     return (
         <BaseStepNodeCard
             title={step.name || data.label || 'Wait delay'}
@@ -20,7 +21,9 @@ function WaitDelayNode({ id, data, selected }: NodeProps<WaitDelayFlowNode>) {
             selected={selected}
             invalid={isStepInvalid(step)}
             issueSeverity={data.issueSeverity ?? null}
-            onDelete={() => emitNodeDelete(id)}
+            runStatus={data.runStatus ?? null}
+            locked={locked}
+            onDelete={locked ? undefined : () => emitNodeDelete(id)}
             testId="workflow-node-wait_delay"
         />
     );

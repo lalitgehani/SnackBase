@@ -10,6 +10,7 @@ export type WaitConditionFlowNode = Node<StepNodeData, 'wait_condition'>;
 
 function WaitConditionNode({ id, data, selected }: NodeProps<WaitConditionFlowNode>) {
     const step = data.step;
+    const locked = Boolean(data.locked);
     return (
         <BaseStepNodeCard
             title={step.name || data.label || 'Wait condition'}
@@ -20,7 +21,9 @@ function WaitConditionNode({ id, data, selected }: NodeProps<WaitConditionFlowNo
             selected={selected}
             invalid={isStepInvalid(step)}
             issueSeverity={data.issueSeverity ?? null}
-            onDelete={() => emitNodeDelete(id)}
+            runStatus={data.runStatus ?? null}
+            locked={locked}
+            onDelete={locked ? undefined : () => emitNodeDelete(id)}
             testId="workflow-node-wait_condition"
         />
     );

@@ -26,6 +26,79 @@ describe('WorkflowCanvas', () => {
         expect(screen.getByTestId('workflow-canvas')).toBeInTheDocument();
     });
 
+    it('read-only locked nodes hide delete control', () => {
+        render(
+            <div style={{ width: 800, height: 600 }}>
+                <WorkflowCanvas
+                    nodes={[
+                        {
+                            id: 'step_a',
+                            type: 'action',
+                            position: { x: 0, y: 0 },
+                            draggable: false,
+                            data: {
+                                kind: 'step',
+                                label: 'step_a',
+                                locked: true,
+                                step: {
+                                    type: 'action',
+                                    name: 'step_a',
+                                    action_type: 'send_webhook',
+                                    config: {},
+                                },
+                            },
+                        },
+                    ]}
+                    edges={[]}
+                    onNodesChange={() => {}}
+                    onEdgesChange={() => {}}
+                    readOnly
+                    showToolbar={false}
+                />
+            </div>,
+        );
+
+        expect(screen.getByTestId('workflow-node-action')).toBeInTheDocument();
+        expect(screen.queryByTestId('workflow-node-delete')).not.toBeInTheDocument();
+    });
+
+    it('applies failed run status badge on node', () => {
+        render(
+            <div style={{ width: 800, height: 600 }}>
+                <WorkflowCanvas
+                    nodes={[
+                        {
+                            id: 'step_a',
+                            type: 'action',
+                            position: { x: 0, y: 0 },
+                            data: {
+                                kind: 'step',
+                                label: 'step_a',
+                                locked: true,
+                                runStatus: 'failed',
+                                step: {
+                                    type: 'action',
+                                    name: 'step_a',
+                                    action_type: 'send_webhook',
+                                    config: {},
+                                },
+                            },
+                        },
+                    ]}
+                    edges={[]}
+                    onNodesChange={() => {}}
+                    onEdgesChange={() => {}}
+                    readOnly
+                    showToolbar={false}
+                />
+            </div>,
+        );
+
+        const node = screen.getByTestId('workflow-node-action');
+        expect(node).toHaveAttribute('data-run-status', 'failed');
+        expect(screen.getByTestId('workflow-node-run-status')).toHaveTextContent('failed');
+    });
+
     it('renders action card nodes when provided', () => {
         render(
             <div style={{ width: 800, height: 600 }}>

@@ -23,6 +23,7 @@ function renderList() {
             <Route path="/admin/workflows" element={<WorkflowsPage />} />
             <Route path="/admin/workflows/new" element={<div>New editor</div>} />
             <Route path="/admin/workflows/:id/edit" element={<div>Edit editor</div>} />
+            <Route path="/admin/workflows/:id" element={<div>Overview page</div>} />
         </Routes>,
         { initialEntries: ['/admin/workflows'] },
     );
@@ -72,5 +73,34 @@ describe('WorkflowsPage', () => {
         const user = userEvent.setup();
         await user.click(screen.getByTestId('workflow-edit-link-wf-1'));
         expect(await screen.findByText('Edit editor')).toBeInTheDocument();
+    });
+
+    it('View action navigates to overview route', async () => {
+        vi.mocked(workflowsService.list).mockResolvedValue({
+            items: [
+                {
+                    id: 'wf-1',
+                    account_id: 'AB1234',
+                    name: 'Alpha',
+                    description: null,
+                    trigger_type: 'manual',
+                    trigger_config: { type: 'manual' },
+                    steps: [{ type: 'action', name: 'a' }],
+                    enabled: true,
+                    created_at: '2026-01-01T00:00:00Z',
+                    updated_at: '2026-01-02T00:00:00Z',
+                    created_by: null,
+                },
+            ],
+            total: 1,
+        });
+
+        renderList();
+        expect(await screen.findByText('Alpha')).toBeInTheDocument();
+
+        const user = userEvent.setup();
+        await user.click(screen.getByRole('button', { name: /actions/i }));
+        await user.click(screen.getByText('View'));
+        expect(await screen.findByText('Overview page')).toBeInTheDocument();
     });
 });

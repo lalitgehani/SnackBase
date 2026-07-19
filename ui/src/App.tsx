@@ -30,6 +30,8 @@ import HooksPage from '@/pages/Hooks/HooksPage';
 import EndpointsPage from '@/pages/Endpoints/EndpointsPage';
 import WorkflowsPage from '@/pages/Workflows/WorkflowsPage';
 import WorkflowEditorPage from '@/pages/Workflows/editor/WorkflowEditorPage';
+import WorkflowOverviewPage from '@/pages/Workflows/WorkflowOverviewPage';
+import WorkflowRunDetailPage from '@/pages/Workflows/WorkflowRunDetailPage';
 import AdminLayout from '@/layouts/AdminLayout';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { Toaster } from '@/components/ui/toaster';
@@ -89,7 +91,8 @@ function App() {
           <Route path="workflows" element={<WorkflowsPage />} />
           <Route path="workflows/new" element={<WorkflowEditorPage />} />
           <Route path="workflows/:id/edit" element={<WorkflowEditorPage />} />
-          <Route path="workflows/:id" element={<Navigate to="edit" replace />} />
+          <Route path="workflows/:id/runs/:instanceId" element={<WorkflowRunDetailPage />} />
+          <Route path="workflows/:id" element={<WorkflowOverviewPage />} />
         </Route>
 
         {/* Catch all - redirect to dashboard */}

@@ -10,6 +10,7 @@ export type ActionFlowNode = Node<StepNodeData, 'action'>;
 
 function ActionNode({ id, data, selected }: NodeProps<ActionFlowNode>) {
     const step = data.step;
+    const locked = Boolean(data.locked);
     return (
         <BaseStepNodeCard
             title={step.name || data.label || 'Action'}
@@ -20,7 +21,9 @@ function ActionNode({ id, data, selected }: NodeProps<ActionFlowNode>) {
             selected={selected}
             invalid={isStepInvalid(step)}
             issueSeverity={data.issueSeverity ?? null}
-            onDelete={() => emitNodeDelete(id)}
+            runStatus={data.runStatus ?? null}
+            locked={locked}
+            onDelete={locked ? undefined : () => emitNodeDelete(id)}
             testId="workflow-node-action"
         />
     );
