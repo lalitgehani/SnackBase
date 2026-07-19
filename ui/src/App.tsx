@@ -29,6 +29,7 @@ import ScheduledTasksPage from '@/pages/ScheduledTasks/ScheduledTasksPage';
 import HooksPage from '@/pages/Hooks/HooksPage';
 import EndpointsPage from '@/pages/Endpoints/EndpointsPage';
 import WorkflowsPage from '@/pages/Workflows/WorkflowsPage';
+import WorkflowEditorPage from '@/pages/Workflows/editor/WorkflowEditorPage';
 import AdminLayout from '@/layouts/AdminLayout';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { Toaster } from '@/components/ui/toaster';
@@ -86,6 +87,9 @@ function App() {
           <Route path="hooks" element={<HooksPage />} />
           <Route path="endpoints" element={<EndpointsPage />} />
           <Route path="workflows" element={<WorkflowsPage />} />
+          <Route path="workflows/new" element={<WorkflowEditorPage />} />
+          <Route path="workflows/:id/edit" element={<WorkflowEditorPage />} />
+          <Route path="workflows/:id" element={<Navigate to="edit" replace />} />
         </Route>
 
         {/* Catch all - redirect to dashboard */}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -29,8 +30,6 @@ import {
     Eye,
 } from 'lucide-react';
 import { workflowsService, type Workflow } from '@/services/workflows.service';
-import { CreateWorkflowDialog } from './CreateWorkflowDialog';
-import { EditWorkflowDialog } from './EditWorkflowDialog';
 import { ViewWorkflowDialog } from './ViewWorkflowDialog';
 import { DeleteWorkflowDialog } from './DeleteWorkflowDialog';
 import { useToast } from '@/hooks/use-toast';
@@ -65,6 +64,7 @@ function TriggerBadge({ triggerType }: { triggerType: string }) {
 
 export default function WorkflowsPage() {
     const { toast } = useToast();
+    const navigate = useNavigate();
     const [workflows, setWorkflows] = useState<Workflow[]>([]);
     const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(true);
@@ -73,9 +73,7 @@ export default function WorkflowsPage() {
     const [togglingId, setTogglingId] = useState<string | null>(null);
     const [triggeringId, setTriggeringId] = useState<string | null>(null);
 
-    const [createOpen, setCreateOpen] = useState(false);
     const [viewWorkflow, setViewWorkflow] = useState<Workflow | null>(null);
-    const [editWorkflow, setEditWorkflow] = useState<Workflow | null>(null);
     const [deleteWorkflow, setDeleteWorkflow] = useState<Workflow | null>(null);
 
     const fetchWorkflows = useCallback(async () => {
@@ -149,7 +147,7 @@ export default function WorkflowsPage() {
                         <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
                         Refresh
                     </Button>
-                    <Button size="sm" onClick={() => setCreateOpen(true)}>
+                    <Button size="sm" onClick={() => navigate('/admin/workflows/new')}>
                         <Plus className="h-4 w-4 mr-2" />
                         New Workflow
                     </Button>
@@ -186,7 +184,7 @@ export default function WorkflowsPage() {
                     <p className="text-muted-foreground text-sm mb-6">
                         Create a workflow to automate multi-step processes triggered by events, schedules, or API calls.
                     </p>
-                    <Button onClick={() => setCreateOpen(true)}>
+                    <Button onClick={() => navigate('/admin/workflows/new')}>
                         <Plus className="h-4 w-4 mr-2" />
                         New Workflow
                     </Button>
@@ -274,7 +272,9 @@ export default function WorkflowsPage() {
                                                 <Eye className="h-4 w-4 mr-2" />
                                                 View
                                             </DropdownMenuItem>
-                                            <DropdownMenuItem onClick={() => setEditWorkflow(wf)}>
+                                            <DropdownMenuItem
+                                                onClick={() => navigate(`/admin/workflows/${wf.id}/edit`)}
+                                            >
                                                 <Pencil className="h-4 w-4 mr-2" />
                                                 Edit
                                             </DropdownMenuItem>
@@ -295,27 +295,12 @@ export default function WorkflowsPage() {
                 </Table>
             )}
 
-            {/* Dialogs */}
-            <CreateWorkflowDialog
-                open={createOpen}
-                onOpenChange={setCreateOpen}
-                onCreated={fetchWorkflows}
-            />
-
+            {/* Dialogs — create/edit use full-page routes; view/delete remain dialogs */}
             {viewWorkflow && (
                 <ViewWorkflowDialog
                     workflow={viewWorkflow}
                     open={viewWorkflow !== null}
                     onOpenChange={(open) => { if (!open) setViewWorkflow(null); }}
-                />
-            )}
-
-            {editWorkflow && (
-                <EditWorkflowDialog
-                    workflow={editWorkflow}
-                    open={editWorkflow !== null}
-                    onOpenChange={(open) => { if (!open) setEditWorkflow(null); }}
-                    onUpdated={() => { setEditWorkflow(null); fetchWorkflows(); }}
                 />
             )}
 

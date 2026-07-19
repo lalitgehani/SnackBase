@@ -454,6 +454,258 @@ async def test_update_workflow_steps(client: AsyncClient, user_token: str) -> No
     assert resp.json()["steps"][0]["name"] == "step1"
 
 
+# ---------------------------------------------------------------------------
+# STEP POSITION PERSISTENCE (UI layout fields)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_create_workflow_with_step_positions(
+    client: AsyncClient, user_token: str
+) -> None:
+    """Create + GET round-trips position_x / position_y on steps."""
+    steps = [
+        {
+            "name": "notify",
+            "type": "action",
+            "action_type": "send_webhook",
+            "config": {"url": "https://example.com/hook"},
+            "position_x": 120.5,
+            "position_y": 40,
+            "next": "done",
+        },
+        {
+            "name": "done",
+            "type": "action",
+            "action_type": "send_email",
+            "config": {"to": "a@b.com"},
+            "position_x": 320,
+            "position_y": 40,
+        },
+    ]
+    create = await client.post(
+        "/api/v1/workflows",
+        json={
+            "name": "Positioned Flow",
+            "trigger": {"type": "manual"},
+            "steps": steps,
+        },
+        headers=_auth(user_token),
+    )
+    assert create.status_code == 201, create.text
+    wf_id = create.json()["id"]
+    assert create.json()["steps"][0]["position_x"] == 120.5
+    assert create.json()["steps"][0]["position_y"] == 40
+    assert create.json()["steps"][1]["position_x"] == 320
+    assert create.json()["steps"][1]["position_y"] == 40
+
+    get_resp = await client.get(
+        f"/api/v1/workflows/{wf_id}", headers=_auth(user_token)
+    )
+    assert get_resp.status_code == 200
+    got = get_resp.json()["steps"]
+    assert got[0]["position_x"] == 120.5
+    assert got[0]["position_y"] == 40
+    assert got[1]["position_x"] == 320
+    assert got[1]["position_y"] == 40
+    # Logic fields preserved
+    assert got[0]["action_type"] == "send_webhook"
+    assert got[0]["next"] == "done"
+
+
+@pytest.mark.asyncio
+async def test_update_workflow_step_positions_only(
+    client: AsyncClient, user_token: str
+) -> None:
+    """Updating positions must not strip step logic fields."""
+    create = await client.post(
+        "/api/v1/workflows",
+        json={
+            "name": "Positions Update Flow",
+            "trigger": {"type": "manual"},
+            "steps": [
+                {
+                    "name": "check",
+                    "type": "condition",
+                    "expression": "true",
+                    "on_true": "yes",
+                    "on_false": "no",
+                    "position_x": 0,
+                    "position_y": 0,
+                },
+                {
+                    "name": "yes",
+                    "type": "action",
+                    "action_type": "send_webhook",
+                    "config": {"url": "https://example.com/yes"},
+                    "position_x": 100,
+                    "position_y": 0,
+                },
+                {
+                    "name": "no",
+                    "type": "action",
+                    "action_type": "send_webhook",
+                    "config": {"url": "https://example.com/no"},
+                    "position_x": 100,
+                    "position_y": 100,
+                },
+            ],
+        },
+        headers=_auth(user_token),
+    )
+    assert create.status_code == 201, create.text
+    wf_id = create.json()["id"]
+
+    updated_steps = [
+        {
+            "name": "check",
+            "type": "condition",
+            "expression": "true",
+            "on_true": "yes",
+            "on_false": "no",
+            "position_x": 50,
+            "position_y": 25,
+        },
+        {
+            "name": "yes",
+            "type": "action",
+            "action_type": "send_webhook",
+            "config": {"url": "https://example.com/yes"},
+            "position_x": 250,
+            "position_y": 10,
+        },
+        {
+            "name": "no",
+            "type": "action",
+            "action_type": "send_webhook",
+            "config": {"url": "https://example.com/no"},
+            "position_x": 250,
+            "position_y": 200,
+        },
+    ]
+    resp = await client.put(
+        f"/api/v1/workflows/{wf_id}",
+        json={"steps": updated_steps},
+        headers=_auth(user_token),
+    )
+    assert resp.status_code == 200
+    steps = resp.json()["steps"]
+    assert steps[0]["position_x"] == 50
+    assert steps[0]["position_y"] == 25
+    assert steps[0]["expression"] == "true"
+    assert steps[0]["on_true"] == "yes"
+    assert steps[0]["on_false"] == "no"
+    assert steps[1]["position_x"] == 250
+    assert steps[1]["config"]["url"] == "https://example.com/yes"
+    assert steps[2]["position_y"] == 200
+
+
+@pytest.mark.asyncio
+async def test_workflow_without_positions_still_works(
+    client: AsyncClient, user_token: str
+) -> None:
+    """Legacy steps without positions create, load, and execute without error."""
+    create = await client.post(
+        "/api/v1/workflows",
+        json={
+            "name": "Legacy Positions",
+            "trigger": {"type": "manual"},
+            "steps": [
+                {
+                    "name": "a",
+                    "type": "action",
+                    "action_type": "send_webhook",
+                    "config": {"url": "https://example.com/a"},
+                    "next": "b",
+                },
+                {
+                    "name": "b",
+                    "type": "action",
+                    "action_type": "send_webhook",
+                    "config": {"url": "https://example.com/b"},
+                },
+            ],
+        },
+        headers=_auth(user_token),
+    )
+    assert create.status_code == 201, create.text
+    data = create.json()
+    assert "position_x" not in data["steps"][0]
+    assert "position_y" not in data["steps"][0]
+
+    get_resp = await client.get(
+        f"/api/v1/workflows/{data['id']}", headers=_auth(user_token)
+    )
+    assert get_resp.status_code == 200
+    assert len(get_resp.json()["steps"]) == 2
+
+    trigger_resp = await client.post(
+        f"/api/v1/workflows/{data['id']}/trigger", headers=_auth(user_token)
+    )
+    assert trigger_resp.status_code == 202
+    instance_id = trigger_resp.json()["instance_id"]
+    await asyncio.sleep(0.3)
+    detail = await client.get(
+        f"/api/v1/workflow-instances/{instance_id}", headers=_auth(user_token)
+    )
+    assert detail.status_code == 200
+    # Empty webhook may fail action but must not crash on unknown keys;
+    # status is completed or failed, never stuck pending from position fields.
+    assert detail.json()["status"] in ("completed", "failed", "running")
+
+
+@pytest.mark.asyncio
+async def test_executor_ignores_step_positions(
+    client: AsyncClient, user_token: str
+) -> None:
+    """Multi-step workflow with positions still runs (executor ignores layout keys)."""
+    create = await client.post(
+        "/api/v1/workflows",
+        json={
+            "name": "Positions Execute",
+            "trigger": {"type": "manual"},
+            "steps": [
+                {
+                    "name": "first",
+                    "type": "action",
+                    "action_type": "send_webhook",
+                    "config": {"url": "https://example.com/1"},
+                    "position_x": 10,
+                    "position_y": 20,
+                    "next": "second",
+                },
+                {
+                    "name": "second",
+                    "type": "action",
+                    "action_type": "send_webhook",
+                    "config": {"url": "https://example.com/2"},
+                    "position_x": 200,
+                    "position_y": 20,
+                },
+            ],
+        },
+        headers=_auth(user_token),
+    )
+    assert create.status_code == 201, create.text
+    wf_id = create.json()["id"]
+
+    trigger_resp = await client.post(
+        f"/api/v1/workflows/{wf_id}/trigger", headers=_auth(user_token)
+    )
+    assert trigger_resp.status_code == 202
+    instance_id = trigger_resp.json()["instance_id"]
+    await asyncio.sleep(0.3)
+    detail = await client.get(
+        f"/api/v1/workflow-instances/{instance_id}", headers=_auth(user_token)
+    )
+    assert detail.status_code == 200
+    assert detail.json()["status"] in ("completed", "failed", "running")
+    # Positions must still be stored on the parent workflow definition
+    get_wf = await client.get(f"/api/v1/workflows/{wf_id}", headers=_auth(user_token))
+    assert get_wf.json()["steps"][0]["position_x"] == 10
+    assert get_wf.json()["steps"][1]["position_y"] == 20
+
+
 @pytest.mark.asyncio
 async def test_update_workflow_trigger(client: AsyncClient, user_token: str) -> None:
     create = await client.post(

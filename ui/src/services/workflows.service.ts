@@ -39,6 +39,10 @@ export interface WorkflowStep {
     type: string;
     name: string;
     next?: string | null;
+    /** Canvas X position for the visual editor (UI only; executor ignores). */
+    position_x?: number;
+    /** Canvas Y position for the visual editor (UI only; executor ignores). */
+    position_y?: number;
     [key: string]: unknown;
 }
 

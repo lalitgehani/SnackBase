@@ -60,9 +60,27 @@ TriggerConfig = Annotated[
 # ---------------------------------------------------------------------------
 # Step config schemas (discriminated on ``type``)
 # ---------------------------------------------------------------------------
+#
+# Steps are stored as free-form JSON dicts (see WorkflowCreateRequest.steps).
+# Optional UI layout fields ``position_x`` / ``position_y`` may be present on
+# any step; the executor ignores them. Typed models below document the contract
+# for OpenAPI consumers; create/update still accept arbitrary step keys.
 
 
-class ActionStep(BaseModel):
+class StepPositionMixin(BaseModel):
+    """Optional canvas coordinates for the visual workflow editor (UI only)."""
+
+    position_x: float | None = Field(
+        None,
+        description="Canvas X position for the visual editor; ignored by the executor",
+    )
+    position_y: float | None = Field(
+        None,
+        description="Canvas Y position for the visual editor; ignored by the executor",
+    )
+
+
+class ActionStep(StepPositionMixin):
     type: Literal["action"]
     name: str = Field(..., description="Unique step name within the workflow")
     action_type: str = Field(
@@ -79,7 +97,7 @@ class ActionStep(BaseModel):
     next: str | None = Field(None, description="Name of next step; None = workflow ends")
 
 
-class ConditionStep(BaseModel):
+class ConditionStep(StepPositionMixin):
     type: Literal["condition"]
     name: str
     expression: str = Field(..., description="Rule expression to evaluate")
@@ -87,7 +105,7 @@ class ConditionStep(BaseModel):
     on_false: str | None = Field(None, description="Next step name if expression is false")
 
 
-class WaitDelayStep(BaseModel):
+class WaitDelayStep(StepPositionMixin):
     type: Literal["wait_delay"]
     name: str
     duration: str = Field(
@@ -98,7 +116,7 @@ class WaitDelayStep(BaseModel):
     next: str | None = Field(None, description="Step to execute after the delay")
 
 
-class WaitConditionStep(BaseModel):
+class WaitConditionStep(StepPositionMixin):
     type: Literal["wait_condition"]
     name: str
     expression: str = Field(..., description="Poll until this expression is true")
@@ -107,7 +125,7 @@ class WaitConditionStep(BaseModel):
     next: str | None = None
 
 
-class WaitEventStep(BaseModel):
+class WaitEventStep(StepPositionMixin):
     type: Literal["wait_event"]
     name: str
     event: str = Field(..., description="Event to wait for, e.g. 'records.update'")
@@ -117,7 +135,7 @@ class WaitEventStep(BaseModel):
     next: str | None = None
 
 
-class LoopStep(BaseModel):
+class LoopStep(StepPositionMixin):
     type: Literal["loop"]
     name: str
     items: str = Field(
@@ -128,7 +146,7 @@ class LoopStep(BaseModel):
     next: str | None = None
 
 
-class ParallelStep(BaseModel):
+class ParallelStep(StepPositionMixin):
     type: Literal["parallel"]
     name: str
     branches: list[list[str]] = Field(
@@ -163,7 +181,10 @@ class WorkflowCreateRequest(BaseModel):
     trigger: TriggerConfig
     steps: list[dict[str, Any]] = Field(
         default_factory=list,
-        description="Ordered list of step definition dicts",
+        description=(
+            "Ordered list of step definition dicts. Each step may include optional "
+            "UI layout fields position_x and position_y (floats); the executor ignores them."
+        ),
     )
     enabled: bool = Field(True)
 

@@ -7,6 +7,13 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/s
 import { AppSidebar } from '@/components/AppSidebar';
 import { ModeToggle } from '@/components/mode-toggle';
 
+/** Full-bleed editor routes under /admin/workflows (not the list). */
+function isWorkflowEditorPath(pathname: string): boolean {
+    if (!pathname.startsWith('/admin/workflows/')) return false;
+    // /admin/workflows/new or /admin/workflows/:id/edit or /admin/workflows/:id
+    return pathname !== '/admin/workflows';
+}
+
 export default function AdminLayout() {
     const location = useLocation();
 
@@ -23,6 +30,8 @@ export default function AdminLayout() {
         if (location.pathname.startsWith('/admin/api-keys')) return 'API Keys';
         if (location.pathname.startsWith('/admin/hooks')) return 'Hooks';
         if (location.pathname.startsWith('/admin/scheduled-tasks')) return 'Scheduled Tasks';
+        if (location.pathname === '/admin/workflows/new') return 'New Workflow';
+        if (location.pathname.match(/^\/admin\/workflows\/[^/]+\/edit$/)) return 'Edit Workflow';
         if (location.pathname.startsWith('/admin/workflows')) return 'Workflows';
         if (location.pathname.startsWith('/admin/jobs')) return 'Jobs';
         if (location.pathname.startsWith('/admin/webhooks')) return 'Webhooks';
@@ -49,10 +58,11 @@ export default function AdminLayout() {
                     </div>
                 </header>
 
-                {/* Page content — collections workspace uses full-bleed shell */}
+                {/* Page content — collections workspace and workflow editor use full-bleed shell */}
                 <main
                     className={
-                        location.pathname.startsWith('/admin/collections')
+                        location.pathname.startsWith('/admin/collections') ||
+                        isWorkflowEditorPath(location.pathname)
                             ? 'flex flex-1 min-h-0 min-w-0 flex-col overflow-hidden bg-background p-0'
                             : 'flex-1 min-w-0 overflow-y-auto bg-background p-6'
                     }
