@@ -3,7 +3,7 @@ import {
     isHookFullBleedPath,
     isFullBleedAdminPath,
     getAdminPageTitle,
-} from '@/layouts/AdminLayout';
+} from '@/layouts/adminLayoutHelpers';
 
 describe('AdminLayout hook path helpers', () => {
     it('classifies non-list hooks paths as full-bleed', () => {
