@@ -39,13 +39,13 @@ export function StackedBarChart({
           <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
           <XAxis
             dataKey={xKey}
-            tick={{ fontSize: 11 }}
+            tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
             tickLine={false}
             axisLine={false}
             minTickGap={24}
           />
           <YAxis
-            tick={{ fontSize: 11 }}
+            tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
             tickLine={false}
             axisLine={false}
             allowDecimals={false}

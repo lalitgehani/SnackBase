@@ -245,12 +245,16 @@ curl -X POST http://localhost:8000/api/v1/admin/verify-email \
 
 After logging in (and verifying your email if required), you'll see the main dashboard with:
 - Sidebar navigation on the left
-- Statistics cards (collections, records, users, etc.)
-- Recent activity or quick actions
+- KPI cards (accounts, users, collections, records, sessions, storage) with period deltas and sparklines
+- Growth, audit activity, and automation health charts (jobs / hooks / webhooks)
+- Compact recent activity feeds and quick actions
+- On a fresh install, a **Getting started** checklist until you create data (or dismiss it)
+
+**Access**: The full dashboard stats API (`GET /api/v1/dashboard/stats`) is **superadmin-only**. Use the time-range selector (`7d` / `30d` / `90d`, default `7d`) and optional auto-refresh; preferences are stored in browser `localStorage`.
 
 > **Screenshot Placeholder 8**
 >
-> **Description**: The main Dashboard page showing statistics cards and the sidebar navigation menu.
+> **Description**: The main Dashboard page showing statistics cards, charts, and the sidebar navigation menu.
 
 ---
 

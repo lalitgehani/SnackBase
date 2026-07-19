@@ -115,12 +115,12 @@ class FeatureCounts(BaseModel):
 class JobsByStatus(BaseModel):
     """Live job queue composition (current snapshot, not range-scoped)."""
 
-    pending: int = 0
-    running: int = 0
-    completed: int = 0
-    failed: int = 0
-    retrying: int = 0
-    dead: int = 0
+    pending: int = Field(0, description="Jobs waiting to run")
+    running: int = Field(0, description="Jobs currently executing")
+    completed: int = Field(0, description="Successfully completed jobs")
+    failed: int = Field(0, description="Failed jobs (may still retry)")
+    retrying: int = Field(0, description="Jobs scheduled for retry")
+    dead: int = Field(0, description="Dead-letter jobs that need attention")
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -128,9 +128,9 @@ class JobsByStatus(BaseModel):
 class HookExecutionsSummary(BaseModel):
     """Hook execution outcomes for the selected time range (via executed_at)."""
 
-    success: int = 0
-    failed: int = 0
-    partial: int = 0
+    success: int = Field(0, description="Successful hook executions in range")
+    failed: int = Field(0, description="Failed hook executions in range")
+    partial: int = Field(0, description="Partially successful hook executions")
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -138,10 +138,10 @@ class HookExecutionsSummary(BaseModel):
 class WebhookDeliveriesSummary(BaseModel):
     """Webhook delivery outcomes for the selected time range (via created_at)."""
 
-    delivered: int = 0
-    failed: int = 0
-    pending: int = 0
-    retrying: int = 0
+    delivered: int = Field(0, description="Successfully delivered webhooks in range")
+    failed: int = Field(0, description="Failed webhook deliveries in range")
+    pending: int = Field(0, description="Pending webhook deliveries")
+    retrying: int = Field(0, description="Webhook deliveries scheduled for retry")
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -36,16 +36,22 @@ async def get_dashboard_stats(
 
     Returns comprehensive dashboard metrics including:
     - Total counts (accounts, users, collections, records)
-    - Growth metrics for the selected range (new accounts/users)
-    - Previous-period comparison counts
-    - Daily time series for accounts and users (zero-filled)
-    - Recent registrations (last 10 users)
-    - System health (database status, storage usage)
-    - Active sessions count
-    - Recent audit logs (PII masked based on user group membership)
+    - Growth metrics for the selected range (new accounts/users; field names
+      ``new_accounts_7d`` / ``new_users_7d`` always reflect the effective ``range``)
+    - Previous-period comparison counts of equal length
+    - Daily time series for accounts, users, and audit operations (zero-filled)
+    - Top collections by record count (top 10 + optional Other bucket)
+    - Platform feature counts (hooks, webhooks, workflows, endpoints, macros, …)
+    - Jobs status composition and hook/webhook outcome summaries
+    - Recent registrations (last 10 users) and recent audit logs
+    - System health (database status, storage usage) and active sessions
 
-    Only superadmins (users in the system account with nil UUID) can access this endpoint.
-    PII is masked unless the user belongs to the 'pii_access' group.
+    Only superadmins can access this endpoint. PII on audit logs is masked unless
+    the user belongs to the ``pii_access`` group.
+
+    Performance notes:
+    - Record counts use a batched ``UNION ALL`` of ``COUNT(*)`` (not N+1).
+    - Automation subsections degrade to zeros if underlying tables fail.
     """
     dashboard_service = DashboardService(session)
     return await dashboard_service.get_dashboard_stats(

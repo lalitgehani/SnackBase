@@ -61,7 +61,10 @@ export function DonutChart({
               fontSize: 12,
             }}
           />
-          <Legend wrapperStyle={{ fontSize: 12 }} />
+          <Legend
+            wrapperStyle={{ fontSize: 12, color: 'var(--foreground)' }}
+            formatter={(value) => String(value)}
+          />
         </PieChart>
       </ResponsiveContainer>
     </div>

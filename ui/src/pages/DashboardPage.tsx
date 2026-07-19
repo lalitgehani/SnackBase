@@ -1,11 +1,11 @@
 /**
  * Dashboard page - main landing page after login
- * Phase 3: automation health (jobs/hooks/webhooks), feature counts, alert strip
+ * Phase 4: performance (placeholderData), getting-started, a11y summaries
  */
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -38,6 +38,10 @@ import {
   Route,
   AlertTriangle,
   X,
+  CheckCircle2,
+  Circle,
+  Rocket,
+  Settings,
 } from 'lucide-react';
 import {
   ChartContainer,
@@ -86,6 +90,7 @@ const RANGE_LABELS: Record<DashboardRange, string> = {
 const REFRESH_STORAGE_KEY = 'dashboard-refresh-frequency';
 const RANGE_STORAGE_KEY = 'dashboard-range';
 const ALERT_DISMISS_KEY = 'dashboard-automation-alert-dismissed';
+const GETTING_STARTED_DISMISS_KEY = 'dashboard-getting-started-dismissed';
 
 const QUICK_ACTIONS = [
   { label: 'Create Account', path: '/admin/accounts', icon: Building2 },
@@ -95,6 +100,49 @@ const QUICK_ACTIONS = [
   { label: 'Create Webhook', path: '/admin/webhooks', icon: Webhook },
   { label: 'Create Workflow', path: '/admin/workflows', icon: Workflow },
 ] as const;
+
+interface GettingStartedItem {
+  id: string;
+  label: string;
+  path: string;
+  done: (s: DashboardStats) => boolean;
+}
+
+const GETTING_STARTED_ITEMS: GettingStartedItem[] = [
+  {
+    id: 'collection',
+    label: 'Create a collection',
+    path: '/admin/collections/new',
+    done: (s) => s.total_collections > 0,
+  },
+  {
+    id: 'invite',
+    label: 'Invite a user',
+    path: '/admin/invitations',
+    done: (s) =>
+      s.total_users > 1 ||
+      s.feature_counts.invitations_pending > 0 ||
+      s.recent_registrations.length > 0,
+  },
+  {
+    id: 'hook',
+    label: 'Create a hook',
+    path: '/admin/hooks',
+    done: (s) => s.feature_counts.hooks > 0,
+  },
+  {
+    id: 'webhook',
+    label: 'Create a webhook',
+    path: '/admin/webhooks',
+    done: (s) => s.feature_counts.webhooks > 0,
+  },
+  {
+    id: 'configuration',
+    label: 'Review configuration',
+    path: '/admin/configuration',
+    done: () => false, // informational step; complete when dismissed or install grows
+  },
+];
 
 const FEATURE_COUNT_ITEMS = [
   {
@@ -254,6 +302,9 @@ export default function DashboardPage() {
   const [alertDismissed, setAlertDismissed] = useState(() => {
     return sessionStorage.getItem(ALERT_DISMISS_KEY) === '1';
   });
+  const [gettingStartedDismissed, setGettingStartedDismissed] = useState(() => {
+    return localStorage.getItem(GETTING_STARTED_DISMISS_KEY) === '1';
+  });
 
   const {
     data: stats,
@@ -265,6 +316,7 @@ export default function DashboardPage() {
   } = useQuery<DashboardStats>({
     queryKey: ['dashboard', 'stats', range],
     queryFn: () => getDashboardStats(range),
+    placeholderData: keepPreviousData,
     refetchInterval:
       parseInt(refreshFrequency, 10) > 0 ? parseInt(refreshFrequency, 10) * 1000 : false,
   });
@@ -296,6 +348,20 @@ export default function DashboardPage() {
     sessionStorage.setItem(ALERT_DISMISS_KEY, '1');
     setAlertDismissed(true);
   };
+
+  const dismissGettingStarted = () => {
+    localStorage.setItem(GETTING_STARTED_DISMISS_KEY, '1');
+    setGettingStartedDismissed(true);
+  };
+
+  /** Fresh install: no collections and no records yet. */
+  const showGettingStarted =
+    !gettingStartedDismissed &&
+    !showKpiSkeletons &&
+    !showFullPageError &&
+    stats != null &&
+    stats.total_collections === 0 &&
+    stats.total_records === 0;
 
   const growthChartData = useMemo(() => {
     if (!stats) return [];
@@ -386,6 +452,58 @@ export default function DashboardPage() {
   const hooksIsEmpty = hooksChartData.every((d) => d.value === 0);
   const webhooksIsEmpty = webhooksChartData.every((d) => d.value === 0);
 
+  const growthSummary = useMemo(() => {
+    if (!stats) return undefined;
+    const accounts = stats.time_series.accounts_created.reduce((s, p) => s + p.count, 0);
+    const users = stats.time_series.users_created.reduce((s, p) => s + p.count, 0);
+    return `Accounts created: ${accounts}. Users created: ${users}. Period: ${rangeLabel}.`;
+  }, [stats, rangeLabel]);
+
+  const auditSummary = useMemo(() => {
+    if (!stats?.time_series.audit_by_operation) return undefined;
+    const series = stats.time_series.audit_by_operation;
+    const create = series.reduce((s, p) => s + p.create, 0);
+    const update = series.reduce((s, p) => s + p.update, 0);
+    const del = series.reduce((s, p) => s + p.delete, 0);
+    return `CREATE: ${create}. UPDATE: ${update}. DELETE: ${del}. Period: ${rangeLabel}.`;
+  }, [stats, rangeLabel]);
+
+  const recordsSummary = useMemo(() => {
+    if (!recordsChartData.length) return undefined;
+    return recordsChartData
+      .map((d) => `${d.name}: ${d.value} records`)
+      .join('. ');
+  }, [recordsChartData]);
+
+  const accessMixSummary = useMemo(() => {
+    if (!accessMixData.length) return undefined;
+    return accessMixData.map((d) => `${d.name}: ${d.value}`).join('. ');
+  }, [accessMixData]);
+
+  const jobsSummary = useMemo(() => {
+    if (jobsIsEmpty) return undefined;
+    return jobsChartData
+      .filter((d) => d.value > 0)
+      .map((d) => `${d.name}: ${d.value}`)
+      .join('. ');
+  }, [jobsChartData, jobsIsEmpty]);
+
+  const hooksSummary = useMemo(() => {
+    if (hooksIsEmpty) return undefined;
+    return hooksChartData
+      .filter((d) => d.value > 0)
+      .map((d) => `${d.name}: ${d.value}`)
+      .join('. ');
+  }, [hooksChartData, hooksIsEmpty]);
+
+  const webhooksSummary = useMemo(() => {
+    if (webhooksIsEmpty) return undefined;
+    return webhooksChartData
+      .filter((d) => d.value > 0)
+      .map((d) => `${d.name}: ${d.value}`)
+      .join('. ');
+  }, [webhooksChartData, webhooksIsEmpty]);
+
   const recentRegistrations = stats?.recent_registrations?.slice(0, 10) ?? [];
   const recentAuditLogs = stats?.recent_audit_logs?.slice(0, 10) ?? [];
 
@@ -445,7 +563,7 @@ export default function DashboardPage() {
             </SelectContent>
           </Select>
           <Select value={refreshFrequency} onValueChange={setRefreshFrequency}>
-            <SelectTrigger className="w-40">
+            <SelectTrigger className="w-40" aria-label="Refresh frequency">
               <SelectValue placeholder="Refresh frequency" />
             </SelectTrigger>
             <SelectContent>
@@ -478,6 +596,70 @@ export default function DashboardPage() {
             Retry
           </Button>
         </div>
+      ) : null}
+
+      {/* Getting started checklist (fresh installs) */}
+      {showGettingStarted && stats ? (
+        <Card data-testid="getting-started-checklist">
+          <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
+            <div className="space-y-1">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Rocket className="h-5 w-5 text-primary" aria-hidden />
+                Getting started
+              </CardTitle>
+              <CardDescription>
+                Your instance is ready. Complete a few steps to populate the dashboard.
+              </CardDescription>
+            </div>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8"
+              onClick={dismissGettingStarted}
+              aria-label="Dismiss getting started checklist"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2" aria-label="Getting started steps">
+              {GETTING_STARTED_ITEMS.map((item) => {
+                const done = item.done(stats);
+                return (
+                  <li key={item.id}>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-muted/50"
+                      onClick={() => navigate(item.path)}
+                      data-testid={`getting-started-${item.id}`}
+                    >
+                      {done ? (
+                        <CheckCircle2
+                          className="h-4 w-4 shrink-0 text-primary"
+                          aria-hidden
+                        />
+                      ) : (
+                        <Circle
+                          className="h-4 w-4 shrink-0 text-muted-foreground"
+                          aria-hidden
+                        />
+                      )}
+                      <span className={done ? 'text-muted-foreground line-through' : ''}>
+                        {item.label}
+                      </span>
+                      <span className="sr-only">
+                        {done ? 'Completed' : 'Not completed'}. Navigate to {item.label}.
+                      </span>
+                      {item.id === 'configuration' ? (
+                        <Settings className="ml-auto h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+                      ) : null}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </CardContent>
+        </Card>
       ) : null}
 
       {/* Automation health alert strip */}
@@ -658,6 +840,7 @@ export default function DashboardPage() {
           isEmpty={!showKpiSkeletons && (growthChartData.length === 0 || growthIsEmpty)}
           emptyMessage="No growth in this period"
           emptyHint="Create accounts or users, or try a wider time range."
+          summary={growthSummary}
         >
           <TimeSeriesAreaChart
             data={growthChartData}
@@ -676,6 +859,7 @@ export default function DashboardPage() {
           isEmpty={!showKpiSkeletons && accessMixData.length === 0}
           emptyMessage="No collections yet"
           emptyHint="Create a collection to see access mix."
+          summary={accessMixSummary}
           headerAction={
             <Button
               variant="ghost"
@@ -713,6 +897,7 @@ export default function DashboardPage() {
           isEmpty={!showKpiSkeletons && (auditChartData.length === 0 || auditIsEmpty)}
           emptyMessage="No audit activity in this period"
           emptyHint="Write operations will appear here once audit logging is active."
+          summary={auditSummary}
           headerAction={
             <Button
               variant="ghost"
@@ -742,6 +927,7 @@ export default function DashboardPage() {
           isEmpty={!showKpiSkeletons && recordsChartData.length === 0}
           emptyMessage="No records yet"
           emptyHint="Add data to collections to see distribution."
+          summary={recordsSummary}
         >
           <HorizontalBarChart
             data={recordsChartData}
@@ -764,6 +950,7 @@ export default function DashboardPage() {
           isEmpty={!showKpiSkeletons && jobsIsEmpty}
           emptyMessage="No jobs yet"
           emptyHint="Background jobs will appear here when enqueued."
+          summary={jobsSummary}
           headerAction={
             <Button
               variant="ghost"
@@ -802,6 +989,7 @@ export default function DashboardPage() {
               ? `${featureCounts.hooks_enabled} hooks enabled — waiting for activity.`
               : 'Create and enable hooks to track execution health.'
           }
+          summary={hooksSummary}
           headerAction={
             <Button
               variant="ghost"
@@ -836,6 +1024,7 @@ export default function DashboardPage() {
           isEmpty={!showKpiSkeletons && webhooksIsEmpty}
           emptyMessage="No webhook deliveries in this period"
           emptyHint="Outbound webhook deliveries will show delivery status here."
+          summary={webhooksSummary}
           headerAction={
             <Button
               variant="ghost"

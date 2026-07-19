@@ -821,6 +821,111 @@ describe('DashboardPage', () => {
         expect(screen.getByText('No refresh')).toBeInTheDocument()
       })
     })
+
+    it('exposes accessible labels on range and refresh frequency controls', async () => {
+      renderDashboard()
+      await waitFor(() => {
+        expect(screen.getByText('Total Accounts')).toBeInTheDocument()
+      })
+      expect(screen.getByLabelText('Time range')).toBeInTheDocument()
+      expect(screen.getByLabelText('Refresh frequency')).toBeInTheDocument()
+      expect(screen.getByLabelText('Refresh dashboard')).toBeInTheDocument()
+    })
+  })
+
+  describe('getting started checklist', () => {
+    it('shows checklist on a fresh install (no collections or records)', async () => {
+      setupSuccessHandler({
+        total_accounts: 1,
+        total_users: 1,
+        total_collections: 0,
+        total_records: 0,
+        records_by_collection: [],
+        feature_counts: {
+          hooks: 0,
+          hooks_enabled: 0,
+          webhooks: 0,
+          webhooks_enabled: 0,
+          workflows: 0,
+          endpoints: 0,
+          macros: 0,
+          api_keys_active: 0,
+          invitations_pending: 0,
+        },
+        recent_registrations: [],
+        time_series: emptyTimeSeries,
+      })
+      renderDashboard()
+      await waitFor(() => {
+        expect(screen.getByTestId('getting-started-checklist')).toBeInTheDocument()
+      })
+      expect(screen.getByText('Getting started')).toBeInTheDocument()
+      expect(screen.getByTestId('getting-started-collection')).toBeInTheDocument()
+      expect(screen.getByTestId('getting-started-invite')).toBeInTheDocument()
+    })
+
+    it('hides checklist when collections exist', async () => {
+      setupSuccessHandler({ total_collections: 3, total_records: 10 })
+      renderDashboard()
+      await waitFor(() => {
+        expect(screen.getByText('Total Accounts')).toBeInTheDocument()
+      })
+      expect(screen.queryByTestId('getting-started-checklist')).not.toBeInTheDocument()
+    })
+
+    it('dismisses checklist and persists in localStorage', async () => {
+      setupSuccessHandler({
+        total_collections: 0,
+        total_records: 0,
+        records_by_collection: [],
+        recent_registrations: [],
+        time_series: emptyTimeSeries,
+      })
+      renderDashboard()
+      await waitFor(() => {
+        expect(screen.getByTestId('getting-started-checklist')).toBeInTheDocument()
+      })
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      await user.click(
+        screen.getByLabelText('Dismiss getting started checklist'),
+      )
+      expect(screen.queryByTestId('getting-started-checklist')).not.toBeInTheDocument()
+      expect(localStorage.getItem('dashboard-getting-started-dismissed')).toBe('1')
+    })
+
+    it('navigates from a checklist step', async () => {
+      setupSuccessHandler({
+        total_collections: 0,
+        total_records: 0,
+        records_by_collection: [],
+        recent_registrations: [],
+        time_series: emptyTimeSeries,
+      })
+      renderDashboard()
+      await waitFor(() => {
+        expect(screen.getByTestId('getting-started-collection')).toBeInTheDocument()
+      })
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      await user.click(screen.getByTestId('getting-started-collection'))
+      expect(mockNavigate).toHaveBeenCalledWith('/admin/collections/new')
+    })
+  })
+
+  describe('chart accessibility summaries', () => {
+    it('renders screen-reader summaries for growth and audit charts', async () => {
+      renderDashboard()
+      await waitFor(() => {
+        expect(screen.getByText('Growth')).toBeInTheDocument()
+      })
+      const summaries = screen.getAllByTestId('chart-summary')
+      expect(summaries.length).toBeGreaterThan(0)
+      expect(
+        summaries.some((el) => el.textContent?.includes('Accounts created')),
+      ).toBe(true)
+      expect(
+        summaries.some((el) => el.textContent?.includes('CREATE:')),
+      ).toBe(true)
+    })
   })
 
   describe('stat values match API response', () => {
@@ -847,6 +952,8 @@ describe('DashboardPage', () => {
       })
       // Multiple zeros expected for KPIs
       expect(screen.getAllByText('0').length).toBeGreaterThan(0)
+      // Fresh install empty charts
+      expect(screen.getAllByTestId('chart-empty').length).toBeGreaterThan(0)
     })
   })
 })

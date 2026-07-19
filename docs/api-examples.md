@@ -3538,16 +3538,37 @@ Database migration management using Alembic.
 
 ## Dashboard
 
+Superadmin-only home metrics for the admin UI. Non-superadmin callers receive **403**; unauthenticated callers receive **401**.
+
 ### Get Dashboard Statistics
 
 **Endpoint**: `GET /api/v1/dashboard/stats`
 
 **Authentication**: Superadmin required
 
+**Query parameters**:
+
+| Param   | Type | Default | Description |
+|---------|------|---------|-------------|
+| `range` | `7d` \| `30d` \| `90d` | `7d` | Time window for growth metrics, previous-period comparison, and time series. Invalid values return **422**. |
+
+**Notes**:
+
+- `new_accounts_7d` / `new_users_7d` always reflect the selected `range` (names kept for backward compatibility).
+- `records_by_collection` is top 10 by row count plus an optional `"Other"` bucket; sum equals `total_records`.
+- Automation fields (`feature_counts`, `jobs_by_status`, hook/webhook summaries) degrade to zeros if underlying tables fail.
+- Record counting uses a batched SQL `UNION ALL` of `COUNT(*)` (not N+1 per collection).
+- Audit log payloads are PII-masked based on group membership (same as audit list API).
+
 **Request**:
 
 ```bash
-curl -X GET http://localhost:8000/api/v1/dashboard/stats \
+# Default range (7d)
+curl -X GET 'http://localhost:8000/api/v1/dashboard/stats' \
+  -H "Authorization: Bearer <superadmin_token>"
+
+# Last 30 days
+curl -X GET 'http://localhost:8000/api/v1/dashboard/stats?range=30d' \
   -H "Authorization: Bearer <superadmin_token>"
 ```
 
@@ -3561,6 +3582,61 @@ curl -X GET http://localhost:8000/api/v1/dashboard/stats \
   "total_records": 1523,
   "new_accounts_7d": 2,
   "new_users_7d": 8,
+  "range": "7d",
+  "previous_period": {
+    "new_accounts": 1,
+    "new_users": 5
+  },
+  "time_series": {
+    "accounts_created": [
+      { "date": "2026-07-13", "count": 0 },
+      { "date": "2026-07-14", "count": 1 }
+    ],
+    "users_created": [
+      { "date": "2026-07-13", "count": 1 },
+      { "date": "2026-07-14", "count": 2 }
+    ],
+    "audit_by_operation": [
+      { "date": "2026-07-13", "create": 2, "update": 1, "delete": 0 },
+      { "date": "2026-07-14", "create": 0, "update": 3, "delete": 1 }
+    ]
+  },
+  "public_collections_count": 2,
+  "records_by_collection": [
+    { "name": "posts", "count": 900 },
+    { "name": "comments", "count": 400 },
+    { "name": "Other", "count": 223 }
+  ],
+  "feature_counts": {
+    "hooks": 4,
+    "hooks_enabled": 3,
+    "webhooks": 2,
+    "webhooks_enabled": 2,
+    "workflows": 1,
+    "endpoints": 5,
+    "macros": 2,
+    "api_keys_active": 3,
+    "invitations_pending": 1
+  },
+  "jobs_by_status": {
+    "pending": 1,
+    "running": 0,
+    "completed": 10,
+    "failed": 1,
+    "retrying": 0,
+    "dead": 0
+  },
+  "hook_executions_summary": {
+    "success": 20,
+    "failed": 1,
+    "partial": 0
+  },
+  "webhook_deliveries_summary": {
+    "delivered": 15,
+    "failed": 0,
+    "pending": 1,
+    "retrying": 0
+  },
   "recent_registrations": [
     {
       "id": "usr_new123",
@@ -3579,6 +3655,14 @@ curl -X GET http://localhost:8000/api/v1/dashboard/stats \
   "recent_audit_logs": []
 }
 ```
+
+**Error responses**:
+
+| Status | When |
+|--------|------|
+| 401 | Missing/invalid token |
+| 403 | Authenticated but not superadmin |
+| 422 | Invalid `range` (not `7d` / `30d` / `90d`) |
 
 ---
 

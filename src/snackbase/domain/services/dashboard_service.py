@@ -5,6 +5,7 @@ from various repositories.
 """
 
 import os
+import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal
@@ -64,6 +65,7 @@ from snackbase.infrastructure.persistence.repositories.webhook_repository import
 from snackbase.infrastructure.persistence.repositories.workflow_repository import (
     WorkflowRepository,
 )
+from snackbase.infrastructure.persistence.table_builder import TableBuilder
 
 logger = get_logger(__name__)
 
@@ -74,6 +76,9 @@ RANGE_DAYS: dict[DashboardRange, int] = {
     "30d": 30,
     "90d": 90,
 }
+
+# Safe dynamic table identifier: col_ + lowercase alphanumeric/underscore only.
+_COLLECTION_TABLE_RE = re.compile(r"^col_[a-z0-9_]+$")
 
 
 class DashboardService:
@@ -379,6 +384,10 @@ class DashboardService:
     ) -> tuple[int, list[CollectionRecordCount]]:
         """Count records across all dynamic collection tables.
 
+        Uses a single batched ``UNION ALL`` of ``COUNT(*)`` statements when
+        possible (O(1) round-trips vs N). Falls back to per-table sequential
+        counts if the batch query fails (e.g. missing tables).
+
         Returns total count and a ranked top-N list (plus optional Other bucket).
         Missing tables are skipped so one bad collection cannot fail the dashboard.
 
@@ -391,20 +400,11 @@ class DashboardService:
         collections = await self.session.execute(text("SELECT name FROM collections"))
         collection_names = [row[0] for row in collections.fetchall()]
 
-        counts: list[tuple[str, int]] = []
-        total = 0
-        for collection_name in collection_names:
-            table_name = f"col_{collection_name.lower().replace(' ', '_')}"
-            try:
-                result = await self.session.execute(
-                    text(f"SELECT COUNT(*) FROM {table_name}")
-                )
-                count = int(result.scalar_one() or 0)
-                total += count
-                counts.append((collection_name, count))
-            except Exception:
-                # Table might not exist or other error; skip without failing
-                continue
+        if not collection_names:
+            return 0, []
+
+        counts = await self._count_collection_tables(collection_names)
+        total = sum(c for _, c in counts)
 
         counts.sort(key=lambda item: item[1], reverse=True)
         top = counts[:top_n]
@@ -419,6 +419,83 @@ class DashboardService:
             )
 
         return total, records_by_collection
+
+    def _collection_table_name(self, collection_name: str) -> str | None:
+        """Map a collection name to a safe physical table identifier.
+
+        Returns None if the generated name is not a safe SQL identifier.
+        """
+        table_name = TableBuilder.generate_table_name(collection_name)
+        if not _COLLECTION_TABLE_RE.match(table_name):
+            return None
+        return table_name
+
+    async def _count_collection_tables(
+        self, collection_names: list[str]
+    ) -> list[tuple[str, int]]:
+        """Count rows per collection table (batched UNION ALL with sequential fallback).
+
+        Args:
+            collection_names: Logical collection names from the collections table.
+
+        Returns:
+            List of (collection_name, count) for tables that could be counted.
+        """
+        segments: list[str] = []
+        for name in collection_names:
+            table_name = self._collection_table_name(name)
+            if table_name is None:
+                continue
+            # Collection name as a string literal (escape single quotes).
+            safe_name = str(name).replace("'", "''")
+            segments.append(
+                f"SELECT '{safe_name}' AS name, COUNT(*) AS count "
+                f'FROM "{table_name}"'
+            )
+
+        if not segments:
+            return []
+
+        sql = " UNION ALL ".join(segments)
+        try:
+            result = await self.session.execute(text(sql))
+            rows = result.fetchall()
+            return [(str(row[0]), int(row[1] or 0)) for row in rows]
+        except Exception:
+            # One missing table can fail the whole UNION; degrade to sequential.
+            logger.warning(
+                "dashboard_batch_record_count_failed",
+                collection_count=len(collection_names),
+                exc_info=True,
+            )
+            return await self._sequential_count_collection_tables(collection_names)
+
+    async def _sequential_count_collection_tables(
+        self, collection_names: list[str]
+    ) -> list[tuple[str, int]]:
+        """Count each collection table individually, skipping missing tables.
+
+        Args:
+            collection_names: Logical collection names.
+
+        Returns:
+            List of (collection_name, count) for successful counts.
+        """
+        counts: list[tuple[str, int]] = []
+        for collection_name in collection_names:
+            table_name = self._collection_table_name(collection_name)
+            if table_name is None:
+                continue
+            try:
+                result = await self.session.execute(
+                    text(f'SELECT COUNT(*) FROM "{table_name}"')
+                )
+                count = int(result.scalar_one() or 0)
+                counts.append((collection_name, count))
+            except Exception:
+                # Table might not exist or other error; skip without failing
+                continue
+        return counts
 
     async def _count_total_records(self) -> int:
         """Count total records across all dynamic collection tables.

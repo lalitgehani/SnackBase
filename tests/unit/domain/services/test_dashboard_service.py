@@ -607,18 +607,18 @@ async def test_get_dashboard_stats_audit_series_from_repo(dashboard_service):
 
 @pytest.mark.asyncio
 async def test_count_records_by_collection_top_n_and_other(dashboard_service, mock_session):
-    """Test ranking, top-N cap, and Other bucket."""
+    """Test ranking, top-N cap, and Other bucket (batched UNION ALL)."""
     # 12 collections with decreasing counts
     names = [(f"col{i}",) for i in range(12)]
     mock_names = MagicMock()
     mock_names.fetchall.return_value = names
 
-    count_results = []
-    for i in range(12):
-        count = MagicMock(scalar_one=lambda c=100 - i: c)
-        count_results.append(count)
+    # Single batch result with all (name, count) pairs
+    batch_rows = [(f"col{i}", 100 - i) for i in range(12)]
+    mock_batch = MagicMock()
+    mock_batch.fetchall.return_value = batch_rows
 
-    mock_session.execute.side_effect = [mock_names] + count_results
+    mock_session.execute.side_effect = [mock_names, mock_batch]
 
     total, ranked = await dashboard_service._count_records_by_collection(top_n=10)
 
@@ -629,20 +629,46 @@ async def test_count_records_by_collection_top_n_and_other(dashboard_service, mo
     assert ranked[9].name == "col9"
     assert ranked[10].name == "Other"
     assert ranked[10].count == 90 + 89  # col10 + col11
+    # Batch path: names query + one UNION ALL (not N COUNT queries)
+    assert mock_session.execute.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_count_records_by_collection_batch_is_o1_round_trips(
+    dashboard_service, mock_session
+):
+    """Many collections still use only 2 executes (names + UNION ALL)."""
+    names = [(f"c{i}",) for i in range(50)]
+    mock_names = MagicMock()
+    mock_names.fetchall.return_value = names
+    mock_batch = MagicMock()
+    mock_batch.fetchall.return_value = [(f"c{i}", i) for i in range(50)]
+    mock_session.execute.side_effect = [mock_names, mock_batch]
+
+    total, ranked = await dashboard_service._count_records_by_collection(top_n=10)
+
+    assert total == sum(range(50))
+    assert len(ranked) == 11  # top 10 + Other
+    assert mock_session.execute.call_count == 2
+    # UNION ALL SQL should mention multiple tables
+    batch_sql = str(mock_session.execute.call_args_list[1].args[0])
+    assert "UNION ALL" in batch_sql
+    assert "COUNT(*)" in batch_sql
 
 
 @pytest.mark.asyncio
 async def test_count_total_records_multiple_collections(dashboard_service, mock_session):
-    """Test _count_total_records counts across multiple collections."""
+    """Test _count_total_records counts across multiple collections (batched)."""
     mock_result = MagicMock()
     mock_result.fetchall.return_value = [("users",), ("posts",), ("comments",)]
 
-    count_results = [
-        MagicMock(scalar_one=lambda: 10),
-        MagicMock(scalar_one=lambda: 25),
-        MagicMock(scalar_one=lambda: 50),
+    mock_batch = MagicMock()
+    mock_batch.fetchall.return_value = [
+        ("users", 10),
+        ("posts", 25),
+        ("comments", 50),
     ]
-    mock_session.execute.side_effect = [mock_result] + count_results
+    mock_session.execute.side_effect = [mock_result, mock_batch]
 
     total = await dashboard_service._count_total_records()
 
@@ -650,16 +676,17 @@ async def test_count_total_records_multiple_collections(dashboard_service, mock_
 
 
 @pytest.mark.asyncio
-async def test_count_total_records_handles_errors(dashboard_service, mock_session):
-    """Test _count_total_records handles table errors gracefully."""
+async def test_count_records_batch_fallback_on_error(dashboard_service, mock_session):
+    """When batch UNION fails, fall back to sequential skip-per-table."""
     mock_result = MagicMock()
     mock_result.fetchall.return_value = [("users",), ("invalid_table",)]
 
     count_success = MagicMock(scalar_one=lambda: 10)
     mock_session.execute.side_effect = [
-        mock_result,
-        count_success,
-        Exception("Table not found"),
+        mock_result,  # SELECT name FROM collections
+        Exception("Table not found"),  # batch UNION fails
+        count_success,  # sequential users OK
+        Exception("Table not found"),  # sequential invalid_table skip
     ]
 
     total, ranked = await dashboard_service._count_records_by_collection()
@@ -668,6 +695,20 @@ async def test_count_total_records_handles_errors(dashboard_service, mock_sessio
     assert len(ranked) == 1
     assert ranked[0].name == "users"
     assert ranked[0].count == 10
+
+
+@pytest.mark.asyncio
+async def test_count_records_empty_collections(dashboard_service, mock_session):
+    """Empty collections table returns zeros without batch query."""
+    mock_result = MagicMock()
+    mock_result.fetchall.return_value = []
+    mock_session.execute.return_value = mock_result
+
+    total, ranked = await dashboard_service._count_records_by_collection()
+
+    assert total == 0
+    assert ranked == []
+    assert mock_session.execute.call_count == 1
 
 
 @pytest.mark.asyncio

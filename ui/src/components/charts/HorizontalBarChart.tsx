@@ -44,12 +44,16 @@ export function HorizontalBarChart({
           margin={{ top: 8, right: 16, left: 8, bottom: 0 }}
         >
           <CartesianGrid strokeDasharray="3 3" className="stroke-border" horizontal={false} />
-          <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
+          <XAxis
+            type="number"
+            tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
+            allowDecimals={false}
+          />
           <YAxis
             type="category"
             dataKey="name"
             width={100}
-            tick={{ fontSize: 11 }}
+            tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
             tickLine={false}
             axisLine={false}
           />

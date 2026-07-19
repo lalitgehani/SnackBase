@@ -34,4 +34,18 @@ describe('ChartContainer', () => {
     expect(screen.getByText('Nothing here')).toBeInTheDocument()
     expect(screen.queryByText('hidden')).not.toBeInTheDocument()
   })
+
+  it('renders screen-reader summary when provided', () => {
+    render(
+      <ChartContainer
+        title="Growth"
+        summary="Accounts created: 3. Users created: 11. Period: Last 7 days."
+      >
+        <div>chart</div>
+      </ChartContainer>,
+    )
+    expect(screen.getByTestId('chart-summary')).toHaveTextContent(
+      'Accounts created: 3. Users created: 11. Period: Last 7 days.',
+    )
+  })
 })

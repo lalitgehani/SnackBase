@@ -39,15 +39,13 @@ export function TimeSeriesAreaChart({
           <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
           <XAxis
             dataKey={xKey}
-            tick={{ fontSize: 11 }}
-            className="text-muted-foreground"
+            tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
             tickLine={false}
             axisLine={false}
             minTickGap={24}
           />
           <YAxis
-            tick={{ fontSize: 11 }}
-            className="text-muted-foreground"
+            tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
             tickLine={false}
             axisLine={false}
             allowDecimals={false}

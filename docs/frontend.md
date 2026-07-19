@@ -711,6 +711,31 @@ const items = [
 
 ---
 
+## Superadmin Dashboard
+
+The home page (`/admin/dashboard`, `DashboardPage.tsx`) is the redesigned operations overview.
+
+**Who can access**: Superadmins only. The client calls `GET /api/v1/dashboard/stats?range=7d|30d|90d` via `dashboard.service.ts` (TanStack Query). Non-superadmin users will receive 403 from the API.
+
+**What it shows**:
+
+- KPI strip (accounts, users, collections, records, sessions, storage) with sparklines and period deltas
+- Growth (accounts vs users), audit activity, records-by-collection, collection access mix
+- Platform feature counts and automation health (jobs / hooks / webhooks) plus alert strip for dead jobs / failed deliveries
+- Compact registration and audit feeds, quick actions
+- Getting-started checklist when `total_collections === 0` and `total_records === 0` (dismissible; `localStorage` key `dashboard-getting-started-dismissed`)
+
+**Preferences** (browser `localStorage`):
+
+| Key | Purpose |
+|-----|---------|
+| `dashboard-range` | Last selected time range (`7d` / `30d` / `90d`) |
+| `dashboard-refresh-frequency` | Auto-refresh interval in seconds (`0` = off) |
+
+**Charts**: Shared Recharts primitives live under `src/components/charts/` (see that folder’s `README.md`). Always use `ChartContainer` empty/loading states so Recharts is not mounted on empty data; pass `summary` for screen-reader totals.
+
+---
+
 ## Adding New Pages
 
 Follow this pattern when adding a new page:
