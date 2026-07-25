@@ -6,12 +6,15 @@
 #   push tag v*   → ghcr.io/<owner>/snackbase:<semver>
 #                   e.g. v0.7.1 → :0.7.1, :0.7, :0
 #
+# Platforms: linux/amd64 + linux/arm64 (multi-arch manifest list).
 # Demo branch builds with VITE_IS_DEMO=true so the UI demo flag is baked in.
 # main and version tags build with VITE_IS_DEMO=false.
 #
 # Usage after a release:
 #   git tag -a v0.7.1 -m "Release 0.7.1"
 #   git push origin v0.7.1
+#
+# Manual rebuild of multi-arch tags: Actions → Docker publish → Run workflow
 
 name: Docker publish
 
@@ -39,6 +42,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # Required so buildx can cross-compile arm64 on the amd64 runner.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -78,10 +85,13 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
           push: true
+          # Multi-arch requires push (cannot --load a multi-platform image locally on the runner).
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             VITE_IS_DEMO=${{ steps.demo_flag.outputs.value }}
+          # Per-platform cache scopes avoid amd64/arm64 thrashing the same GHA cache entry.
           cache-from: type=gha
           cache-to: type=gha,mode=max
