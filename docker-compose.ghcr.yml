@@ -1,0 +1,57 @@
+# SnackBase from GitHub Container Registry (demo / published image).
+#
+# Image tags (see .github/workflows/docker-publish.yml):
+#   ghcr.io/lalitgehani/snackbase:demo    ← demo branch (VITE_IS_DEMO=true)
+#   ghcr.io/lalitgehani/snackbase:latest  ← main
+#   ghcr.io/lalitgehani/snackbase:<semver>
+#
+# Usage:
+#   # If the package is private:
+#   echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
+#
+#   docker compose -f docker-compose.ghcr.yml pull
+#   docker compose -f docker-compose.ghcr.yml up -d
+#
+#   open http://localhost:8000
+#   Superadmin (defaults below): admin@admin.com / Admin@123456
+
+services:
+  snackbase:
+    image: ${SNACKBASE_IMAGE:-ghcr.io/lalitgehani/snackbase:demo}
+    # Published images may still be amd64-only until multi-arch CI finishes.
+    # Apple Silicon: keep linux/amd64 (emulation). After arm64 is in the
+    # manifest, you can remove this line for native pulls.
+    platform: linux/amd64
+    container_name: snackbase-ghcr
+    ports:
+      - "${PORT:-8000}:8000"
+    environment:
+      PORT: "8000"
+      SNACKBASE_HOST: "0.0.0.0"
+      SNACKBASE_PORT: "8000"
+      SNACKBASE_EXTERNAL_URL: ${SNACKBASE_EXTERNAL_URL:-http://localhost:8000}
+      SNACKBASE_DATABASE_URL: ${SNACKBASE_DATABASE_URL:-sqlite+aiosqlite:///./sb_data/snackbase.db}
+      SNACKBASE_STORAGE_PATH: ${SNACKBASE_STORAGE_PATH:-./sb_data/files}
+      SNACKBASE_SECRET_KEY: ${SNACKBASE_SECRET_KEY:-change-me-in-production-use-openssl-rand-hex-32}
+      SNACKBASE_ENCRYPTION_KEY: ${SNACKBASE_ENCRYPTION_KEY:-change-me-in-production-use-openssl-rand-hex-32}
+      SNACKBASE_SUPERADMIN_EMAIL: ${SNACKBASE_SUPERADMIN_EMAIL:-admin@admin.com}
+      SNACKBASE_SUPERADMIN_PASSWORD: ${SNACKBASE_SUPERADMIN_PASSWORD:-Admin@123456}
+      SNACKBASE_CORS_ORIGINS: ${SNACKBASE_CORS_ORIGINS:-http://localhost:8000,http://localhost:5173,http://127.0.0.1:8000,http://127.0.0.1:5173}
+      SNACKBASE_ENVIRONMENT: ${SNACKBASE_ENVIRONMENT:-development}
+      SNACKBASE_DEBUG: ${SNACKBASE_DEBUG:-false}
+      SNACKBASE_LOG_LEVEL: ${SNACKBASE_LOG_LEVEL:-INFO}
+      SNACKBASE_LOG_FORMAT: ${SNACKBASE_LOG_FORMAT:-json}
+      SNACKBASE_IS_DEMO: ${SNACKBASE_IS_DEMO:-false}
+      SNACKBASE_ACCESS_TOKEN_EXPIRE_MINUTES: ${SNACKBASE_ACCESS_TOKEN_EXPIRE_MINUTES:-60}
+      SNACKBASE_REFRESH_TOKEN_EXPIRE_DAYS: ${SNACKBASE_REFRESH_TOKEN_EXPIRE_DAYS:-7}
+      # Multi-tenant control plane (default). Leave unset/false.
+      # SNACKBASE_SINGLE_TENANT_MODE: "false"
+    volumes:
+      - ./sb_data:/app/sb_data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+    restart: unless-stopped
