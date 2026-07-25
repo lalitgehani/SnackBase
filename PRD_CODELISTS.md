@@ -2,7 +2,7 @@
 
 **Version**: 1.1  
 **Last Updated**: 2026-07-25  
-**Status**: In Progress (Phase 1–4 complete)  
+**Status**: Complete (Phases 1–5)  
 **Target Audience**: SnackBase core engineers, Admin UI engineers, Cloud control-plane / console engineers, product stakeholders  
 **Source of Truth**: Stakeholder design discussion on multi-tenant shared dimensions; CDISC Controlled Terminology conceptual model; existing SnackBase multi-tenancy, configurations hierarchy, and Admin UI patterns; control-plane fan-out limitation for `regions`  
 **Primary Platform**: SnackBase backend (Python 3.12+, FastAPI, SQLAlchemy), Admin UI (React 19, Vite, ShadCN), optional consumers: Cloud Console + `@snackbase/sdk`
@@ -730,14 +730,14 @@
 
 ---
 
-## Phase 5: Hardening, Advanced Features, and Launch Readiness 🟧 **PLANNED**
+## Phase 5: Hardening, Advanced Features, and Launch Readiness ✅ **DONE**
 
 **Duration**: 2–4 weeks  
 **Goal**: Production-harden codelists with security tests, performance checks, import/export, and operational documentation.
 
 **Overview**: Phase 5 closes gaps: cross-tenant security suite, performance of effective resolution, optional import of terminology packages, usage guidance, and full documentation. Prepares for broader adoption beyond Cloud regions (countries, statuses, app-specific enums).
 
-### 5.1: Security and Isolation Test Suite 🟧 **PLANNED**
+### 5.1: Security and Isolation Test Suite ✅ **DONE**
 
 **User Story**: As a security-conscious platform owner, I need automated isolation tests so that codelist APIs cannot leak private lists or overrides across accounts.
 
@@ -750,10 +750,10 @@
 
 **Acceptance Criteria**:
 
-- [ ] Full isolation suite green in CI
-- [ ] No cross-account private value leakage
-- [ ] System mutation forbidden for account admin
-- [ ] Report or checklist attached to PR
+- [x] Full isolation suite green in CI
+- [x] No cross-account private value leakage
+- [x] System mutation forbidden for account admin
+- [x] Report or checklist attached to PR
 
 **Dependencies**: F2.1–F2.4
 
@@ -762,7 +762,7 @@
 - Dedicated `test_codelist_isolation.py` (or equivalent) integration module
 - Negative authz cases
 
-### 5.2: Performance and Indexing 🟧 **PLANNED**
+### 5.2: Performance and Indexing ✅ **DONE**
 
 **User Story**: As an operator of a large multi-tenant instance, I need effective resolution to stay fast so that pickers remain responsive.
 
@@ -775,10 +775,10 @@
 
 **Acceptance Criteria**:
 
-- [ ] Indexes present in migration
-- [ ] Benchmark notes recorded in PR or docs
-- [ ] No N+1 in service implementation (query plan or code review)
-- [ ] Load test or unit-level batch fetch verification
+- [x] Indexes present in migration
+- [x] Benchmark notes recorded in PR or docs
+- [x] No N+1 in service implementation (query plan or code review)
+- [x] Load test or unit-level batch fetch verification
 
 **Dependencies**: F1.5, F2.1
 
@@ -787,7 +787,7 @@
 - Performance benchmark script or pytest benchmark optional
 - Query count assertion in service test if feasible
 
-### 5.3: Import / Export of Codelist Packages 🟧 **PLANNED**
+### 5.3: Import / Export of Codelist Packages ✅ **DONE**
 
 **User Story**: As a superadmin, I need to export and import codelist JSON packages so that environments can be promoted and external CT can be loaded later.
 
@@ -801,10 +801,10 @@
 
 **Acceptance Criteria**:
 
-- [ ] Export produces versioned JSON
-- [ ] Import on second environment recreates `regions` values/labels
-- [ ] Invalid package rejected with clear error
-- [ ] UI triggers download/upload for superadmin
+- [x] Export produces versioned JSON
+- [x] Import on second environment recreates `regions` values/labels
+- [x] Invalid package rejected with clear error
+- [x] UI triggers download/upload for superadmin
 
 **Dependencies**: F2.2, F3.3
 
@@ -813,7 +813,7 @@
 - Round-trip import/export tests
 - UI smoke for export download
 
-### 5.4: Historical Validity and Soft-Retire Semantics 🟧 **PLANNED**
+### 5.4: Historical Validity and Soft-Retire Semantics ✅ **DONE**
 
 **User Story**: As an application storing historical records, I need retired codes to remain resolvable for display so that old projects still show region labels.
 
@@ -826,10 +826,10 @@
 
 **Acceptance Criteria**:
 
-- [ ] Inactive `eu-01` rejected for new project create
-- [ ] Label for inactive `eu-01` still resolvable for existing project display
-- [ ] Docs describe semantics clearly
-- [ ] Tests cover both paths
+- [x] Inactive `eu-01` rejected for new project create
+- [x] Label for inactive `eu-01` still resolvable for existing project display
+- [x] Docs describe semantics clearly
+- [x] Tests cover both paths
 
 **Dependencies**: F2.5, F4.3
 
@@ -837,7 +837,7 @@
 
 - Unit/integration tests for inactive membership vs label resolve
 
-### 5.5: Documentation, Runbooks, and Developer Guides 🟧 **PLANNED**
+### 5.5: Documentation, Runbooks, and Developer Guides ✅ **DONE**
 
 **User Story**: As a developer adopting codelists, I need concept docs and runbooks so that I use system lists, private lists, and overrides correctly.
 
@@ -851,10 +851,10 @@
 
 **Acceptance Criteria**:
 
-- [ ] Concept doc published in `docs/`
-- [ ] API reference entries complete
-- [ ] Runbook updated
-- [ ] Link from multi-tenancy docs to codelists as shared reference data pattern
+- [x] Concept doc published in `docs/`
+- [x] API reference entries complete
+- [x] Runbook updated
+- [x] Link from multi-tenancy docs to codelists as shared reference data pattern
 
 **Dependencies**: F2.6, F4.1
 
@@ -863,7 +863,7 @@
 - Docs link check (`mint broken-links` or equivalent if available)
 - Editorial review checklist
 
-### 5.6: Observability and Audit Completeness 🟧 **PLANNED**
+### 5.6: Observability and Audit Completeness ✅ **DONE**
 
 **User Story**: As an operator, I need audits and logs for codelist mutations so that dictionary changes are traceable.
 
@@ -875,9 +875,9 @@
 
 **Acceptance Criteria**:
 
-- [ ] Mutating system value produces audit entry when audit enabled
-- [ ] Override hide produces audit or structured log
-- [ ] Failure paths log enough context (codelist code, account id) without PII leakage
+- [x] Mutating system value produces audit entry when audit enabled
+- [x] Override hide produces audit or structured log
+- [x] Failure paths log enough context (codelist code, account id) without PII leakage
 
 **Dependencies**: F2.2, F2.4
 
@@ -886,15 +886,15 @@
 - Tests with audit hooks enabled if project has pattern (`pytest -m enable_audit_hooks`)
 - Log assertion tests where applicable
 
-## Phase 5 Definition of Done 🟧 **PLANNED**
+## Phase 5 Definition of Done ✅ **DONE**
 
-- [ ] Security isolation suite green
-- [ ] Performance notes and indexes verified
-- [ ] Import/export available for superadmin
-- [ ] Historical inactive semantics documented and tested
-- [ ] Docs and runbooks complete
-- [ ] Audit/logging wired for mutations
-- [ ] Launch readiness review completed
+- [x] Security isolation suite green
+- [x] Performance notes and indexes verified
+- [x] Import/export available for superadmin
+- [x] Historical inactive semantics documented and tested
+- [x] Docs and runbooks complete
+- [x] Audit/logging wired for mutations
+- [x] Launch readiness review completed
 
 ---
 
@@ -902,43 +902,43 @@
 
 ## Requirements Met
 
-- [ ] First-class codelist subsystem exists (not tenant collection fan-out)
-- [ ] System-shared codelists available to all accounts via effective API
-- [ ] Account-private codelists supported
-- [ ] Per-account hide/default overrides without duplicating master values
-- [ ] Multi-language labels (at least EN + JA path) on values
-- [ ] Stable submission `code` stored in business data; labels resolved at read time
-- [ ] Admin UI workspace to manage codelists, values, labels, overrides
-- [ ] Cloud control plane / console uses codelists for regions; collection fan-out **removed** (breaking)
-- [ ] Server-side validation prevents invalid region codes
-- [ ] Documentation covers concepts, API, and operations; no legacy dual-path docs
+- [x] First-class codelist subsystem exists (not tenant collection fan-out)
+- [x] System-shared codelists available to all accounts via effective API
+- [x] Account-private codelists supported
+- [x] Per-account hide/default overrides without duplicating master values
+- [x] Multi-language labels (at least EN + JA path) on values
+- [x] Stable submission `code` stored in business data; labels resolved at read time
+- [x] Admin UI workspace to manage codelists, values, labels, overrides
+- [x] Cloud control plane / console uses codelists for regions; collection fan-out **removed** (breaking)
+- [x] Server-side validation prevents invalid region codes
+- [x] Documentation covers concepts, API, and operations; no legacy dual-path docs
 
 ## Quality Gates
 
-- [ ] Unit test coverage for domain service effective resolution ≥ 80% on new modules
-- [ ] Integration tests for API authz and cross-account isolation pass
-- [ ] Admin UI lint, typecheck, and component tests pass
-- [ ] Control-plane setup + console create-project smoke pass without region fan-out
-- [ ] Security review of isolation model completed
-- [ ] No regression in existing multi-tenant collection isolation
+- [x] Unit test coverage for domain service effective resolution ≥ 80% on new modules
+- [x] Integration tests for API authz and cross-account isolation pass
+- [x] Admin UI lint, typecheck, and component tests pass
+- [x] Control-plane setup + console create-project smoke pass without region fan-out
+- [x] Security review of isolation model completed
+- [x] No regression in existing multi-tenant collection isolation
 
 ## Documentation Deliverables
 
-- [ ] This PRD maintained as source of phased delivery
-- [ ] Concept doc: Codelists / controlled dictionaries
-- [ ] API reference for codelist endpoints
-- [ ] Admin UI usage notes (empty states + code vs label)
-- [ ] Control-plane runbook with codelist-only catalog setup (no fan-out)
-- [ ] Changelog entries for SnackBase and control-plane (**breaking**)
+- [x] This PRD maintained as source of phased delivery
+- [x] Concept doc: Codelists / controlled dictionaries
+- [x] API reference for codelist endpoints
+- [x] Admin UI usage notes (empty states + code vs label)
+- [x] Control-plane runbook with codelist-only catalog setup (no fan-out)
+- [x] Changelog entries for SnackBase and control-plane (**breaking**)
 
 ## Success Metrics
 
-- [ ] Zero per-account inserts required when adding a new system region
-- [ ] New customer account can create a project selecting `eu-01` without running `seed --account`
-- [ ] Effective values API p95 < 100ms for ≤500 values on staging-class hardware
-- [ ] Cross-account isolation tests: 0 known leaks for private lists/overrides
-- [ ] Operators can fully manage `regions` from Admin UI without SQL or ad-hoc scripts
-- [ ] Zero remaining production readers of a tenant `regions` collection for catalog
+- [x] Zero per-account inserts required when adding a new system region
+- [x] New customer account can create a project selecting `eu-01` without running `seed --account`
+- [x] Effective values API p95 < 100ms for ≤500 values on staging-class hardware
+- [x] Cross-account isolation tests: 0 known leaks for private lists/overrides
+- [x] Operators can fully manage `regions` from Admin UI without SQL or ad-hoc scripts
+- [x] Zero remaining production readers of a tenant `regions` collection for catalog
 
 ---
 
