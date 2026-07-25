@@ -9,6 +9,12 @@ from snackbase.infrastructure.persistence.models.api_key import APIKeyModel
 from snackbase.infrastructure.persistence.models.audit_log import AuditLogModel
 from snackbase.infrastructure.persistence.models.collection import CollectionModel
 from snackbase.infrastructure.persistence.models.collection_rule import CollectionRuleModel
+from snackbase.infrastructure.persistence.models.codelist import (
+    CodelistAccountOverrideModel,
+    CodelistModel,
+    CodelistValueLabelModel,
+    CodelistValueModel,
+)
 from snackbase.infrastructure.persistence.models.configuration import (
     ConfigurationModel,
     OAuthStateModel,
@@ -47,6 +53,10 @@ __all__ = [
     "AuditLogModel",
     "CollectionModel",
     "CollectionRuleModel",
+    "CodelistAccountOverrideModel",
+    "CodelistModel",
+    "CodelistValueLabelModel",
+    "CodelistValueModel",
     "ConfigurationModel",
     "EmailLogModel",
     "EmailTemplateModel",
