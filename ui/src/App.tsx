@@ -20,6 +20,7 @@ import RolesPage from '@/pages/RolesPage';
 import AuditLogsPage from '@/pages/AuditLogsPage';
 import MigrationsPage from '@/pages/MigrationsPage';
 import MacrosPage from '@/pages/MacrosPage';
+import CodelistsPage from '@/pages/codelists/CodelistsPage';
 import AcceptInvitationPage from '@/pages/AcceptInvitationPage';
 import ConfigurationDashboardPage from '@/pages/ConfigurationDashboardPage';
 import ApiKeysPage from '@/pages/ApiKeys/ApiKeysPage';
@@ -83,6 +84,8 @@ function App() {
           <Route path="audit-logs" element={<AuditLogsPage />} />
           <Route path="migrations" element={<MigrationsPage />} />
           <Route path="macros" element={<MacrosPage />} />
+          <Route path="codelists" element={<CodelistsPage />} />
+          <Route path="codelists/:code" element={<CodelistsPage />} />
           <Route path="configuration" element={<ConfigurationDashboardPage />} />
           <Route path="api-keys" element={<ApiKeysPage />} />
           <Route path="webhooks" element={<WebhooksPage />} />

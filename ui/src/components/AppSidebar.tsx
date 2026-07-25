@@ -24,6 +24,7 @@ import {
     ChevronRight,
     Plug,
     Cookie,
+    BookMarked,
 } from "lucide-react"
 import { useLocation, Link, useNavigate } from "react-router"
 import { useAuthStore } from "@/stores/auth.store"
@@ -103,6 +104,11 @@ const navigation: NavGroup[] = [
                 title: "Collections",
                 url: "/admin/collections",
                 icon: Database,
+            },
+            {
+                title: "Codelists",
+                url: "/admin/codelists",
+                icon: BookMarked,
             },
             {
                 title: "Macros",

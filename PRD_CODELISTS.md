@@ -2,7 +2,7 @@
 
 **Version**: 1.1  
 **Last Updated**: 2026-07-25  
-**Status**: In Progress (Phase 1–2 complete)  
+**Status**: In Progress (Phase 1–3 complete)  
 **Target Audience**: SnackBase core engineers, Admin UI engineers, Cloud control-plane / console engineers, product stakeholders  
 **Source of Truth**: Stakeholder design discussion on multi-tenant shared dimensions; CDISC Controlled Terminology conceptual model; existing SnackBase multi-tenancy, configurations hierarchy, and Admin UI patterns; control-plane fan-out limitation for `regions`  
 **Primary Platform**: SnackBase backend (Python 3.12+, FastAPI, SQLAlchemy), Admin UI (React 19, Vite, ShadCN), optional consumers: Cloud Console + `@snackbase/sdk`
@@ -381,14 +381,14 @@
 
 ---
 
-## Phase 3: Admin UI — Codelist Workspace 🟧 **PLANNED**
+## Phase 3: Admin UI — Codelist Workspace ✅ **DONE**
 
 **Duration**: 3–4 weeks  
 **Goal**: Deliver a first-class Admin UI workspace so operators can manage codelists, values, labels, and overrides without raw API calls.
 
 **Overview**: Phase 3 builds on existing Admin UI patterns (Collections workspace rail + tabs; Configuration system/account mental model; Macros list/service layer). Codelists appear under **Data** navigation. Superadmin and account admin experiences are gated appropriately.
 
-### 3.1: Navigation, Routes, and Workspace Shell 🟧 **PLANNED**
+### 3.1: Navigation, Routes, and Workspace Shell ✅ **DONE**
 
 **User Story**: As an admin user, I need Codelists in the Admin sidebar and a list/detail workspace so that I can manage dictionaries like other platform data resources.
 
@@ -404,11 +404,11 @@
 
 **Acceptance Criteria**:
 
-- [ ] Nav link visible to authenticated admin users (role gates as designed)
-- [ ] Workspace loads codelist rail from API
-- [ ] Selecting a codelist opens detail with default Values tab
-- [ ] Empty state explains system vs account dictionaries
-- [ ] UI builds and typechecks
+- [x] Nav link visible to authenticated admin users (role gates as designed)
+- [x] Workspace loads codelist rail from API
+- [x] Selecting a codelist opens detail with default Values tab
+- [x] Empty state explains system vs account dictionaries
+- [x] UI builds and typechecks
 
 **Dependencies**: F2.1, F2.2
 
@@ -417,7 +417,7 @@
 - Component/unit tests for route shell and empty state
 - Smoke test navigation render with mocked service
 
-### 3.2: Create and Settings for Codelists 🟧 **PLANNED**
+### 3.2: Create and Settings for Codelists ✅ **DONE**
 
 **User Story**: As a superadmin or account admin, I need to create and edit codelist metadata so that new dictionaries can be defined from the UI.
 
@@ -431,11 +431,11 @@
 
 **Acceptance Criteria**:
 
-- [ ] Superadmin creates system codelist from UI
-- [ ] Account admin creates account codelist from UI
-- [ ] Account admin cannot select system scope
-- [ ] Invalid code shows field error
-- [ ] Builtin list shows restricted delete/deactivate affordances
+- [x] Superadmin creates system codelist from UI
+- [x] Account admin creates account codelist from UI
+- [x] Account admin cannot select system scope
+- [x] Invalid code shows field error
+- [x] Builtin list shows restricted delete/deactivate affordances
 
 **Dependencies**: F3.1, F2.2, F2.3
 
@@ -444,7 +444,7 @@
 - Component tests for form validation and role-gated scope
 - Service mock tests for create/update
 
-### 3.3: Values Management UI 🟧 **PLANNED**
+### 3.3: Values Management UI ✅ **DONE**
 
 **User Story**: As an operator, I need a values table with add/edit/deactivate so that I can maintain submission codes and metadata visually.
 
@@ -459,11 +459,11 @@
 
 **Acceptance Criteria**:
 
-- [ ] Can add `us-01` to system `regions` from UI (superadmin)
-- [ ] Label preview updates when language switched
-- [ ] Deactivated values hidden by default with “Show inactive” toggle
-- [ ] Code field locked on edit after create
-- [ ] Tests cover table render and dialog validation
+- [x] Can add `us-01` to system `regions` from UI (superadmin)
+- [x] Label preview updates when language switched
+- [x] Deactivated values hidden by default with “Show inactive” toggle
+- [x] Code field locked on edit after create
+- [x] Tests cover table render and dialog validation
 
 **Dependencies**: F3.1, F2.2, F2.3
 
@@ -472,7 +472,7 @@
 - Component tests for Values table and dialogs
 - Mock API success/error paths
 
-### 3.4: Labels Editor UI 🟧 **PLANNED**
+### 3.4: Labels Editor UI ✅ **DONE**
 
 **User Story**: As an operator supporting Japanese UI, I need to manage per-language labels so that pickers display localized text without changing stored codes.
 
@@ -485,10 +485,10 @@
 
 **Acceptance Criteria**:
 
-- [ ] Can set EN and JA labels on `eu-01` from UI
-- [ ] Values table preview shows JA when preview language is JA
-- [ ] Removing last label falls back to code in preview
-- [ ] Component tests for multi-language rows
+- [x] Can set EN and JA labels on `eu-01` from UI
+- [x] Values table preview shows JA when preview language is JA
+- [x] Removing last label falls back to code in preview
+- [x] Component tests for multi-language rows
 
 **Dependencies**: F3.3, F1.3, F2.2
 
@@ -496,7 +496,7 @@
 
 - Component tests for label row add/remove and preferred flag
 
-### 3.5: Overrides Tab and Effective Preview 🟧 **PLANNED**
+### 3.5: Overrides Tab and Effective Preview ✅ **DONE**
 
 **User Story**: As an account admin (or superadmin acting for an account), I need to hide/default shared values and preview the effective list so that I trust multi-tenant customization without data copies.
 
@@ -510,11 +510,11 @@
 
 **Acceptance Criteria**:
 
-- [ ] Hiding `us-01` for account A updates effective preview for A only
-- [ ] Setting default marks exactly one default
-- [ ] Clear override restores visibility
-- [ ] Callout text visible on tab
-- [ ] Component/integration tests with mocked effective API
+- [x] Hiding `us-01` for account A updates effective preview for A only
+- [x] Setting default marks exactly one default
+- [x] Clear override restores visibility
+- [x] Callout text visible on tab
+- [x] Component/integration tests with mocked effective API
 
 **Dependencies**: F2.4, F3.1
 
@@ -523,7 +523,7 @@
 - Component tests for hide/default interactions
 - Preview panel tests for language switch
 
-### 3.6: Role Gating, Empty States, and UX Polish 🟧 **PLANNED**
+### 3.6: Role Gating, Empty States, and UX Polish ✅ **DONE**
 
 **User Story**: As any admin user, I need clear permissions and guidance so that I do not misuse system dictionaries or get stuck on empty data.
 
@@ -537,10 +537,10 @@
 
 **Acceptance Criteria**:
 
-- [ ] Non-privileged actions disabled or hidden appropriately
-- [ ] Empty states render with primary CTA
-- [ ] Submission-code helper text present on value form
-- [ ] Basic a11y checks for dialogs (focus trap via existing dialog component)
+- [x] Non-privileged actions disabled or hidden appropriately
+- [x] Empty states render with primary CTA
+- [x] Submission-code helper text present on value form
+- [x] Basic a11y checks for dialogs (focus trap via existing dialog component)
 
 **Dependencies**: F3.1–F3.5
 
@@ -549,13 +549,13 @@
 - Snapshot/component tests for empty states
 - Manual a11y pass checklist documented
 
-## Phase 3 Definition of Done 🟧 **PLANNED**
+## Phase 3 Definition of Done ✅ **DONE**
 
-- [ ] Codelists workspace usable end-to-end for system `regions`
-- [ ] Superadmin can manage values/labels without API client
-- [ ] Account override hide + effective preview works in UI
-- [ ] UI unit tests pass; lint/typecheck clean
-- [ ] Stakeholder demo of Admin UI managing shared regions
+- [x] Codelists workspace usable end-to-end for system `regions`
+- [x] Superadmin can manage values/labels without API client
+- [x] Account override hide + effective preview works in UI
+- [x] UI unit tests pass; lint/typecheck clean
+- [x] Stakeholder demo of Admin UI managing shared regions
 
 ---
 
