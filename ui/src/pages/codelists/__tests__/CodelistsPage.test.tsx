@@ -30,6 +30,8 @@ vi.mock('@/services/codelists.service', async () => {
     createCodelist: vi.fn(),
     setOverride: vi.fn(),
     clearOverride: vi.fn(),
+    exportCodelist: vi.fn(),
+    importCodelist: vi.fn(),
   }
 })
 
@@ -129,5 +131,99 @@ describe('CodelistsPage', () => {
     await user.click(screen.getByRole('tab', { name: /Overrides/i }))
     expect(await screen.findByTestId('overrides-callout')).toBeInTheDocument()
     expect(screen.getByTestId('effective-preview')).toBeInTheDocument()
+  })
+
+  it('superadmin sees import control and can export selected system list', async () => {
+    useAuthStore.setState({
+      user: {
+        id: 'sa',
+        email: 'super@test.com',
+        role: 'admin',
+      } as never,
+      account: {
+        id: '00000000-0000-0000-0000-000000000000',
+        slug: 'system',
+        name: 'System',
+      } as never,
+      token: 't',
+      isAuthenticated: true,
+    })
+    vi.mocked(codelistsService.exportCodelist).mockResolvedValue({
+      format: 'snackbase.codelist',
+      format_version: '1.0',
+      codelist: { code: 'regions', name: 'Cloud Regions' },
+      values: [],
+    })
+
+    // stub download path used by handleExport
+    const click = vi.fn()
+    const createElement = document.createElement.bind(document)
+    vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+      const el = createElement(tag)
+      if (tag === 'a') {
+        Object.defineProperty(el, 'click', { value: click })
+      }
+      return el
+    })
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock')
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+
+    const user = userEvent.setup()
+    renderCodelists('/admin/codelists/regions')
+    expect(await screen.findByTestId('codelist-import-btn')).toBeInTheDocument()
+    expect(screen.getByTestId('codelist-import-input')).toBeInTheDocument()
+    await waitFor(() => expect(codelistsService.listManageValues).toHaveBeenCalled())
+    const exportBtn = await screen.findByTestId('codelist-export-btn')
+    await user.click(exportBtn)
+    await waitFor(() => {
+      expect(codelistsService.exportCodelist).toHaveBeenCalledWith('regions')
+    })
+    expect(click).toHaveBeenCalled()
+  })
+
+  it('superadmin import input triggers importCodelist with package JSON', async () => {
+    useAuthStore.setState({
+      user: {
+        id: 'sa',
+        email: 'super@test.com',
+        role: 'admin',
+      } as never,
+      account: {
+        id: '00000000-0000-0000-0000-000000000000',
+        slug: 'system',
+        name: 'System',
+      } as never,
+      token: 't',
+      isAuthenticated: true,
+    })
+    vi.mocked(codelistsService.importCodelist).mockResolvedValue({
+      id: '2',
+      code: 'imported',
+      name: 'Imported',
+      scope: 'system',
+      account_id: '00000000-0000-0000-0000-000000000000',
+      is_system: true,
+      is_extensible: false,
+      is_active: true,
+      is_builtin: false,
+    })
+
+    renderCodelists('/admin/codelists')
+    const input = (await screen.findByTestId(
+      'codelist-import-input',
+    )) as HTMLInputElement
+    const pkg = {
+      format: 'snackbase.codelist',
+      format_version: '1.0',
+      codelist: { code: 'imported', name: 'Imported' },
+      values: [],
+    }
+    const file = new File([JSON.stringify(pkg)], 'pkg.json', {
+      type: 'application/json',
+    })
+    await userEvent.upload(input, file)
+    await waitFor(() => {
+      expect(codelistsService.importCodelist).toHaveBeenCalledWith(pkg)
+    })
   })
 })

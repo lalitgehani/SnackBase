@@ -7,6 +7,8 @@ import {
   createCodelist,
   setOverride,
   isValidCodelistCode,
+  exportCodelist,
+  importCodelist,
 } from '../codelists.service'
 import type { Codelist, EffectiveCodelistValue } from '@/types/codelist'
 
@@ -110,6 +112,48 @@ describe('Codelists Service', () => {
       expect(isValidCodelistCode('my_list2')).toBe(true)
       expect(isValidCodelistCode('Bad-Code')).toBe(false)
       expect(isValidCodelistCode('1abc')).toBe(false)
+    })
+  })
+
+  describe('exportCodelist() / importCodelist()', () => {
+    it('GETs export package', async () => {
+      const pkg = {
+        format: 'snackbase.codelist',
+        format_version: '1.0',
+        codelist: { code: 'regions' },
+        values: [],
+      }
+      server.use(
+        http.get('/api/v1/codelists/regions/export', () => HttpResponse.json(pkg)),
+      )
+      const result = await exportCodelist('regions')
+      expect(result.format).toBe('snackbase.codelist')
+      expect((result.codelist as { code: string }).code).toBe('regions')
+    })
+
+    it('POSTs import package body', async () => {
+      server.use(
+        http.post('/api/v1/codelists/import', async ({ request }) => {
+          const body = (await request.json()) as { package: { codelist: { code: string } } }
+          return HttpResponse.json({
+            id: '9',
+            code: body.package.codelist.code,
+            name: 'X',
+            scope: 'system',
+            account_id: '00000000-0000-0000-0000-000000000000',
+            is_system: true,
+            is_extensible: false,
+            is_active: true,
+            is_builtin: false,
+          })
+        }),
+      )
+      const created = await importCodelist({
+        format: 'snackbase.codelist',
+        codelist: { code: 'pkg_x', name: 'X' },
+        values: [],
+      })
+      expect(created.code).toBe('pkg_x')
     })
   })
 })

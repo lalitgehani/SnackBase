@@ -3,15 +3,17 @@
  * (values | overrides | settings).
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import {
   BookMarked,
+  Download,
   Lock,
   Plus,
   RefreshCw,
   Search,
   Star,
+  Upload,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -81,6 +83,7 @@ export default function CodelistsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [valueDialogOpen, setValueDialogOpen] = useState(false);
   const [editingValue, setEditingValue] = useState<CodelistValue | null>(null);
+  const importFileRef = useRef<HTMLInputElement>(null);
 
   // Create form
   const [formCode, setFormCode] = useState('');
@@ -356,6 +359,54 @@ export default function CodelistsPage() {
     }
   };
 
+  /** Superadmin: download versioned JSON package for selected codelist. */
+  const handleExport = async () => {
+    if (!selectedCode) return;
+    try {
+      const pkg = await codelistsService.exportCodelist(selectedCode);
+      const blob = new Blob([JSON.stringify(pkg, null, 2)], {
+        type: 'application/json',
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `codelist-${selectedCode}.json`;
+      a.setAttribute('data-testid', 'codelist-export-download');
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast({ title: 'Exported', description: `${selectedCode} package downloaded` });
+    } catch (err) {
+      toast({
+        title: 'Export failed',
+        description: handleApiError(err),
+        variant: 'destructive',
+      });
+    }
+  };
+
+  /** Superadmin: import package JSON from file picker. */
+  const handleImportFile = async (file: File | null) => {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const packageData = JSON.parse(text) as Record<string, unknown>;
+      const created = await codelistsService.importCodelist(packageData);
+      toast({ title: 'Imported', description: created.code });
+      await fetchLists();
+      selectCodelist(created.code);
+    } catch (err) {
+      toast({
+        title: 'Import failed',
+        description: handleApiError(err),
+        variant: 'destructive',
+      });
+    } finally {
+      if (importFileRef.current) importFileRef.current.value = '';
+    }
+  };
+
   const labelPreview = (v: CodelistValue) => {
     const labels = v.labels || [];
     const preferred =
@@ -381,16 +432,42 @@ export default function CodelistsPage() {
       {/* Rail */}
       <Card className="w-72 shrink-0 flex flex-col overflow-hidden">
         <CardHeader className="pb-3 space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-1">
             <CardTitle className="text-lg flex items-center gap-2">
               <BookMarked className="h-5 w-5" />
               Codelists
             </CardTitle>
-            {isAdmin && (
-              <Button size="sm" onClick={() => setCreateOpen(true)} data-testid="codelist-create-btn">
-                <Plus className="h-4 w-4" />
-              </Button>
-            )}
+            <div className="flex items-center gap-1">
+              {isSuperadmin && (
+                <>
+                  <input
+                    ref={importFileRef}
+                    type="file"
+                    accept="application/json,.json"
+                    className="hidden"
+                    data-testid="codelist-import-input"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0] ?? null
+                      void handleImportFile(f)
+                    }}
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => importFileRef.current?.click()}
+                    data-testid="codelist-import-btn"
+                    title="Import package (superadmin)"
+                  >
+                    <Upload className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
+              {isAdmin && (
+                <Button size="sm" onClick={() => setCreateOpen(true)} data-testid="codelist-create-btn">
+                  <Plus className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
           </div>
           <div className="relative">
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -513,9 +590,23 @@ export default function CodelistsPage() {
                     {!selected.is_active && <Badge variant="destructive">Inactive</Badge>}
                   </CardDescription>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => fetchDetail(selected.code)}>
-                  <RefreshCw className="h-4 w-4" />
-                </Button>
+                <div className="flex gap-2">
+                  {isSuperadmin && selected.is_system && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void handleExport()}
+                      data-testid="codelist-export-btn"
+                      title="Export package JSON"
+                    >
+                      <Download className="h-4 w-4 mr-1" />
+                      Export
+                    </Button>
+                  )}
+                  <Button variant="outline" size="sm" onClick={() => fetchDetail(selected.code)}>
+                    <RefreshCw className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="flex-1 overflow-auto">
