@@ -7,7 +7,9 @@ PostgreSQL (asyncpg) drivers.
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from datetime import date, datetime
 from pathlib import Path
+import sqlite3
 
 from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import (
@@ -21,6 +23,28 @@ from snackbase.core.config import get_settings
 from snackbase.core.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+def _register_sqlite_datetime_adapters() -> None:
+    """Register custom sqlite3 datetime adapters for Python 3.12+.
+
+    Python 3.12 deprecated the default date/datetime adapters. Without custom
+    adapters, aiosqlite emits DeprecationWarning on every bind of a datetime.
+    ISO-8601 strings match the historical default behaviour and work with
+    SQLAlchemy's SQLite DateTime handling.
+    """
+
+    def adapt_date_iso(val: date) -> str:
+        return val.isoformat()
+
+    def adapt_datetime_iso(val: datetime) -> str:
+        return val.isoformat(sep=" ")
+
+    sqlite3.register_adapter(date, adapt_date_iso)
+    sqlite3.register_adapter(datetime, adapt_datetime_iso)
+
+
+_register_sqlite_datetime_adapters()
 
 
 class Base(DeclarativeBase):
