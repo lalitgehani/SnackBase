@@ -155,11 +155,11 @@ export default function CodelistsPage() {
           codelistsService.getEffectiveValues(code, effParams),
           canLoadOverrides
             ? codelistsService
-                .listOverrides(
-                  code,
-                  isSuperadmin ? overrideAccountId : undefined,
-                )
-                .catch(() => [] as CodelistOverride[])
+              .listOverrides(
+                code,
+                isSuperadmin ? overrideAccountId : undefined,
+              )
+              .catch(() => [] as CodelistOverride[])
             : Promise.resolve([] as CodelistOverride[]),
         ]);
         setValues(raw);
@@ -596,11 +596,6 @@ export default function CodelistsPage() {
                 <strong>System</strong> dictionaries are shared by all accounts.
                 <strong> Account</strong> lists are private to your tenant.
               </p>
-              {isAdmin && (
-                <Button size="sm" variant="secondary" onClick={() => setCreateOpen(true)}>
-                  Create codelist
-                </Button>
-              )}
             </div>
           ) : (
             <ScrollArea className="h-full">
