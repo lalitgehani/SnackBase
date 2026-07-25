@@ -322,6 +322,7 @@ def register_routes(app: FastAPI) -> None:
         auth_router,
         collections_router,
         collection_rules_router,
+        codelists_router,
         dashboard_router,
         email_templates_router,
         files_router,
@@ -381,6 +382,10 @@ def register_routes(app: FastAPI) -> None:
     # Register macros routes
     app.include_router(
         macros_router, prefix=f"{settings.api_prefix}/macros", tags=["macros"]
+    )
+
+    app.include_router(
+        codelists_router, prefix=f"{settings.api_prefix}/codelists", tags=["codelists"]
     )
 
     # Register groups routes

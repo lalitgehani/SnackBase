@@ -2,7 +2,7 @@
 
 **Version**: 1.1  
 **Last Updated**: 2026-07-25  
-**Status**: In Progress (Phase 1 complete)  
+**Status**: In Progress (Phase 1–2 complete)  
 **Target Audience**: SnackBase core engineers, Admin UI engineers, Cloud control-plane / console engineers, product stakeholders  
 **Source of Truth**: Stakeholder design discussion on multi-tenant shared dimensions; CDISC Controlled Terminology conceptual model; existing SnackBase multi-tenancy, configurations hierarchy, and Admin UI patterns; control-plane fan-out limitation for `regions`  
 **Primary Platform**: SnackBase backend (Python 3.12+, FastAPI, SQLAlchemy), Admin UI (React 19, Vite, ShadCN), optional consumers: Cloud Console + `@snackbase/sdk`
@@ -200,14 +200,14 @@
 
 ---
 
-## Phase 2: Core API — Management and Effective Read Paths 🟧 **PLANNED**
+## Phase 2: Core API — Management and Effective Read Paths ✅ **DONE**
 
 **Duration**: 2–3 weeks  
 **Goal**: Expose secure REST APIs so clients and Admin UI can manage codelists and read effective values without superadmin collection hacks.
 
 **Overview**: Phase 2 adds HTTP routes, schemas, authz, and OpenAPI documentation. Superadmins manage system dictionaries; account admins manage private lists and overrides; authenticated users can read effective values for their account. This phase does not yet ship full Admin UI.
 
-### 2.1: Effective Values Read API 🟧 **PLANNED**
+### 2.1: Effective Values Read API ✅ **DONE**
 
 **User Story**: As an authenticated app or Cloud Console, I need to list effective codelist values for my account so that pickers show the right shared and customized options.
 
@@ -223,11 +223,11 @@
 
 **Acceptance Criteria**:
 
-- [ ] Authenticated user receives effective `regions` values including `eu-01`
-- [ ] Hidden value for that account is omitted
-- [ ] Unauthenticated request is rejected (401/403 per platform norms)
-- [ ] Superadmin preview with `account_id` returns that account’s effective set
-- [ ] OpenAPI documents endpoints and query params
+- [x] Authenticated user receives effective `regions` values including `eu-01`
+- [x] Hidden value for that account is omitted
+- [x] Unauthenticated request is rejected (401/403 per platform norms)
+- [x] Superadmin preview with `account_id` returns that account’s effective set
+- [x] OpenAPI documents endpoints and query params
 
 **Dependencies**: F1.5
 
@@ -237,7 +237,7 @@
 - Auth negative tests
 - Superadmin preview tests
 
-### 2.2: System Codelist Management API (Superadmin) 🟧 **PLANNED**
+### 2.2: System Codelist Management API (Superadmin) ✅ **DONE**
 
 **User Story**: As a superadmin, I need to create and update system codelists and values so that platform dimensions stay centralized.
 
@@ -253,11 +253,11 @@
 
 **Acceptance Criteria**:
 
-- [ ] Superadmin can create system codelist and values
-- [ ] Account admin cannot create system codelist (403)
-- [ ] Builtin list delete is rejected
-- [ ] Labels can be upserted for `en` and `ja`
-- [ ] Integration tests cover happy path and authz failures
+- [x] Superadmin can create system codelist and values
+- [x] Account admin cannot create system codelist (403)
+- [x] Builtin list delete is rejected
+- [x] Labels can be upserted for `en` and `ja`
+- [x] Integration tests cover happy path and authz failures
 
 **Dependencies**: F1.5, F2.1
 
@@ -266,7 +266,7 @@
 - Authz matrix tests (superadmin vs account admin vs user)
 - CRUD integration tests for system lists
 
-### 2.3: Account Private Codelists and Extension Values API 🟧 **PLANNED**
+### 2.3: Account Private Codelists and Extension Values API ✅ **DONE**
 
 **User Story**: As an account admin, I need private codelists (and optional extensions on extensible shared lists) so that tenant-specific enums stay isolated.
 
@@ -281,11 +281,11 @@
 
 **Acceptance Criteria**:
 
-- [ ] Account admin creates private codelist and values
-- [ ] Effective API returns private list only for that account
-- [ ] Cross-account access denied
-- [ ] Non-extensible system list rejects extension values
-- [ ] Extensible list allows account-only extension value in effective results
+- [x] Account admin creates private codelist and values
+- [x] Effective API returns private list only for that account
+- [x] Cross-account access denied
+- [x] Non-extensible system list rejects extension values
+- [x] Extensible list allows account-only extension value in effective results
 
 **Dependencies**: F2.1, F2.2
 
@@ -294,7 +294,7 @@
 - Cross-account isolation integration tests
 - Extensible vs non-extensible matrix tests
 
-### 2.4: Account Override Management API 🟧 **PLANNED**
+### 2.4: Account Override Management API ✅ **DONE**
 
 **User Story**: As an account admin, I need to hide or default shared values for my account so that unavailable options do not appear in product UIs.
 
@@ -308,11 +308,11 @@
 
 **Acceptance Criteria**:
 
-- [ ] Hide removes value from effective list for that account only
-- [ ] Other accounts still see the value
-- [ ] Setting default flips previous default off
-- [ ] Clear restore default effective behavior
-- [ ] Invalid value_code returns 404
+- [x] Hide removes value from effective list for that account only
+- [x] Other accounts still see the value
+- [x] Setting default flips previous default off
+- [x] Clear restore default effective behavior
+- [x] Invalid value_code returns 404
 
 **Dependencies**: F1.4, F2.1
 
@@ -321,7 +321,7 @@
 - Integration tests multi-account hide isolation
 - Default uniqueness tests
 
-### 2.5: Validation Helper for Codelist Membership 🟧 **PLANNED**
+### 2.5: Validation Helper for Codelist Membership ✅ **DONE**
 
 **User Story**: As a backend developer, I need a reusable validator so that product endpoints can reject invalid codes against the effective list.
 
@@ -334,10 +334,10 @@
 
 **Acceptance Criteria**:
 
-- [ ] Valid effective code passes
-- [ ] Hidden or unknown code fails
-- [ ] Documented behavior for inactive historical codes
-- [ ] Unit tests cover pass/fail paths
+- [x] Valid effective code passes
+- [x] Hidden or unknown code fails
+- [x] Documented behavior for inactive historical codes
+- [x] Unit tests cover pass/fail paths
 
 **Dependencies**: F1.5
 
@@ -345,7 +345,7 @@
 
 - Unit tests for validator including hidden and inactive cases
 
-### 2.6: API Documentation and Error Contracts 🟧 **PLANNED**
+### 2.6: API Documentation and Error Contracts ✅ **DONE**
 
 **User Story**: As an SDK and Console engineer, I need consistent error shapes and OpenAPI docs so that clients can integrate without reverse-engineering.
 
@@ -358,10 +358,10 @@
 
 **Acceptance Criteria**:
 
-- [ ] OpenAPI includes codelist paths
-- [ ] Error responses match platform patterns
-- [ ] Draft concept doc describes system vs account vs overrides
-- [ ] Example requests for effective values and override hide
+- [x] OpenAPI includes codelist paths
+- [x] Error responses match platform patterns
+- [x] Draft concept doc describes system vs account vs overrides
+- [x] Example requests for effective values and override hide
 
 **Dependencies**: F2.1–F2.4
 
@@ -370,14 +370,14 @@
 - Contract tests or schema snapshot for key endpoints if project pattern exists
 - Manual OpenAPI review checklist
 
-## Phase 2 Definition of Done 🟧 **PLANNED**
+## Phase 2 Definition of Done ✅ **DONE**
 
-- [ ] All Phase 2 APIs implemented and authz-tested
-- [ ] Effective values API used successfully by integration tests for two accounts
-- [ ] Superadmin can fully manage system `regions` via API
-- [ ] Account override hide works without value fan-out
-- [ ] OpenAPI/docs draft available
-- [ ] Stakeholder demo of API-driven region list without collection seed per account
+- [x] All Phase 2 APIs implemented and authz-tested
+- [x] Effective values API used successfully by integration tests for two accounts
+- [x] Superadmin can fully manage system `regions` via API
+- [x] Account override hide works without value fan-out
+- [x] OpenAPI/docs draft available
+- [x] Stakeholder demo of API-driven region list without collection seed per account
 
 ---
 

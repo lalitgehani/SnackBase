@@ -25,6 +25,7 @@ from .jobs_router import router as jobs_router
 from .hooks_router import router as hooks_router
 from .endpoints_router import router as endpoints_router
 from .custom_endpoint_dispatcher import router as custom_endpoint_dispatcher_router
+from .codelists_router import router as codelists_router
 
 __all__ = [
     "accounts_router",
@@ -54,5 +55,6 @@ __all__ = [
     "hooks_router",
     "endpoints_router",
     "custom_endpoint_dispatcher_router",
+    "codelists_router",
 ]
 
