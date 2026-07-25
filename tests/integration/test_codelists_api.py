@@ -167,18 +167,31 @@ async def test_unauthenticated_rejected(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_effective_regions_includes_eu01(
-    client: AsyncClient, admin_a_token: str
+async def test_effective_values_for_operator_created_list(
+    client: AsyncClient, superadmin_token: str, admin_a_token: str
 ):
+    await client.post(
+        "/api/v1/codelists",
+        headers={"Authorization": f"Bearer {superadmin_token}"},
+        json={"code": "priority", "name": "Priority", "scope": "system"},
+    )
+    await client.post(
+        "/api/v1/codelists/priority/manage/values",
+        headers={"Authorization": f"Bearer {superadmin_token}"},
+        json={
+            "code": "p1",
+            "labels": [{"language": "en", "label": "Priority One"}],
+        },
+    )
     r = await client.get(
-        "/api/v1/codelists/regions/values?lang=en",
+        "/api/v1/codelists/priority/values?lang=en",
         headers={"Authorization": f"Bearer {admin_a_token}"},
     )
     assert r.status_code == 200, r.text
     codes = {v["code"] for v in r.json()}
-    assert "eu-01" in codes
-    eu = next(v for v in r.json() if v["code"] == "eu-01")
-    assert eu["label"] == "EU Central (Germany)"
+    assert "p1" in codes
+    p1 = next(v for v in r.json() if v["code"] == "p1")
+    assert p1["label"] == "Priority One"
 
 
 @pytest.mark.asyncio
@@ -271,12 +284,22 @@ async def test_account_private_list_and_isolation(
 
 @pytest.mark.asyncio
 async def test_non_extensible_rejects_extension(
-    client: AsyncClient, admin_a_token: str
+    client: AsyncClient, superadmin_token: str, admin_a_token: str
 ):
+    await client.post(
+        "/api/v1/codelists",
+        headers={"Authorization": f"Bearer {superadmin_token}"},
+        json={
+            "code": "locked_list",
+            "name": "Locked",
+            "scope": "system",
+            "is_extensible": False,
+        },
+    )
     r = await client.post(
-        "/api/v1/codelists/regions/manage/values",
+        "/api/v1/codelists/locked_list/manage/values",
         headers={"Authorization": f"Bearer {admin_a_token}"},
-        json={"code": "us-99"},
+        json={"code": "x99"},
     )
     assert r.status_code == 403
 
@@ -377,10 +400,15 @@ async def test_override_hide_isolation(
 
 @pytest.mark.asyncio
 async def test_override_invalid_value_404(
-    client: AsyncClient, admin_a_token: str
+    client: AsyncClient, superadmin_token: str, admin_a_token: str
 ):
+    await client.post(
+        "/api/v1/codelists",
+        headers={"Authorization": f"Bearer {superadmin_token}"},
+        json={"code": "ov404", "name": "OV404", "scope": "system"},
+    )
     r = await client.put(
-        "/api/v1/codelists/regions/values/no-such/override",
+        "/api/v1/codelists/ov404/values/no-such/override",
         headers={"Authorization": f"Bearer {admin_a_token}"},
         json={"visibility": "hidden"},
     )
@@ -464,13 +492,24 @@ async def test_superadmin_preview_account_id(
 
 
 @pytest.mark.asyncio
-async def test_builtin_delete_rejected(
+async def test_system_list_with_values_hard_delete_rejected(
     client: AsyncClient, superadmin_token: str
 ):
+    await client.post(
+        "/api/v1/codelists",
+        headers={"Authorization": f"Bearer {superadmin_token}"},
+        json={"code": "sys_vals", "name": "Sys", "scope": "system"},
+    )
+    await client.post(
+        "/api/v1/codelists/sys_vals/manage/values",
+        headers={"Authorization": f"Bearer {superadmin_token}"},
+        json={"code": "v"},
+    )
     r = await client.delete(
-        "/api/v1/codelists/regions?hard=true",
+        "/api/v1/codelists/sys_vals?hard=true",
         headers={"Authorization": f"Bearer {superadmin_token}"},
     )
+    # Non-empty system list cannot hard-delete
     assert r.status_code == 403
 
 
@@ -491,6 +530,10 @@ async def test_openapi_includes_codelist_paths(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_assert_in_codelist_via_service(db_session: AsyncSession):
     """Validator helper unit path driven through service on migrated DB."""
+    from snackbase.infrastructure.persistence.repositories.codelist_repository import (
+        SYSTEM_ACCOUNT_ID,
+    )
+
     svc = CodelistService(db_session)
     if await db_session.get(AccountModel, ACCOUNT_A) is None:
         db_session.add(
@@ -502,7 +545,17 @@ async def test_assert_in_codelist_via_service(db_session: AsyncSession):
             )
         )
         await db_session.commit()
-    ok = await svc.assert_in_codelist(ACCOUNT_A, "regions", "eu-01")
-    assert ok.code == "eu-01"
+    await svc.create_codelist(
+        code="assert_cl",
+        name="Assert",
+        account_id=SYSTEM_ACCOUNT_ID,
+        scope="system",
+    )
+    await svc.add_value(
+        "assert_cl", code="ok", account_id=SYSTEM_ACCOUNT_ID, as_system=True
+    )
+    await db_session.commit()
+    ok = await svc.assert_in_codelist(ACCOUNT_A, "assert_cl", "ok")
+    assert ok.code == "ok"
     with pytest.raises(Exception):
-        await svc.assert_in_codelist(ACCOUNT_A, "regions", "nope")
+        await svc.assert_in_codelist(ACCOUNT_A, "assert_cl", "nope")

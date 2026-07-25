@@ -27,11 +27,6 @@ logger = get_logger(__name__)
 CODELIST_CODE_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
 VALUE_CODE_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$")
 
-# Stable seed IDs (must match migration seed)
-REGIONS_CODELIST_ID = "00000000-0000-0000-0000-00000000c001"
-EU01_VALUE_ID = "00000000-0000-0000-0000-00000000c0e1"
-EU01_LABEL_EN_ID = "00000000-0000-0000-0000-00000000c1e1"
-
 
 class CodelistError(Exception):
     """Base domain error for codelist operations."""
@@ -752,82 +747,7 @@ class CodelistService:
         )
 
     # ------------------------------------------------------------------
-    # Bootstrap / seed
-    # ------------------------------------------------------------------
-
-    async def ensure_builtin_regions(self) -> CodelistModel:
-        """Idempotently ensure system codelist ``regions`` with ``eu-01`` exists."""
-        existing = await self.repo.get_system_codelist_by_code("regions")
-        if existing is None:
-            existing = CodelistModel(
-                id=REGIONS_CODELIST_ID,
-                code="regions",
-                name="Cloud Regions",
-                description="SnackBase Cloud deployment regions",
-                definition=None,
-                scope="system",
-                account_id=SYSTEM_ACCOUNT_ID,
-                is_system=True,
-                is_extensible=False,
-                is_active=True,
-                is_builtin=True,
-                external_code=None,
-                version="1.0",
-                metadata_=None,
-            )
-            try:
-                existing = await self.repo.create_codelist(existing)
-            except IntegrityError:
-                existing = await self.repo.get_system_codelist_by_code("regions")
-                if existing is None:
-                    raise
-
-        value = await self.repo.get_value_by_code(existing.id, "eu-01")
-        if value is None:
-            value = CodelistValueModel(
-                id=EU01_VALUE_ID,
-                codelist_id=existing.id,
-                code="eu-01",
-                external_code=None,
-                sort_order=1,
-                is_active=True,
-                scope="system",
-                account_id=SYSTEM_ACCOUNT_ID,
-                is_system=True,
-                definition=None,
-                metadata_={
-                    "country": "DE",
-                    "status": "available",
-                    "sort_order": 1,
-                },
-            )
-            try:
-                value = await self.repo.create_value(value)
-            except IntegrityError:
-                value = await self.repo.get_value_by_code(existing.id, "eu-01")
-
-        if value is not None:
-            label = await self.repo.get_label(value.id, "en")
-            if label is None:
-                try:
-                    await self.repo.create_label(
-                        CodelistValueLabelModel(
-                            id=EU01_LABEL_EN_ID,
-                            value_id=value.id,
-                            language="en",
-                            label="EU Central (Germany)",
-                            description=None,
-                            is_preferred=True,
-                        )
-                    )
-                except IntegrityError:
-                    pass
-
-        await self.session.flush()
-        return existing
-
-    # ------------------------------------------------------------------
-    # Import / export (Phase 5 also uses these)
+    # Import / export
     # ------------------------------------------------------------------
 
     async def export_codelist_package(

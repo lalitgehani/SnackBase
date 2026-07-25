@@ -89,28 +89,38 @@ async def test_inactive_excluded_from_picker_but_label_resolvable(
         await db_session.commit()
 
     svc = CodelistService(db_session)
-    await svc.ensure_builtin_regions()
+    await svc.create_codelist(
+        code="hist_list",
+        name="Historical",
+        account_id=SYSTEM_ACCOUNT_ID,
+        scope="system",
+    )
+    v = await svc.add_value(
+        "hist_list",
+        code="old",
+        account_id=SYSTEM_ACCOUNT_ID,
+        as_system=True,
+    )
+    await svc.set_label(v.id, "en", "Old Label")
     await db_session.commit()
 
-    # Soft-deactivate eu-01
     await svc.deactivate_value(
-        "regions", "eu-01", account_id=SYSTEM_ACCOUNT_ID
+        "hist_list", "old", account_id=SYSTEM_ACCOUNT_ID
     )
     await db_session.commit()
 
-    effective = await svc.get_effective_values(ACCOUNT_A, "regions", "en")
-    assert "eu-01" not in {e.code for e in effective}
+    effective = await svc.get_effective_values(ACCOUNT_A, "hist_list", "en")
+    assert "old" not in {e.code for e in effective}
 
     with pytest.raises(CodelistValidationError):
-        await svc.assert_in_codelist(ACCOUNT_A, "regions", "eu-01")
+        await svc.assert_in_codelist(ACCOUNT_A, "hist_list", "old")
 
-    # Historical: allow inactive existing for updates
     ok = await svc.assert_in_codelist(
-        ACCOUNT_A, "regions", "eu-01", allow_inactive_existing=True
+        ACCOUNT_A, "hist_list", "old", allow_inactive_existing=True
     )
-    assert ok.code == "eu-01"
+    assert ok.code == "old"
 
     label = await svc.resolve_label(
-        "regions", "eu-01", "en", account_id=ACCOUNT_A, include_inactive=True
+        "hist_list", "old", "en", account_id=ACCOUNT_A, include_inactive=True
     )
-    assert label == "EU Central (Germany)"
+    assert label == "Old Label"

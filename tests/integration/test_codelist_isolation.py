@@ -187,11 +187,16 @@ async def test_account_admin_cannot_create_system(
 
 @pytest.mark.asyncio
 async def test_account_id_injection_on_effective_values_denied(
-    client: AsyncClient, token_a: str
+    client: AsyncClient, superadmin_token: str, token_a: str
 ):
     """Non-superadmin cannot pass account_id to preview another tenant."""
+    await client.post(
+        "/api/v1/codelists",
+        headers={"Authorization": f"Bearer {superadmin_token}"},
+        json={"code": "iso_prev", "name": "Prev", "scope": "system"},
+    )
     r = await client.get(
-        f"/api/v1/codelists/regions/values?account_id={ACCOUNT_B}",
+        f"/api/v1/codelists/iso_prev/values?account_id={ACCOUNT_B}",
         headers={"Authorization": f"Bearer {token_a}"},
     )
     assert r.status_code == 403

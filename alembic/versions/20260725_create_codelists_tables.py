@@ -10,7 +10,7 @@ Creates first-class codelist tables:
 - codelist_value_labels
 - codelist_account_overrides
 
-Also seeds builtin system codelist ``regions`` with value ``eu-01`` (idempotent).
+Creates empty codelist tables (no platform-default dictionary seed).
 """
 
 from collections.abc import Sequence
@@ -27,13 +27,10 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 SYSTEM_ACCOUNT_ID = "00000000-0000-0000-0000-000000000000"
-REGIONS_CODELIST_ID = "00000000-0000-0000-0000-00000000c001"
-EU01_VALUE_ID = "00000000-0000-0000-0000-00000000c0e1"
-EU01_LABEL_EN_ID = "00000000-0000-0000-0000-00000000c1e1"
 
 
 def upgrade() -> None:
-    """Create codelist tables and seed builtin regions/eu-01."""
+    """Create empty codelist tables (operators create dictionaries as needed)."""
     op.create_table(
         "codelists",
         sa.Column("id", sa.String(length=36), nullable=False, comment="Codelist ID (UUID)"),
@@ -270,7 +267,7 @@ def upgrade() -> None:
             unique=False,
         )
 
-    # Ensure system account exists (idempotent)
+    # Ensure system account exists (idempotent) — required for system-scoped codelists later
     bind = op.get_bind()
     if bind.dialect.name == "postgresql":
         op.execute(
@@ -287,76 +284,7 @@ def upgrade() -> None:
             ON CONFLICT (id) DO NOTHING
             """
         )
-        op.execute(
-            f"""
-            INSERT INTO codelists (
-                id, code, name, description, definition, scope, account_id,
-                is_system, is_extensible, is_active, is_builtin, external_code,
-                version, metadata, created_at, updated_at
-            ) VALUES (
-                '{REGIONS_CODELIST_ID}',
-                'regions',
-                'Cloud Regions',
-                'SnackBase Cloud deployment regions',
-                NULL,
-                'system',
-                '{SYSTEM_ACCOUNT_ID}',
-                true,
-                false,
-                true,
-                true,
-                NULL,
-                '1.0',
-                NULL,
-                CURRENT_TIMESTAMP,
-                CURRENT_TIMESTAMP
-            )
-            ON CONFLICT (id) DO NOTHING
-            """
-        )
-        op.execute(
-            f"""
-            INSERT INTO codelist_values (
-                id, codelist_id, code, external_code, sort_order, is_active,
-                scope, account_id, is_system, definition, metadata, created_at, updated_at
-            ) VALUES (
-                '{EU01_VALUE_ID}',
-                '{REGIONS_CODELIST_ID}',
-                'eu-01',
-                NULL,
-                1,
-                true,
-                'system',
-                '{SYSTEM_ACCOUNT_ID}',
-                true,
-                NULL,
-                '{{"country": "DE", "status": "available", "sort_order": 1}}'::jsonb,
-                CURRENT_TIMESTAMP,
-                CURRENT_TIMESTAMP
-            )
-            ON CONFLICT (id) DO NOTHING
-            """
-        )
-        op.execute(
-            f"""
-            INSERT INTO codelist_value_labels (
-                id, value_id, language, label, description, is_preferred,
-                created_at, updated_at
-            ) VALUES (
-                '{EU01_LABEL_EN_ID}',
-                '{EU01_VALUE_ID}',
-                'en',
-                'EU Central (Germany)',
-                NULL,
-                true,
-                CURRENT_TIMESTAMP,
-                CURRENT_TIMESTAMP
-            )
-            ON CONFLICT (id) DO NOTHING
-            """
-        )
     else:
-        # SQLite and other databases
         op.execute(
             f"""
             INSERT OR IGNORE INTO accounts (id, account_code, slug, name, created_at, updated_at)
@@ -365,71 +293,6 @@ def upgrade() -> None:
                 'SY0000',
                 'system',
                 'System Account',
-                CURRENT_TIMESTAMP,
-                CURRENT_TIMESTAMP
-            )
-            """
-        )
-        op.execute(
-            f"""
-            INSERT OR IGNORE INTO codelists (
-                id, code, name, description, definition, scope, account_id,
-                is_system, is_extensible, is_active, is_builtin, external_code,
-                version, metadata, created_at, updated_at
-            ) VALUES (
-                '{REGIONS_CODELIST_ID}',
-                'regions',
-                'Cloud Regions',
-                'SnackBase Cloud deployment regions',
-                NULL,
-                'system',
-                '{SYSTEM_ACCOUNT_ID}',
-                1,
-                0,
-                1,
-                1,
-                NULL,
-                '1.0',
-                NULL,
-                CURRENT_TIMESTAMP,
-                CURRENT_TIMESTAMP
-            )
-            """
-        )
-        op.execute(
-            f"""
-            INSERT OR IGNORE INTO codelist_values (
-                id, codelist_id, code, external_code, sort_order, is_active,
-                scope, account_id, is_system, definition, metadata, created_at, updated_at
-            ) VALUES (
-                '{EU01_VALUE_ID}',
-                '{REGIONS_CODELIST_ID}',
-                'eu-01',
-                NULL,
-                1,
-                1,
-                'system',
-                '{SYSTEM_ACCOUNT_ID}',
-                1,
-                NULL,
-                '{{"country": "DE", "status": "available", "sort_order": 1}}',
-                CURRENT_TIMESTAMP,
-                CURRENT_TIMESTAMP
-            )
-            """
-        )
-        op.execute(
-            f"""
-            INSERT OR IGNORE INTO codelist_value_labels (
-                id, value_id, language, label, description, is_preferred,
-                created_at, updated_at
-            ) VALUES (
-                '{EU01_LABEL_EN_ID}',
-                '{EU01_VALUE_ID}',
-                'en',
-                'EU Central (Germany)',
-                NULL,
-                1,
                 CURRENT_TIMESTAMP,
                 CURRENT_TIMESTAMP
             )

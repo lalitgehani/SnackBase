@@ -595,67 +595,44 @@ async def test_assert_in_codelist_pass_fail(service: CodelistService, db_session
 
 
 # ---------------------------------------------------------------------------
-# Builtin regions seed
+# Shared system list without platform seed
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_regions_seed_idempotent_and_shared(
+async def test_operator_created_system_list_shared_without_fan_out(
     service: CodelistService, db_session
 ):
-    """ensure_builtin_regions seeds regions/eu-01; re-run is idempotent.
-
-    Unit fixture uses create_all (no migration SQL seed); ensure_* is the
-    service-layer bootstrap. Migration seed is covered by integration tests.
-    """
-    regions = await service.ensure_builtin_regions()
+    """Operator-created system values appear for all accounts (no per-account rows)."""
+    cl = await service.create_codelist(
+        code="priority",
+        name="Priority",
+        account_id=SYSTEM_ACCOUNT_ID,
+        scope="system",
+        is_builtin=True,
+    )
     await db_session.commit()
-    assert regions.is_builtin is True
-    assert regions.is_extensible is False
-    assert regions.is_system is True
-    assert regions.code == "regions"
-
-    # Idempotent ensure
-    again = await service.ensure_builtin_regions()
+    v = await service.add_value(
+        "priority",
+        code="p1",
+        account_id=SYSTEM_ACCOUNT_ID,
+        as_system=True,
+        metadata={"rank": 1},
+    )
+    await service.set_label(v.id, "en", "Priority One")
     await db_session.commit()
-    assert again.id == regions.id
 
-    # Two accounts both see eu-01 without per-account value rows
     for acct in (ACCOUNT_A, ACCOUNT_B):
-        eff = await service.get_effective_values(acct, "regions", "en")
-        codes = {e.code for e in eff}
-        assert "eu-01" in codes
-        eu = next(e for e in eff if e.code == "eu-01")
-        assert eu.label == "EU Central (Germany)"
-        assert eu.metadata is not None
-        assert eu.metadata.get("country") == "DE"
+        eff = await service.get_effective_values(acct, "priority", "en")
+        assert any(e.code == "p1" and e.label == "Priority One" for e in eff)
 
-    values = await service.list_values("regions", account_id=ACCOUNT_A)
-    eu_rows = [v for v in values if v.code == "eu-01"]
-    assert len(eu_rows) == 1
-    assert eu_rows[0].account_id == SYSTEM_ACCOUNT_ID
+    values = await service.list_values("priority", account_id=ACCOUNT_A)
+    assert len([x for x in values if x.code == "p1"]) == 1
+    assert values[0].account_id == SYSTEM_ACCOUNT_ID
 
     with pytest.raises(CodelistForbiddenError):
-        await service.delete_codelist("regions", hard=True)
-
-
-@pytest.mark.asyncio
-async def test_ensure_builtin_regions_creates_when_missing(
-    service: CodelistService, db_session
-):
-    """Calling ensure after soft-delete of eu-01 recreates cleanly."""
-    # Soft-deactivate value if present; ensure restores label path
-    regions = await service.ensure_builtin_regions()
-    await db_session.commit()
-    assert regions.code == "regions"
-    # Second call no-ops without duplicate
-    r2 = await service.ensure_builtin_regions()
-    await db_session.commit()
-    assert r2.id == regions.id
-    values = await service.list_values(
-        "regions", account_id=SYSTEM_ACCOUNT_ID, include_inactive=True
-    )
-    assert sum(1 for v in values if v.code == "eu-01") == 1
+        await service.delete_codelist("priority", hard=True)
+    assert cl.is_builtin is True
 
 
 @pytest.mark.asyncio

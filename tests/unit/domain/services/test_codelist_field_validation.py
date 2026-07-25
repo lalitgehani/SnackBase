@@ -1,4 +1,4 @@
-"""Tests for record field codelist option validation (Phase 4)."""
+"""Tests for record field codelist option validation."""
 
 from __future__ import annotations
 
@@ -11,6 +11,22 @@ from snackbase.infrastructure.persistence.repositories.codelist_repository impor
 )
 
 ACCOUNT_A = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+
+
+async def _seed_priority_list(svc: CodelistService, db_session) -> None:
+    await svc.create_codelist(
+        code="priority",
+        name="Priority",
+        account_id=SYSTEM_ACCOUNT_ID,
+        scope="system",
+    )
+    await svc.add_value(
+        "priority",
+        code="p1",
+        account_id=SYSTEM_ACCOUNT_ID,
+        as_system=True,
+    )
+    await db_session.commit()
 
 
 @pytest.fixture
@@ -35,18 +51,17 @@ async def service(db_session) -> CodelistService:
         )
     await db_session.commit()
     svc = CodelistService(db_session)
-    await svc.ensure_builtin_regions()
-    await db_session.commit()
+    await _seed_priority_list(svc, db_session)
     return svc
 
 
 @pytest.mark.asyncio
-async def test_codelist_field_accepts_eu01(service: CodelistService):
+async def test_codelist_field_accepts_member(service: CodelistService):
     schema = [
-        {"name": "region", "type": "text", "required": True, "codelist": "regions"},
+        {"name": "priority", "type": "text", "required": True, "codelist": "priority"},
     ]
     errs = await service.validate_record_codelist_fields(
-        schema, {"region": "eu-01"}, ACCOUNT_A
+        schema, {"priority": "p1"}, ACCOUNT_A
     )
     assert errs == []
 
@@ -55,28 +70,28 @@ async def test_codelist_field_accepts_eu01(service: CodelistService):
 async def test_codelist_field_rejects_unknown(service: CodelistService):
     schema = [
         {
-            "name": "region",
+            "name": "priority",
             "type": "text",
-            "options": {"codelist": "regions"},
+            "options": {"codelist": "priority"},
         },
     ]
     errs = await service.validate_record_codelist_fields(
-        schema, {"region": "us-hack"}, ACCOUNT_A
+        schema, {"priority": "nope"}, ACCOUNT_A
     )
     assert len(errs) == 1
     assert errs[0]["code"] == "not_in_codelist"
-    assert errs[0]["field"] == "region"
+    assert errs[0]["field"] == "priority"
 
 
 @pytest.mark.asyncio
 async def test_codelist_field_rejects_hidden(service: CodelistService, db_session):
     await service.set_override(
-        "regions", "eu-01", account_id=ACCOUNT_A, visibility="hidden"
+        "priority", "p1", account_id=ACCOUNT_A, visibility="hidden"
     )
     await db_session.commit()
-    schema = [{"name": "region", "type": "text", "codelist": "regions"}]
+    schema = [{"name": "priority", "type": "text", "codelist": "priority"}]
     errs = await service.validate_record_codelist_fields(
-        schema, {"region": "eu-01"}, ACCOUNT_A
+        schema, {"priority": "p1"}, ACCOUNT_A
     )
     assert len(errs) == 1
     assert errs[0]["code"] == "not_in_codelist"

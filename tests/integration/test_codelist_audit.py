@@ -112,10 +112,21 @@ async def test_override_hide_produces_audit_entry(db_session: AsyncSession):
     )
     try:
         svc = CodelistService(db_session)
-        await svc.ensure_builtin_regions()
+        await svc.create_codelist(
+            code="audit_ov",
+            name="Audit OV",
+            account_id=SYSTEM_ACCOUNT_ID,
+            scope="system",
+        )
+        await svc.add_value(
+            "audit_ov",
+            code="v1",
+            account_id=SYSTEM_ACCOUNT_ID,
+            as_system=True,
+        )
         await db_session.commit()
         ov = await svc.set_override(
-            "regions", "eu-01", account_id=ACCOUNT_A, visibility="hidden"
+            "audit_ov", "v1", account_id=ACCOUNT_A, visibility="hidden"
         )
         await db_session.commit()
 
