@@ -408,6 +408,22 @@ async def create_record(
         data, schema
     )
 
+    # 5b. Codelist membership (field option "codelist") — sole SoT for catalog codes
+    codelist_errors: list[dict] = []
+    if any(
+        f.get("codelist")
+        or (isinstance(f.get("options"), dict) and f.get("options", {}).get("codelist"))
+        for f in schema
+    ):
+        from snackbase.domain.services.codelist_service import CodelistService
+
+        cl_svc = CodelistService(session)
+        codelist_errors = await cl_svc.validate_record_codelist_fields(
+            schema,
+            processed_data,
+            target_account_id,
+        )
+
     # Combine validation errors
     all_errors = [
         RecordValidationErrorDetail(
@@ -418,6 +434,8 @@ async def create_record(
         for e in validation_errors
     ] + [
         RecordValidationErrorDetail(**e) for e in reference_errors
+    ] + [
+        RecordValidationErrorDetail(**e) for e in codelist_errors
     ]
 
     if all_errors:

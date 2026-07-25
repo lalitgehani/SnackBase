@@ -656,6 +656,68 @@ class CodelistService:
         effective.sort(key=lambda e: (not e.is_default, e.sort_order, e.code))
         return effective
 
+    async def validate_record_codelist_fields(
+        self,
+        schema: list[dict[str, Any]],
+        data: dict[str, Any],
+        account_id: str,
+        *,
+        allow_inactive_existing: bool = False,
+    ) -> list[dict[str, str]]:
+        """Validate fields that declare a ``codelist`` option against effective membership.
+
+        Field schema shapes supported:
+        - ``{"name": "region", "type": "text", "codelist": "regions"}``
+        - ``{"name": "region", "type": "text", "options": {"codelist": "regions"}}``
+
+        Returns a list of error dicts ``{field, message, code}`` (empty if valid).
+        """
+        errors: list[dict[str, str]] = []
+        for field in schema:
+            field_name = field.get("name")
+            if not field_name:
+                continue
+            options = field.get("options") if isinstance(field.get("options"), dict) else {}
+            codelist_code = field.get("codelist") or options.get("codelist")
+            if not codelist_code or field_name not in data:
+                continue
+            value = data[field_name]
+            if value is None or value == "":
+                continue
+            if not isinstance(value, str):
+                errors.append(
+                    {
+                        "field": field_name,
+                        "message": f"Field '{field_name}' must be a string codelist code",
+                        "code": "not_in_codelist",
+                    }
+                )
+                continue
+            try:
+                await self.assert_in_codelist(
+                    account_id,
+                    str(codelist_code),
+                    value,
+                    allow_inactive_existing=allow_inactive_existing,
+                )
+            except CodelistValidationError as e:
+                errors.append(
+                    {
+                        "field": field_name,
+                        "message": e.message,
+                        "code": "not_in_codelist",
+                    }
+                )
+            except CodelistNotFoundError:
+                errors.append(
+                    {
+                        "field": field_name,
+                        "message": f"Codelist '{codelist_code}' not found",
+                        "code": "codelist_not_found",
+                    }
+                )
+        return errors
+
     async def assert_in_codelist(
         self,
         account_id: str,

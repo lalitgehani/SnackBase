@@ -2,7 +2,7 @@
 
 **Version**: 1.1  
 **Last Updated**: 2026-07-25  
-**Status**: In Progress (Phase 1–3 complete)  
+**Status**: In Progress (Phase 1–4 complete)  
 **Target Audience**: SnackBase core engineers, Admin UI engineers, Cloud control-plane / console engineers, product stakeholders  
 **Source of Truth**: Stakeholder design discussion on multi-tenant shared dimensions; CDISC Controlled Terminology conceptual model; existing SnackBase multi-tenancy, configurations hierarchy, and Admin UI patterns; control-plane fan-out limitation for `regions`  
 **Primary Platform**: SnackBase backend (Python 3.12+, FastAPI, SQLAlchemy), Admin UI (React 19, Vite, ShadCN), optional consumers: Cloud Console + `@snackbase/sdk`
@@ -559,14 +559,14 @@
 
 ---
 
-## Phase 4: Product Integration and Control-Plane Cutover 🟧 **PLANNED**
+## Phase 4: Product Integration and Control-Plane Cutover ✅ **DONE**
 
 **Duration**: 2–4 weeks  
 **Goal**: Wire codelists into Cloud control plane / console and **hard-remove** per-account region fan-out as a breaking cutover (no dual SoT).
 
 **Overview**: Phase 4 switches control-plane consumers to the effective codelist API, validates project create against effective membership, rewrites seed/runbooks, and **deletes** collection-based region catalog paths. Breaking changes are explicit and acceptable; do not preserve legacy fan-out or dual validation.
 
-### 4.1: Control-Plane Seed and Schema Docs Cutover 🟧 **PLANNED**
+### 4.1: Control-Plane Seed and Schema Docs Cutover ✅ **DONE**
 
 **User Story**: As a control-plane operator, I need seed scripts and docs that treat `regions` as a system codelist only so that onboarding never uses account fan-out for catalog rows.
 
@@ -580,10 +580,10 @@
 
 **Acceptance Criteria**:
 
-- [ ] Runbook documents setup without per-account region insert
-- [ ] Seed path has **no** region fan-out code path
-- [ ] Docs state effective codelist is the **only** SoT for region catalog
-- [ ] Isolation verify script does not assume or perform fan-out
+- [x] Runbook documents setup without per-account region insert
+- [x] Seed path has **no** region fan-out code path
+- [x] Docs state effective codelist is the **only** SoT for region catalog
+- [x] Isolation verify script does not assume or perform fan-out
 
 **Dependencies**: F1.6, F2.1
 
@@ -592,7 +592,7 @@
 - Manual/automated setup path on clean instance
 - `verify-isolation` updated expectations pass without fan-out
 
-### 4.2: Cloud Console Region Picker Integration 🟧 **PLANNED**
+### 4.2: Cloud Console Region Picker Integration ✅ **DONE**
 
 **User Story**: As a Cloud user creating a project, I need the region dropdown to load effective codelist values so that I see available regions without tenant-local copies.
 
@@ -605,11 +605,11 @@
 
 **Acceptance Criteria**:
 
-- [ ] Create Project page lists `eu-01` from codelist API
-- [ ] Project stores region code string (not label)
-- [ ] Two accounts without fan-out both see system regions
-- [ ] Account with hidden region does not see it
-- [ ] Console unit tests updated/mocks pass
+- [x] Create Project page lists `eu-01` from codelist API
+- [x] Project stores region code string (not label)
+- [x] Two accounts without fan-out both see system regions
+- [x] Account with hidden region does not see it
+- [x] Console unit tests updated/mocks pass
 
 **Dependencies**: F2.1, F2.4, F4.1
 
@@ -618,7 +618,7 @@
 - Console unit tests for region loader
 - Manual E2E: register account → create project without seed fan-out
 
-### 4.3: Server-Side Project Region Validation via Codelist 🟧 **PLANNED**
+### 4.3: Server-Side Project Region Validation via Codelist ✅ **DONE**
 
 **User Story**: As a platform, I need project create validation to use effective codelist membership so that clients cannot bypass the catalog with arbitrary region strings.
 
@@ -631,11 +631,11 @@
 
 **Acceptance Criteria**:
 
-- [ ] Creating project with unknown region fails server-side
-- [ ] Creating with effective `eu-01` succeeds
-- [ ] Hidden region for account fails for that account
-- [ ] No remaining hard-coded dual path for region membership
-- [ ] Tests cover allow/deny
+- [x] Creating project with unknown region fails server-side
+- [x] Creating with effective `eu-01` succeeds
+- [x] Hidden region for account fails for that account
+- [x] No remaining hard-coded dual path for region membership
+- [x] Tests cover allow/deny
 
 **Dependencies**: F2.5, F4.2
 
@@ -644,7 +644,7 @@
 - Integration tests for create project validation
 - Negative tests for hidden/unknown codes
 
-### 4.4: Remove Collection Fan-Out Path (Breaking) 🟧 **PLANNED**
+### 4.4: Remove Collection Fan-Out Path (Breaking) ✅ **DONE**
 
 **User Story**: As a maintainer, I need the fan-out seeding path **deleted** so that engineers cannot reintroduce per-account dimension copies.
 
@@ -658,11 +658,11 @@
 
 **Acceptance Criteria**:
 
-- [ ] No docs instruct `seed --account` for regions
-- [ ] No fan-out implementation remains in control-plane scripts
-- [ ] CI/setup scripts green without fan-out
-- [ ] Changelog explicitly labels breaking removal
-- [ ] No production code path reads tenant-local region collection rows for picker/validation
+- [x] No docs instruct `seed --account` for regions
+- [x] No fan-out implementation remains in control-plane scripts
+- [x] CI/setup scripts green without fan-out
+- [x] Changelog explicitly labels breaking removal
+- [x] No production code path reads tenant-local region collection rows for picker/validation
 
 **Dependencies**: F4.1, F4.2, F4.3
 
@@ -671,7 +671,7 @@
 - Full control-plane setup + console create project smoke
 - Regression: org/project/env isolation still holds
 
-### 4.5: SDK Client Surface for Codelists 🟧 **PLANNED**
+### 4.5: SDK Client Surface for Codelists ✅ **DONE**
 
 **User Story**: As a TypeScript developer, I need SDK methods for effective codelist reads so that apps integrate without hand-written HTTP.
 
@@ -684,10 +684,10 @@
 
 **Acceptance Criteria**:
 
-- [ ] `client.codelists.getValues('regions', { lang: 'en' })` returns data
-- [ ] Types compile in SDK package
-- [ ] Unit tests pass
-- [ ] README/docs mention codelists
+- [x] `client.codelists.getValues('regions', { lang: 'en' })` returns data
+- [x] Types compile in SDK package
+- [x] Unit tests pass
+- [x] README/docs mention codelists
 
 **Dependencies**: F2.1
 
@@ -696,7 +696,7 @@
 - SDK unit tests for service methods
 - Typecheck package
 
-### 4.6: Optional Field Option `codelist` (Stretch) 🟧 **PLANNED**
+### 4.6: Optional Field Option `codelist` (Stretch) ✅ **DONE**
 
 **User Story**: As a collection designer, I need a field option linking a text field to a codelist so that generic record validation can enforce dictionaries.
 
@@ -709,9 +709,9 @@
 
 **Acceptance Criteria**:
 
-- [ ] (If shipped) invalid code rejected on record create
-- [ ] (If shipped) valid effective code accepted
-- [ ] (If deferred) Phase 5 feature references this item
+- [x] (If shipped) invalid code rejected on record create
+- [x] (If shipped) valid effective code accepted
+- [x] (If deferred) Phase 5 feature references this item
 
 **Dependencies**: F2.5
 
@@ -719,14 +719,14 @@
 
 - Record validation unit/integration tests if shipped
 
-## Phase 4 Definition of Done 🟧 **PLANNED**
+## Phase 4 Definition of Done ✅ **DONE**
 
-- [ ] Cloud Console uses effective codelist for regions
-- [ ] New accounts do not require region fan-out seed
-- [ ] Server-side validation prevents arbitrary region codes
-- [ ] Fan-out path **removed** (not merely deprecated)
-- [ ] SDK read API available (or explicitly deferred with issue link)
-- [ ] Stakeholder demo: two new accounts create projects with shared regions, no per-account seed
+- [x] Cloud Console uses effective codelist for regions
+- [x] New accounts do not require region fan-out seed
+- [x] Server-side validation prevents arbitrary region codes
+- [x] Fan-out path **removed** (not merely deprecated)
+- [x] SDK read API available (or explicitly deferred with issue link)
+- [x] Stakeholder demo: two new accounts create projects with shared regions, no per-account seed
 
 ---
 
