@@ -12,7 +12,6 @@ import {
   Plus,
   RefreshCw,
   Search,
-  Star,
   Upload,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -42,9 +41,10 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { handleApiError } from '@/lib/api';
-import { isSuperadminAccount } from '@/lib/auth';
+import { isSuperadminAccount, SYSTEM_ACCOUNT_ID } from '@/lib/auth';
 import { useAuthStore } from '@/stores/auth.store';
 import * as codelistsService from '@/services/codelists.service';
+import { getAccounts, type AccountListItem } from '@/services/accounts.service';
 import type {
   Codelist,
   CodelistValue,
@@ -79,6 +79,9 @@ export default function CodelistsPage() {
   const [langPreview, setLangPreview] = useState('en');
   const [showInactive, setShowInactive] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
+  /** Superadmin: which tenant's overrides/effective preview to manage. */
+  const [overrideAccountId, setOverrideAccountId] = useState<string>('');
+  const [tenantAccounts, setTenantAccounts] = useState<AccountListItem[]>([]);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [valueDialogOpen, setValueDialogOpen] = useState(false);
@@ -127,15 +130,36 @@ export default function CodelistsPage() {
     }
   }, []);
 
+  /** Account id for override APIs: own account for tenants; selected tenant for superadmin. */
+  const overrideTargetAccountId = isSuperadmin
+    ? overrideAccountId || undefined
+    : account?.id;
+
   const fetchDetail = useCallback(
     async (code: string) => {
       setDetailLoading(true);
       try {
+        const canLoadOverrides =
+          isAdmin && (!isSuperadmin || Boolean(overrideAccountId));
+        const effParams: {
+          lang?: string;
+          active?: boolean;
+          account_id?: string;
+        } = { lang: langPreview, active: true };
+        if (isSuperadmin && overrideAccountId) {
+          effParams.account_id = overrideAccountId;
+        }
+
         const [raw, eff, ovs] = await Promise.all([
           codelistsService.listManageValues(code, true),
-          codelistsService.getEffectiveValues(code, { lang: langPreview, active: true }),
-          isAdmin
-            ? codelistsService.listOverrides(code).catch(() => [] as CodelistOverride[])
+          codelistsService.getEffectiveValues(code, effParams),
+          canLoadOverrides
+            ? codelistsService
+                .listOverrides(
+                  code,
+                  isSuperadmin ? overrideAccountId : undefined,
+                )
+                .catch(() => [] as CodelistOverride[])
             : Promise.resolve([] as CodelistOverride[]),
         ]);
         setValues(raw);
@@ -147,12 +171,38 @@ export default function CodelistsPage() {
         setDetailLoading(false);
       }
     },
-    [isAdmin, langPreview, toast],
+    [isAdmin, isSuperadmin, langPreview, overrideAccountId, toast],
   );
 
   useEffect(() => {
     fetchLists();
   }, [fetchLists]);
+
+  useEffect(() => {
+    if (!isSuperadmin) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await getAccounts({ page: 1, page_size: 100 });
+        if (cancelled) return;
+        // Exclude system account — overrides are for tenant pickers
+        const tenants = (res.items || []).filter(
+          (a) => a.id !== SYSTEM_ACCOUNT_ID && a.slug !== 'system',
+        );
+        setTenantAccounts(tenants);
+        if (!overrideAccountId && tenants.length > 0) {
+          setOverrideAccountId(tenants[0].id);
+        }
+      } catch {
+        // Superadmin without accounts list still sees the selector empty state
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // only load once when becoming superadmin
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSuperadmin]);
 
   useEffect(() => {
     if (routeCode) {
@@ -307,11 +357,29 @@ export default function CodelistsPage() {
 
   const toggleHide = async (valueCode: string, hidden: boolean) => {
     if (!selectedCode) return;
+    if (isSuperadmin && !overrideAccountId) {
+      toast({
+        title: 'Select an account',
+        description: 'Choose which tenant account to apply overrides for.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    const accountIdParam = isSuperadmin ? overrideAccountId : undefined;
     try {
       if (hidden) {
-        await codelistsService.setOverride(selectedCode, valueCode, { visibility: 'hidden' });
+        await codelistsService.setOverride(
+          selectedCode,
+          valueCode,
+          { visibility: 'hidden' },
+          accountIdParam,
+        );
       } else {
-        await codelistsService.clearOverride(selectedCode, valueCode);
+        await codelistsService.clearOverride(
+          selectedCode,
+          valueCode,
+          accountIdParam,
+        );
       }
       await fetchDetail(selectedCode);
     } catch (err) {
@@ -319,16 +387,35 @@ export default function CodelistsPage() {
     }
   };
 
-  const setDefault = async (valueCode: string) => {
+  const toggleDefault = async (valueCode: string, makeDefault: boolean) => {
     if (!selectedCode) return;
-    try {
-      await codelistsService.setOverride(selectedCode, valueCode, {
-        visibility: 'visible',
-        is_default: true,
+    if (isSuperadmin && !overrideAccountId) {
+      toast({
+        title: 'Select an account',
+        description: 'Choose which tenant account to apply overrides for.',
+        variant: 'destructive',
       });
+      return;
+    }
+    const accountIdParam = isSuperadmin ? overrideAccountId : undefined;
+    try {
+      // Default toggle is disabled when hidden; always keep value visible
+      await codelistsService.setOverride(
+        selectedCode,
+        valueCode,
+        {
+          visibility: 'visible',
+          is_default: makeDefault,
+        },
+        accountIdParam,
+      );
       await fetchDetail(selectedCode);
     } catch (err) {
-      toast({ title: 'Set default failed', description: handleApiError(err), variant: 'destructive' });
+      toast({
+        title: 'Default update failed',
+        description: handleApiError(err),
+        variant: 'destructive',
+      });
     }
   };
 
@@ -720,9 +807,46 @@ export default function CodelistsPage() {
                     Shared values are defined once. Overrides are <strong>deltas</strong> only
                     (hide, default, sort). New system values appear for all accounts unless
                     hidden.
+                    {isSuperadmin && (
+                      <>
+                        {' '}
+                        As superadmin, pick a <strong>tenant account</strong> to apply
+                        overrides for (system account cannot hold product overrides).
+                      </>
+                    )}
                   </div>
+                  {isSuperadmin && (
+                    <div className="flex flex-wrap items-center gap-2 max-w-md">
+                      <Label htmlFor="override-account">Account</Label>
+                      <Select
+                        value={overrideAccountId || undefined}
+                        onValueChange={(id) => {
+                          setOverrideAccountId(id);
+                        }}
+                      >
+                        <SelectTrigger
+                          id="override-account"
+                          className="flex-1 min-w-[12rem]"
+                          data-testid="override-account-select"
+                        >
+                          <SelectValue placeholder="Select tenant account" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {tenantAccounts.map((a) => (
+                            <SelectItem key={a.id} value={a.id}>
+                              {a.name} ({a.slug})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   {!isAdmin ? (
                     <p className="text-sm text-muted-foreground">Admin role required to manage overrides.</p>
+                  ) : isSuperadmin && !overrideAccountId ? (
+                    <p className="text-sm text-muted-foreground" data-testid="override-account-required">
+                      Select a tenant account above to manage visibility and defaults.
+                    </p>
                   ) : detailLoading ? (
                     <Skeleton className="h-32 w-full" />
                   ) : (
@@ -743,6 +867,8 @@ export default function CodelistsPage() {
                               .map((v) => {
                                 const ov = overrideByValue.get(v.id);
                                 const hidden = ov?.visibility === 'hidden';
+                                const overridesDisabled =
+                                  isSuperadmin && !overrideTargetAccountId;
                                 return (
                                   <tr key={v.id} className="border-b">
                                     <td className="p-2 font-mono">{v.code}</td>
@@ -750,20 +876,21 @@ export default function CodelistsPage() {
                                     <td className="p-2">
                                       <Switch
                                         checked={!hidden}
+                                        disabled={overridesDisabled}
                                         onCheckedChange={(vis) => toggleHide(v.code, !vis)}
                                         aria-label={`Visibility for ${v.code}`}
                                       />
                                     </td>
                                     <td className="p-2">
-                                      <Button
-                                        size="sm"
-                                        variant={ov?.is_default ? 'default' : 'outline'}
-                                        onClick={() => setDefault(v.code)}
-                                        disabled={hidden}
-                                      >
-                                        <Star className="h-3 w-3 mr-1" />
-                                        Default
-                                      </Button>
+                                      <Switch
+                                        checked={Boolean(ov?.is_default)}
+                                        disabled={hidden || overridesDisabled}
+                                        onCheckedChange={(on) =>
+                                          void toggleDefault(v.code, on)
+                                        }
+                                        aria-label={`Default for ${v.code}`}
+                                        data-testid={`default-toggle-${v.code}`}
+                                      />
                                     </td>
                                   </tr>
                                 );
@@ -935,15 +1062,18 @@ export default function CodelistsPage() {
 
       {/* Value dialog */}
       <Dialog open={valueDialogOpen} onOpenChange={setValueDialogOpen}>
-        <DialogContent className="max-w-lg" data-testid="value-dialog">
-          <DialogHeader>
+        <DialogContent
+          className="max-w-lg max-h-[90vh] flex flex-col gap-4 overflow-hidden"
+          data-testid="value-dialog"
+        >
+          <DialogHeader className="shrink-0">
             <DialogTitle>{editingValue ? 'Edit value' : 'Add value'}</DialogTitle>
             <DialogDescription>
               The <strong>submission code</strong> is stored in application data and should
               not change. Labels are for UI display only.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
             <div className="space-y-1">
               <Label>Code</Label>
               <Input
@@ -971,30 +1101,37 @@ export default function CodelistsPage() {
             </div>
             <div className="space-y-2">
               <Label>Labels</Label>
-              {vLabels.map((row, idx) => (
-                <div key={idx} className="flex gap-2">
-                  <Input
-                    className="w-20"
-                    value={row.language}
-                    onChange={(e) => {
-                      const next = [...vLabels];
-                      next[idx] = { ...next[idx], language: e.target.value };
-                      setVLabels(next);
-                    }}
-                    placeholder="en"
-                  />
-                  <Input
-                    className="flex-1"
-                    value={row.label}
-                    onChange={(e) => {
-                      const next = [...vLabels];
-                      next[idx] = { ...next[idx], label: e.target.value };
-                      setVLabels(next);
-                    }}
-                    placeholder="Display label"
-                  />
+              <ScrollArea
+                className="h-40 max-h-40 rounded-md border"
+                data-testid="labels-scroll"
+              >
+                <div className="space-y-2 p-2 pr-3">
+                  {vLabels.map((row, idx) => (
+                    <div key={idx} className="flex gap-2">
+                      <Input
+                        className="w-20 shrink-0"
+                        value={row.language}
+                        onChange={(e) => {
+                          const next = [...vLabels];
+                          next[idx] = { ...next[idx], language: e.target.value };
+                          setVLabels(next);
+                        }}
+                        placeholder="en"
+                      />
+                      <Input
+                        className="flex-1"
+                        value={row.label}
+                        onChange={(e) => {
+                          const next = [...vLabels];
+                          next[idx] = { ...next[idx], label: e.target.value };
+                          setVLabels(next);
+                        }}
+                        placeholder="Display label"
+                      />
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </ScrollArea>
               <Button
                 type="button"
                 size="sm"
@@ -1009,7 +1146,7 @@ export default function CodelistsPage() {
               <Textarea value={vMeta} onChange={(e) => setVMeta(e.target.value)} className="font-mono text-xs" />
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="shrink-0">
             <Button variant="outline" onClick={() => setValueDialogOpen(false)}>
               Cancel
             </Button>

@@ -35,6 +35,27 @@ vi.mock('@/services/codelists.service', async () => {
   }
 })
 
+vi.mock('@/services/accounts.service', () => ({
+  getAccounts: vi.fn().mockResolvedValue({
+    items: [
+      {
+        id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        account_code: 'AA1111',
+        slug: 'acct-a',
+        name: 'Account A',
+        user_count: 1,
+        status: 'active',
+        created_at: '',
+        updated_at: '',
+      },
+    ],
+    total: 1,
+    page: 1,
+    page_size: 100,
+    total_pages: 1,
+  }),
+}))
+
 describe('CodelistsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
