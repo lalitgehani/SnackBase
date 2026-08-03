@@ -32,7 +32,7 @@ class FieldDefinition(BaseModel):
         default=False,
         description="Whether the field value must be unique",
     )
-    options: dict | None = Field(
+    options: dict[str, Any] | None = Field(
         default=None,
         description="Additional field options",
     )
@@ -53,6 +53,14 @@ class FieldDefinition(BaseModel):
     mask_type: str | None = Field(
         default=None,
         description="Mask type for PII fields: email, ssn, phone, name, full, custom",
+    )
+    # Server-only credential encryption (text/json only; non-queryable)
+    encrypted: bool = Field(
+        default=False,
+        description=(
+            "When true, values are encrypted at rest and redacted in normal API "
+            "responses. Only allowed on text and json fields."
+        ),
     )
     # Computed field properties
     expression: str | None = Field(
@@ -137,11 +145,12 @@ class SchemaFieldResponse(BaseModel):
     required: bool = False
     default: Any = None
     unique: bool = False
-    options: dict | None = None
+    options: dict[str, Any] | None = None
     collection: str | None = None
     on_delete: str | None = None
     pii: bool = False
     mask_type: str | None = None
+    encrypted: bool = False
     expression: str | None = None
     return_type: str | None = None
 
@@ -198,6 +207,38 @@ class UpdateCollectionRequest(BaseModel):
     )
 
     model_config = {"populate_by_name": True}
+
+
+class EncryptionMigrationRequest(BaseModel):
+    """Request body for enabling or disabling field encryption with data migration."""
+
+    enable: bool = Field(
+        ...,
+        description=(
+            "True to encrypt existing values and set encrypted=true; "
+            "False to decrypt existing values and clear encrypted"
+        ),
+    )
+    account_id: str | None = Field(
+        default=None,
+        description=(
+            "Must be omitted. Encryption state changes convert every account's "
+            "non-null values before flipping the schema flag so tenants never "
+            "mix plaintext and ciphertext under one encrypted field. "
+            "Providing account_id is rejected."
+        ),
+    )
+
+
+class EncryptionMigrationResponse(BaseModel):
+    """Result of an encryption-state data migration (no secret values)."""
+
+    status: str
+    field: str
+    encrypted: bool
+    rows_converted: int = 0
+    rows_processed: int = 0
+    direction: str | None = None
 
 
 class GetCollectionsParams(BaseModel):
@@ -333,11 +374,12 @@ class CollectionExportFieldDefinition(BaseModel):
     required: bool = False
     default: Any = None
     unique: bool = False
-    options: dict | None = None
+    options: dict[str, Any] | None = None
     collection: str | None = None
     on_delete: str | None = None
     pii: bool = False
     mask_type: str | None = None
+    encrypted: bool = False
     expression: str | None = None
     return_type: str | None = None
 

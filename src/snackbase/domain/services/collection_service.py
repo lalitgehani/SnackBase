@@ -157,6 +157,22 @@ class CollectionService:
                             code="type_change_not_allowed",
                         )
                     )
+                # Encryption state changes require migrate_field_encryption()
+                existing_enc = bool(existing_field.get("encrypted", False))
+                new_enc = bool(new_field.get("encrypted", False))
+                if existing_enc != new_enc:
+                    errors.append(
+                        CollectionValidationError(
+                            field=field_name,
+                            message=(
+                                "Changing a field's encryption state requires the "
+                                "encryption data migration path "
+                                "(CollectionService.migrate_field_encryption); "
+                                "it cannot be toggled via a plain schema update"
+                            ),
+                            code="encryption_state_change_requires_migration",
+                        )
+                    )
 
         # Validate the entire new schema (not just new fields)
         # This catches duplicate field names and other schema-wide validation issues
@@ -164,6 +180,114 @@ class CollectionService:
         errors.extend(validation_errors)
 
         return errors
+
+    async def migrate_field_encryption(
+        self,
+        collection_id: str,
+        field_name: str,
+        *,
+        enable_encryption: bool,
+        encryption_service: Any,
+        account_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Migrate existing values and flip the field's encrypted flag.
+
+        Converts **all** existing non-null values for ``field_name`` (every
+        account) before updating collection schema metadata. Partial
+        account-scoped conversion is refused when it would leave other
+        tenants' values unconverted under a flipped schema (F4.1).
+
+        On conversion failure the schema is left unchanged so the operation
+        is retryable. Secret values are never logged.
+
+        Args:
+            collection_id: Collection UUID.
+            field_name: Field to encrypt or decrypt.
+            enable_encryption: True to enable encryption, False to disable.
+            encryption_service: EncryptionService instance.
+            account_id: Must be omitted or null for schema-changing migrations.
+                Providing a scoped account_id is rejected so plaintext and
+                ciphertext cannot be mixed under one ``encrypted`` flag.
+
+        Returns:
+            Dict with migration result summary (no values).
+
+        Raises:
+            ValueError: If collection/field invalid, account_id is scoped, or
+                migration fails.
+        """
+        from snackbase.domain.services.encryption_migration_service import (
+            EncryptionMigrationService,
+        )
+
+        collection = await self.repository.get_by_id(collection_id)
+        if not collection:
+            raise ValueError(f"Collection with ID '{collection_id}' not found")
+
+        schema: list[dict[str, Any]] = json.loads(collection.schema)
+        field_def = next((f for f in schema if f.get("name") == field_name), None)
+        if field_def is None:
+            raise ValueError(f"Field '{field_name}' not found on collection")
+
+        field_type = str(field_def.get("type", "")).lower()
+        if field_type not in ("text", "json"):
+            raise ValueError("Only text and json fields support encryption")
+
+        currently_encrypted = bool(field_def.get("encrypted", False))
+        if currently_encrypted == enable_encryption:
+            return {
+                "status": "noop",
+                "field": field_name,
+                "encrypted": currently_encrypted,
+            }
+
+        # F4.1: refuse partial multi-tenant conversion that would leave mixed
+        # plaintext/ciphertext under a single collection encrypted flag.
+        if account_id is not None:
+            raise ValueError(
+                "account_id cannot be used when changing encryption state: "
+                "all accounts must be converted together before the schema "
+                "encrypted flag is updated. Omit account_id to migrate every "
+                "tenant's values. Schema not updated."
+            )
+
+        migrator = EncryptionMigrationService(self.session, encryption_service)
+        # Always convert every account's non-null values before schema flip.
+        result = await migrator.migrate_field(
+            collection.name,
+            field_name,
+            field_type,
+            enable_encryption=enable_encryption,
+            account_id=None,
+        )
+        if not result.success:
+            raise ValueError(
+                f"Encryption migration failed for field '{field_name}' "
+                f"({result.error or 'unknown'}); schema not updated"
+            )
+
+        # Update schema metadata only after successful full data conversion
+        field_def["encrypted"] = enable_encryption
+        if enable_encryption:
+            field_def["unique"] = False
+        collection.schema = json.dumps(schema)
+        await self.repository.update(collection)
+
+        logger.info(
+            "Field encryption state updated",
+            collection_id=collection_id,
+            field=field_name,
+            encrypted=enable_encryption,
+            rows_converted=result.rows_converted,
+        )
+        return {
+            "status": "ok",
+            "field": field_name,
+            "encrypted": enable_encryption,
+            "rows_converted": result.rows_converted,
+            "rows_processed": result.rows_processed,
+            "direction": result.direction,
+        }
 
     async def update_collection_schema(
         self, collection_id: str, new_schema: list[dict[str, Any]]

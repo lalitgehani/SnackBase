@@ -6,8 +6,7 @@ Implements the Authenticator class which handles:
 - Legacy API keys (sb_sk)
 """
 
-from datetime import datetime, timezone
-from typing import Dict, Optional
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,7 +20,7 @@ from snackbase.infrastructure.auth.jwt_service import (
     jwt_service,
 )
 from snackbase.infrastructure.auth.token_codec import AuthenticationError, TokenCodec
-from snackbase.infrastructure.auth.token_types import AuthenticatedUser, TokenPayload, TokenType
+from snackbase.infrastructure.auth.token_types import AuthenticatedUser, TokenType
 from snackbase.infrastructure.persistence.models import APIKeyModel, UserModel
 
 logger = get_logger(__name__)
@@ -33,7 +32,7 @@ SYSTEM_ACCOUNT_ID = "00000000-0000-0000-0000-000000000000"
 class Authenticator:
     """Unified authentication for all token types."""
 
-    def __init__(self, secret: Optional[str] = None):
+    def __init__(self, secret: str | None = None):
         """Initialize the authenticator.
 
         Args:
@@ -43,7 +42,7 @@ class Authenticator:
         self.secret = secret
 
     async def authenticate(
-        self, request_headers: Dict[str, str], session: Optional[AsyncSession] = None
+        self, request_headers: dict[str, str], session: AsyncSession | None = None
     ) -> AuthenticatedUser:
         """Authenticate from request headers.
 
@@ -77,37 +76,37 @@ class Authenticator:
         raise AuthenticationError("Missing authentication credentials")
 
     async def _authenticate_bearer(
-        self, token: str, session: Optional[AsyncSession]
+        self, token: str, session: AsyncSession | None
     ) -> AuthenticatedUser:
         """Authenticate a Bearer token (either JWT or SB token)."""
         # SnackBase tokens start with 'sb_'
         if token.startswith("sb_"):
             return await self._authenticate_sb_token(token, session)
-        
+
         # Otherwise, assume it's a standard JWT
         return await self._authenticate_jwt(token, session)
 
     async def _authenticate_api_key_header(
-        self, token: str, session: Optional[AsyncSession]
+        self, token: str, session: AsyncSession | None
     ) -> AuthenticatedUser:
         """Authenticate from X-API-Key header (either SB API Key or Legacy Key)."""
         # SnackBase API keys start with 'sb_ak.'
         if token.startswith("sb_ak."):
             return await self._authenticate_sb_token(token, session)
-        
+
         # Legacy API keys start with 'sb_sk_'
         if token.startswith("sb_sk_"):
             return await self._authenticate_legacy_api_key(token, session)
-        
-        raise AuthenticationError(f"Invalid API key format")
+
+        raise AuthenticationError("Invalid API key format")
 
     async def _authenticate_jwt(
-        self, token: str, session: Optional[AsyncSession]
+        self, token: str, session: AsyncSession | None
     ) -> AuthenticatedUser:
         """Validate a standard JWT."""
         try:
             payload = jwt_service.validate_access_token(token)
-            
+
             if session:
                 await self._verify_user_account(
                     payload["user_id"], payload["account_id"], session
@@ -133,7 +132,7 @@ class Authenticator:
         """Verify that a user belongs to an account."""
         # Special case: superadmins in system account
         if account_id == SYSTEM_ACCOUNT_ID:
-            # We still want to verify the user exists and has a role, 
+            # We still want to verify the user exists and has a role,
             # but they might be linked to the system account.
             pass
 
@@ -151,7 +150,7 @@ class Authenticator:
             raise AuthenticationError("User does not belong to the specifying account")
 
     async def _authenticate_sb_token(
-        self, token: str, session: Optional[AsyncSession]
+        self, token: str, session: AsyncSession | None
     ) -> AuthenticatedUser:
         """Validate a SnackBase unified token (sb_ak, sb_pt, sb_ot)."""
         if not self.secret:
@@ -162,16 +161,26 @@ class Authenticator:
 
         try:
             payload = TokenCodec.decode(token, secret)
-            
+
             # Check expiration
-            now = int(datetime.now(timezone.utc).timestamp())
+            now = int(datetime.now(UTC).timestamp())
             if payload.expires_at and payload.expires_at < now:
                 raise AuthenticationError("Token has expired")
 
             # Check revocation if session is available
+            scopes: list[str] = list(payload.scopes or [])
+            api_key_id: str | None = None
             if session:
                 await self._check_revocation(payload.token_id, session)
                 await self._verify_user_account(payload.user_id, payload.account_id, session)
+                # Prefer DB-stored scopes for API keys (source of truth after create).
+                if payload.type == TokenType.API_KEY:
+                    api_key_id = payload.token_id
+                    db_scopes = await self._load_api_key_scopes(payload.token_id, session)
+                    if db_scopes is not None:
+                        scopes = db_scopes
+                    # Update last_used_at for API keys
+                    await self._touch_api_key(payload.token_id, session)
 
             return AuthenticatedUser(
                 user_id=payload.user_id,
@@ -179,9 +188,9 @@ class Authenticator:
                 email=payload.email,
                 role=payload.role,
                 token_type=payload.type,
-                groups=[], # SB tokens currently don't store groups, or do they?
-                           # PRD says "permissions", but not groups.
-                           # We can load them from DB if needed.
+                groups=[],  # SB tokens currently don't store groups
+                scopes=scopes,
+                api_key_id=api_key_id,
             )
         except AuthenticationError:
             raise
@@ -190,7 +199,7 @@ class Authenticator:
             raise AuthenticationError("Invalid token") from e
 
     async def _authenticate_legacy_api_key(
-        self, token: str, session: Optional[AsyncSession]
+        self, token: str, session: AsyncSession | None
     ) -> AuthenticatedUser:
         """Validate a legacy API key (legacy sb_sk_ format)."""
         if not session:
@@ -198,12 +207,12 @@ class Authenticator:
             raise AuthenticationError("Authentication requires database session")
 
         key_hash = api_key_service.hash_key(token)
-        
+
         # Load key and user
         result = await session.execute(
             select(APIKeyModel)
-            .where(APIKeyModel.key_hash == key_hash, APIKeyModel.is_active == True)
-            .options(selectinload(APIKeyModel.user).selectinload(UserModel.groups), 
+            .where(APIKeyModel.key_hash == key_hash, APIKeyModel.is_active.is_(True))
+            .options(selectinload(APIKeyModel.user).selectinload(UserModel.groups),
                      selectinload(APIKeyModel.user).selectinload(UserModel.role))
         )
         key_model = result.scalar_one_or_none()
@@ -215,9 +224,9 @@ class Authenticator:
         if key_model.expires_at:
             expires_at = key_model.expires_at
             if expires_at.tzinfo is None:
-                expires_at = expires_at.replace(tzinfo=timezone.utc)
-            
-            if expires_at < datetime.now(timezone.utc):
+                expires_at = expires_at.replace(tzinfo=UTC)
+
+            if expires_at < datetime.now(UTC):
                 raise AuthenticationError("API key has expired")
 
         user = key_model.user
@@ -234,12 +243,13 @@ class Authenticator:
             raise AuthenticationError("API keys are restricted to superadmin users")
 
         # Update last_used_at
-        key_model.last_used_at = datetime.now(timezone.utc)
+        key_model.last_used_at = datetime.now(UTC)
         await session.commit()
-        
+
         groups = [g.name for g in user.groups] if user.groups else []
         role_name = user.role.name if user.role else "admin"
 
+        scopes = list(key_model.scopes or [])
         return AuthenticatedUser(
             user_id=user.id,
             account_id=user.account_id,
@@ -247,18 +257,52 @@ class Authenticator:
             role=role_name,
             token_type=TokenType.API_KEY,
             groups=groups,
+            scopes=scopes,
+            api_key_id=key_model.id,
         )
 
     async def _load_user_groups(self, user_id: str, session: AsyncSession) -> list[str]:
         """Load group names for a given user."""
         from snackbase.infrastructure.persistence.models import GroupModel, UsersGroupsModel
-        
+
         result = await session.execute(
             select(GroupModel.name)
             .join(UsersGroupsModel)
             .where(UsersGroupsModel.user_id == user_id)
         )
         return list(result.scalars().all())
+
+    async def _load_api_key_scopes(
+        self, token_id: str, session: AsyncSession
+    ) -> list[str] | None:
+        """Load scopes for an API key from the database.
+
+        Returns:
+            Scope list if the key row exists, None if not found.
+        """
+        result = await session.execute(
+            select(APIKeyModel.scopes, APIKeyModel.is_active).where(APIKeyModel.id == token_id)
+        )
+        row = result.one_or_none()
+        if row is None:
+            return None
+        scopes, is_active = row
+        if not is_active:
+            raise AuthenticationError("API key is inactive")
+        return list(scopes or [])
+
+    async def _touch_api_key(self, token_id: str, session: AsyncSession) -> None:
+        """Update last_used_at for an API key without failing authentication."""
+        try:
+            result = await session.execute(
+                select(APIKeyModel).where(APIKeyModel.id == token_id)
+            )
+            key_model = result.scalar_one_or_none()
+            if key_model is not None:
+                key_model.last_used_at = datetime.now(UTC)
+                await session.commit()
+        except Exception as e:
+            logger.warning("Failed to update API key last_used_at", error=str(e))
 
     async def _check_revocation(self, token_id: str, session: AsyncSession) -> None:
         """Check if a token has been revoked."""

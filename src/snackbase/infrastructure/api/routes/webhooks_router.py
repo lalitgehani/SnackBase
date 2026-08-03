@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.core.config import get_settings
 from snackbase.core.logging import get_logger
-from snackbase.infrastructure.api.dependencies import AuthenticatedUser, get_db_session
+from snackbase.infrastructure.api.dependencies import AuthenticatedUser
 from snackbase.infrastructure.api.schemas.webhook_schemas import (
     WebhookCreateRequest,
     WebhookCreateResponse,
@@ -22,16 +22,30 @@ from snackbase.infrastructure.api.schemas.webhook_schemas import (
     WebhookTestResponse,
     WebhookUpdateRequest,
 )
+from snackbase.infrastructure.persistence.database import get_db_session
 from snackbase.infrastructure.persistence.models.webhook import WebhookModel
 from snackbase.infrastructure.persistence.repositories.webhook_repository import (
     WebhookDeliveryRepository,
     WebhookRepository,
 )
+from snackbase.infrastructure.security.encryption import EncryptionService
 from snackbase.infrastructure.webhooks.webhook_service import (
     generate_webhook_secret,
     test_webhook,
     validate_webhook_url,
 )
+
+
+def _encrypt_webhook_secret(plaintext: str) -> str:
+    """Encrypt a webhook signing secret for at-rest storage."""
+    return EncryptionService(get_settings().encryption_key).encrypt(plaintext)
+
+
+def _decrypt_webhook_secret(stored: str) -> str:
+    """Decrypt a stored webhook secret; soft-fail for legacy plaintext rows."""
+    service = EncryptionService(get_settings().encryption_key)
+    decrypted = service.try_decrypt(stored)
+    return decrypted if decrypted is not None else stored
 
 router = APIRouter(tags=["Webhooks"])
 logger = get_logger(__name__)
@@ -90,13 +104,14 @@ async def create_webhook(
         )
 
     secret = data.secret or generate_webhook_secret()
+    encrypted_secret = _encrypt_webhook_secret(secret)
 
     webhook = WebhookModel(
         account_id=current_user.account_id,
         url=data.url,
         collection=data.collection,
         events=data.events,
-        secret=secret,
+        secret=encrypted_secret,
         filter=data.filter,
         enabled=data.enabled,
         headers=data.headers,
@@ -112,6 +127,7 @@ async def create_webhook(
         collection=webhook.collection,
     )
 
+    # One-time plaintext delivery of the signing secret
     return WebhookCreateResponse(
         id=webhook.id,
         account_id=webhook.account_id,

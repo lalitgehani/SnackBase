@@ -1,6 +1,6 @@
 """Amazon S3 storage provider configuration."""
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 class S3StorageConfiguration:
@@ -19,11 +19,11 @@ class S3StorageConfiguration:
         return "Amazon S3"
 
     @property
-    def logo_url(self) -> Optional[str]:
+    def logo_url(self) -> str | None:
         return "/assets/providers/aws-ses.svg"
 
     @property
-    def config_schema(self) -> Dict[str, Any]:
+    def config_schema(self) -> dict[str, Any]:
         return {
             "type": "object",
             "properties": {
@@ -47,6 +47,7 @@ class S3StorageConfiguration:
                     "type": "string",
                     "title": "Secret Access Key",
                     "writeOnly": True,
+                    "secret": True,
                     "description": "AWS secret access key with S3 permissions.",
                 },
                 "endpoint_url": {

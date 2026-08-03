@@ -5,7 +5,7 @@ Supports access tokens and refresh tokens with configurable expiration.
 """
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import jwt
@@ -80,7 +80,7 @@ class JWTService:
         if expires_delta is None:
             expires_delta = timedelta(minutes=settings.access_token_expire_minutes)
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         expire = now + expires_delta
 
         payload = {
@@ -117,7 +117,7 @@ class JWTService:
         if expires_delta is None:
             expires_delta = timedelta(days=settings.refresh_token_expire_days)
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         expire = now + expires_delta
         token_id = str(uuid.uuid4())
 

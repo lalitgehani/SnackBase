@@ -74,7 +74,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
         # Register built-in authentication providers
         await register_builtin_providers(app)
-        
+
         # Ensure db_manager is available for hooks registration
         from snackbase.infrastructure.persistence.database import get_db_manager
         db_manager = get_db_manager()
@@ -126,9 +126,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 
         # Initialize Realtime components
-        from snackbase.infrastructure.realtime.realtime_manager import ConnectionManager
         from snackbase.infrastructure.realtime.event_broadcaster import EventBroadcaster
-        
+        from snackbase.infrastructure.realtime.realtime_manager import ConnectionManager
+
         connection_manager = ConnectionManager()
         event_broadcaster = EventBroadcaster(connection_manager)
 
@@ -251,17 +251,22 @@ def register_health_check(app: FastAPI) -> None:
     """
 
     @app.get("/health", tags=["health"])
-    async def health_check():
+    async def health_check() -> dict[str, object]:
         """Basic health check endpoint.
 
         Returns 200 if the service is running. Does not check
         database connectivity or other dependencies.
+
+        Includes whether a non-default encryption key is configured; never
+        exposes the key value itself.
         """
+        settings = get_settings()
         return {
             "status": "healthy",
             "service": "SnackBase",
-            "version": get_settings().app_version,
-            "audit_logging_enabled": get_settings().audit_logging_enabled,
+            "version": settings.app_version,
+            "audit_logging_enabled": settings.audit_logging_enabled,
+            "encryption_key_configured": settings.has_non_default_encryption_key,
         }
 
     @app.get("/ready", tags=["health"])
@@ -320,14 +325,18 @@ def register_routes(app: FastAPI) -> None:
         api_keys_router,
         audit_log_router,
         auth_router,
-        collections_router,
-        collection_rules_router,
         codelists_router,
+        collection_rules_router,
+        collections_router,
+        custom_endpoint_dispatcher_router,
         dashboard_router,
         email_templates_router,
+        endpoints_router,
         files_router,
         groups_router,
+        hooks_router,
         invitations_router,
+        jobs_router,
         macros_router,
         migrations_router,
         oauth_router,
@@ -337,13 +346,11 @@ def register_routes(app: FastAPI) -> None:
         saml_router,
         users_router,
         webhooks_router,
-        jobs_router,
-        hooks_router,
-        endpoints_router,
-        custom_endpoint_dispatcher_router,
     )
     from snackbase.infrastructure.api.routes.workflows_router import (
         router as workflows_router,
+    )
+    from snackbase.infrastructure.api.routes.workflows_router import (
         webhook_router as workflow_webhook_router,
     )
 
@@ -585,10 +592,10 @@ def register_middleware(app: FastAPI) -> None:
         app: FastAPI application instance.
     """
     from snackbase.infrastructure.api.middleware.context_middleware import ContextMiddleware
+    from snackbase.infrastructure.api.middleware.rate_limit_middleware import RateLimitMiddleware
     from snackbase.infrastructure.api.middleware.security_headers_middleware import (
         SecurityHeadersMiddleware,
     )
-    from snackbase.infrastructure.api.middleware.rate_limit_middleware import RateLimitMiddleware
     from snackbase.infrastructure.auth.middleware import AuthenticationMiddleware
 
     # Register SecurityHeadersMiddleware first (outermost layer)
@@ -653,7 +660,7 @@ def register_middleware(app: FastAPI) -> None:
 
 async def register_builtin_providers(app: FastAPI) -> None:
     """Register built-in authentication and configuration providers.
-    
+
     Args:
         app: FastAPI application instance.
     """
@@ -680,9 +687,9 @@ async def register_builtin_providers(app: FastAPI) -> None:
     from snackbase.infrastructure.configuration.providers.system import SystemConfiguration
     from snackbase.infrastructure.persistence.database import get_db_manager
     from snackbase.infrastructure.security.encryption import EncryptionService
-    
+
     settings = get_settings()
-    
+
     # Initialize registry if not already present
     if not hasattr(app.state, "config_registry"):
         encryption_service = EncryptionService(settings.encryption_key)

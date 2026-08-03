@@ -2,14 +2,18 @@
 
 import time
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any
 
 from snackbase.infrastructure.persistence.models.configuration import ConfigurationModel
 from snackbase.infrastructure.persistence.repositories.configuration_repository import (
     ConfigurationRepository,
 )
-from snackbase.infrastructure.security.encryption import EncryptionService
+from snackbase.infrastructure.security.encryption import (
+    EncryptionService,
+    extract_secret_paths_from_schema,
+)
 
 
 @dataclass
@@ -19,8 +23,8 @@ class ProviderDefinition:
     category: str
     provider_name: str
     display_name: str
-    logo_url: Optional[str] = None
-    config_schema: Optional[Dict[str, Any]] = None
+    logo_url: str | None = None
+    config_schema: dict[str, Any] | None = None
     is_builtin: bool = False
 
 
@@ -28,7 +32,7 @@ class ProviderDefinition:
 class CachedConfig:
     """Cached effective configuration."""
 
-    config: Optional[Dict[str, Any]]
+    config: dict[str, Any] | None
     expires_at: float
 
 
@@ -52,16 +56,16 @@ class ConfigurationRegistry:
             encryption_service: Encryption service for sensitive data.
         """
         self.encryption_service = encryption_service
-        self._provider_definitions: Dict[str, ProviderDefinition] = {}
-        self._cache: Dict[str, CachedConfig] = {}
+        self._provider_definitions: dict[str, ProviderDefinition] = {}
+        self._cache: dict[str, CachedConfig] = {}
 
     def register_provider_definition(
         self,
         category: str,
         provider_name: str,
         display_name: str,
-        logo_url: Optional[str] = None,
-        config_schema: Optional[Dict[str, Any]] = None,
+        logo_url: str | None = None,
+        config_schema: dict[str, Any] | None = None,
         is_builtin: bool = False,
     ) -> None:
         """Register a new provider definition.
@@ -84,7 +88,7 @@ class ConfigurationRegistry:
             is_builtin=is_builtin,
         )
 
-    def get_provider_definition(self, category: str, provider_name: str) -> Optional[ProviderDefinition]:
+    def get_provider_definition(self, category: str, provider_name: str) -> ProviderDefinition | None:
         """Retrieve a provider definition.
 
         Args:
@@ -96,7 +100,7 @@ class ConfigurationRegistry:
         """
         return self._provider_definitions.get(f"{category}:{provider_name}")
 
-    def list_provider_definitions(self, category: Optional[str] = None) -> List[ProviderDefinition]:
+    def list_provider_definitions(self, category: str | None = None) -> list[ProviderDefinition]:
         """List all registered provider definitions.
 
         Args:
@@ -115,7 +119,7 @@ class ConfigurationRegistry:
         account_id: str,
         provider_name: str,
         repository: ConfigurationRepository,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Resolve effective configuration (account override -> system default).
 
         Args:
@@ -155,8 +159,13 @@ class ConfigurationRegistry:
 
         effective_config = None
         if config_model and config_model.enabled:
-            # Decrypted config values are returned to the caller
-            effective_config = self.encryption_service.decrypt_dict(config_model.config)
+            # Decrypted config values are returned only to trusted runtime callers
+            effective_config = self._decrypt_config(
+                config_model.config,
+                config_model.config_schema,
+                category=config_model.category,
+                provider_name=config_model.provider_name,
+            )
 
         # Update cache
         self._cache[cache_key] = CachedConfig(
@@ -206,19 +215,63 @@ class ConfigurationRegistry:
             is_system=False,
         )
 
+    def _resolve_config_schema(
+        self,
+        category: str,
+        provider_name: str,
+        config_schema: dict[str, Any] | None = None,
+        model_schema: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        """Resolve schema: explicit arg > model > registered provider definition."""
+        if config_schema is not None:
+            return config_schema
+        if model_schema is not None:
+            return model_schema
+        provider_def = self.get_provider_definition(category, provider_name)
+        return provider_def.config_schema if provider_def else None
+
+    def _encrypt_config(
+        self,
+        config: dict[str, Any],
+        config_schema: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        """Encrypt schema-declared secrets; fall back to name heuristics."""
+        paths = extract_secret_paths_from_schema(config_schema)
+        if paths:
+            return self.encryption_service.encrypt_at_paths(config, paths)
+        return self.encryption_service.encrypt_dict(config)
+
+    def _decrypt_config(
+        self,
+        config: dict[str, Any],
+        config_schema: dict[str, Any] | None = None,
+        *,
+        category: str | None = None,
+        provider_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Decrypt schema-declared secrets; fall back to name heuristics."""
+        schema = config_schema
+        if schema is None and category and provider_name:
+            schema = self._resolve_config_schema(category, provider_name)
+        paths = extract_secret_paths_from_schema(schema)
+        if paths:
+            return self.encryption_service.decrypt_at_paths(config, paths, strict=False)
+        return self.encryption_service.decrypt_dict(config)
+
     async def create_config(
         self,
         account_id: str,
         category: str,
         provider_name: str,
         display_name: str,
-        config: Dict[str, Any],
-        logo_url: Optional[str] = None,
+        config: dict[str, Any],
+        logo_url: str | None = None,
         enabled: bool = True,
         is_builtin: bool = False,
         is_system: bool = False,
         priority: int = 0,
-        repository: Optional[ConfigurationRepository] = None,
+        repository: ConfigurationRepository | None = None,
+        config_schema: dict[str, Any] | None = None,
     ) -> ConfigurationModel:
         """Create a new configuration record.
 
@@ -234,16 +287,26 @@ class ConfigurationRegistry:
             is_system: Whether it's system-level.
             priority: Display priority.
             repository: Optional repository. Required if persisting.
+            config_schema: Optional JSON schema for custom (unregistered) providers.
+                When provided, secret fields are taken from ``secret: true`` markers.
 
         Returns:
             Created configuration model.
         """
-        # Encrypt configuration values before storage
-        encrypted_config = self.encryption_service.encrypt_dict(config)
+        resolved_schema = self._resolve_config_schema(
+            category, provider_name, config_schema=config_schema
+        )
+        # Custom credential configs without any schema cannot declare secrets safely
+        if (
+            not is_builtin
+            and resolved_schema is None
+            and not self.get_provider_definition(category, provider_name)
+        ):
+            # Allow non-secret custom configs; if config looks credential-like without
+            # schema, reject when caller explicitly needs secrets (enforced at API layer)
+            pass
 
-        # Retrieve schema from provider definition if registered
-        provider_def = self.get_provider_definition(category, provider_name)
-        config_schema = provider_def.config_schema if provider_def else None
+        encrypted_config = self._encrypt_config(config, resolved_schema)
 
         new_config = ConfigurationModel(
             id=str(uuid.uuid4()),
@@ -252,7 +315,7 @@ class ConfigurationRegistry:
             provider_name=provider_name,
             display_name=display_name,
             logo_url=logo_url,
-            config_schema=config_schema,
+            config_schema=resolved_schema,
             config=encrypted_config,
             enabled=enabled,
             is_builtin=is_builtin,
@@ -273,13 +336,13 @@ class ConfigurationRegistry:
     async def update_config(
         self,
         config_id: str,
-        config: Optional[Dict[str, Any]] = None,
-        display_name: Optional[str] = None,
-        logo_url: Optional[str] = None,
-        enabled: Optional[bool] = None,
-        priority: Optional[int] = None,
-        repository: Optional[ConfigurationRepository] = None,
-    ) -> Optional[ConfigurationModel]:
+        config: dict[str, Any] | None = None,
+        display_name: str | None = None,
+        logo_url: str | None = None,
+        enabled: bool | None = None,
+        priority: int | None = None,
+        repository: ConfigurationRepository | None = None,
+    ) -> ConfigurationModel | None:
         """Update an existing configuration record.
 
         Args:
@@ -302,7 +365,12 @@ class ConfigurationRegistry:
             return None
 
         if config is not None:
-            config_model.config = self.encryption_service.encrypt_dict(config)
+            schema = self._resolve_config_schema(
+                config_model.category,
+                config_model.provider_name,
+                model_schema=config_model.config_schema,
+            )
+            config_model.config = self._encrypt_config(config, schema)
         if display_name is not None:
             config_model.display_name = display_name
         if logo_url is not None:

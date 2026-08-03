@@ -124,7 +124,7 @@ class Settings(BaseSettings):
     )
     encryption_key: str = Field(
         default="change-me-in-production-use-openssl-rand-hex-32",
-        description="Secret key for sensitive data encryption at rest",
+        description="Secret key for sensitive data encryption at rest (SNACKBASE_ENCRYPTION_KEY)",
     )
     access_token_expire_minutes: int = 60
     refresh_token_expire_days: int = 7
@@ -317,6 +317,25 @@ class Settings(BaseSettings):
     def is_testing(self) -> bool:
         """Check if running in testing environment."""
         return self.environment == "testing"
+
+    @property
+    def has_non_default_encryption_key(self) -> bool:
+        """True when SNACKBASE_ENCRYPTION_KEY is not the built-in default."""
+        from snackbase.infrastructure.security.encryption import DEFAULT_ENCRYPTION_KEY
+
+        return bool(self.encryption_key != DEFAULT_ENCRYPTION_KEY)
+
+    @model_validator(mode="after")
+    def validate_production_encryption_key(self) -> "Settings":
+        """Reject the default encryption key in production (fail-closed)."""
+        from snackbase.infrastructure.security.encryption import DEFAULT_ENCRYPTION_KEY
+
+        if self.environment == "production" and self.encryption_key == DEFAULT_ENCRYPTION_KEY:
+            raise ValueError(
+                "SNACKBASE_ENCRYPTION_KEY must be set to a non-default value in production. "
+                "Generate one with: openssl rand -hex 32"
+            )
+        return self
 
     @model_validator(mode="after")
     def validate_sqlite_workers(self) -> "Settings":

@@ -1,4 +1,5 @@
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from sqlalchemy import and_, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,7 +39,7 @@ async def get_configuration_stats(
         # Account configs count by category
         account_query = (
             select(ConfigurationModel.category, func.count(ConfigurationModel.id))
-            .where(and_(ConfigurationModel.is_system == False, ConfigurationModel.enabled))
+            .where(and_(ConfigurationModel.is_system.is_(False), ConfigurationModel.enabled))
             .group_by(ConfigurationModel.category)
         )
 
@@ -175,7 +176,7 @@ async def get_account_configurations(
 
         # Query account-level configurations
         query = select(ConfigurationModel).where(
-            and_(ConfigurationModel.is_system == False, ConfigurationModel.account_id == account_id)
+            and_(ConfigurationModel.is_system.is_(False), ConfigurationModel.account_id == account_id)
         )
 
         if category:
@@ -427,7 +428,7 @@ async def delete_configuration(
 async def get_available_providers(
     _admin: SuperadminUser,
     request: Request,
-    category: Optional[str] = None,
+    category: str | None = None,
 ):
     """List all available provider definitions."""
     try:
@@ -496,16 +497,40 @@ async def get_configuration_values(
             )
 
         registry = request.app.state.config_registry
-        values = registry.encryption_service.decrypt_dict(config_model.config)
+        schema = config_model.config_schema
+        if schema is None:
+            p_def = registry.get_provider_definition(
+                config_model.category, config_model.provider_name
+            )
+            schema = p_def.config_schema if p_def else None
+        values = registry._decrypt_config(
+            config_model.config,
+            schema,
+            category=config_model.category,
+            provider_name=config_model.provider_name,
+        )
 
-        # Mask secrets if schema is available
-        p_def = registry.get_provider_definition(config_model.category, config_model.provider_name)
-        if p_def and p_def.config_schema:
-            properties = p_def.config_schema.get("properties", {})
-            for key, prop in properties.items():
-                if prop.get("writeOnly") or prop.get("format") == "password" or "secret" in key.lower():
+        # Mask schema-declared secrets (and legacy writeOnly/password heuristics)
+        from snackbase.infrastructure.security.encryption import (
+            REDACTION_PLACEHOLDER,
+            extract_secret_paths_from_schema,
+        )
+        from snackbase.infrastructure.security.redaction import redact_config_secrets
+
+        secret_paths = extract_secret_paths_from_schema(schema)
+        if secret_paths:
+            values = redact_config_secrets(values, secret_paths)
+        elif schema and isinstance(schema.get("properties"), dict):
+            for key, prop in schema["properties"].items():
+                if not isinstance(prop, dict):
+                    continue
+                if (
+                    prop.get("writeOnly")
+                    or prop.get("format") == "password"
+                    or "secret" in key.lower()
+                ):
                     if key in values and values[key]:
-                        values[key] = "••••••••"
+                        values[key] = REDACTION_PLACEHOLDER
 
         return values
     except HTTPException:
@@ -523,7 +548,7 @@ async def update_configuration_values(
     _admin: SuperadminUser,
     config_id: str,
     request: Request,
-    values: Dict[str, Any] = Body(...),
+    values: dict[str, Any] = Body(...),
     db: AsyncSession = Depends(get_db_session),
 ):
     """Update configuration values."""
@@ -540,24 +565,37 @@ async def update_configuration_values(
             )
 
         registry = request.app.state.config_registry
-        
+        schema = config_model.config_schema
+        if schema is None:
+            p_def = registry.get_provider_definition(
+                config_model.category, config_model.provider_name
+            )
+            schema = p_def.config_schema if p_def else None
+
         # Merge values, preserving masked secrets if not updated
-        current_values = registry.encryption_service.decrypt_dict(config_model.config)
+        from snackbase.infrastructure.security.encryption import REDACTION_PLACEHOLDER
+
+        current_values = registry._decrypt_config(
+            config_model.config,
+            schema,
+            category=config_model.category,
+            provider_name=config_model.provider_name,
+        )
         new_values = {}
         for key, val in values.items():
-            if val == "••••••••" and key in current_values:
+            if val == REDACTION_PLACEHOLDER and key in current_values:
                 new_values[key] = current_values[key]
             else:
                 new_values[key] = val
 
-        # Handle other fields that might be passed (display_name, logo_url, etc)
-        # For now, focus on the 'config' field
-        config_model.config = registry.encryption_service.encrypt_dict(new_values)
+        config_model.config = registry._encrypt_config(new_values, schema)
         await repo.update(config_model)
         await db.commit()
 
         # Invalidate cache
-        registry._invalidate_cache(config_model.category, config_model.account_id, config_model.provider_name)
+        registry._invalidate_cache(
+            config_model.category, config_model.account_id, config_model.provider_name
+        )
 
         return {"status": "success"}
     except HTTPException:
@@ -574,13 +612,13 @@ async def update_configuration_values(
 async def create_configuration(
     _admin: SuperadminUser,
     request: Request,
-    data: Dict[str, Any] = Body(...),
+    data: dict[str, Any] = Body(...),
     db: AsyncSession = Depends(get_db_session),
 ):
     """Create a new configuration record."""
     try:
         registry = request.app.state.config_registry
-        
+
         # Validate required fields in data
         required = ["category", "provider_name", "display_name", "config"]
         for field in required:
@@ -597,6 +635,34 @@ async def create_configuration(
                 detail="Storage providers can only be configured at system level.",
             )
 
+        # Custom providers may supply config_schema with secret: true markers
+        config_schema = data.get("config_schema")
+        provider_def = registry.get_provider_definition(
+            data["category"], data["provider_name"]
+        )
+        if provider_def is None and config_schema is None:
+            # Reject credential-like custom configs without a schema
+            config_keys = set((data.get("config") or {}).keys())
+            credential_hints = {
+                "password",
+                "secret",
+                "token",
+                "api_key",
+                "client_secret",
+                "access_key",
+                "private_key",
+            }
+            if any(
+                any(h in k.lower() for h in credential_hints) for k in config_keys
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        "config_schema with secret: true markers is required for "
+                        "custom providers that store credentials"
+                    ),
+                )
+
         repo = ConfigurationRepository(db)
         new_config = await registry.create_config(
             account_id=account_id,
@@ -610,6 +676,7 @@ async def create_configuration(
             is_system=is_system,
             priority=data.get("priority", 0),
             repository=repo,
+            config_schema=config_schema,
         )
 
         await db.commit()
@@ -626,14 +693,14 @@ async def create_configuration(
         # or use string matching if the exception type varies.
         # But importing it is cleaner.
         from sqlalchemy.exc import IntegrityError
-        
+
         if isinstance(e, IntegrityError) or "UNIQUE constraint failed" in str(e):
             logger.info("Configuration creation failed: duplicate exists", error=str(e))
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Configuration already exists for this provider and category.",
             )
-            
+
         logger.error("Failed to create configuration", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -645,7 +712,7 @@ async def create_configuration(
 async def test_provider_connection(
     _admin: SuperadminUser,
     request: Request,
-    data: Dict[str, Any] = Body(...),
+    data: dict[str, Any] = Body(...),
 ):
     """Test connection for a provider configuration."""
     try:
@@ -660,14 +727,15 @@ async def test_provider_connection(
         # Resolve provider handler
         # Note: In a larger system, this could be moved to a ProviderFactory
         from snackbase.infrastructure.configuration.providers.oauth import (
-            GoogleOAuthHandler, GitHubOAuthHandler, MicrosoftOAuthHandler, AppleOAuthHandler
+            AppleOAuthHandler,
+            GitHubOAuthHandler,
+            GoogleOAuthHandler,
+            MicrosoftOAuthHandler,
         )
         from snackbase.infrastructure.configuration.providers.saml import (
-            OktaSAMLProvider, AzureADSAMLProvider, GenericSAMLProvider
-        )
-        from snackbase.infrastructure.services.email.smtp_provider import (
-            SMTPProvider,
-            SMTPSettings,
+            AzureADSAMLProvider,
+            GenericSAMLProvider,
+            OktaSAMLProvider,
         )
         from snackbase.infrastructure.services.email.aws_ses_provider import (
             AWSESProvider,
@@ -676,6 +744,10 @@ async def test_provider_connection(
         from snackbase.infrastructure.services.email.resend_provider import (
             ResendProvider,
             ResendSettings,
+        )
+        from snackbase.infrastructure.services.email.smtp_provider import (
+            SMTPProvider,
+            SMTPSettings,
         )
         from snackbase.infrastructure.storage.local_storage_provider import (
             LocalStorageProvider,
@@ -695,7 +767,7 @@ async def test_provider_connection(
                         timeout=10.0
                     )
                     return {"success": success, "message": message or "Local storage is available"}
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     return {
                         "success": False,
                         "message": "Local storage connection test timed out after 10 seconds.",
@@ -712,7 +784,7 @@ async def test_provider_connection(
                         timeout=10.0
                     )
                     return {"success": success, "message": message or "S3 connection successful"}
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     return {
                         "success": False,
                         "message": (
@@ -722,7 +794,7 @@ async def test_provider_connection(
                     }
                 except Exception as e:
                     return {"success": False, "message": f"S3 storage test failed: {str(e)}"}
-        
+
         # Handle email providers
         if category == "email_providers":
             if provider_name == "smtp":
@@ -734,7 +806,7 @@ async def test_provider_connection(
                         timeout=10.0
                     )
                     return {"success": success, "message": message or "SMTP connection successful"}
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     return {
                         "success": False,
                         "message": (
@@ -744,7 +816,7 @@ async def test_provider_connection(
                     }
                 except Exception as e:
                     return {"success": False, "message": f"SMTP test failed: {str(e)}"}
-            
+
             elif provider_name == "aws_ses":
                 try:
                     ses_settings = AWSESSettings(**config_values)
@@ -754,7 +826,7 @@ async def test_provider_connection(
                         timeout=10.0
                     )
                     return {"success": success, "message": message or "AWS SES connection successful"}
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     return {
                         "success": False,
                         "message": (
@@ -764,7 +836,7 @@ async def test_provider_connection(
                     }
                 except Exception as e:
                     return {"success": False, "message": f"AWS SES test failed: {str(e)}"}
-            
+
             elif provider_name == "resend":
                 try:
                     resend_settings = ResendSettings(**config_values)
@@ -774,7 +846,7 @@ async def test_provider_connection(
                         timeout=10.0
                     )
                     return {"success": success, "message": message or "Resend connection successful"}
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     return {
                         "success": False,
                         "message": (
@@ -784,7 +856,7 @@ async def test_provider_connection(
                     }
                 except Exception as e:
                     return {"success": False, "message": f"Resend test failed: {str(e)}"}
-        
+
         handlers = {
             "google": GoogleOAuthHandler,
             "github": GitHubOAuthHandler,
@@ -794,26 +866,26 @@ async def test_provider_connection(
             "azure_ad": AzureADSAMLProvider,
             "generic_saml": GenericSAMLProvider,
         }
-        
+
         handler_class = handlers.get(provider_name)
         if not handler_class:
             return {
-                "success": False, 
+                "success": False,
                 "message": f"Provider {provider_name} does not support connection testing yet."
             }
-            
+
         handler = handler_class()
-        
+
         # Execute test with 10-second timeout
         try:
             success, message = await asyncio.wait_for(
-                handler.test_connection(config_values), 
+                handler.test_connection(config_values),
                 timeout=10.0
             )
             return {"success": success, "message": message}
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return {
-                "success": False, 
+                "success": False,
                 "message": "Connection test timed out after 10 seconds. Check your network or provider settings."
             }
         except Exception as e:

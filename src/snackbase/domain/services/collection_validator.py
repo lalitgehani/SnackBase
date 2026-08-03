@@ -7,6 +7,7 @@ Supports field types: text, number, boolean, datetime, email, url, json, referen
 import re
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any
 
 
 class FieldType(str, Enum):
@@ -229,7 +230,7 @@ class CollectionValidator:
 
     @classmethod
     def validate_reference_field(
-        cls, field: dict, field_index: int
+        cls, field: dict[str, Any], field_index: int
     ) -> list[CollectionValidationError]:
         """Validate a reference field configuration.
 
@@ -307,7 +308,7 @@ class CollectionValidator:
         return None
 
     @classmethod
-    def validate_pii_field(cls, field: dict, field_index: int) -> list[CollectionValidationError]:
+    def validate_pii_field(cls, field: dict[str, Any], field_index: int) -> list[CollectionValidationError]:
         """Validate PII field configuration.
 
         Args:
@@ -348,7 +349,7 @@ class CollectionValidator:
     @classmethod
     def validate_computed_field(
         cls,
-        field: dict,
+        field: dict[str, Any],
         field_index: int,
         all_field_names: set[str] | None = None,
         computed_field_names: set[str] | None = None,
@@ -423,8 +424,8 @@ class CollectionValidator:
         # Validate expression syntax and field references
         if not errors:
             try:
-                from snackbase.core.rules.expression_compiler import compile_expression_to_sql
                 from snackbase.core.rules.exceptions import RuleSyntaxError
+                from snackbase.core.rules.expression_compiler import compile_expression_to_sql
 
                 # Build schema_fields: all non-computed fields + system fields
                 system_fields = {
@@ -454,7 +455,7 @@ class CollectionValidator:
     @classmethod
     def validate_field(
         cls,
-        field: dict,
+        field: dict[str, Any],
         field_index: int,
         all_field_names: set[str] | None = None,
         computed_field_names: set[str] | None = None,
@@ -494,10 +495,76 @@ class CollectionValidator:
         # Validate PII configuration
         errors.extend(cls.validate_pii_field(field, field_index))
 
+        # Validate encrypted field configuration
+        errors.extend(cls.validate_encrypted_field(field, field_index))
+
         return errors
 
     @classmethod
-    def validate_schema(cls, schema: list[dict]) -> list[CollectionValidationError]:
+    def validate_encrypted_field(
+        cls, field: dict[str, Any], field_index: int
+    ) -> list[CollectionValidationError]:
+        """Validate encrypted field configuration.
+
+        encrypted=true is only allowed on text and json fields, and is
+        incompatible with unique/index/sort/search/aggregation options.
+        """
+        errors: list[CollectionValidationError] = []
+        if field.get("encrypted") is not True:
+            return errors
+
+        field_path = f"schema[{field_index}]"
+        field_type = str(field.get("type", "")).lower()
+        allowed = {FieldType.TEXT.value, FieldType.JSON.value}
+        if field_type not in allowed:
+            errors.append(
+                CollectionValidationError(
+                    field=f"{field_path}.encrypted",
+                    message=(
+                        f"encrypted=true is only allowed on text and json fields "
+                        f"(got type '{field_type or 'missing'}')"
+                    ),
+                    code="encrypted_type_invalid",
+                )
+            )
+
+        if field.get("unique", False):
+            errors.append(
+                CollectionValidationError(
+                    field=f"{field_path}.unique",
+                    message="Encrypted fields cannot be unique",
+                    code="encrypted_no_unique",
+                )
+            )
+
+        # Common option keys that imply indexing / search / sort / aggregation
+        forbidden_flags = (
+            "indexed",
+            "index",
+            "sortable",
+            "searchable",
+            "search",
+            "aggregatable",
+            "groupable",
+        )
+        options = field.get("options") if isinstance(field.get("options"), dict) else {}
+        for flag in forbidden_flags:
+            if field.get(flag) is True or (options and options.get(flag) is True):
+                errors.append(
+                    CollectionValidationError(
+                        field=f"{field_path}.{flag}",
+                        message=(
+                            f"Encrypted fields cannot have '{flag}' enabled; "
+                            "they are server-only and non-queryable"
+                        ),
+                        code="encrypted_query_option_forbidden",
+                    )
+                )
+
+        return errors
+
+    @classmethod
+    def validate_schema(cls, schema: list[dict[str, Any]]) -> list[CollectionValidationError]:
         """Validate a collection schema.
 
         Args:
@@ -565,7 +632,7 @@ class CollectionValidator:
         return errors
 
     @classmethod
-    def validate(cls, name: str, schema: list[dict]) -> list[CollectionValidationError]:
+    def validate(cls, name: str, schema: list[dict[str, Any]]) -> list[CollectionValidationError]:
         """Validate a complete collection definition.
 
         Args:

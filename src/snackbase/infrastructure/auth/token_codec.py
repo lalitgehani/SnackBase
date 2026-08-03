@@ -8,7 +8,6 @@ import base64
 import hmac
 import json
 from hashlib import sha256
-from typing import Dict
 
 from snackbase.infrastructure.auth.token_types import TokenPayload, TokenType
 
@@ -60,7 +59,7 @@ class TokenCodec:
         encoded_payload = cls._base64url_encode(payload_json.encode("utf-8"))
 
         # Sign: HMAC-SHA256(secret, prefix + "." + encoded_payload)
-        signing_input = f"{prefix}.{encoded_payload}".encode("utf-8")
+        signing_input = f"{prefix}.{encoded_payload}".encode()
         signature = hmac.new(secret.encode("utf-8"), signing_input, sha256).digest()
         encoded_signature = cls._base64url_encode(signature)
 
@@ -79,9 +78,9 @@ class TokenCodec:
         prefix, encoded_payload, encoded_signature = parts
 
         # Verify signature first
-        signing_input = f"{prefix}.{encoded_payload}".encode("utf-8")
+        signing_input = f"{prefix}.{encoded_payload}".encode()
         expected_signature = hmac.new(secret.encode("utf-8"), signing_input, sha256).digest()
-        
+
         try:
             actual_signature = cls._base64url_decode(encoded_signature)
         except Exception as e:

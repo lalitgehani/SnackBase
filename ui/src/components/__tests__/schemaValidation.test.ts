@@ -98,6 +98,29 @@ describe('validateSchemaFields', () => {
     ])
     expect(result.valid).toBe(true)
   })
+
+  it('accepts encrypted text and json fields', () => {
+    const result = validateSchemaFields([
+      field({ name: 'api_token', type: 'text', encrypted: true }),
+      field({ name: 'creds', type: 'json', encrypted: true }),
+    ])
+    expect(result.valid).toBe(true)
+  })
+
+  it('rejects encrypted fields on unsupported types', () => {
+    const result = validateSchemaFields([
+      field({ name: 'secret_num', type: 'number', encrypted: true }),
+    ])
+    expect(result.valid).toBe(false)
+    expect(result.fieldErrors[0]?.type).toMatch(/text and json/i)
+  })
+
+  it('rejects encrypted unique fields', () => {
+    const result = validateSchemaFields([
+      field({ name: 'token', type: 'text', encrypted: true, unique: true }),
+    ])
+    expect(result.valid).toBe(false)
+  })
 })
 
 describe('prepareSchemaPayload', () => {

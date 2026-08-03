@@ -160,7 +160,8 @@ export default function SchemaColumnTable({
       if (
         field.type === 'reference' ||
         field.type === 'computed' ||
-        field.pii
+        field.pii ||
+        field.encrypted
       ) {
         initial.add(index);
       }
@@ -186,6 +187,7 @@ export default function SchemaColumnTable({
         required: false,
         unique: false,
         pii: false,
+        encrypted: false,
       },
     ]);
   };
@@ -276,8 +278,17 @@ export default function SchemaColumnTable({
       newFields[index].required = false;
       newFields[index].unique = false;
       newFields[index].pii = false;
+      newFields[index].encrypted = false;
       delete newFields[index].mask_type;
       delete newFields[index].default;
+    }
+
+    // Encryption only for text/json; clear when type becomes unsupported
+    if (updates.type && updates.type !== 'text' && updates.type !== 'json') {
+      newFields[index].encrypted = false;
+    }
+    if (updates.encrypted === true) {
+      newFields[index].unique = false;
     }
 
     if (updates.default === '') {
@@ -288,7 +299,8 @@ export default function SchemaColumnTable({
     if (
       updates.type === 'reference' ||
       updates.type === 'computed' ||
-      updates.pii === true
+      updates.pii === true ||
+      updates.encrypted === true
     ) {
       setExpanded((prev) => new Set(prev).add(index));
     }
@@ -299,7 +311,8 @@ export default function SchemaColumnTable({
   const needsExpand = (field: FieldDefinition) =>
     field.type === 'reference' ||
     field.type === 'computed' ||
-    Boolean(field.pii);
+    Boolean(field.pii) ||
+    Boolean(field.encrypted);
 
   return (
     <div className="space-y-3" data-testid="schema-column-table">
@@ -345,6 +358,7 @@ export default function SchemaColumnTable({
                   <TableHead className="w-16 text-center">Req</TableHead>
                   <TableHead className="w-16 text-center">Uniq</TableHead>
                   <TableHead className="w-16 text-center">PII</TableHead>
+                  <TableHead className="w-16 text-center">Enc</TableHead>
                   <TableHead className="w-10" />
                   {!readOnly && <TableHead className="w-10" />}
                 </TableRow>
@@ -447,7 +461,7 @@ function FieldRows({
   const nameLocked = readOnly || isExisting;
   const typeLocked = readOnly || isExisting;
   const deleteDisabled = readOnly || isExisting;
-  const colSpan = readOnly ? 7 : 9;
+  const colSpan = readOnly ? 8 : 10;
 
   const {
     attributes,
@@ -649,6 +663,26 @@ function FieldRows({
             disabled={readOnly || isComputed}
             className="rounded"
             aria-label={`Field ${index + 1} pii`}
+          />
+        </TableCell>
+
+        <TableCell className="text-center">
+          <input
+            type="checkbox"
+            checked={field.encrypted || false}
+            onChange={(e) => onUpdate({ encrypted: e.target.checked })}
+            disabled={
+              readOnly ||
+              isComputed ||
+              (field.type !== 'text' && field.type !== 'json')
+            }
+            className="rounded"
+            aria-label={`Field ${index + 1} encrypted`}
+            title={
+              field.type === 'text' || field.type === 'json'
+                ? 'Encrypt at rest (server-only, non-queryable)'
+                : 'Encryption is only available for text and json fields'
+            }
           />
         </TableCell>
 
@@ -861,6 +895,20 @@ function FieldRows({
                   <p className="text-xs text-amber-700 dark:text-amber-300">
                     PII fields are masked in API responses according to the selected
                     mask type.
+                  </p>
+                </div>
+              )}
+
+              {field.encrypted && !isComputed && (
+                <div className="space-y-1.5 max-w-md rounded-md border border-amber-300 bg-amber-50 p-3 dark:border-amber-700 dark:bg-amber-950/40">
+                  <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
+                    Encrypted field (server-only)
+                  </p>
+                  <p className="text-xs text-amber-800 dark:text-amber-200">
+                    Values are encrypted at rest and returned as •••••••• in normal
+                    API responses. Encrypted fields cannot be filtered, sorted,
+                    searched, indexed, or unique. Plaintext is only available via a
+                    service API key with the <code>records:secrets:read</code> scope.
                   </p>
                 </div>
               )}

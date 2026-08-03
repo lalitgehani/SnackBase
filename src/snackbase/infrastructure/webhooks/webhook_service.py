@@ -52,11 +52,25 @@ def generate_webhook_secret() -> str:
     return secrets.token_hex(32)
 
 
+def resolve_webhook_signing_secret(stored_secret: str) -> str:
+    """Return plaintext signing secret from stored value.
+
+    Stored values are Fernet ciphertext after encryption hardening. Legacy
+    plaintext rows (pre-migration) are returned as-is when decryption fails.
+    """
+    from snackbase.core.config import get_settings
+    from snackbase.infrastructure.security.encryption import EncryptionService
+
+    service = EncryptionService(get_settings().encryption_key)
+    decrypted = service.try_decrypt(stored_secret)
+    return decrypted if decrypted is not None else stored_secret
+
+
 def sign_payload(secret: str, body: bytes) -> str:
     """Compute HMAC-SHA256 signature for a payload.
 
     Args:
-        secret: The webhook signing secret.
+        secret: The webhook signing secret (plaintext).
         body: Raw JSON bytes to sign.
 
     Returns:
@@ -467,13 +481,14 @@ async def dispatch_webhook(
     # Enqueue a job for reliable delivery with retry support
     from snackbase.infrastructure.services.job_service import JobService
 
+    plaintext_secret = resolve_webhook_signing_secret(webhook.secret)
     job_service = JobService(session_factory)
     await job_service.enqueue(
         handler="webhook_delivery",
         payload={
             "delivery_id": delivery_id,
             "url": webhook.url,
-            "secret": webhook.secret,
+            "secret": plaintext_secret,
             "custom_headers": custom_headers,
             "payload_b64": base64.b64encode(payload_bytes).decode(),
             "timeout_seconds": timeout_seconds,
@@ -511,7 +526,8 @@ async def test_webhook(
         "account_id": webhook.account_id,
     }
     payload_bytes = json.dumps(payload, default=str).encode()
-    signature = sign_payload(webhook.secret, payload_bytes)
+    plaintext_secret = resolve_webhook_signing_secret(webhook.secret)
+    signature = sign_payload(plaintext_secret, payload_bytes)
 
     headers: dict[str, str] = {
         "Content-Type": "application/json",

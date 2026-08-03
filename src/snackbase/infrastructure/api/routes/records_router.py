@@ -62,6 +62,20 @@ from snackbase.infrastructure.persistence.repositories import (
 from snackbase.infrastructure.persistence.repositories.record_repository import (
     _build_computed_select_parts,
 )
+from snackbase.infrastructure.security.encryption import (
+    DecryptionError,
+    EncryptionService,
+)
+from snackbase.infrastructure.security.field_encryption import (
+    assert_no_encrypted_in_query,
+    decrypt_record_fields,
+    encrypt_record_for_storage,
+    prepare_write_payload,
+    redact_record_for_response,
+    redact_records_for_response,
+)
+from snackbase.infrastructure.security.redaction import get_encrypted_field_names
+from snackbase.infrastructure.security.scopes import SCOPE_RECORDS_SECRETS_READ
 
 logger = get_logger(__name__)
 
@@ -111,6 +125,28 @@ def _mask_record_pii(
             )
 
     return masked_record
+
+
+def _get_encryption_service(request: Request) -> EncryptionService:
+    """Resolve EncryptionService from app state or settings."""
+    try:
+        app = getattr(request, "app", None)
+        state = getattr(app, "state", None) if app is not None else None
+        registry = getattr(state, "config_registry", None) if state is not None else None
+        if registry is not None and getattr(registry, "encryption_service", None) is not None:
+            return registry.encryption_service  # type: ignore[no-any-return]
+    except Exception:
+        pass
+    settings = get_settings()
+    return EncryptionService(settings.encryption_key)
+
+
+def _apply_encrypted_redaction(
+    record: dict[str, Any],
+    schema: list[dict],
+) -> dict[str, Any]:
+    """Redact encrypted collection fields for public API responses."""
+    return redact_record_for_response(record, schema)
 
 
 def _parse_expand_param(
@@ -456,6 +492,18 @@ async def create_record(
     # 6. Generate record ID
     record_id = str(uuid.uuid4())
 
+    # 6.5 Encrypt encrypted fields before persistence (null stays null)
+    encryption = _get_encryption_service(request)
+    processed_data = prepare_write_payload(processed_data, schema, partial=False)
+    try:
+        storage_data = encrypt_record_for_storage(processed_data, schema, encryption)
+    except Exception as e:
+        logger.error("Record encryption failed", collection=collection, error=type(e).__name__)
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"error": "Internal error", "message": "Failed to encrypt record fields"},
+        )
+
     # 7. Insert record
     try:
         created_record = await record_repo.insert_record(
@@ -463,7 +511,7 @@ async def create_record(
             record_id=record_id,
             account_id=target_account_id,
             created_by=current_user.user_id if current_user else ANONYMOUS_USER_ID,
-            data=processed_data,
+            data=storage_data,
             schema=schema,
         )
         await session.commit()
@@ -500,10 +548,12 @@ async def create_record(
         created_by=current_user.user_id if current_user else None,
     )
 
+    # Public responses and events never include ciphertext or plaintext secrets
+    created_record = _apply_encrypted_redaction(created_record, schema)
+
     # 7.5 Broadcast create event
     try:
         broadcaster = request.app.state.event_broadcaster
-        # Use full record for creation broadcast
         await broadcaster.publish_event(
             account_id=target_account_id,
             collection=collection,
@@ -600,6 +650,16 @@ async def list_records(
     else:
         # Default behavior or handle bare field name
         sort_by = sort
+
+    # 3b. Reject sort/filter on encrypted fields
+    encrypted_query_err = assert_no_encrypted_in_query(
+        schema, sort_by=sort_by, filter_expr=filter_expr if isinstance(filter_expr, str) else None
+    )
+    if encrypted_query_err:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"error": "Invalid query", "message": encrypted_query_err},
+        )
 
     # 4. Reject old-style query param filters and parse the new filter expression
     reserved_params = {"skip", "limit", "sort", "fields", "filter", "expand", "cursor", "cursor_before", "include_count"}
@@ -807,8 +867,10 @@ async def list_records(
             filtered_records.append(filtered_record)
         records = filtered_records
 
-    # 9. Return response
-    # Debug: Log records before response creation
+    # 9. Redact encrypted fields for public list responses
+    records = redact_records_for_response(records, schema)
+
+    # 10. Return response
     logger.debug(f"Creating response with {len(records)} records")
     for i, r in enumerate(records):
         logger.debug(f"Record {i}: keys={list(r.keys())}, id={r.get('id')}")
@@ -888,6 +950,18 @@ async def aggregate_collection(
 
     # 3. Parse schema
     schema = json.loads(collection_model.schema)
+    group_fields = [g.strip() for g in group_by.split(",")] if group_by else None
+    encrypted_query_err = assert_no_encrypted_in_query(
+        schema,
+        filter_expr=filter_expr if isinstance(filter_expr, str) else None,
+        group_by=group_fields,
+        agg_expr=functions,
+    )
+    if encrypted_query_err:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"error": "Invalid aggregation", "message": encrypted_query_err},
+        )
     schema_lookup = {f["name"]: f for f in schema}
 
     # 4. Parse and validate aggregation functions
@@ -1081,6 +1155,7 @@ async def batch_create_records(
                             "code": "invalid_reference",
                         })
 
+        data = prepare_write_payload(data, schema, partial=False)
         processed_data, validation_errors = RecordValidator.validate_and_apply_defaults(data, schema)
 
         all_errors = [
@@ -1098,7 +1173,9 @@ async def batch_create_records(
                 ).model_dump(),
             )
 
-        validated_records.append(processed_data)
+        encryption = _get_encryption_service(request)
+        storage_data = encrypt_record_for_storage(processed_data, schema, encryption)
+        validated_records.append(storage_data)
 
     # All valid — write atomically
     try:
@@ -1117,6 +1194,9 @@ async def batch_create_records(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"error": "Internal error", "message": "Batch create failed"},
         )
+
+    # Redact secrets for events and responses
+    created = redact_records_for_response(created, schema)
 
     # Broadcast a create event for each record
     try:
@@ -1244,6 +1324,7 @@ async def batch_update_records(
         if allowed_fields != "*":
             data = apply_field_filter(data, allowed_fields, is_request=True)
 
+        data = prepare_write_payload(data, schema, partial=True)
         processed_data, validation_errors = RecordValidator.validate_and_apply_defaults(
             data, schema, partial=True
         )
@@ -1263,9 +1344,11 @@ async def batch_update_records(
                 ).model_dump(),
             )
 
+        encryption = _get_encryption_service(request)
+        storage_data = encrypt_record_for_storage(processed_data, schema, encryption)
         validated_updates.append({
             "id": item.id,
-            "data": processed_data,
+            "data": storage_data,
             "old_values": existing_map[item.id],
         })
 
@@ -1287,6 +1370,8 @@ async def batch_update_records(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"error": "Internal error", "message": "Batch update failed"},
         )
+
+    updated = redact_records_for_response(updated, schema)
 
     # Broadcast update events
     try:
@@ -1436,6 +1521,203 @@ async def batch_delete_records(
     return BatchDeleteResponse(deleted=deleted_ids, count=len(deleted_ids))
 
 
+# ── Secrets reveal — MUST be registered before /{collection}/{record_id} ──
+# Starlette matches routes in registration order. "secrets" must appear as a
+# literal path segment before the parameterized {record_id} catch-all would
+# incorrectly capture it if ordered wrong. Path is .../{record_id}/secrets so
+# it is more specific than .../{record_id}.
+
+
+@router.get(
+    "/{collection}/{record_id}/secrets",
+    response_model=None,
+    responses={
+        400: {"description": "Invalid field selection"},
+        401: {"description": "Authentication required"},
+        403: {"description": "Missing records:secrets:read scope"},
+        404: {"description": "Record or collection not found"},
+    },
+)
+async def reveal_record_secrets(
+    collection: str,
+    record_id: str,
+    request: Request,
+    current_user: OptionalUser,
+    auth_context: OptionalAuthContext,
+    fields: str | None = Query(
+        None,
+        description="Comma-separated encrypted field names (max 20)",
+    ),
+    session: AsyncSession = Depends(get_db_session),
+) -> Any:
+    """Reveal selected encrypted field plaintext for a scoped service API key.
+
+    Requires an account-bound API key with ``records:secrets:read``. Ordinary
+    JWTs, unscope keys, and superadmin sessions without the scope receive 403.
+    Cross-account records return 404 (same as missing).
+    """
+    # 401 if unauthenticated
+    if current_user is None:
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={"error": "Authentication required", "message": "Authentication required"},
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # 403 if missing scope (JWT, superadmin, or API key without scope)
+    if not auth_context.has_scope(SCOPE_RECORDS_SECRETS_READ):
+        logger.info(
+            "Secret reveal denied: missing scope",
+            collection=collection,
+            record_id=record_id,
+            user_id=current_user.user_id,
+            api_key_id=getattr(current_user, "api_key_id", None),
+        )
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content={
+                "error": "Forbidden",
+                "message": f"API key scope '{SCOPE_RECORDS_SECRETS_READ}' is required",
+            },
+        )
+
+    collection_repo = CollectionRepository(session)
+    collection_model = await collection_repo.get_by_name(collection)
+    if collection_model is None:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"error": "Not found", "message": "Record not found"},
+        )
+
+    try:
+        schema = json.loads(collection_model.schema)
+    except json.JSONDecodeError:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"error": "Internal error", "message": "Failed to parse collection schema"},
+        )
+
+    encrypted_names = get_encrypted_field_names(schema)
+    encrypted_set = set(encrypted_names)
+
+    # Parse requested fields
+    if fields is not None and fields.strip():
+        requested = [f.strip() for f in fields.split(",") if f.strip()]
+    else:
+        requested = list(encrypted_names)
+
+    if not requested:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "error": "Invalid fields",
+                "message": "No encrypted fields available to reveal",
+            },
+        )
+
+    if len(requested) > 20:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "error": "Invalid fields",
+                "message": "At most 20 encrypted fields may be requested per reveal",
+            },
+        )
+
+    # When fields omitted and more than 20 encrypted fields exist
+    if (fields is None or not fields.strip()) and len(encrypted_names) > 20:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "error": "Invalid fields",
+                "message": (
+                    "Collection has more than 20 encrypted fields; "
+                    "specify the fields query parameter explicitly"
+                ),
+            },
+        )
+
+    for name in requested:
+        if name not in encrypted_set:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={
+                    "error": "Invalid fields",
+                    "message": f"Field '{name}' is not an encrypted field on this collection",
+                },
+            )
+
+    # Collection read authorization
+    try:
+        await check_collection_permission(
+            auth_context=auth_context,
+            collection=collection,
+            operation="view",
+            session=session,
+        )
+    except HTTPException as exc:
+        if exc.status_code == status.HTTP_403_FORBIDDEN:
+            return JSONResponse(
+                status_code=status.HTTP_403_FORBIDDEN,
+                content={"error": "Forbidden", "message": "Permission denied"},
+            )
+        raise
+
+    # Account isolation: always scope to the API key's account (no superadmin bypass)
+    target_account_id = current_user.account_id
+    record_repo = RecordRepository(session)
+    record = await record_repo.get_by_id(
+        collection_name=collection,
+        record_id=record_id,
+        account_id=target_account_id,
+        schema=schema,
+    )
+    if record is None:
+        logger.info(
+            "Secret reveal denied: record not found or cross-account",
+            collection=collection,
+            record_id=record_id,
+            account_id=target_account_id,
+            user_id=current_user.user_id,
+            api_key_id=getattr(current_user, "api_key_id", None),
+        )
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"error": "Not found", "message": "Record not found"},
+        )
+
+    encryption = _get_encryption_service(request)
+    try:
+        revealed = decrypt_record_fields(
+            record, schema, encryption, field_names=requested
+        )
+    except DecryptionError:
+        logger.error(
+            "Secret reveal decryption failed",
+            collection=collection,
+            record_id=record_id,
+            account_id=target_account_id,
+            field_count=len(requested),
+        )
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"error": "Internal error", "message": "Failed to decrypt secrets"},
+        )
+
+    # Audit success without values
+    logger.info(
+        "Secret reveal succeeded",
+        collection=collection,
+        record_id=record_id,
+        account_id=target_account_id,
+        user_id=current_user.user_id,
+        api_key_id=getattr(current_user, "api_key_id", None),
+        fields=requested,
+    )
+
+    return {"data": revealed}
+
+
 @router.get(
     "/{collection}/{record_id}",
     response_model=RecordResponse,
@@ -1512,6 +1794,9 @@ async def get_record(
     # 3. Apply field filter to response
     if allowed_fields != "*":
         record = apply_field_filter(record, allowed_fields)
+
+    # 4. Redact encrypted fields (never return ciphertext/plaintext via normal get)
+    record = _apply_encrypted_redaction(record, schema)
 
     # 5. Apply PII masking to response
     record = _mask_record_pii(
@@ -1705,7 +1990,8 @@ async def _update_record(
                         "code": "invalid_reference",
                     })
 
-    # 6. Validate record data
+    # 6. Validate record data (strip redaction placeholders so secrets are preserved)
+    data = prepare_write_payload(data, schema, partial=partial)
     processed_data, validation_errors = RecordValidator.validate_and_apply_defaults(
         data, schema, partial=partial
     )
@@ -1731,6 +2017,17 @@ async def _update_record(
             ).model_dump(),
         )
 
+    # 6.5 Encrypt encrypted fields before persistence
+    encryption = _get_encryption_service(request)
+    try:
+        storage_data = encrypt_record_for_storage(processed_data, schema, encryption)
+    except Exception as e:
+        logger.error("Record encryption failed", collection=collection, error=type(e).__name__)
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"error": "Internal error", "message": "Failed to encrypt record fields"},
+        )
+
     # 7. Update record
     try:
         updated_record = await record_repo.update_record(
@@ -1738,7 +2035,7 @@ async def _update_record(
             record_id=record_id,
             account_id=repo_account_id,
             updated_by=current_user.user_id if current_user else ANONYMOUS_USER_ID,
-            data=processed_data,
+            data=storage_data,
             schema=schema,
             old_values=existing_record,
             rule_filter=rule_result,
@@ -1787,6 +2084,9 @@ async def _update_record(
         account_id=target_account_id,
         updated_by=current_user.user_id if current_user else None,
     )
+
+    # Public responses and events never include ciphertext or plaintext secrets
+    updated_record = _apply_encrypted_redaction(updated_record, schema)
 
     # 7.5 Broadcast update event
     try:

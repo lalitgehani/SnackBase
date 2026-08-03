@@ -139,12 +139,19 @@ async def get_user_role_id(
 class AuthorizationContext:
     """Context for authorization checks.
 
-    Contains user information and role for
+    Contains user information, role, and API-key scopes for
     performing authorization checks.
     """
 
     user: AuthUser | None
     role_id: int | None
+    scopes: list[str] | None = None
+
+    def has_scope(self, scope: str) -> bool:
+        """Return True if the request principal has the given API-key scope."""
+        if not self.scopes:
+            return False
+        return scope in self.scopes
 
 
 async def get_authorization_context(
@@ -158,11 +165,13 @@ async def get_authorization_context(
         role_id: User's role_id from database.
 
     Returns:
-        AuthorizationContext with user and role_id.
+        AuthorizationContext with user, role_id, and scopes.
     """
+    scopes = list(getattr(current_user, "scopes", None) or [])
     return AuthorizationContext(
         user=current_user,
         role_id=role_id,
+        scopes=scopes,
     )
 
 
@@ -232,9 +241,11 @@ async def get_optional_auth_context(
     Returns:
         AuthorizationContext with user and role_id (either may be None for anonymous).
     """
+    scopes = list(getattr(current_user, "scopes", None) or []) if current_user else []
     return AuthorizationContext(
         user=current_user,
         role_id=role_id,
+        scopes=scopes,
     )
 
 

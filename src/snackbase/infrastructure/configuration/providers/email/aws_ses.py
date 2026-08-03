@@ -3,12 +3,12 @@
 Defines the configuration schema for the AWS SES email provider.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 class AWSESConfiguration:
     """AWS SES email provider configuration definition.
-    
+
     This class defines the metadata and schema for AWS SES configuration,
     allowing it to be managed via the unified configuration framework.
     """
@@ -29,12 +29,12 @@ class AWSESConfiguration:
         return "AWS SES"
 
     @property
-    def logo_url(self) -> Optional[str]:
+    def logo_url(self) -> str | None:
         """Path to provider logo."""
         return "/assets/providers/aws-ses.svg"
 
     @property
-    def config_schema(self) -> Dict[str, Any]:
+    def config_schema(self) -> dict[str, Any]:
         """JSON Schema for configuration validation."""
         return {
             "type": "object",
@@ -54,6 +54,7 @@ class AWSESConfiguration:
                     "type": "string",
                     "title": "Secret Access Key",
                     "writeOnly": True,
+                    "secret": True,
                     "description": "Your AWS IAM secret access key.",
                 },
                 "from_email": {

@@ -43,6 +43,7 @@ class ResendConfiguration:
                     "type": "string",
                     "title": "API Key",
                     "writeOnly": True,
+                    "secret": True,
                     "description": "Your Resend API key from the Resend dashboard.",
                 },
                 "from_email": {

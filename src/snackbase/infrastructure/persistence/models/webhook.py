@@ -65,9 +65,9 @@ class WebhookModel(Base):
         comment="JSON list of events: create, update, delete",
     )
     secret: Mapped[str] = mapped_column(
-        String(100),
+        Text,
         nullable=False,
-        comment="HMAC-SHA256 signing secret (plaintext, only returned at creation)",
+        comment="HMAC-SHA256 signing secret (Fernet ciphertext at rest)",
     )
     filter: Mapped[str | None] = mapped_column(
         Text,

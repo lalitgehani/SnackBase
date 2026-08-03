@@ -1,6 +1,6 @@
 import hashlib
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -46,7 +46,8 @@ class APIKeyService:
         account_id: str,
         role: str,
         name: str,
-        permissions: list[str] = [],
+        permissions: list[str] | None = None,
+        scopes: list[str] | None = None,
         expires_at: datetime | None = None,
     ) -> tuple[str, "APIKeyModel"]:
         """Create a new JWT-like API key and store it in the database.
@@ -55,15 +56,25 @@ class APIKeyService:
             session: SQLAlchemy async session.
             user_id: ID of the user owning the key.
             email: Email of the user.
-            account_id: ID of the account.
+            account_id: ID of the account the key is bound to.
             role: Role of the user.
             name: Human-readable name for the key.
-            permissions: List of permissions.
+            permissions: List of permissions (legacy).
+            scopes: Approved API-key scopes (e.g. records:secrets:read).
             expires_at: Optional expiration timestamp.
 
         Returns:
             tuple: (plaintext_key, APIKeyModel)
+
+        Raises:
+            ValueError: If any requested scope is not approved.
         """
+        from snackbase.infrastructure.security.scopes import validate_scopes
+
+        if permissions is None:
+            permissions = []
+        validated_scopes = validate_scopes(scopes)
+
         token_id = str(uuid.uuid4())
         payload = TokenPayload(
             version=1,
@@ -73,7 +84,8 @@ class APIKeyService:
             account_id=account_id,
             role=role,
             permissions=permissions,
-            issued_at=int(datetime.now(timezone.utc).timestamp()),
+            scopes=validated_scopes,
+            issued_at=int(datetime.now(UTC).timestamp()),
             expires_at=int(expires_at.timestamp()) if expires_at else None,
             token_id=token_id,
         )
@@ -91,12 +103,19 @@ class APIKeyService:
             key_hash=key_hash,
             user_id=user_id,
             account_id=account_id,
+            scopes=validated_scopes or None,
             expires_at=expires_at,
         )
         session.add(model)
         await session.flush()
 
-        logger.info("API Key created", key_id=token_id, user_id=user_id, name=name)
+        logger.info(
+            "API Key created",
+            key_id=token_id,
+            user_id=user_id,
+            name=name,
+            scopes=validated_scopes,
+        )
         return plaintext_key, model
 
     async def revoke_api_key(
@@ -115,7 +134,7 @@ class APIKeyService:
         blacklist_entry = TokenBlacklistModel(
             id=token_id,
             token_type=TokenType.API_KEY,
-            revoked_at=int(datetime.now(timezone.utc).timestamp()),
+            revoked_at=int(datetime.now(UTC).timestamp()),
             reason=reason,
         )
         session.add(blacklist_entry)

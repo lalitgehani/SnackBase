@@ -16,6 +16,8 @@ export interface FieldDefinition {
   on_delete?: string;
   pii?: boolean;
   mask_type?: string;
+  /** Server-only encryption; text/json only; non-queryable. */
+  encrypted?: boolean;
   expression?: string;
   return_type?: string;
 }

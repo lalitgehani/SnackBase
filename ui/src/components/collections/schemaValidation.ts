@@ -86,6 +86,17 @@ export function validateSchemaFields(
       errors.mask_type = 'Mask type is required when PII is enabled';
     }
 
+    if (field.encrypted) {
+      if (field.type !== 'text' && field.type !== 'json') {
+        errors.type =
+          'Encrypted fields are only supported for text and json types';
+      }
+      if (field.unique) {
+        errors.type =
+          'Encrypted fields cannot be unique (they are non-queryable)';
+      }
+    }
+
     if (field.type === 'computed') {
       if (!field.expression?.trim()) {
         errors.expression = 'Expression is required for computed fields';
@@ -130,6 +141,7 @@ export function normalizeSchemaForCompare(fields: FieldDefinition[]): string {
       required: f.required ?? false,
       unique: f.unique ?? false,
       pii: f.pii ?? false,
+      encrypted: f.encrypted ?? false,
       default: f.default ?? null,
       collection: f.collection ?? null,
       on_delete: f.on_delete ?? null,
@@ -151,6 +163,7 @@ export function prepareSchemaPayload(fields: FieldDefinition[]): FieldDefinition
       required: field.required ?? false,
       unique: field.unique ?? false,
       pii: field.pii ?? false,
+      encrypted: field.encrypted ?? false,
     };
 
     if (field.type === 'computed') {

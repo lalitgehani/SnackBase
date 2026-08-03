@@ -14,6 +14,10 @@ class APIKeyBase(BaseModel):
 class APIKeyCreateRequest(APIKeyBase):
     """Request schema for creating an API key."""
     expires_at: datetime | None = None
+    scopes: list[str] = Field(
+        default_factory=list,
+        description="Approved permission scopes (e.g. records:secrets:read)",
+    )
 
 
 class APIKeyCreateResponse(APIKeyBase):
@@ -22,6 +26,7 @@ class APIKeyCreateResponse(APIKeyBase):
     key: str  # Plaintext key, only returned once
     expires_at: datetime | None = None
     created_at: datetime
+    scopes: list[str] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -34,6 +39,7 @@ class APIKeyListItem(APIKeyBase):
     expires_at: datetime | None = None
     is_active: bool
     created_at: datetime
+    scopes: list[str] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -41,31 +41,31 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         # Get database session factory
         db_manager = get_db_manager()
         session_factory = db_manager.session_factory
-        
+
         authenticator = Authenticator()
-        
+
         try:
             # We need a session for revocation check and legacy keys
             async with session_factory() as session:
                 auth_user = await authenticator.authenticate(request.headers, session)
-            
+
             # Set request.state.authenticated_user
             request.state.authenticated_user = auth_user
-            
+
         except AuthenticationError as e:
             # We log the error but let the request proceed.
             # Dependencies or late logic will return 401 if needed.
             logger.debug(
-                "Authentication failed in middleware", 
-                error=str(e), 
+                "Authentication failed in middleware",
+                error=str(e),
                 path=request.url.path
             )
             request.state.auth_error = str(e)
         except Exception as e:
             # Handle unexpected errors gracefully
             logger.error(
-                "Unexpected error in AuthenticationMiddleware", 
-                error=str(e), 
+                "Unexpected error in AuthenticationMiddleware",
+                error=str(e),
                 path=request.url.path
             )
 

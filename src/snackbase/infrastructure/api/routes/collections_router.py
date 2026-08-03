@@ -26,11 +26,16 @@ from snackbase.infrastructure.api.schemas.collection_schemas import (
     CollectionImportItemResult,
     CollectionImportRequest,
     CollectionImportResult,
+    EncryptionMigrationRequest,
+    EncryptionMigrationResponse,
 )
 from snackbase.infrastructure.persistence.database import get_db_session
 from snackbase.infrastructure.persistence.repositories import CollectionRepository
-from snackbase.infrastructure.persistence.repositories.collection_rule_repository import CollectionRuleRepository
+from snackbase.infrastructure.persistence.repositories.collection_rule_repository import (
+    CollectionRuleRepository,
+)
 from snackbase.infrastructure.persistence.table_builder import TableBuilder
+from snackbase.infrastructure.security.encryption import EncryptionService
 
 logger = get_logger(__name__)
 
@@ -345,6 +350,7 @@ async def get_collection(
                 on_delete=f.get("on_delete"),
                 pii=f.get("pii", False),
                 mask_type=f.get("mask_type"),
+                encrypted=f.get("encrypted", False),
             )
             for f in schema_dicts
         ],
@@ -437,6 +443,7 @@ async def create_collection(
                 on_delete=f.get("on_delete"),
                 pii=f.get("pii", False),
                 mask_type=f.get("mask_type"),
+                encrypted=f.get("encrypted", False),
             )
             for f in schema_dicts
         ],
@@ -518,6 +525,8 @@ async def update_collection(
         updated_by=current_user.user_id,
     )
 
+    # Prefer persisted schema (source of truth after update)
+    persisted_schema = json.loads(updated_collection.schema)
     return CollectionResponse(
         id=updated_collection.id,
         name=updated_collection.name,
@@ -534,11 +543,93 @@ async def update_collection(
                 on_delete=f.get("on_delete"),
                 pii=f.get("pii", False),
                 mask_type=f.get("mask_type"),
+                encrypted=f.get("encrypted", False),
             )
-            for f in schema_dicts
+            for f in persisted_schema
         ],
         created_at=updated_collection.created_at,
         updated_at=updated_collection.updated_at,
+    )
+
+
+@router.post(
+    "/{collection_id}/fields/{field_name}/encryption",
+    status_code=status.HTTP_200_OK,
+    response_model=EncryptionMigrationResponse,
+    responses={
+        400: {"description": "Validation or migration failure"},
+        403: {"description": "Superadmin access required"},
+        404: {"description": "Collection or field not found"},
+    },
+    summary="Migrate field encryption state",
+)
+async def migrate_field_encryption(
+    collection_id: str,
+    field_name: str,
+    body: EncryptionMigrationRequest,
+    current_user: SuperadminUser,
+    session: AsyncSession = Depends(get_db_session),
+) -> EncryptionMigrationResponse | JSONResponse:
+    """Enable or disable encryption on a field and convert existing values.
+
+    Superadmin-only. Converts all existing non-null values before updating
+    schema metadata. On conversion failure the schema is left unchanged.
+
+    Set ``enable=true`` to encrypt plaintext → ciphertext.
+    Set ``enable=false`` to decrypt ciphertext → plaintext (explicit authorization
+    for the reverse migration). Optionally scope to one ``account_id``.
+    """
+    from snackbase.core.config import get_settings
+
+    engine = cast(AsyncEngine, session.bind)
+    collection_service = CollectionService(session, engine)
+    encryption = EncryptionService(get_settings().encryption_key)
+
+    try:
+        result = await collection_service.migrate_field_encryption(
+            collection_id,
+            field_name,
+            enable_encryption=body.enable,
+            encryption_service=encryption,
+            account_id=body.account_id,
+        )
+        await session.commit()
+    except ValueError as e:
+        error_message = str(e)
+        status_code = (
+            status.HTTP_404_NOT_FOUND
+            if "not found" in error_message.lower()
+            else status.HTTP_400_BAD_REQUEST
+        )
+        logger.info(
+            "Field encryption migration failed",
+            collection_id=collection_id,
+            field=field_name,
+            enable=body.enable,
+            error=error_message,
+            user_id=current_user.user_id,
+        )
+        return JSONResponse(
+            status_code=status_code,
+            content={"error": "Migration failed", "message": error_message},
+        )
+
+    logger.info(
+        "Field encryption migration completed",
+        collection_id=collection_id,
+        field=field_name,
+        enable=body.enable,
+        rows_converted=result.get("rows_converted", 0),
+        user_id=current_user.user_id,
+        # Never log values
+    )
+    return EncryptionMigrationResponse(
+        status=str(result.get("status", "ok")),
+        field=str(result.get("field", field_name)),
+        encrypted=bool(result.get("encrypted", body.enable)),
+        rows_converted=int(result.get("rows_converted", 0) or 0),
+        rows_processed=int(result.get("rows_processed", 0) or 0),
+        direction=result.get("direction"),
     )
 
 

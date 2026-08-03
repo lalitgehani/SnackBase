@@ -149,6 +149,10 @@ async def test_create_webhook_http_url_in_production_rejected(
     from snackbase.core.config import get_settings
 
     monkeypatch.setenv("SNACKBASE_ENVIRONMENT", "production")
+    # Production Settings reject the default encryption key; set a non-default value.
+    monkeypatch.setenv(
+        "SNACKBASE_ENCRYPTION_KEY", "production-test-encryption-key-32b"
+    )
     get_settings.cache_clear()
 
     try:
@@ -165,6 +169,7 @@ async def test_create_webhook_http_url_in_production_rejected(
         assert "HTTPS" in response.json()["detail"]
     finally:
         monkeypatch.delenv("SNACKBASE_ENVIRONMENT", raising=False)
+        monkeypatch.delenv("SNACKBASE_ENCRYPTION_KEY", raising=False)
         get_settings.cache_clear()
 
 
