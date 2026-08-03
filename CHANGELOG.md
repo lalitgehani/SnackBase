@@ -1,3 +1,20 @@
+# Unreleased
+
+## 📦 Packaging
+
+- Slimmed the Docker image with a three-stage build: frontend builder, Python
+  dependency builder, and a runtime stage that no longer ships
+  `build-essential` / gcc (saves ~300 MB).
+- Runtime still includes the pinned `uv` binary and `packages/snackbase_fn` for
+  Functions env installs; the app process starts via `.venv/bin/uvicorn`
+  instead of `uv run`.
+- Moved `types-aiobotocore-ses` from runtime dependencies to the dev group
+  (type stubs only).
+- Tightened `.dockerignore` to shrink build context (tests, examples, UI
+  node_modules, coverage, etc.).
+
+---
+
 # Release Notes - v0.10.0
 
 SnackBase v0.10.0 introduces SnackBase Functions: account-scoped, tenant-deployed

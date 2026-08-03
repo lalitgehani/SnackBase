@@ -18,6 +18,7 @@ env/
 htmlcov/
 *.cover
 .hypothesis/
+tests/
 
 # IDEs
 .vscode/
@@ -30,25 +31,40 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
-# Git
+# Git / CI
 .git/
 .gitignore
+.github/
 
-# Documentation
+# Caches
+.mypy_cache/
+.ruff_cache/
+
+# Documentation (keep README for package metadata during install)
 docs/
-CLAUDE.md
-PRD_PHASES.md
-REQUIREMENTS.md
+*.md
+!README.md
+demo_data/
 
-# Scripts
+# Scripts and examples (not needed in image)
 scripts/
+examples/
 
-# SQLite database (will be volume mounted)
+# Frontend build artifacts / deps (rebuilt in image)
+ui/node_modules/
+ui/coverage/
+ui/playwright-report/
+ui/test-results/
+ui/e2e/
+ui/dist/
+
+# SQLite database (volume mounted at runtime)
 sb_data/
 *.db
 *.db-shm
 *.db-wal
 
-# Other
+# Local env
+.env
 .env.local
 .env.*.local

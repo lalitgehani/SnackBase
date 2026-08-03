@@ -430,7 +430,22 @@ sudo certbot renew --dry-run
 
 ### Option 3: Docker Deployment
 
-You can deploy SnackBase using the included `Dockerfile` and `docker-compose.yml` (optional).
+You can deploy SnackBase using the included multi-stage `Dockerfile` and
+`docker-compose.yml` (or the published GHCR image via `docker-compose.ghcr.yml`).
+
+The production image:
+
+- Builds the React admin UI and serves it from `./static`
+- Installs Python dependencies from wheels only (no C compiler in the image)
+- Includes the `uv` binary so **Functions** can create per-version environments
+- Keeps `curl` for container healthchecks
+
+Approximate size after the slim multi-stage build: **~250–300 MB** filesystem
+(about half the previous single-stage image that shipped `build-essential`).
+
+**Functions note:** native third-party pins without prebuilt wheels may fail to
+install inside Function envs, because the runtime image does not include a C
+compiler. Prefer pure-Python packages or packages that publish manylinux wheels.
 
 #### 1. Build the Image
 
