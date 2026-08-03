@@ -4,15 +4,15 @@
 #   push to main  → ghcr.io/<owner>/snackbase:latest
 #   push to demo  → ghcr.io/<owner>/snackbase:demo
 #   push tag v*   → ghcr.io/<owner>/snackbase:<semver>
-#                   e.g. v0.8.0 → :0.8.0, :0.8, :0
+#                   e.g. v0.9.0 → :0.9.0, :0.9, :0
 #
 # Platforms: linux/amd64 + linux/arm64 (multi-arch manifest list).
 # Demo branch builds with VITE_IS_DEMO=true so the UI demo flag is baked in.
 # main and version tags build with VITE_IS_DEMO=false.
 #
 # Usage after a release:
-#   git tag -a v0.8.0 -m "Release 0.8.0"
-#   git push origin v0.8.0
+#   git tag -a v0.9.0 -m "Release 0.9.0"
+#   git push origin v0.9.0
 #
 # Manual rebuild of multi-arch tags: Actions → Docker publish → Run workflow
 
@@ -62,7 +62,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          # latest ← main, demo ← demo branch, semver ← git tags like v0.8.0
+          # latest ← main, demo ← demo branch, semver ← git tags like v0.9.0
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=raw,value=demo,enable=${{ github.ref == 'refs/heads/demo' }}
