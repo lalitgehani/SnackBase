@@ -21,6 +21,43 @@ Element.prototype.releasePointerCapture = () => {}
 // Mock scrollIntoView — jsdom does not implement it, but Radix UI Select calls it
 Element.prototype.scrollIntoView = () => {}
 
+// CodeMirror measures text via Range#getClientRects; jsdom lacks a real layout engine.
+const emptyClientRect = () =>
+  ({
+    x: 0,
+    y: 0,
+    width: 0,
+    height: 0,
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    toJSON() {
+      return {}
+    },
+  }) as DOMRect
+
+if (typeof Range !== 'undefined') {
+  Range.prototype.getBoundingClientRect = emptyClientRect
+  Range.prototype.getClientRects = () =>
+    ({
+      length: 0,
+      item: () => null,
+      [Symbol.iterator]: function* () {},
+    }) as DOMRectList
+}
+
+Element.prototype.getClientRects = function getClientRects() {
+  return {
+    length: 1,
+    item: () => emptyClientRect(),
+    0: emptyClientRect(),
+    [Symbol.iterator]: function* () {
+      yield emptyClientRect()
+    },
+  } as unknown as DOMRectList
+}
+
 // Start MSW server before all tests
 beforeAll(() => server.listen({ onUnhandledRequest: 'warn' }))
 

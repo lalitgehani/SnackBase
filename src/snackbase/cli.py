@@ -705,6 +705,184 @@ def worker(queue: str | None, poll_interval: float | None) -> None:
         click.echo("\nJob worker stopped.")
 
 
+@cli.group("functions")
+def functions_group() -> None:
+    """Manage and deploy SnackBase Functions."""
+
+
+@functions_group.command("list")
+@click.option("--url", envvar="SNACKBASE_URL", default="http://127.0.0.1:8090")
+@click.option("--token", envvar="SNACKBASE_TOKEN", required=True, help="Bearer access token")
+def functions_list(url: str, token: str) -> None:
+    """List remote functions for the authenticated account."""
+    import httpx
+
+    resp = httpx.get(
+        f"{url.rstrip('/')}/api/v1/functions",
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=30.0,
+    )
+    if resp.status_code >= 400:
+        raise click.ClickException(f"List failed ({resp.status_code}): {resp.text}")
+    data = resp.json()
+    for item in data.get("items", []):
+        click.echo(
+            f"{item.get('slug'):<24} enabled={item.get('enabled')} "
+            f"auth={item.get('auth_required')} status={item.get('status')}"
+        )
+    click.echo(f"Total: {data.get('total', 0)}")
+
+
+@functions_group.command("deploy")
+@click.argument("slug")
+@click.option(
+    "--dir",
+    "source_dir",
+    type=click.Path(exists=True, file_okay=False, path_type=str),
+    default=None,
+    help="Directory with handler.py / requirements.txt (default: snackbase/functions/<slug>)",
+)
+@click.option("--url", envvar="SNACKBASE_URL", default="http://127.0.0.1:8090")
+@click.option("--token", envvar="SNACKBASE_TOKEN", required=True)
+def functions_deploy(slug: str, source_dir: str | None, url: str, token: str) -> None:
+    """Deploy a local function directory to the instance."""
+    from pathlib import Path
+
+    import httpx
+
+    root = Path(source_dir) if source_dir else Path("snackbase/functions") / slug
+    if not root.exists():
+        raise click.ClickException(f"Source directory not found: {root}")
+
+    files: dict[str, str] = {}
+    for path in root.rglob("*"):
+        if path.is_file() and not any(p.startswith(".") for p in path.parts):
+            rel = path.relative_to(root).as_posix()
+            files[rel] = path.read_text(encoding="utf-8")
+    if not files:
+        raise click.ClickException("No source files found to deploy")
+
+    deps: list[str] = []
+    req = root / "requirements.txt"
+    if req.exists():
+        deps = [
+            line.strip()
+            for line in req.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        ]
+
+    headers = {"Authorization": f"Bearer {token}"}
+    base = url.rstrip("/")
+    # Ensure function exists
+    get_resp = httpx.get(f"{base}/api/v1/functions/{slug}", headers=headers, timeout=30.0)
+    if get_resp.status_code == 404:
+        create = httpx.post(
+            f"{base}/api/v1/functions",
+            headers=headers,
+            json={"name": slug, "slug": slug},
+            timeout=30.0,
+        )
+        if create.status_code >= 400:
+            raise click.ClickException(f"Create failed: {create.text}")
+
+    deploy = httpx.post(
+        f"{base}/api/v1/functions/{slug}/deploy",
+        headers=headers,
+        json={"files": files, "dependencies": deps},
+        timeout=300.0,
+    )
+    if deploy.status_code >= 400:
+        raise click.ClickException(f"Deploy failed ({deploy.status_code}): {deploy.text}")
+    version = deploy.json().get("version", {})
+    click.echo(f"Deployed {slug} version {version.get('version')} sha={version.get('sha256')}")
+
+
+@functions_group.command("logs")
+@click.argument("slug")
+@click.option("--url", envvar="SNACKBASE_URL", default="http://127.0.0.1:8090")
+@click.option("--token", envvar="SNACKBASE_TOKEN", required=True)
+@click.option("--limit", default=20, show_default=True)
+def functions_logs(slug: str, url: str, token: str, limit: int) -> None:
+    """Print recent function executions."""
+    import httpx
+
+    resp = httpx.get(
+        f"{url.rstrip('/')}/api/v1/functions/{slug}/executions",
+        headers={"Authorization": f"Bearer {token}"},
+        params={"limit": limit},
+        timeout=30.0,
+    )
+    if resp.status_code >= 400:
+        raise click.ClickException(f"Logs failed ({resp.status_code}): {resp.text}")
+    for item in resp.json().get("items", []):
+        click.echo(
+            f"{item.get('executed_at')}  {item.get('status'):<8} "
+            f"http={item.get('http_status')}  {item.get('duration_ms')}ms  "
+            f"{item.get('error_message') or ''}"
+        )
+
+
+@functions_group.command("serve")
+@click.argument("slug")
+@click.option(
+    "--dir",
+    "source_dir",
+    type=click.Path(exists=True, file_okay=False, path_type=str),
+    default=None,
+)
+@click.option("--url", envvar="SNACKBASE_URL", default="http://127.0.0.1:8090")
+@click.option("--token", envvar="SNACKBASE_TOKEN", default=None)
+def functions_serve(slug: str, source_dir: str | None, url: str, token: str | None) -> None:
+    """Watch a local function directory and redeploy on change (requires token)."""
+    import time
+    from pathlib import Path
+
+    if not token:
+        raise click.ClickException("SNACKBASE_TOKEN is required for functions serve")
+
+    root = Path(source_dir) if source_dir else Path("snackbase/functions") / slug
+    if not root.exists():
+        raise click.ClickException(f"Source directory not found: {root}")
+
+    click.echo(f"Watching {root} — redeploying to {url} as {slug} (Ctrl+C to stop)")
+    last_mtime = 0.0
+    ctx = click.get_current_context()
+    while True:
+        try:
+            mtimes = [p.stat().st_mtime for p in root.rglob("*") if p.is_file()]
+            newest = max(mtimes) if mtimes else 0.0
+            if newest > last_mtime:
+                last_mtime = newest
+                ctx.invoke(
+                    functions_deploy,
+                    slug=slug,
+                    source_dir=str(root),
+                    url=url,
+                    token=token,
+                )
+            time.sleep(1.0)
+        except KeyboardInterrupt:
+            click.echo("\nStopped watching.")
+            break
+
+
+@functions_group.command("purge-executions")
+def functions_purge_executions() -> None:
+    """Purge function execution logs older than retention config (local DB)."""
+    import asyncio
+
+    from snackbase.infrastructure.functions.retention import purge_old_function_executions
+    from snackbase.infrastructure.persistence.database import get_db_manager
+
+    async def _run() -> int:
+        db = get_db_manager()
+        async with db.session() as session:
+            return await purge_old_function_executions(session)
+
+    deleted = asyncio.run(_run())
+    click.echo(f"Deleted {deleted} old function executions")
+
+
 def main() -> NoReturn:
     """Main entry point for the CLI.
 

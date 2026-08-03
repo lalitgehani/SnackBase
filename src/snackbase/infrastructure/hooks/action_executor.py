@@ -298,6 +298,17 @@ async def execute_actions(
             elif action_type == "enqueue_job":
                 await _execute_enqueue_job(resolved, session_factory, account_id)
 
+            elif action_type == "invoke_function":
+                from snackbase.infrastructure.functions.invoke_action import (
+                    execute_invoke_function,
+                )
+
+                await execute_invoke_function(
+                    resolved,
+                    session_factory=session_factory,
+                    account_id=account_id,
+                )
+
             else:
                 logger.warning("Unknown action type — skipping", action_type=action_type)
                 continue

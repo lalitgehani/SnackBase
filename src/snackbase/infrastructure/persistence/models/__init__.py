@@ -43,6 +43,12 @@ from snackbase.infrastructure.persistence.models.hook_execution import HookExecu
 from snackbase.infrastructure.persistence.models.job import JobModel
 from snackbase.infrastructure.persistence.models.endpoint import EndpointModel
 from snackbase.infrastructure.persistence.models.endpoint_execution import EndpointExecutionModel
+from snackbase.infrastructure.persistence.models.function import (
+    FunctionExecutionModel,
+    FunctionModel,
+    FunctionSecretModel,
+    FunctionVersionModel,
+)
 from snackbase.infrastructure.persistence.models.workflow import WorkflowModel
 from snackbase.infrastructure.persistence.models.workflow_instance import WorkflowInstanceModel
 from snackbase.infrastructure.persistence.models.workflow_step_log import WorkflowStepLogModel
@@ -78,6 +84,10 @@ __all__ = [
     "JobModel",
     "EndpointModel",
     "EndpointExecutionModel",
+    "FunctionModel",
+    "FunctionVersionModel",
+    "FunctionExecutionModel",
+    "FunctionSecretModel",
     "WorkflowModel",
     "WorkflowInstanceModel",
     "WorkflowStepLogModel",

@@ -70,6 +70,15 @@
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
+  /* CodeMirror syntax — darkened for contrast on light backgrounds */
+  --cm-keyword: color-mix(in oklch, var(--chart-1) 55%, black);
+  --cm-operator: color-mix(in oklch, var(--chart-2) 50%, black);
+  --cm-string: color-mix(in oklch, var(--chart-2) 45%, black);
+  --cm-number: color-mix(in oklch, var(--chart-4) 40%, black);
+  --cm-function: color-mix(in oklch, var(--chart-1) 50%, black);
+  --cm-class: color-mix(in oklch, var(--chart-5) 45%, black);
+  --cm-property: color-mix(in oklch, var(--chart-3) 45%, black);
+  --cm-type: color-mix(in oklch, var(--chart-5) 45%, black);
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -105,6 +114,15 @@
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
+  /* CodeMirror syntax — lightened for contrast on dark backgrounds */
+  --cm-keyword: color-mix(in oklch, var(--chart-1) 45%, white);
+  --cm-operator: color-mix(in oklch, var(--chart-2) 50%, white);
+  --cm-string: color-mix(in oklch, var(--chart-2) 45%, white);
+  --cm-number: color-mix(in oklch, var(--chart-4) 45%, white);
+  --cm-function: color-mix(in oklch, var(--chart-1) 45%, white);
+  --cm-class: color-mix(in oklch, var(--chart-5) 45%, white);
+  --cm-property: color-mix(in oklch, var(--chart-3) 40%, white);
+  --cm-type: color-mix(in oklch, var(--chart-5) 45%, white);
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);

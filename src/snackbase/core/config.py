@@ -293,6 +293,80 @@ class Settings(BaseSettings):
         description="Custom endpoint execution timeout in seconds (SNACKBASE_ENDPOINT_EXECUTION_TIMEOUT_SECONDS)",
     )
 
+    # Functions Settings (tenant-deployed Python FaaS)
+    function_execution_timeout_seconds: int = Field(
+        default=30,
+        description="Function subprocess timeout in seconds (SNACKBASE_FUNCTION_EXECUTION_TIMEOUT_SECONDS)",
+    )
+    max_functions_per_account: int = Field(
+        default=20,
+        description="Maximum functions per account (SNACKBASE_MAX_FUNCTIONS_PER_ACCOUNT)",
+    )
+    max_function_source_bytes: int = Field(
+        default=512_000,
+        description="Max total source bytes per deploy (SNACKBASE_MAX_FUNCTION_SOURCE_BYTES)",
+    )
+    max_function_request_body_bytes: int = Field(
+        default=1_048_576,
+        description="Max invoke request body bytes (SNACKBASE_MAX_FUNCTION_REQUEST_BODY_BYTES)",
+    )
+    max_concurrent_function_invokes_per_account: int = Field(
+        default=5,
+        description="Per-account concurrent invoke cap (SNACKBASE_MAX_CONCURRENT_FUNCTION_INVOKES_PER_ACCOUNT)",
+    )
+    max_concurrent_function_invokes_global: int = Field(
+        default=32,
+        description="Global concurrent invoke cap (SNACKBASE_MAX_CONCURRENT_FUNCTION_INVOKES_GLOBAL)",
+    )
+    function_dependency_mode: Literal["open_pinned", "allowlist"] = Field(
+        default="open_pinned",
+        description="Dependency pin mode: open_pinned or allowlist (SNACKBASE_FUNCTION_DEPENDENCY_MODE)",
+    )
+    function_env_base_path: str = Field(
+        default="./sb_data/function_envs",
+        description="Base path for per-version function venvs (SNACKBASE_FUNCTION_ENV_BASE_PATH)",
+    )
+    function_env_disk_quota_mb: int = Field(
+        default=1024,
+        description="Disk quota for function envs in MB (SNACKBASE_FUNCTION_ENV_DISK_QUOTA_MB)",
+    )
+    max_function_versions_retained: int = Field(
+        default=20,
+        description="Max versions retained per function (SNACKBASE_MAX_FUNCTION_VERSIONS_RETAINED)",
+    )
+    function_cors_origins: CommaSepList = Field(
+        default_factory=lambda: ["*"],
+        description="CORS origins for function invoke (SNACKBASE_FUNCTION_CORS_ORIGINS)",
+    )
+    function_dependency_allowlist: CommaSepList = Field(
+        default_factory=list,
+        description="Allowed package names when dependency mode is allowlist",
+    )
+    function_stdout_max_bytes: int = Field(
+        default=65_536,
+        description="Max captured stdout/stderr bytes per execution",
+    )
+    function_nested_invoke_limit_per_minute: int = Field(
+        default=30,
+        description="Nested function invoke budget per root invoke per minute",
+    )
+    function_worker_pool_size: int = Field(
+        default=4,
+        description="Dedicated function worker pool size (SNACKBASE_FUNCTION_WORKER_POOL_SIZE)",
+    )
+    function_streaming_timeout_seconds: int = Field(
+        default=120,
+        description="Streaming response timeout in seconds",
+    )
+    function_execution_retention_days: int = Field(
+        default=30,
+        description="Days to retain function execution logs",
+    )
+    max_function_secrets_per_account: int = Field(
+        default=100,
+        description="Maximum function secrets per account",
+    )
+
     @field_validator("secret_key")
     @classmethod
     def validate_secret_key(cls, v: str) -> str:

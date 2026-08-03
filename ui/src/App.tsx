@@ -31,6 +31,9 @@ import HooksPage from '@/pages/Hooks/HooksPage';
 import HookEditorPage from '@/pages/Hooks/editor/HookEditorPage';
 import HookOverviewPage from '@/pages/Hooks/HookOverviewPage';
 import EndpointsPage from '@/pages/Endpoints/EndpointsPage';
+import FunctionsPage from '@/pages/Functions/FunctionsPage';
+import FunctionEditorPage from '@/pages/Functions/FunctionEditorPage';
+import FunctionSecretsPage from '@/pages/Functions/FunctionSecretsPage';
 import WorkflowsPage from '@/pages/Workflows/WorkflowsPage';
 import WorkflowEditorPage from '@/pages/Workflows/editor/WorkflowEditorPage';
 import WorkflowOverviewPage from '@/pages/Workflows/WorkflowOverviewPage';
@@ -96,6 +99,9 @@ function App() {
           <Route path="hooks/:id/edit" element={<HookEditorPage />} />
           <Route path="hooks/:id" element={<HookOverviewPage />} />
           <Route path="endpoints" element={<EndpointsPage />} />
+          <Route path="functions" element={<FunctionsPage />} />
+          <Route path="functions/secrets" element={<FunctionSecretsPage />} />
+          <Route path="functions/:slug" element={<FunctionEditorPage />} />
           <Route path="workflows" element={<WorkflowsPage />} />
           <Route path="workflows/new" element={<WorkflowEditorPage />} />
           <Route path="workflows/:id/edit" element={<WorkflowEditorPage />} />

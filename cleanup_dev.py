@@ -4,6 +4,7 @@
 This script removes:
 - All uploaded files in sb_data/files/
 - All dynamic migrations in sb_data/migrations/
+- All function envs in sb_data/function_envs/
 - The SQLite database file (snackbase.db)
 
 WARNING: This will delete all data! Only use in development.
@@ -31,6 +32,7 @@ def confirm_cleanup(skip_confirm: bool = False) -> bool:
     print("\nThe following will be removed:")
     print("  - All uploaded files (sb_data/files/)")
     print("  - All dynamic migrations (sb_data/migrations/)")
+    print("  - All function envs (sb_data/function_envs/)")
     print("  - Database files (sb_data/snackbase.db + WAL/SHM)")
     print("  - Security test reports (tests/security-reports/)")
     print("\nThis action cannot be undone!")
@@ -91,6 +93,7 @@ Examples:
     # Define paths to clean
     files_dir = project_root / "sb_data" / "files"
     migrations_dir = project_root / "sb_data" / "migrations"
+    function_envs_dir = project_root / "sb_data" / "function_envs"
     db_file = project_root / "sb_data" / "snackbase.db"
     db_wal_file = project_root / "sb_data" / "snackbase.db-wal"
     db_shm_file = project_root / "sb_data" / "snackbase.db-shm"
@@ -116,6 +119,9 @@ Examples:
     
     # Clean dynamic migrations
     cleanup_directory(migrations_dir, "Dynamic migrations directory")
+    
+    # Clean function envs (per-version venvs)
+    cleanup_directory(function_envs_dir, "Function envs directory")
     
     # Clean database files (main DB + WAL + SHM)
     cleanup_file(db_file, "Database file")

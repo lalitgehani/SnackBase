@@ -26,6 +26,9 @@ from .hooks_router import router as hooks_router
 from .endpoints_router import router as endpoints_router
 from .custom_endpoint_dispatcher import router as custom_endpoint_dispatcher_router
 from .codelists_router import router as codelists_router
+from .functions_router import router as functions_router
+from .functions_router import secrets_router as function_secrets_router
+from .function_dispatcher import router as function_dispatcher_router
 
 __all__ = [
     "accounts_router",
@@ -56,5 +59,8 @@ __all__ = [
     "endpoints_router",
     "custom_endpoint_dispatcher_router",
     "codelists_router",
+    "functions_router",
+    "function_secrets_router",
+    "function_dispatcher_router",
 ]
 

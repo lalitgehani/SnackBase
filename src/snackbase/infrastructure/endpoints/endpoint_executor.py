@@ -409,6 +409,17 @@ async def _run_actions(
                 # transform reads from the live ctx (action_results already populated)
                 result = await _execute_transform(resolved, ctx)
 
+            elif action_type == "invoke_function":
+                from snackbase.infrastructure.functions.invoke_action import (
+                    execute_invoke_function,
+                )
+
+                result = await execute_invoke_function(
+                    resolved,
+                    session_factory=session_factory,
+                    account_id=account_id,
+                )
+
             else:
                 logger.warning("Unknown action type — skipping", action_type=action_type)
                 ctx.action_results.append(None)

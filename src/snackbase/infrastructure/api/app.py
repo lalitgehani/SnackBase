@@ -333,6 +333,9 @@ def register_routes(app: FastAPI) -> None:
         email_templates_router,
         endpoints_router,
         files_router,
+        function_dispatcher_router,
+        function_secrets_router,
+        functions_router,
         groups_router,
         hooks_router,
         invitations_router,
@@ -476,12 +479,32 @@ def register_routes(app: FastAPI) -> None:
         tags=["endpoints"],
     )
 
+    # Register Functions management + secrets
+    app.include_router(
+        functions_router,
+        prefix=f"{settings.api_prefix}/functions",
+        tags=["functions"],
+    )
+    app.include_router(
+        function_secrets_router,
+        prefix=f"{settings.api_prefix}/function-secrets",
+        tags=["function-secrets"],
+    )
+
     # Register custom endpoint dispatcher at /api/v1/x (F8.2)
     # Must be registered before records_router to avoid catch-all collision
     app.include_router(
         custom_endpoint_dispatcher_router,
         prefix=f"{settings.api_prefix}/x",
         tags=["custom-endpoints"],
+    )
+
+    # Register Functions invoke dispatcher at /api/v1/f
+    # Must be registered before records_router to avoid catch-all collision
+    app.include_router(
+        function_dispatcher_router,
+        prefix=f"{settings.api_prefix}/f",
+        tags=["function-invoke"],
     )
 
     # Register workflow CRUD + instance management routes (F8.3)

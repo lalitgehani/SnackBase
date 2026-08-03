@@ -18,6 +18,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Loader2, UserPlus, UserMinus, Search } from 'lucide-react';
 import type { Group } from '@/services/groups.service';
+import { getGroup } from '@/services/groups.service';
 import { getUsers, type User } from '@/services/users.service';
 
 interface ManageGroupUsersDialogProps {
@@ -53,9 +54,7 @@ export default function ManageGroupUsersDialog({
             });
 
             // Fetch current group members (by getting full group details)
-            // We use the imported getGroup from services which corresponds to the GET /groups/{id} endpoint
-            // Dynamically import to avoid circular dependency if needed, or assume it's available
-            const groupPromise = import('@/services/groups.service').then(m => m.getGroup(group!.id));
+            const groupPromise = getGroup(group!.id);
 
             const [usersResponse, groupDetails] = await Promise.all([
                 usersPromise,
