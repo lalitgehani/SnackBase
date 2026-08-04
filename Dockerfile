@@ -45,7 +45,10 @@ COPY src ./src
 COPY packages ./packages
 
 # Production deps only; manylinux wheels cover all native packages.
-RUN uv sync --frozen --no-dev --no-editable
+# ruff is also required at runtime: alembic.ini runs it as a post_write_hook when
+# generating dynamic collection migrations.
+RUN uv sync --frozen --no-dev --no-editable \
+    && uv pip install "ruff==0.14.10"
 
 # ---------------------------------------------------------------------------
 # Stage 3: Slim runtime (no gcc; uv kept for Functions)
