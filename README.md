@@ -266,7 +266,7 @@ open http://localhost:8000
 
 ### Prerequisites
 
-- Python 3.12+
+- python 3.14
 - [uv](https://github.com/astral-sh/uv) package manager
 
 ### Setup

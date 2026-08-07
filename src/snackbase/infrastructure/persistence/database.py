@@ -26,9 +26,9 @@ logger = get_logger(__name__)
 
 
 def _register_sqlite_datetime_adapters() -> None:
-    """Register custom sqlite3 datetime adapters for Python 3.12+.
+    """Register custom sqlite3 datetime adapters for python 3.14.
 
-    Python 3.12 deprecated the default date/datetime adapters. Without custom
+    python 3.14 deprecated the default date/datetime adapters. Without custom
     adapters, aiosqlite emits DeprecationWarning on every bind of a datetime.
     ISO-8601 strings match the historical default behaviour and work with
     SQLAlchemy's SQLite DateTime handling.
@@ -106,6 +106,7 @@ class DatabaseManager:
 
             # Apply SQLite pragmas on connection (only for SQLite dialect)
             if self._engine.dialect.name == "sqlite":
+
                 @event.listens_for(self._engine.sync_engine, "connect")
                 def set_sqlite_pragma(dbapi_connection, connection_record):
                     cursor = dbapi_connection.cursor()
@@ -349,8 +350,6 @@ async def _seed_default_roles(db: DatabaseManager, RoleModel: type) -> None:
         await session.commit()
 
 
-
-
 async def _create_superadmin_from_env(db: DatabaseManager) -> None:
     """Create superadmin from environment variables if configured.
 
@@ -509,7 +508,7 @@ async def _seed_default_configurations(db: DatabaseManager) -> None:
                 ConfigurationModel.category == ep_provider.category,
                 ConfigurationModel.account_id == SYSTEM_ACCOUNT_ID,
                 ConfigurationModel.provider_name == ep_provider.provider_name,
-                ConfigurationModel.is_system == True
+                ConfigurationModel.is_system == True,
             )
         )
         existing = result.scalar_one_or_none()
@@ -522,11 +521,11 @@ async def _seed_default_configurations(db: DatabaseManager) -> None:
                 category=ep_provider.category,
                 provider_name=ep_provider.provider_name,
                 display_name=ep_provider.display_name,
-                config={}, # Empty config
+                config={},  # Empty config
                 enabled=True,
                 is_builtin=True,
                 is_system=True,
-                priority=0
+                priority=0,
             )
             session.add(new_config)
             logger.info("Seeded default Email/Password configuration")
@@ -537,7 +536,7 @@ async def _seed_default_configurations(db: DatabaseManager) -> None:
                 ConfigurationModel.category == system_config_provider.category,
                 ConfigurationModel.account_id == SYSTEM_ACCOUNT_ID,
                 ConfigurationModel.provider_name == system_config_provider.provider_name,
-                ConfigurationModel.is_system == True
+                ConfigurationModel.is_system == True,
             )
         )
         existing_system = result.scalar_one_or_none()
@@ -545,12 +544,12 @@ async def _seed_default_configurations(db: DatabaseManager) -> None:
         if existing_system is None:
             # Create default system configuration with sensible defaults
             # Use app_url from settings if available, otherwise use placeholder
-            app_url = getattr(settings, 'app_url', 'http://localhost:8000')
+            app_url = getattr(settings, "app_url", "http://localhost:8000")
 
             system_config_data = {
                 "app_name": "SnackBase",
                 "app_url": app_url,
-                "support_email": ""  # Optional field, leave empty by default
+                "support_email": "",  # Optional field, leave empty by default
             }
 
             new_system_config = ConfigurationModel(
@@ -563,10 +562,12 @@ async def _seed_default_configurations(db: DatabaseManager) -> None:
                 enabled=True,
                 is_builtin=True,
                 is_system=True,
-                priority=0
+                priority=0,
             )
             session.add(new_system_config)
-            logger.info("Seeded default System Configuration", app_name="SnackBase", app_url=app_url)
+            logger.info(
+                "Seeded default System Configuration", app_name="SnackBase", app_url=app_url
+            )
 
         # Seed local storage provider configuration at system level
         result = await session.execute(
@@ -616,7 +617,6 @@ async def _seed_default_configurations(db: DatabaseManager) -> None:
             logger.info("Set Local Storage as default system storage provider")
 
         await session.commit()
-
 
 
 async def _seed_default_email_templates(db: DatabaseManager) -> None:

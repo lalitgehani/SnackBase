@@ -10,7 +10,7 @@ IMPORTANT: This is a STABLE API. Changes to the registration interface
            would be breaking changes for users who have built plugins.
 """
 
-import asyncio
+import inspect
 import uuid
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
@@ -323,7 +323,7 @@ class HookRegistry:
         callback = hook.callback
 
         # Check if callback is coroutine
-        if asyncio.iscoroutinefunction(callback):
+        if inspect.iscoroutinefunction(callback):
             return await callback(event, data, context)
         else:
             # Wrap sync functions in executor

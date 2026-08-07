@@ -170,7 +170,7 @@ uv run mypy src/
 # Update system
 sudo apt update && sudo apt upgrade -y
 
-# Install Python 3.12
+# Install python 3.14
 sudo apt install python3.12 python3.12-venv -y
 
 # Install uv

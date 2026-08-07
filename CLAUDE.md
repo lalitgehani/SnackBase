@@ -70,7 +70,7 @@ npm run preview    # Preview production build
 
 ## Python Version
 
-Python 3.12+ is required. The project uses `.python-version` for version specification.
+python 3.14 is required. The project uses `.python-version` for version specification.
 
 ## Architecture
 

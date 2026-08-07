@@ -457,7 +457,7 @@ SnackBase follows **Clean Architecture** principles with clear separation betwee
 
 | Category   | Technology                                    |
 | ---------- | --------------------------------------------- |
-| Backend    | Python 3.12+, FastAPI, SQLAlchemy 2.0 (async) |
+| Backend    | python 3.14, FastAPI, SQLAlchemy 2.0 (async) |
 | Database   | SQLite (dev), PostgreSQL (prod)               |
 | Frontend   | React 19, TypeScript, Vite 7, React Router v7 |
 | UI         | TailwindCSS 4, Radix UI, ShadCN, Lucide Icons |

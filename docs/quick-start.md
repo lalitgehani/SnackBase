@@ -8,7 +8,7 @@ Get up and running with SnackBase in 5 minutes. This guide will walk you through
 
 Before you begin, ensure you have:
 
-- **Python 3.12+** installed
+- **python 3.14** installed
 - **Node.js 18+** installed (for the admin UI)
 - **uv** package manager installed
   - **macOS/Linux**: `curl -LsSf https://astral.sh/uv/install.sh | sh`

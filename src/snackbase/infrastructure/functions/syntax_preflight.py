@@ -1,6 +1,6 @@
 """Python syntax preflight for Function deploys.
 
-Parses ``.py`` / ``.pyi`` sources with the compile() builtin using Python 3.12
+Parses ``.py`` / ``.pyi`` sources with the compile() builtin using python 3.14
 syntax. Does not import, execute, or resolve dependencies.
 """
 
@@ -17,9 +17,7 @@ class SyntaxPreflightError(ValueError):
         self.line = line
         self.column = column
         self.message = message
-        super().__init__(
-            f"Syntax error in '{path}' at line {line}, column {column}: {message}"
-        )
+        super().__init__(f"Syntax error in '{path}' at line {line}, column {column}: {message}")
 
 
 def _is_python_source(path: str) -> bool:
