@@ -64,7 +64,6 @@ export interface WebhookDeliveryListResponse {
 export interface WebhookTestResponse {
   success: boolean;
   status_code: number | null;
-  response_body: string | null;
   error: string | null;
 }
 

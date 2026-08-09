@@ -4,6 +4,7 @@ Account-scoped endpoints to create, list, update, delete webhooks and
 inspect delivery history.
 """
 
+import asyncio
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -87,10 +88,10 @@ async def create_webhook(
     """
     settings = get_settings()
 
-    # Validate URL
+    # Validate URL. Validation resolves the hostname, so it runs off the event loop.
     require_https = settings.is_production
     try:
-        validate_webhook_url(data.url, require_https=require_https)
+        await asyncio.to_thread(validate_webhook_url, data.url, require_https)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e))
 
@@ -200,7 +201,9 @@ async def update_webhook(
     if "url" in updates:
         settings = get_settings()
         try:
-            validate_webhook_url(updates["url"], require_https=settings.is_production)
+            await asyncio.to_thread(
+                validate_webhook_url, updates["url"], settings.is_production
+            )
         except ValueError as e:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e))
 

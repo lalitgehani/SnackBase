@@ -122,9 +122,12 @@ class WebhookDeliveryListResponse(BaseModel):
 
 
 class WebhookTestResponse(BaseModel):
-    """Response for the test webhook endpoint."""
+    """Response for the test webhook endpoint.
+
+    Carries no response body: reflecting the destination's response would make
+    the endpoint a read primitive against anything the server can reach.
+    """
 
     success: bool
     status_code: int | None
-    response_body: str | None
     error: str | None = None

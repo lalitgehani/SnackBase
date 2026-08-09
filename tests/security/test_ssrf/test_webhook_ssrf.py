@@ -1,19 +1,19 @@
 """SSRF-WH-*: webhook URL-validation guards (H-01).
 
-``validate_webhook_url`` blocks a hand-written list of private networks. Three
-things are missing from it:
+``validate_webhook_url`` once blocked only a hand-written list of private
+networks, which left three ways through. These guard the fix:
 
 * **Link-local (169.254.0.0/16)** — the cloud instance-metadata range, the
-  single most valuable SSRF target, is absent. So is ``0.0.0.0/8``.
+  single most valuable SSRF target, was absent. So was ``0.0.0.0/8``.
 * **IPv4-mapped IPv6** — ``::ffff:127.0.0.1`` parses as an ``IPv6Address``, and
-  comparing it against the IPv4 networks in the deny list silently yields
-  ``False`` rather than raising.
-* **DNS resolution** — only literal IPs are checked. A hostname that resolves
-  to a private address passes untouched.
+  comparing it against IPv4 networks silently yielded ``False`` rather than
+  raising. The mapped address must be unwrapped before the check.
+* **DNS resolution** — only literal IPs were checked, so a hostname resolving
+  to a private address passed untouched.
 
-``test_webhook`` then compounds it: it performs no re-validation and reflects
-up to 5000 characters of the response body straight back to the caller, which
-turns a blind SSRF into a read primitive.
+``test_webhook`` compounded it by reflecting up to 5000 characters of the
+response body straight back to the caller, which turned a blind SSRF into a
+read primitive. It now returns only the status code.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 from typing import Any
+from unittest.mock import patch
 
 import httpx
 import pytest
@@ -30,6 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.infrastructure.persistence.models.webhook import WebhookModel
 from snackbase.infrastructure.webhooks.webhook_service import (
+    _PinnedIPTransport,
     generate_webhook_secret,
     validate_webhook_url,
 )
@@ -75,7 +77,6 @@ def test_ssrf_wh_001_known_private_ranges_are_rejected(url: str) -> None:
         "http://0.0.0.0/hook",
     ],
 )
-@pytest.mark.xfail(reason="H-01 fix pending", strict=True)
 def test_ssrf_wh_002_link_local_and_unspecified_are_rejected(url: str) -> None:
     """SSRF-WH-002: link-local and 0.0.0.0/8 must be on the deny list."""
     with pytest.raises(ValueError, match="private/loopback"):
@@ -90,14 +91,12 @@ def test_ssrf_wh_002_link_local_and_unspecified_are_rejected(url: str) -> None:
         "http://[::ffff:10.0.0.1]/hook",
     ],
 )
-@pytest.mark.xfail(reason="H-01 fix pending", strict=True)
 def test_ssrf_wh_003_ipv4_mapped_ipv6_is_rejected(url: str) -> None:
     """SSRF-WH-003: an IPv4-mapped IPv6 literal must not slip past the deny list."""
     with pytest.raises(ValueError, match="private/loopback"):
         validate_webhook_url(url, require_https=False)
 
 
-@pytest.mark.xfail(reason="H-01 fix pending", strict=True)
 def test_ssrf_wh_004_hostname_resolving_to_private_ip_is_rejected() -> None:
     """SSRF-WH-004: the hostname must be resolved before the deny list is applied."""
     # `localhost` resolves to 127.0.0.1 on every supported platform, so it needs
@@ -117,13 +116,40 @@ def test_ssrf_wh_006_non_http_scheme_rejected() -> None:
         validate_webhook_url("file:///etc/passwd", require_https=False)
 
 
+@pytest.mark.asyncio
+async def test_ssrf_wh_012_request_is_pinned_to_the_validated_address() -> None:
+    """SSRF-WH-012: the connect must reuse the validated IP, not re-resolve.
+
+    Validation resolves the hostname; if the connect resolved it a second time,
+    an attacker-controlled DNS server could answer the first lookup publicly and
+    the second with an internal address (DNS rebinding). The transport must
+    therefore carry the approved IP while leaving `Host` and TLS SNI on the name.
+    """
+    seen: dict[str, Any] = {}
+
+    async def _capture(self: Any, request: httpx.Request) -> httpx.Response:
+        seen["host"] = request.url.host
+        seen["host_header"] = request.headers.get("Host")
+        seen["sni"] = request.extensions.get("sni_hostname")
+        return httpx.Response(200)
+
+    transport = _PinnedIPTransport("hooks.example.com", "203.0.113.7")
+
+    with patch.object(httpx.AsyncHTTPTransport, "handle_async_request", _capture):
+        async with httpx.AsyncClient(transport=transport) as client:
+            await client.post("https://hooks.example.com/inbound", content=b"{}")
+
+    assert seen["host"] == "203.0.113.7", "the connect was not pinned to the validated IP"
+    assert seen["host_header"] == "hooks.example.com"
+    assert seen["sni"] == "hooks.example.com", "TLS would validate against the wrong name"
+
+
 # ---------------------------------------------------------------------------
 # Integration level — creation and the test endpoint
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(reason="H-01 fix pending", strict=True)
 async def test_ssrf_wh_010_cannot_create_webhook_pointing_at_metadata(
     client: AsyncClient, security_test_data: dict[str, Any]
 ) -> None:
@@ -142,7 +168,6 @@ async def test_ssrf_wh_010_cannot_create_webhook_pointing_at_metadata(
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(reason="H-01 fix pending", strict=True)
 @respx.mock
 async def test_ssrf_wh_011_test_endpoint_does_not_reflect_internal_body(
     client: AsyncClient,

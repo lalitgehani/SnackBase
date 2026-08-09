@@ -5,7 +5,12 @@ Handles signing, delivery, retry logic, and filter evaluation for outbound webho
 Delivery architecture:
 - dispatch_webhook(): creates a delivery record and enqueues a job for delivery
 - attempt_webhook_delivery(): performs exactly ONE HTTP attempt (used by job handler)
-- _send_and_retry(): legacy looping retry, kept for test_webhook synchronous path
+- test_webhook(): one synchronous attempt on behalf of the admin UI
+
+SSRF containment: validate_webhook_url() refuses any destination that resolves into
+internal address space, and every outbound request is issued through a transport
+pinned to the address that validation approved, so a DNS answer cannot change
+between the check and the connect.
 """
 
 import asyncio
@@ -16,6 +21,7 @@ import ipaddress
 import json
 import re
 import secrets
+import socket
 import urllib.parse
 from datetime import UTC, datetime
 from typing import Any
@@ -36,15 +42,14 @@ logger = get_logger(__name__)
 # Retry schedule in seconds: 1min, 5min, 30min, 2hr, 12hr
 RETRY_SCHEDULE = [60, 300, 1800, 7200, 43200]
 
-# Private/loopback IP ranges to block in production
-_PRIVATE_NETWORKS = [
-    ipaddress.ip_network("127.0.0.0/8"),
-    ipaddress.ip_network("10.0.0.0/8"),
-    ipaddress.ip_network("172.16.0.0/12"),
-    ipaddress.ip_network("192.168.0.0/16"),
-    ipaddress.ip_network("::1/128"),
-    ipaddress.ip_network("fc00::/7"),
-]
+# Ranges the `ipaddress` special-use properties do not flag but that are still
+# internal for our purposes. Everything else (loopback, RFC1918, link-local —
+# including the 169.254.169.254 cloud metadata endpoint — unspecified, reserved
+# and multicast) is recognised by those properties directly.
+_EXTRA_BLOCKED_V4_NETWORKS = (
+    ipaddress.ip_network("100.64.0.0/10"),  # CGNAT (RFC 6598)
+    ipaddress.ip_network("198.18.0.0/15"),  # benchmarking (RFC 2544)
+)
 
 
 def generate_webhook_secret() -> str:
@@ -80,15 +85,69 @@ def sign_payload(secret: str, body: bytes) -> str:
     return f"sha256={digest}"
 
 
-def validate_webhook_url(url: str, require_https: bool = True) -> None:
-    """Validate a webhook URL.
+def _is_blocked_address(addr: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """Whether an address belongs to internal space and must not be a webhook target.
+
+    IPv4-mapped IPv6 (``::ffff:169.254.169.254``) is unwrapped first: comparing a
+    mapped address against IPv4 ranges otherwise yields ``False`` and lets the
+    highest-value SSRF targets through.
+    """
+    if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped is not None:
+        addr = addr.ipv4_mapped
+
+    if (
+        addr.is_private
+        or addr.is_loopback
+        or addr.is_link_local
+        or addr.is_unspecified
+        or addr.is_reserved
+        or addr.is_multicast
+    ):
+        return True
+
+    if isinstance(addr, ipaddress.IPv4Address):
+        return any(addr in network for network in _EXTRA_BLOCKED_V4_NETWORKS)
+
+    return False
+
+
+def _parse_ip_literal(hostname: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
+    """Return the address if the hostname is an IP literal, else None."""
+    try:
+        return ipaddress.ip_address(hostname.split("%", 1)[0])
+    except ValueError:
+        return None
+
+
+def _resolve_hostname(hostname: str) -> list[str]:
+    """Resolve a hostname to every A/AAAA address, or an empty list if it does not resolve."""
+    try:
+        infos = socket.getaddrinfo(hostname, None, proto=socket.IPPROTO_TCP)
+    except OSError:
+        return []
+
+    # Preserve order while de-duplicating; strip any IPv6 scope suffix.
+    return list(dict.fromkeys(str(info[4][0]).split("%", 1)[0] for info in infos))
+
+
+def validate_webhook_url(url: str, require_https: bool = True) -> list[str]:
+    """Validate a webhook URL and return the addresses it is allowed to reach.
+
+    A hostname is resolved and *every* returned address is checked, so a name
+    pointing at internal space cannot slip past a literal-IP-only check. A
+    hostname that does not resolve is accepted — the destination simply will not
+    connect — which keeps registration usable offline; the binding gate is the
+    pinned transport used at send time.
 
     Args:
         url: The URL to validate.
         require_https: Whether to require HTTPS (True in production).
 
+    Returns:
+        The validated IP addresses, or an empty list if the hostname did not resolve.
+
     Raises:
-        ValueError: If the URL is invalid, insecure, or targets a private IP.
+        ValueError: If the URL is invalid, insecure, or targets internal address space.
     """
     try:
         parsed = urllib.parse.urlparse(url)
@@ -105,19 +164,70 @@ def validate_webhook_url(url: str, require_https: bool = True) -> None:
     if not hostname:
         raise ValueError("Webhook URL must have a valid hostname")
 
-    # Block private/loopback IPs
-    try:
-        addr = ipaddress.ip_address(hostname)
-        for network in _PRIVATE_NETWORKS:
-            if addr in network:
-                raise ValueError(
-                    f"Webhook URL cannot target private/loopback IP address: {hostname}"
-                )
-    except ValueError as e:
-        # Re-raise if it's our validation error
-        if "Webhook URL" in str(e):
-            raise
-        # Otherwise it's not an IP address (it's a hostname) — that's fine
+    literal = _parse_ip_literal(hostname)
+    if literal is not None:
+        if _is_blocked_address(literal):
+            raise ValueError(
+                f"Webhook URL cannot target private/loopback IP address: {hostname}"
+            )
+        return [str(literal)]
+
+    resolved = _resolve_hostname(hostname)
+    for candidate in resolved:
+        if _is_blocked_address(ipaddress.ip_address(candidate)):
+            raise ValueError(
+                f"Webhook URL cannot target private/loopback IP address: "
+                f"{hostname} resolves to {candidate}"
+            )
+
+    return resolved
+
+
+class _PinnedIPTransport(httpx.AsyncHTTPTransport):
+    """Transport that connects only to a pre-validated address.
+
+    Validation resolves the hostname; without pinning, the connect performs a
+    second, independent resolution that an attacker-controlled DNS server is free
+    to answer differently (DNS rebinding). Rewriting the URL host to the approved
+    address closes that window, while the original ``Host`` header and TLS SNI
+    keep the request — and certificate validation — addressed to the real name.
+    """
+
+    def __init__(self, hostname: str, ip: str, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self._hostname = hostname
+        self._ip = ip
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        host_header = request.headers.get("Host")
+        request.url = request.url.copy_with(host=self._ip)
+        if host_header:
+            request.headers["Host"] = host_header
+        request.extensions["sni_hostname"] = self._hostname
+        return await super().handle_async_request(request)
+
+
+async def _pinned_transport(url: str) -> httpx.AsyncHTTPTransport | None:
+    """Re-validate a webhook destination and return a transport pinned to it.
+
+    Validation runs immediately before every send, not just at registration, so a
+    DNS record that has since been repointed inward is caught. Returns ``None``
+    when there is nothing to pin (an IP literal, or a name that does not resolve).
+
+    Raises:
+        ValueError: If the destination is no longer an acceptable webhook target.
+    """
+    from snackbase.core.config import get_settings
+
+    resolved = await asyncio.to_thread(
+        validate_webhook_url, url, get_settings().is_production
+    )
+
+    hostname = urllib.parse.urlparse(url).hostname or ""
+    if not resolved or _parse_ip_literal(hostname) is not None:
+        return None
+
+    return _PinnedIPTransport(hostname, resolved[0])
 
 
 def _evaluate_filter(filter_expr: str, record: dict[str, Any]) -> bool:
@@ -232,108 +342,6 @@ def _safe_compare(a: Any, b: Any) -> int:
         return 0
 
 
-async def _send_and_retry(
-    delivery_id: str,
-    webhook: WebhookModel,
-    payload_bytes: bytes,
-    delivery_headers: dict[str, str],
-    session_factory: Any,
-    timeout_seconds: int,
-) -> None:
-    """Background task: attempt delivery and retry on failure.
-
-    This runs in a background asyncio task and does NOT block the calling request.
-
-    Args:
-        delivery_id: ID of the WebhookDeliveryModel to update.
-        webhook: The webhook configuration.
-        payload_bytes: JSON-encoded payload to send.
-        delivery_headers: Headers to send with the request.
-        session_factory: Async session factory (db_manager.session).
-        timeout_seconds: HTTP request timeout in seconds.
-    """
-    for attempt, delay in enumerate([0] + RETRY_SCHEDULE):
-        if delay > 0:
-            await asyncio.sleep(delay)
-
-        attempt_number = attempt + 1
-        status_code = None
-        response_body = None
-        success = False
-
-        try:
-            async with httpx.AsyncClient(timeout=timeout_seconds) as client:
-                response = await client.post(
-                    webhook.url,
-                    content=payload_bytes,
-                    headers=delivery_headers,
-                )
-                status_code = response.status_code
-                response_body = response.text[:5000]
-                success = 200 <= status_code < 300
-
-        except Exception as e:
-            logger.warning(
-                "Webhook delivery attempt failed",
-                webhook_id=webhook.id,
-                delivery_id=delivery_id,
-                attempt=attempt_number,
-                error=str(e),
-            )
-            response_body = str(e)[:5000]
-
-        # Persist attempt result
-        async with session_factory() as session:
-            delivery_repo = WebhookDeliveryRepository(session)
-            if success:
-                await delivery_repo.update_status(
-                    delivery_id=delivery_id,
-                    status="delivered",
-                    response_status=status_code,
-                    response_body=response_body,
-                    delivered_at=datetime.now(UTC),
-                    next_retry_at=None,
-                    attempt_number=attempt_number,
-                )
-                await session.commit()
-                logger.info(
-                    "Webhook delivered",
-                    webhook_id=webhook.id,
-                    delivery_id=delivery_id,
-                    status_code=status_code,
-                    attempt=attempt_number,
-                )
-                return
-            else:
-                # Determine if there are more retries
-                is_last = attempt >= len(RETRY_SCHEDULE)
-                next_delay = RETRY_SCHEDULE[attempt] if attempt < len(RETRY_SCHEDULE) else None
-                next_retry = (
-                    datetime.now(UTC).replace(microsecond=0)
-                    if not is_last and next_delay
-                    else None
-                )
-                new_status = "failed" if is_last else "retrying"
-                await delivery_repo.update_status(
-                    delivery_id=delivery_id,
-                    status=new_status,
-                    response_status=status_code,
-                    response_body=response_body,
-                    attempt_number=attempt_number,
-                    next_retry_at=next_retry,
-                )
-                await session.commit()
-
-            if success:
-                return
-
-    logger.warning(
-        "Webhook exhausted all retries",
-        webhook_id=webhook.id,
-        delivery_id=delivery_id,
-    )
-
-
 async def attempt_webhook_delivery(
     delivery_id: str,
     url: str,
@@ -360,10 +368,9 @@ async def attempt_webhook_delivery(
         timeout_seconds: HTTP request timeout.
 
     Raises:
-        RuntimeError: On HTTP error or non-2xx response.
+        RuntimeError: On HTTP error, a destination that no longer validates,
+            or a non-2xx response.
     """
-    import httpx
-
     from snackbase.infrastructure.persistence.database import get_db_manager
 
     signature = sign_payload(secret, payload_bytes)
@@ -379,7 +386,10 @@ async def attempt_webhook_delivery(
     success = False
 
     try:
-        async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+        transport = await _pinned_transport(url)
+        async with httpx.AsyncClient(
+            timeout=timeout_seconds, transport=transport, follow_redirects=False
+        ) as client:
             response = await client.post(url, content=payload_bytes, headers=headers)
             status_code = response.status_code
             response_body = response.text[:5000]
@@ -509,12 +519,17 @@ async def test_webhook(
 ) -> dict[str, Any]:
     """Send a test payload to the webhook URL synchronously.
 
+    The destination's response body is deliberately **not** returned. Echoing it
+    back to the caller would turn any SSRF that got past validation into a read
+    primitive against whatever the server can reach; the status code is enough to
+    tell an operator whether their endpoint accepted the payload.
+
     Args:
         webhook: The webhook configuration.
         timeout_seconds: HTTP timeout in seconds.
 
     Returns:
-        Dict with success, status_code, response_body, error keys.
+        Dict with success, status_code, error keys.
     """
     payload = {
         "event": "test",
@@ -539,18 +554,19 @@ async def test_webhook(
         headers.update(webhook.headers)
 
     try:
-        async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+        transport = await _pinned_transport(webhook.url)
+        async with httpx.AsyncClient(
+            timeout=timeout_seconds, transport=transport, follow_redirects=False
+        ) as client:
             response = await client.post(webhook.url, content=payload_bytes, headers=headers)
             return {
                 "success": 200 <= response.status_code < 300,
                 "status_code": response.status_code,
-                "response_body": response.text[:5000],
                 "error": None,
             }
     except Exception as e:
         return {
             "success": False,
             "status_code": None,
-            "response_body": None,
             "error": str(e),
         }
