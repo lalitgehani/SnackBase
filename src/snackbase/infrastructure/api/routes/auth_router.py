@@ -42,6 +42,7 @@ from snackbase.infrastructure.api.schemas import (
     VerifyEmailRequest,
     VerifyResetTokenResponse,
 )
+from snackbase.infrastructure.api.middleware.client_ip import get_client_ip
 from snackbase.infrastructure.auth import (
     DUMMY_PASSWORD_HASH,
     InvalidTokenError,
@@ -49,6 +50,14 @@ from snackbase.infrastructure.auth import (
     hash_password,
     jwt_service,
     verify_password,
+)
+from snackbase.infrastructure.auth.login_throttle import (
+    account_lock_remaining,
+    check_ip_throttle,
+    clear_ip_failures,
+    record_ip_failure,
+    register_failure,
+    register_success,
 )
 from snackbase.infrastructure.persistence.database import get_db_session
 from snackbase.infrastructure.persistence.models import (
@@ -384,10 +393,12 @@ async def register(
     response_model=AuthResponse,
     responses={
         401: {"description": "Invalid credentials"},
+        429: {"description": "Too many failed attempts"},
     },
 )
 async def login(
     request: LoginRequest,
+    http_request: Request,
     session: AsyncSession = Depends(get_db_session),
 ) -> AuthResponse | JSONResponse:
     """Authenticate a user and return JWT tokens.
@@ -396,18 +407,22 @@ async def login(
     JWT tokens for authenticated access.
 
     Flow:
+    0. Refuse outright if this client IP has spent its failed-attempt budget
     1. Resolve account by slug or ID
     2. Look up user by email in account
     3. Check authentication provider (OAuth/SAML users must use their respective flows)
-    4. Verify password using timing-safe comparison
+    4. Verify password using timing-safe comparison, honouring any account lockout
     5. Check if user is active
-    6. Update last_login timestamp
+    6. Update last_login timestamp and clear the failure counters
     7. Generate JWT tokens
     8. Return response
 
     Security:
     - All authentication failures return the same generic 401 message
     - Password verification is always performed (even with dummy hash) to prevent timing attacks
+    - Guessing is bounded twice over: per client IP and per account. Both are
+      enforced here rather than in middleware, so no authenticated-caller bypass
+      can reach around them.
     """
     # Generic error response for all auth failures (prevents user enumeration)
     auth_error = JSONResponse(
@@ -417,6 +432,21 @@ async def login(
             "message": "Invalid credentials",
         },
     )
+
+    # 0. Per-IP failed-attempt budget. Checked before anything touches the
+    #    database so a burst costs the attacker more than it costs us.
+    client_ip = get_client_ip(http_request)
+    retry_after = check_ip_throttle(client_ip)
+    if retry_after is not None:
+        logger.warning("Login throttled", client_ip=client_ip)
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            content={
+                "error": "Too Many Requests",
+                "message": "Too many failed login attempts. Try again later.",
+            },
+            headers={"Retry-After": str(int(retry_after) + 1)},
+        )
 
     # Initialize repositories
     account_repo = AccountRepository(session)
@@ -455,6 +485,7 @@ async def login(
             email=request.email,
         )
         verify_password(request.password, DUMMY_PASSWORD_HASH)
+        record_ip_failure(client_ip)
         return auth_error
 
     # 2. Look up user by email in account
@@ -468,6 +499,20 @@ async def login(
             email=request.email,
         )
         verify_password(request.password, DUMMY_PASSWORD_HASH)
+        record_ip_failure(client_ip)
+        return auth_error
+
+    # 2.5. Honour an existing account lockout before spending a hash comparison.
+    #      The response is the same generic 401 shape so a lockout does not
+    #      confirm the account exists.
+    if account_lock_remaining(user) is not None:
+        logger.info(
+            "Login refused: account locked",
+            account_id=account.id,
+            user_id=user.id,
+        )
+        verify_password(request.password, DUMMY_PASSWORD_HASH)
+        record_ip_failure(client_ip)
         return auth_error
 
     # 3. Check authentication provider
@@ -516,6 +561,9 @@ async def login(
             account_id=account.id,
             user_id=user.id,
         )
+        record_ip_failure(client_ip)
+        register_failure(user)
+        await session.commit()
         return auth_error
 
     # 5. Check if user is active
@@ -556,8 +604,10 @@ async def login(
             content={"error": "Internal error", "message": "Role configuration error"},
         )
 
-    # 6. Update last_login timestamp
+    # 6. Update last_login timestamp and clear both failure counters
     await user_repo.update_last_login(user.id)
+    register_success(user)
+    clear_ip_failures(client_ip)
     await session.commit()
 
     # Refresh to get updated timestamps

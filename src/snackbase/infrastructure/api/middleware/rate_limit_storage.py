@@ -87,6 +87,46 @@ class RateLimitStorage:
                 reset_seconds = (capacity - bucket.tokens) / rate_per_second
                 return False, 0, wait_seconds
 
+    def peek(self, key: str, rate_per_minute: float, burst: float = 1.0) -> tuple[bool, float]:
+        """Report whether a token is available without spending one.
+
+        Lets a caller gate on the limit but charge only the requests it wants to
+        count — failed logins, for instance, so that ordinary successful traffic
+        never eats into the guessing budget.
+
+        Args:
+            key: The unique key (IP address or User ID).
+            rate_per_minute: Allowed requests per minute.
+            burst: Maximum burst capacity.
+
+        Returns:
+            A tuple of (is_allowed, seconds_until_next_token).
+        """
+        now = time.time()
+        rate_per_second = rate_per_minute / 60.0
+        capacity = max(1.0, burst)
+
+        with self._lock:
+            bucket = self._storage.get(key)
+            if bucket is None:
+                return True, 0.0
+
+            tokens = min(capacity, bucket.tokens + (now - bucket.last_updated) * rate_per_second)
+            if tokens >= 1.0:
+                return True, 0.0
+            return False, (1.0 - tokens) / rate_per_second
+
+    def forget(self, key: str) -> None:
+        """Drop a single key's bucket, restoring its full allowance."""
+        with self._lock:
+            self._storage.pop(key, None)
+
+    def reset(self) -> None:
+        """Drop every bucket. Used to isolate tests from one another."""
+        with self._lock:
+            self._storage.clear()
+            self._last_cleanup = time.time()
+
     def _cleanup_stale(self, now: float) -> None:
         """Remove entries that haven't been updated for a while."""
         # Simple policy: remove if not updated in the last hour

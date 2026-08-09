@@ -5,7 +5,16 @@ Users belong to accounts and are uniquely identified by (account_id, email).
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, UniqueConstraint, func
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import JSON
@@ -36,6 +45,8 @@ class UserModel(Base):
         created_at: Timestamp when the user was created.
         updated_at: Timestamp when the user was last updated.
         last_login: Timestamp of last successful login.
+        failed_login_attempts: Consecutive failed logins, reset on success.
+        locked_until: When set and in the future, login is refused outright.
     """
 
     __tablename__ = "users"
@@ -102,6 +113,18 @@ class UserModel(Base):
         DateTime(timezone=True),
         nullable=True,
         comment="Timestamp of last successful login",
+    )
+    failed_login_attempts: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+        comment="Consecutive failed login attempts; reset on success",
+    )
+    locked_until: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Login is refused until this time after too many failed attempts",
     )
     auth_provider: Mapped[str] = mapped_column(
         String(50),

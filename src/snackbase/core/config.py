@@ -162,12 +162,39 @@ class Settings(BaseSettings):
     )
 
     # Rate Limiting Settings
-    rate_limit_enabled: bool = False
+    # On by default: a throttle an operator has to discover and switch on is not
+    # a throttle. Raise the numbers rather than turning this off.
+    rate_limit_enabled: bool = True
     rate_limit_per_minute: int = 60
     rate_limit_per_hour: int = 1000
     rate_limit_burst: int = 10
     rate_limit_authenticated_per_minute: int = 120
     rate_limit_endpoints: dict[str, int] = Field(default_factory=dict)
+    trusted_proxies: CommaSepList = Field(
+        default=["127.0.0.1", "::1"],
+        description=(
+            "Peers whose X-Forwarded-For header may be trusted for client-IP "
+            "derivation. Anything else collapses every proxied client into one "
+            "rate-limit bucket, or lets a client forge its own identity."
+        ),
+    )
+
+    # Login Brute-Force Protection
+    # The per-IP throttle must trip before the per-account lockout, so that
+    # hammering one victim locks out the attacker's address rather than the
+    # victim's account.
+    login_rate_limit_per_minute: int = Field(
+        default=10,
+        description="Failed logins allowed per client IP per minute.",
+    )
+    login_lockout_threshold: int = Field(
+        default=20,
+        description="Consecutive failed logins before an account is locked.",
+    )
+    login_lockout_seconds: int = Field(
+        default=900,
+        description="Base lockout duration; doubles for each further lockout.",
+    )
 
     # Superadmin Settings
     superadmin_email: str | None = Field(

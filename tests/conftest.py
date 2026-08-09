@@ -70,6 +70,24 @@ def _setup_config_registry():
 
 
 @pytest.fixture(autouse=True)
+def _reset_rate_limit_storage():
+    """Give every test the full rate-limit and login-throttle allowance.
+
+    `rate_limit_storage` is a process-wide singleton, so without this a test that
+    made many requests would silently spend the budget of the tests that follow
+    it. Resetting also means the security suite's brute-force tests observe the
+    shipped defaults rather than whatever the preceding test left behind.
+    """
+    from snackbase.infrastructure.api.middleware.rate_limit_storage import (
+        rate_limit_storage,
+    )
+
+    rate_limit_storage.reset()
+    yield
+    rate_limit_storage.reset()
+
+
+@pytest.fixture(autouse=True)
 def _clean_dynamic_migrations():
     """Clear the dynamic migrations directory before running tests."""
     import shutil

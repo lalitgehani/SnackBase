@@ -293,6 +293,9 @@ def test_login_success(
     user_mock.role_id = "role-id"
     user_mock.created_at = datetime.now(timezone.utc)
     user_mock.auth_provider = "password"
+    # Brute-force state: not locked, no accumulated failures.
+    user_mock.locked_until = None
+    user_mock.failed_login_attempts = 0
     user_mock.auth_provider_name = None
     user_repo.get_by_email_and_account = AsyncMock(return_value=user_mock)
     user_repo.update_last_login = AsyncMock()
@@ -421,6 +424,9 @@ def test_login_invalid_password(mock_account_repo, mock_user_repo, mock_verify, 
     user_mock = MagicMock()
     user_mock.password_hash = "hashed_password"
     user_mock.auth_provider = "password"
+    # Brute-force state: not locked, no accumulated failures.
+    user_mock.locked_until = None
+    user_mock.failed_login_attempts = 0
     user_mock.email_verified = True
     user_mock.is_active = True
     mock_user_repo.return_value.get_by_email_and_account = AsyncMock(return_value=user_mock)
@@ -465,6 +471,9 @@ def test_login_inactive_user(mock_account_repo, mock_user_repo, mock_verify, moc
     user_mock.is_active = False
     user_mock.password_hash = "hashed_password"
     user_mock.auth_provider = "password"
+    # Brute-force state: not locked, no accumulated failures.
+    user_mock.locked_until = None
+    user_mock.failed_login_attempts = 0
     mock_user_repo.return_value.get_by_email_and_account = AsyncMock(return_value=user_mock)
     
     mock_verify.return_value = True
@@ -529,6 +538,9 @@ def test_login_single_tenant_no_account(
     user_mock.email_verified = True
     user_mock.role_id = "role-id"
     user_mock.auth_provider = "password"
+    # Brute-force state: not locked, no accumulated failures.
+    user_mock.locked_until = None
+    user_mock.failed_login_attempts = 0
     user_mock.created_at = datetime.now(timezone.utc)
     user_repo.get_by_email_and_account = AsyncMock(return_value=user_mock)
     user_repo.update_last_login = AsyncMock()

@@ -1,41 +1,52 @@
 """RATE-LOGIN-*: online password-guessing guards (H-02).
 
-Two independent gaps leave `/api/v1/auth/login` unlimited:
+Three independent gaps once left `/api/v1/auth/login` unlimited:
 
-* **No lockout.** Failed logins are logged and nothing else. There is no
-  counter per ``(email, account)``, so an attacker gets unlimited attempts
-  against a single victim regardless of any IP-based limit.
-* **Rate limiting is off by default.** ``rate_limit_enabled`` defaults to
-  ``False``, so ``RateLimitMiddleware`` returns immediately and no endpoint —
-  auth included — is throttled unless an operator opts in.
+* **No lockout.** Failed logins were logged and nothing else — no counter per
+  ``(email, account)``, so an attacker got unlimited attempts against a single
+  victim regardless of any IP-based limit.
+* **Rate limiting was off by default.** ``rate_limit_enabled`` defaulted to
+  ``False``, so ``RateLimitMiddleware`` returned immediately and no endpoint —
+  auth included — was throttled unless an operator opted in.
+* **One bucket behind a proxy.** The key came purely from
+  ``request.client.host``, so every client behind a reverse proxy collapsed onto
+  the proxy's address.
 
-The middleware also derives its key purely from ``request.client.host``. Behind
-a reverse proxy every client collapses onto the proxy's IP, which turns the
-limit into a shared bucket rather than a per-client one.
-
-These assert the *target* behaviour and are written against the default
-configuration on purpose: "you must set an env var first" is exactly the state
-H-02 flags.
+These run against the *default* configuration on purpose: "you must set an env
+var first" is exactly the state H-02 flagged. RATE-LOGIN-001..005 exercise the
+per-IP throttle; 010/011 exercise the per-account lockout, which is the layer
+that survives an attacker rotating source addresses.
 """
 
 from __future__ import annotations
 
 import uuid
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 import pytest_asyncio
 from fastapi import status
 from httpx import AsyncClient
+from starlette.datastructures import Headers
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from snackbase.core.config import Settings
+from snackbase.core.config import Settings, get_settings
+from snackbase.infrastructure.api.middleware.client_ip import get_client_ip
 from snackbase.infrastructure.auth import hash_password
 from snackbase.infrastructure.persistence.models import AccountModel, RoleModel, UserModel
 
 # Comfortably above any plausible threshold, small enough to stay fast.
 BURST_ATTEMPTS = 25
+
+
+def _fake_request(peer: str, headers: dict[str, str]) -> Any:
+    """The smallest thing `get_client_ip` needs: a peer address and headers."""
+    return SimpleNamespace(
+        client=SimpleNamespace(host=peer),
+        headers=Headers(headers),
+    )
 
 
 @pytest_asyncio.fixture
@@ -71,6 +82,7 @@ async def bruteforce_user(db_session: AsyncSession) -> dict[str, Any]:
         "password": password,
         "account": account.account_code,
         "account_id": account.id,
+        "user_id": user.id,
     }
 
 
@@ -93,7 +105,6 @@ async def _failed_logins(
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(reason="H-02 fix pending", strict=True)
 async def test_rate_login_001_repeated_failures_are_throttled(
     client: AsyncClient, bruteforce_user: dict[str, Any]
 ) -> None:
@@ -106,7 +117,6 @@ async def test_rate_login_001_repeated_failures_are_throttled(
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(reason="H-02 fix pending", strict=True)
 async def test_rate_login_002_correct_password_refused_during_lockout(
     client: AsyncClient, bruteforce_user: dict[str, Any]
 ) -> None:
@@ -127,14 +137,12 @@ async def test_rate_login_002_correct_password_refused_during_lockout(
     )
 
 
-@pytest.mark.xfail(reason="H-02 fix pending", strict=True)
 def test_rate_login_003_rate_limiting_enabled_by_default() -> None:
     """RATE-LOGIN-003: throttling must be on out of the box, not opt-in."""
     assert Settings().rate_limit_enabled is True
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(reason="H-02 fix pending", strict=True)
 async def test_rate_login_004_superadmin_account_not_exempt_from_login_throttle(
     client: AsyncClient, superadmin_token: str, bruteforce_user: dict[str, Any]
 ) -> None:
@@ -157,7 +165,6 @@ async def test_rate_login_004_superadmin_account_not_exempt_from_login_throttle(
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(reason="H-02 fix pending", strict=True)
 async def test_rate_login_005_forwarded_for_distinguishes_proxied_clients(
     client: AsyncClient, bruteforce_user: dict[str, Any]
 ) -> None:
@@ -186,6 +193,97 @@ async def test_rate_login_005_forwarded_for_distinguishes_proxied_clients(
     assert other_client == [status.HTTP_401_UNAUTHORIZED], (
         "a different forwarded client inherited the first client's throttle"
     )
+
+
+@pytest.mark.asyncio
+async def test_rate_login_010_distributed_guessing_locks_the_account(
+    client: AsyncClient, bruteforce_user: dict[str, Any], db_session: AsyncSession
+) -> None:
+    """RATE-LOGIN-010: rotating source addresses must still hit the account lockout.
+
+    RATE-LOGIN-001..005 are all satisfied by the per-IP throttle alone. An
+    attacker with a pool of addresses pays that toll once per address, so the
+    per-account counter is the layer that actually bounds guessing against a
+    chosen victim — and it is the layer with no other coverage.
+    """
+    settings = get_settings()
+    attempts = settings.login_lockout_threshold
+
+    for attempt in range(attempts):
+        response = await client.post(
+            "/api/v1/auth/login",
+            json={
+                "email": bruteforce_user["email"],
+                "password": f"wrong-{attempt}",
+                "account": bruteforce_user["account"],
+            },
+            # A fresh address each time, so the per-IP budget is never spent.
+            headers={"X-Forwarded-For": f"198.51.100.{attempt + 1}"},
+        )
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    user = (
+        await db_session.execute(
+            select(UserModel).where(UserModel.id == bruteforce_user["user_id"])
+        )
+    ).scalar_one()
+    await db_session.refresh(user)
+    assert user.failed_login_attempts >= attempts
+    assert user.locked_until is not None, "the account never locked"
+
+    # The correct password must not open a locked account, from any address.
+    response = await client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": bruteforce_user["email"],
+            "password": bruteforce_user["password"],
+            "account": bruteforce_user["account"],
+        },
+        headers={"X-Forwarded-For": "198.51.100.250"},
+    )
+    assert response.status_code != status.HTTP_200_OK, (
+        "the correct password opened a locked account"
+    )
+
+
+@pytest.mark.asyncio
+async def test_rate_login_011_successful_login_clears_the_counter(
+    client: AsyncClient, bruteforce_user: dict[str, Any], db_session: AsyncSession
+) -> None:
+    """RATE-LOGIN-011: a mistyped password must not accumulate towards a lockout forever."""
+    await _failed_logins(client, bruteforce_user, 3)
+
+    response = await client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": bruteforce_user["email"],
+            "password": bruteforce_user["password"],
+            "account": bruteforce_user["account"],
+        },
+    )
+    assert response.status_code == status.HTTP_200_OK, response.text
+
+    user = (
+        await db_session.execute(
+            select(UserModel).where(UserModel.id == bruteforce_user["user_id"])
+        )
+    ).scalar_one()
+    await db_session.refresh(user)
+    assert user.failed_login_attempts == 0
+    assert user.locked_until is None
+
+
+def test_rate_login_012_forwarded_for_ignored_from_untrusted_peer() -> None:
+    """RATE-LOGIN-012: only a trusted proxy's `X-Forwarded-For` may be believed.
+
+    Believing it unconditionally would let any client mint a fresh rate-limit
+    bucket per request simply by varying the header.
+    """
+    forged = _fake_request("203.0.113.77", {"X-Forwarded-For": "8.8.8.8"})
+    assert get_client_ip(forged) == "203.0.113.77"
+
+    proxied = _fake_request("127.0.0.1", {"X-Forwarded-For": "8.8.8.8"})
+    assert get_client_ip(proxied) == "8.8.8.8"
 
 
 @pytest.mark.asyncio

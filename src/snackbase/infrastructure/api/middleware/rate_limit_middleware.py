@@ -12,6 +12,7 @@ from starlette.responses import JSONResponse
 from snackbase.core.config import get_settings
 from snackbase.core.context import get_current_context
 from snackbase.core.logging import get_logger
+from snackbase.infrastructure.api.middleware.client_ip import get_client_ip
 from snackbase.infrastructure.api.middleware.rate_limit_storage import rate_limit_storage
 from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID
 
@@ -41,25 +42,30 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         # Get current context (set by ContextMiddleware)
         context = get_current_context()
-        
+
+        path = request.url.path
+
         # Determine tracking key and limit
-        # Default to IP-based tracking
-        key = f"ip:{request.client.host}" if request.client else "ip:unknown"
+        # Default to IP-based tracking, honouring X-Forwarded-For from trusted proxies
+        # so that clients behind one do not share a single bucket.
+        key = f"ip:{get_client_ip(request)}"
         rate = settings.rate_limit_per_minute
-        
+
         # Check if user is authenticated and not a superadmin
         if context and context.user:
-            # Superadmin bypass
-            if context.account_id == SYSTEM_ACCOUNT_ID:
+            # Superadmin bypass — but never on the auth endpoints. Login is
+            # unauthenticated, so a caller could otherwise present a superadmin
+            # bearer token alongside a login body and buy an exemption from the
+            # very limit that bounds password guessing.
+            if context.account_id == SYSTEM_ACCOUNT_ID and not path.startswith("/api/v1/auth/"):
                 return await call_next(request)
-            
+
             # User-based tracking for authenticated users
             key = f"user:{context.user.id}"
             rate = settings.rate_limit_authenticated_per_minute
 
         # Check for endpoint-specific overrides
         # This is a simplified version, ideally we'd use a better path matching
-        path = request.url.path
         if path in settings.rate_limit_endpoints:
             rate = settings.rate_limit_endpoints[path]
 
