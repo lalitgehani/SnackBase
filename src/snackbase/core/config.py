@@ -323,8 +323,12 @@ class Settings(BaseSettings):
         description="Global concurrent invoke cap (SNACKBASE_MAX_CONCURRENT_FUNCTION_INVOKES_GLOBAL)",
     )
     function_dependency_mode: Literal["open_pinned", "allowlist"] = Field(
-        default="open_pinned",
-        description="Dependency pin mode: open_pinned or allowlist (SNACKBASE_FUNCTION_DEPENDENCY_MODE)",
+        default="allowlist",
+        description=(
+            "Dependency pin mode: allowlist (default, fail-closed) or open_pinned, "
+            "which lets a function deploy install any pinned PyPI package "
+            "(SNACKBASE_FUNCTION_DEPENDENCY_MODE)"
+        ),
     )
     function_env_base_path: str = Field(
         default="./sb_data/function_envs",

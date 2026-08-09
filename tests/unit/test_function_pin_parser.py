@@ -48,6 +48,7 @@ def test_parse_dependencies_merge_and_dedupe() -> None:
     pins = parse_dependencies(
         ["cowsay==6.0"],
         requirements_txt="cowsay==6.1\n",
+        mode="open_pinned",
     )
     assert pins == ["cowsay==6.1"]
 
@@ -64,3 +65,9 @@ def test_allowlist_mode() -> None:
         mode="allowlist",
         allowlist=["cowsay"],
     ) == ["cowsay==6.1"]
+
+
+def test_default_mode_is_allowlist() -> None:
+    """C-04: an unconfigured deployment must not install arbitrary PyPI packages."""
+    with pytest.raises(PinParseError, match="allowlist"):
+        parse_dependencies(["cowsay==6.1"])

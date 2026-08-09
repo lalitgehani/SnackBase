@@ -80,7 +80,7 @@ def parse_dependencies(
     dependencies: Iterable[str] | None = None,
     *,
     requirements_txt: str | None = None,
-    mode: str = "open_pinned",
+    mode: str = "allowlist",
     allowlist: Iterable[str] | None = None,
 ) -> list[str]:
     """Parse and validate dependency pins from deploy body and/or requirements.txt.
