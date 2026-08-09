@@ -1,10 +1,6 @@
 import pytest
-import pytest_asyncio
 from fastapi import status
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from snackbase.infrastructure.persistence.models import RoleModel
 from tests.security.conftest import AttackClient
 
 
@@ -16,7 +12,7 @@ async def test_auth_az_001_access_without_token(attack_client: AttackClient):
         headers={},
         description="Accessing protected endpoint without token"
     )
-    
+
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
     data = response.json()
     assert "detail" in data or "error" in data
@@ -31,7 +27,7 @@ async def test_auth_az_002_access_with_invalid_token(attack_client: AttackClient
         headers=headers,
         description="Accessing protected endpoint with invalid token"
     )
-    
+
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
@@ -44,7 +40,7 @@ async def test_auth_az_003_regular_user_to_superadmin_endpoint(attack_client: At
         headers=headers,
         description="Regular user attempting to list accounts (superadmin only)"
     )
-    
+
     # Superadmin endpoints should return 403 Forbidden for regular users
     assert response.status_code == status.HTTP_403_FORBIDDEN
 
@@ -58,7 +54,7 @@ async def test_auth_az_004_regular_user_to_collections_endpoint(attack_client: A
         headers=headers,
         description="Regular user attempting to list collections (superadmin only)"
     )
-    
+
     assert response.status_code == status.HTTP_403_FORBIDDEN
 
 
@@ -71,7 +67,7 @@ async def test_auth_az_005_regular_user_to_roles_endpoint(attack_client: AttackC
         headers=headers,
         description="Regular user attempting to list roles (superadmin only)"
     )
-    
+
     assert response.status_code == status.HTTP_403_FORBIDDEN
 
 
@@ -86,25 +82,25 @@ async def test_auth_az_007_regular_user_to_dashboard_stats(attack_client: Attack
         headers=headers,
         description="Regular user attempting to access dashboard stats"
     )
-    
+
     assert response.status_code == status.HTTP_403_FORBIDDEN
 
 
 @pytest.mark.asyncio
 async def test_auth_az_008_superadmin_to_all_endpoints(
-    attack_client: AttackClient, 
+    attack_client: AttackClient,
     superadmin_token: str
 ):
     """AUTH-AZ-008: Verify superadmin can access all sensitive endpoints."""
     headers = {"Authorization": f"Bearer {superadmin_token}"}
-    
+
     endpoints = [
         "/api/v1/accounts",
         "/api/v1/collections",
         "/api/v1/roles",
         "/api/v1/dashboard/stats"
     ]
-    
+
     for endpoint in endpoints:
         response = await attack_client.get(
             endpoint,
@@ -121,7 +117,7 @@ async def test_auth_az_009_bypass_via_http_method_override(attack_client: Attack
         "Authorization": f"Bearer {regular_user_token}",
         "X-HTTP-Method-Override": "GET"
     }
-    
+
     # We use POST to a restricted GET endpoint with override
     response = await attack_client.post(
         "/api/v1/accounts",
@@ -129,8 +125,8 @@ async def test_auth_az_009_bypass_via_http_method_override(attack_client: Attack
         headers=headers,
         description="Method override attempt (X-HTTP-Method-Override: GET)"
     )
-    
-    # FastAPI/Starlette doesn't support method override by default, 
+
+    # FastAPI/Starlette doesn't support method override by default,
     # so it should be strictly 405 Method Not Allowed or 403 Forbidden
     assert response.status_code in [status.HTTP_405_METHOD_NOT_ALLOWED, status.HTTP_403_FORBIDDEN]
 
@@ -139,14 +135,14 @@ async def test_auth_az_009_bypass_via_http_method_override(attack_client: Attack
 async def test_auth_az_010_bypass_via_path_traversal(attack_client: AttackClient, regular_user_token: str):
     """AUTH-AZ-010: Attempt to bypass authorization using path traversal."""
     headers = {"Authorization": f"Bearer {regular_user_token}"}
-    
+
     # Attempting to access /api/v1/accounts via traversal from /api/v1/auth/me
     response = await attack_client.get(
         "/api/v1/auth/../accounts",
         headers=headers,
         description="Path traversal attempt (/api/v1/auth/../accounts)"
     )
-    
-    # Modern web servers/frameworks normalize paths, so this should still hit /api/v1/accounts 
+
+    # Modern web servers/frameworks normalize paths, so this should still hit /api/v1/accounts
     # and be denied with 403, or be 404 if not normalized as expected.
     assert response.status_code in [status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND]

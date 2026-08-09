@@ -1,13 +1,13 @@
-import pytest
-import pytest_asyncio
 import uuid
+
+import pytest_asyncio
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.infrastructure.auth.jwt_service import jwt_service
-from snackbase.infrastructure.persistence.models import AccountModel, UserModel, RoleModel
-from tests.security.conftest import AttackClient
+from snackbase.infrastructure.persistence.models import AccountModel, RoleModel, UserModel
+
 
 @pytest_asyncio.fixture
 async def isolation_test_data(db_session: AsyncSession):
@@ -20,7 +20,7 @@ async def isolation_test_data(db_session: AsyncSession):
         slug="account-a"
     )
     db_session.add(account_a)
-    
+
     # 2. Create Account B and User B
     account_b = AccountModel(
         id="AC0002",
@@ -29,7 +29,7 @@ async def isolation_test_data(db_session: AsyncSession):
         slug="account-b"
     )
     db_session.add(account_b)
-    
+
     # Get roles
     result = await db_session.execute(select(RoleModel).where(RoleModel.name == "user"))
     user_role = result.scalar_one()
@@ -46,7 +46,7 @@ async def isolation_test_data(db_session: AsyncSession):
         is_active=True
     )
     db_session.add(user_a)
-    
+
     # User B
     user_b = UserModel(
         id="user-b",
@@ -57,9 +57,9 @@ async def isolation_test_data(db_session: AsyncSession):
         is_active=True
     )
     db_session.add(user_b)
-    
+
     await db_session.commit()
-    
+
     # Tokens
     token_a = jwt_service.create_access_token(
         user_id=user_a.id,
@@ -67,14 +67,14 @@ async def isolation_test_data(db_session: AsyncSession):
         email=user_a.email,
         role="user"
     )
-    
+
     token_b = jwt_service.create_access_token(
         user_id=user_b.id,
         account_id=user_b.account_id,
         email=user_b.email,
         role="user"
     )
-    
+
     return {
         "account_a": account_a,
         "account_b": account_b,
@@ -86,7 +86,7 @@ async def isolation_test_data(db_session: AsyncSession):
 async def isolation_collection(client: AsyncClient, superadmin_token, isolation_test_data):
     """Create a collection for isolation testing."""
     collection_name = f"secrets_{uuid.uuid4().hex[:8]}"
-    
+
     collection_data = {
         "name": collection_name,
         "schema": [
@@ -100,9 +100,9 @@ async def isolation_collection(client: AsyncClient, superadmin_token, isolation_
         "update_rule": "true",
         "delete_rule": "true",
     }
-    
+
     headers = {"Authorization": f"Bearer {superadmin_token}"}
     response = await client.post("/api/v1/collections", json=collection_data, headers=headers)
     assert response.status_code == 201
-    
+
     return collection_name

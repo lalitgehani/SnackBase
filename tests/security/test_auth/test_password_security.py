@@ -1,5 +1,6 @@
 import pytest
 from fastapi import status
+
 from tests.security.conftest import AttackClient
 
 
@@ -11,13 +12,13 @@ async def test_auth_pw_001_empty_password(attack_client: AttackClient):
         "password": "",
         "account_name": "Test Account",
     }
-    
+
     response = await attack_client.post(
         "/api/v1/auth/register",
         json=payload,
         description="Attempt registration with empty password"
     )
-    
+
     # Expected: 400 Bad Request (from validator) or 422 Unprocessable Content (from Pydantic)
     assert response.status_code in [status.HTTP_400_BAD_REQUEST, status.HTTP_422_UNPROCESSABLE_CONTENT, 422]
     data = response.json()
@@ -34,13 +35,13 @@ async def test_auth_pw_002_short_password(attack_client: AttackClient):
         "password": "Short1!",
         "account_name": "Test Account",
     }
-    
+
     response = await attack_client.post(
         "/api/v1/auth/register",
         json=payload,
         description="Attempt registration with too short password (7 chars)"
     )
-    
+
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     data = response.json()
     codes = [d["code"] for d in data.get("details", [])]
@@ -55,13 +56,13 @@ async def test_auth_pw_003_no_uppercase(attack_client: AttackClient):
         "password": "nouppercase123!",
         "account_name": "Test Account",
     }
-    
+
     response = await attack_client.post(
         "/api/v1/auth/register",
         json=payload,
         description="Attempt registration with no uppercase letter"
     )
-    
+
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     data = response.json()
     codes = [d["code"] for d in data.get("details", [])]
@@ -76,13 +77,13 @@ async def test_auth_pw_004_no_lowercase(attack_client: AttackClient):
         "password": "NOLOWERCASE123!",
         "account_name": "Test Account",
     }
-    
+
     response = await attack_client.post(
         "/api/v1/auth/register",
         json=payload,
         description="Attempt registration with no lowercase letter"
     )
-    
+
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     data = response.json()
     codes = [d["code"] for d in data.get("details", [])]
@@ -97,13 +98,13 @@ async def test_auth_pw_005_no_digit(attack_client: AttackClient):
         "password": "NoDigitsAllowed!",
         "account_name": "Test Account",
     }
-    
+
     response = await attack_client.post(
         "/api/v1/auth/register",
         json=payload,
         description="Attempt registration with no digits"
     )
-    
+
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     data = response.json()
     codes = [d["code"] for d in data.get("details", [])]
@@ -118,13 +119,13 @@ async def test_auth_pw_006_no_special(attack_client: AttackClient):
         "password": "NoSpecialChars123",
         "account_name": "Test Account",
     }
-    
+
     response = await attack_client.post(
         "/api/v1/auth/register",
         json=payload,
         description="Attempt registration with no special characters"
     )
-    
+
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     data = response.json()
     codes = [d["code"] for d in data.get("details", [])]
@@ -139,13 +140,13 @@ async def test_auth_pw_007_valid_password(attack_client: AttackClient):
         "password": "SecurePassword123!",
         "account_name": "Secure Account",
     }
-    
+
     response = await attack_client.post(
         "/api/v1/auth/register",
         json=payload,
         description="Register with a strong password"
     )
-    
+
     assert response.status_code == status.HTTP_201_CREATED
     data = response.json()
     assert "message" in data
@@ -160,20 +161,20 @@ async def test_auth_pw_008_common_passwords(attack_client: AttackClient):
     # Currently PasswordValidator does not implement dictionary checks.
     # This test will document the gap.
     common_passwords = ["Password123!", "Admin123!", "Welcome123!"]
-    
+
     for pwd in common_passwords:
         payload = {
             "email": f"common-pw-{pwd}@example.com",
             "password": pwd,
             "account_name": "Common Account",
         }
-        
+
         response = await attack_client.post(
             "/api/v1/auth/register",
             json=payload,
             description=f"Attempt registration with common password: {pwd}"
         )
-        
+
         # If not implemented, this might return 201 (since they meet complexity)
         # We handle this in the security report by marking it as a finding if it passes
         if response.status_code == status.HTTP_201_CREATED:

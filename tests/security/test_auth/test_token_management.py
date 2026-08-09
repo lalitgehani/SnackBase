@@ -1,14 +1,15 @@
+import uuid
+from datetime import UTC, datetime, timedelta
+
+import jwt
 import pytest
 import pytest_asyncio
-import uuid
-import jwt
-from datetime import datetime, timedelta, timezone
 from fastapi import status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from snackbase.infrastructure.persistence.models import AccountModel, UserModel, RoleModel
 from snackbase.infrastructure.auth import hash_password, jwt_service
+from snackbase.infrastructure.persistence.models import AccountModel, RoleModel, UserModel
 from tests.security.conftest import AttackClient
 
 
@@ -39,7 +40,7 @@ async def token_test_user(db_session: AsyncSession):
     )
     db_session.add(user)
     await db_session.commit()
-    
+
     return {
         "user_id": user.id,
         "email": user.email,
@@ -57,8 +58,8 @@ async def test_auth_tk_001_expired_access_token(attack_client: AttackClient, tok
     payload = {
         "iss": jwt_service.ISSUER,
         "sub": token_test_user["user_id"],
-        "iat": datetime.now(timezone.utc) - timedelta(hours=2),
-        "exp": datetime.now(timezone.utc) - timedelta(hours=1),
+        "iat": datetime.now(UTC) - timedelta(hours=2),
+        "exp": datetime.now(UTC) - timedelta(hours=1),
         "user_id": token_test_user["user_id"],
         "account_id": token_test_user["account_id"],
         "email": token_test_user["email"],
@@ -66,16 +67,16 @@ async def test_auth_tk_001_expired_access_token(attack_client: AttackClient, tok
         "type": "access",
     }
     expired_token = jwt.encode(payload, jwt_service.secret_key, algorithm=jwt_service.ALGORITHM)
-    
+
     headers = {"Authorization": f"Bearer {expired_token}"}
-    
+
     # Try to access a protected endpoint
     response = await attack_client.get(
         "/api/v1/auth/me",
         headers=headers,
         description="Access with expired access token"
     )
-    
+
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
     data = response.json()
     assert "detail" in data or "error" in data
@@ -89,7 +90,7 @@ async def test_auth_tk_002_malformed_jwt(attack_client: AttackClient):
         "header.payload.signature-extra",
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.payload.invalid",
     ]
-    
+
     for token in malformed_tokens:
         headers = {"Authorization": f"Bearer {token}"}
         response = await attack_client.get(
@@ -110,31 +111,31 @@ async def test_auth_tk_003_tampered_token_signature(attack_client: AttackClient,
         email=token_test_user["email"],
         role=token_test_user["role"]
     )
-    
+
     # 2. Tamper with the payload (e.g., change account_id)
     header, payload_b64, signature = valid_token.split(".")
     import base64
     import json
-    
+
     # Decode payload
     padding = "=" * (4 - len(payload_b64) % 4)
     payload_json = base64.urlsafe_b64decode(payload_b64 + padding).decode()
     payload = json.loads(payload_json)
-    
+
     # Change something
     payload["account_id"] = "SY0000"
-    
+
     # Encode back
     tampered_payload_b64 = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip("=")
     tampered_token = f"{header}.{tampered_payload_b64}.{signature}"
-    
+
     headers = {"Authorization": f"Bearer {tampered_token}"}
     response = await attack_client.get(
         "/api/v1/auth/me",
         headers=headers,
         description="Access with tampered token signature"
     )
-    
+
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
@@ -150,11 +151,11 @@ async def test_auth_tk_004_valid_refresh_token(attack_client: AttackClient, toke
     login_response = await attack_client.post("/api/v1/auth/login", json=login_payload, description="Initial login")
     assert login_response.status_code == status.HTTP_200_OK
     refresh_token = login_response.json()["refresh_token"]
-    
+
     # 2. Refresh tokens
     refresh_payload = {"refresh_token": refresh_token}
     response = await attack_client.post("/api/v1/auth/refresh", json=refresh_payload, description="Valid token refresh")
-    
+
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
     assert "token" in data
@@ -169,18 +170,18 @@ async def test_auth_tk_005_expired_refresh_token(attack_client: AttackClient, to
     payload = {
         "iss": jwt_service.ISSUER,
         "sub": token_test_user["user_id"],
-        "iat": datetime.now(timezone.utc) - timedelta(days=2),
-        "exp": datetime.now(timezone.utc) - timedelta(days=1),
+        "iat": datetime.now(UTC) - timedelta(days=2),
+        "exp": datetime.now(UTC) - timedelta(days=1),
         "jti": str(uuid.uuid4()),
         "user_id": token_test_user["user_id"],
         "account_id": token_test_user["account_id"],
         "type": "refresh",
     }
     expired_token = jwt.encode(payload, jwt_service.secret_key, algorithm=jwt_service.ALGORITHM)
-    
+
     refresh_payload = {"refresh_token": expired_token}
     response = await attack_client.post("/api/v1/auth/refresh", json=refresh_payload, description="Expired refresh token")
-    
+
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
@@ -195,14 +196,14 @@ async def test_auth_tk_006_used_refresh_token_replay(attack_client: AttackClient
     }
     login_response = await attack_client.post("/api/v1/auth/login", json=login_payload, description="Initial login")
     refresh_token = login_response.json()["refresh_token"]
-    
+
     # 2. Use it once
     refresh_payload = {"refresh_token": refresh_token}
     await attack_client.post("/api/v1/auth/refresh", json=refresh_payload, description="First refresh (rotation)")
-    
+
     # 3. Use it again (replay)
     response = await attack_client.post("/api/v1/auth/refresh", json=refresh_payload, description="Replay refresh token")
-    
+
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
@@ -218,17 +219,17 @@ async def test_auth_tk_007_refresh_token_rotation(attack_client: AttackClient, t
     }
     login_response = await attack_client.post("/api/v1/auth/login", json=login_payload, description="Initial login")
     old_refresh_token = login_response.json()["refresh_token"]
-    
+
     # 2. Refresh
     response = await attack_client.post("/api/v1/auth/refresh", json={"refresh_token": old_refresh_token}, description="Rotate refresh token")
     new_refresh_token = response.json()["refresh_token"]
-    
+
     assert new_refresh_token != old_refresh_token
-    
+
     # 3. Verify old is invalid
     response = await attack_client.post("/api/v1/auth/refresh", json={"refresh_token": old_refresh_token}, description="Verify old token is invalid")
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
-    
+
     # 4. Verify new is valid
     response = await attack_client.post("/api/v1/auth/refresh", json={"refresh_token": new_refresh_token}, description="Verify new token is valid")
     assert response.status_code == status.HTTP_200_OK
@@ -240,8 +241,8 @@ async def test_auth_tk_008_token_without_account_id(attack_client: AttackClient,
     payload = {
         "iss": jwt_service.ISSUER,
         "sub": token_test_user["user_id"],
-        "iat": datetime.now(timezone.utc),
-        "exp": datetime.now(timezone.utc) + timedelta(hours=1),
+        "iat": datetime.now(UTC),
+        "exp": datetime.now(UTC) + timedelta(hours=1),
         "user_id": token_test_user["user_id"],
         # "account_id": missing,
         "email": token_test_user["email"],
@@ -249,12 +250,12 @@ async def test_auth_tk_008_token_without_account_id(attack_client: AttackClient,
         "type": "access",
     }
     invalid_token = jwt.encode(payload, jwt_service.secret_key, algorithm=jwt_service.ALGORITHM)
-    
+
     headers = {"Authorization": f"Bearer {invalid_token}"}
     response = await attack_client.get(
         "/api/v1/auth/me",
         headers=headers,
         description="Access with token missing account_id"
     )
-    
+
     assert response.status_code == status.HTTP_401_UNAUTHORIZED

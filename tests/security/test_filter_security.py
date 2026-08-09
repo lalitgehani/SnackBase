@@ -8,10 +8,8 @@ Tests cover:
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-
-from snackbase.infrastructure.auth.jwt_service import jwt_service
+from sqlalchemy.ext.asyncio import AsyncSession
 
 COLLECTION = "sec_filter_col"
 SCHEMA = [

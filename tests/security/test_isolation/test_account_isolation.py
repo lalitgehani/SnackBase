@@ -1,40 +1,33 @@
-import pytest
-import pytest_asyncio
-import uuid
-from fastapi import status
-from httpx import AsyncClient
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from snackbase.infrastructure.auth.jwt_service import jwt_service
-from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID
-from snackbase.infrastructure.persistence.models import AccountModel, UserModel, RoleModel
+import pytest
+from fastapi import status
+
 from tests.security.conftest import AttackClient
 
 
 @pytest.mark.asyncio
 async def test_iso_ac_001_user_a_sees_own_records(
 
-    attack_client: AttackClient, 
-    isolation_test_data, 
+    attack_client: AttackClient,
+    isolation_test_data,
     isolation_collection
 ):
     """ISO-AC-001: User A sees their own records."""
     headers = {"Authorization": f"Bearer {isolation_test_data['user_a_token']}"}
-    
+
     # 1. Create record as User A
     record_data = {"title": "A's Secret", "secret_data": "shhh"}
     create_resp = await attack_client.post(
-        f"/api/v1/records/{isolation_collection}", 
-        json=record_data, 
+        f"/api/v1/records/{isolation_collection}",
+        json=record_data,
         headers=headers,
         description="User A creates a record"
     )
     assert create_resp.status_code == 201
-    
+
     # 2. List records
     list_resp = await attack_client.get(
-        f"/api/v1/records/{isolation_collection}", 
+        f"/api/v1/records/{isolation_collection}",
         headers=headers,
         description="User A lists records"
     )
@@ -45,82 +38,82 @@ async def test_iso_ac_001_user_a_sees_own_records(
 
 @pytest.mark.asyncio
 async def test_iso_ac_002_user_a_cannot_see_account_b_records(
-    attack_client: AttackClient, 
-    isolation_test_data, 
+    attack_client: AttackClient,
+    isolation_test_data,
     isolation_collection
 ):
     """ISO-AC-002: User A cannot see Account B's records."""
     headers_a = {"Authorization": f"Bearer {isolation_test_data['user_a_token']}"}
     headers_b = {"Authorization": f"Bearer {isolation_test_data['user_b_token']}"}
-    
+
     # 1. Create record as User B
     record_b = {"title": "B's Secret", "secret_data": "don't look"}
     await attack_client.post(
-        f"/api/v1/records/{isolation_collection}", 
-        json=record_b, 
+        f"/api/v1/records/{isolation_collection}",
+        json=record_b,
         headers=headers_b,
         description="User B creates a record"
     )
-    
+
     # 2. List as User A
     list_resp = await attack_client.get(
-        f"/api/v1/records/{isolation_collection}", 
+        f"/api/v1/records/{isolation_collection}",
         headers=headers_a,
         description="User A lists records (should not see B's)"
     )
     assert list_resp.status_code == 200
     data = list_resp.json()
-    
+
     # Verify User A doesn't see User B's record
     titles = [item["title"] for item in data["items"]]
     assert "B's Secret" not in titles
 
 @pytest.mark.asyncio
 async def test_iso_ac_003_user_a_cannot_access_b_record_by_id(
-    attack_client: AttackClient, 
-    isolation_test_data, 
+    attack_client: AttackClient,
+    isolation_test_data,
     isolation_collection
 ):
     """ISO-AC-003: User A cannot access B's record by ID (404 Not Found)."""
     headers_a = {"Authorization": f"Bearer {isolation_test_data['user_a_token']}"}
     headers_b = {"Authorization": f"Bearer {isolation_test_data['user_b_token']}"}
-    
+
     # 1. Create record as User B
     resp_b = await attack_client.post(
-        f"/api/v1/records/{isolation_collection}", 
-        json={"title": "B's ID Secret", "secret_data": "prying eyes"}, 
+        f"/api/v1/records/{isolation_collection}",
+        json={"title": "B's ID Secret", "secret_data": "prying eyes"},
         headers=headers_b
     )
     record_id_b = resp_b.json()["id"]
-    
+
     # 2. Try to GET as User A
     get_resp = await attack_client.get(
         f"/api/v1/records/{isolation_collection}/{record_id_b}",
         headers=headers_a,
         description="User A attempts to access B's record by ID"
     )
-    
+
     # Should be 404 (or 403, but 404 is better for isolation to avoid leaking existence)
     assert get_resp.status_code == status.HTTP_404_NOT_FOUND
 
 @pytest.mark.asyncio
 async def test_iso_ac_004_user_a_cannot_update_b_record(
-    attack_client: AttackClient, 
-    isolation_test_data, 
+    attack_client: AttackClient,
+    isolation_test_data,
     isolation_collection
 ):
     """ISO-AC-004: User A cannot update B's record."""
     headers_a = {"Authorization": f"Bearer {isolation_test_data['user_a_token']}"}
     headers_b = {"Authorization": f"Bearer {isolation_test_data['user_b_token']}"}
-    
+
     # 1. Create record as User B
     resp_b = await attack_client.post(
-        f"/api/v1/records/{isolation_collection}", 
-        json={"title": "B's Update Secret", "secret_data": "pre-hack"}, 
+        f"/api/v1/records/{isolation_collection}",
+        json={"title": "B's Update Secret", "secret_data": "pre-hack"},
         headers=headers_b
     )
     record_id_b = resp_b.json()["id"]
-    
+
     # 2. Try to UPDATE as User A
     update_resp = await attack_client.patch(
         f"/api/v1/records/{isolation_collection}/{record_id_b}",
@@ -128,101 +121,101 @@ async def test_iso_ac_004_user_a_cannot_update_b_record(
         headers=headers_a,
         description="User A attempts to update B's record"
     )
-    
+
     assert update_resp.status_code == status.HTTP_404_NOT_FOUND
 
 @pytest.mark.asyncio
 async def test_iso_ac_005_user_a_cannot_delete_b_record(
-    attack_client: AttackClient, 
-    isolation_test_data, 
+    attack_client: AttackClient,
+    isolation_test_data,
     isolation_collection
 ):
     """ISO-AC-005: User A cannot delete B's record."""
     headers_a = {"Authorization": f"Bearer {isolation_test_data['user_a_token']}"}
     headers_b = {"Authorization": f"Bearer {isolation_test_data['user_b_token']}"}
-    
+
     # 1. Create record as User B
     resp_b = await attack_client.post(
-        f"/api/v1/records/{isolation_collection}", 
-        json={"title": "B's Delete Secret", "secret_data": "delete me not"}, 
+        f"/api/v1/records/{isolation_collection}",
+        json={"title": "B's Delete Secret", "secret_data": "delete me not"},
         headers=headers_b
     )
     record_id_b = resp_b.json()["id"]
-    
+
     # 2. Try to DELETE as User A
     delete_resp = await attack_client.delete(
         f"/api/v1/records/{isolation_collection}/{record_id_b}",
         headers=headers_a,
         description="User A attempts to delete B's record"
     )
-    
+
     assert delete_resp.status_code == status.HTTP_404_NOT_FOUND
 
 @pytest.mark.asyncio
 async def test_iso_ac_006_user_a_cannot_create_in_b_account(
-    attack_client: AttackClient, 
-    isolation_test_data, 
+    attack_client: AttackClient,
+    isolation_test_data,
     isolation_collection
 ):
     """ISO-AC-006: User A cannot create a record with B's account_id."""
     headers_a = {"Authorization": f"Bearer {isolation_test_data['user_a_token']}"}
     acc_b_id = isolation_test_data["account_b"].id
-    
+
     # Try to inject B's account_id
     record_data = {
-        "title": "A's Injection", 
+        "title": "A's Injection",
         "secret_data": "stealth",
         "account_id": acc_b_id # Attack vector: injecting other account_id
     }
-    
+
     resp = await attack_client.post(
-        f"/api/v1/records/{isolation_collection}", 
-        json=record_data, 
+        f"/api/v1/records/{isolation_collection}",
+        json=record_data,
         headers=headers_a,
         description="User A attempts to create record in Account B"
     )
-    
-    # Should be 422 Unprocessable Content because account_id is a system field 
+
+    # Should be 422 Unprocessable Content because account_id is a system field
     # and shouldn't be allowed in the request body at all.
     assert resp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     assert "account_id" in resp.json()["detail"]["unauthorized_fields"]
 
 @pytest.mark.asyncio
 async def test_iso_ac_007_superadmin_sees_all_records(
-    attack_client: AttackClient, 
-    superadmin_token, 
-    isolation_test_data, 
+    attack_client: AttackClient,
+    superadmin_token,
+    isolation_test_data,
     isolation_collection
 ):
     """ISO-AC-007: Superadmin sees all records across accounts."""
     sa_headers = {"Authorization": f"Bearer {superadmin_token}"}
     h_a = {"Authorization": f"Bearer {isolation_test_data['user_a_token']}"}
     h_b = {"Authorization": f"Bearer {isolation_test_data['user_b_token']}"}
-    
+
     # 1. Create record in A
     await attack_client.post(
-        f"/api/v1/records/{isolation_collection}", 
-        json={"title": "Record A", "secret_data": "data a"}, 
+        f"/api/v1/records/{isolation_collection}",
+        json={"title": "Record A", "secret_data": "data a"},
         headers=h_a
     )
-    
+
     # 2. Create record in B
     await attack_client.post(
-        f"/api/v1/records/{isolation_collection}", 
-        json={"title": "Record B", "secret_data": "data b"}, 
+        f"/api/v1/records/{isolation_collection}",
+        json={"title": "Record B", "secret_data": "data b"},
         headers=h_b
     )
-    
+
     # 3. List as Superadmin
     list_resp = await attack_client.get(
-        f"/api/v1/records/{isolation_collection}", 
+        f"/api/v1/records/{isolation_collection}",
         headers=sa_headers,
         description="Superadmin lists all records"
     )
-    
+
     assert list_resp.status_code == 200
     data = list_resp.json()
-    
+
     # Verify both records are visible
     titles = [item["title"] for item in data["items"]]
     assert "Record A" in titles
@@ -230,8 +223,8 @@ async def test_iso_ac_007_superadmin_sees_all_records(
 
 @pytest.mark.asyncio
 async def test_iso_ac_008_filter_bypass_attempt(
-    attack_client: AttackClient, 
-    isolation_test_data, 
+    attack_client: AttackClient,
+    isolation_test_data,
     isolation_collection
 ):
     """ISO-AC-008: Attempt to bypass isolation via account_id filter param."""

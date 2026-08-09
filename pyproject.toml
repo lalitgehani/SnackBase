@@ -78,6 +78,7 @@ disallow_untyped_defs = true
 [tool.pytest.ini_options]
 markers = [
     "enable_audit_hooks: Enable audit logging hooks for this test (adds overhead)",
+    "security: Security suite test (applied automatically to tests/security/)",
 ]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
