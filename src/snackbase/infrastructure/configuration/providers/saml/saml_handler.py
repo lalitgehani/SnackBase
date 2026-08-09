@@ -8,6 +8,12 @@ and metadata generation.
 import abc
 from typing import Any
 
+from lxml.etree import _Element
+
+from snackbase.infrastructure.configuration.providers.saml.assertion_validator import (
+    validate_assertion,
+)
+
 
 class SAMLProviderHandler(abc.ABC):
     """Abstract base class for SAML 2.0 authentication providers.
@@ -143,6 +149,23 @@ class SAMLProviderHandler(abc.ABC):
             XML string containing the SP metadata.
         """
         pass
+
+    def _validate_assertion(self, verified_data: _Element, config: dict[str, Any]) -> None:
+        """Enforce assertion conditions, audience and single use.
+
+        Every provider must call this immediately after the signature check.
+        A verified signature alone leaves a captured assertion replayable and
+        accepts assertions minted for a different service provider.
+
+        Args:
+            verified_data: The signature-verified Response or Assertion element.
+            config: Provider configuration.
+
+        Raises:
+            ValueError: If the assertion does not bind to this SP, this moment,
+                and this single use.
+        """
+        validate_assertion(verified_data, config)
 
     async def test_connection(self, config: dict[str, Any]) -> tuple[bool, str]:
         """Test if provider configuration is valid.

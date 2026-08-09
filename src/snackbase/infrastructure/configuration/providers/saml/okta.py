@@ -141,16 +141,16 @@ class OktaSAMLProvider(SAMLProviderHandler):
             # Verify signature using signxml
             # Note: We need to handle potential namespaces and schema validation
             # signxml XMLVerifier verifies the signature and returns the signed data
-            # strict=True ensures we don't accept unsigned assertions if we expect them
             verified_data = XMLVerifier().verify(
-                xml_str, 
+                xml_str,
                 x509_cert=cert,
                 ignore_ambiguous_key_info=True # Common issue with some providers
             ).signed_xml
 
-            # If verify returns, the signature is valid.
-            # verified_data is an lxml Element
-            
+            # A valid signature only proves the IdP issued this. Bind it to us,
+            # to now, and to a single use before trusting anything inside it.
+            self._validate_assertion(verified_data, config)
+
             # Parse namespace map
             ns = {
                 'saml': 'urn:oasis:names:tc:SAML:2.0:assertion',

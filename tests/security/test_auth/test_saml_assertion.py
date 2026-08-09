@@ -1,15 +1,15 @@
 """SAML-ASRT-*: SAML assertion-validation guards (H-03).
 
-``GenericSAMLProvider.parse_saml_response`` verifies the XML signature and then
-goes straight to extracting the NameID and attributes. Everything that binds an
-assertion to *this* SP, *this* moment, and *one* use is missing:
+``GenericSAMLProvider.parse_saml_response`` once verified the XML signature and
+went straight to extracting the NameID and attributes. Everything that binds an
+assertion to *this* SP, *this* moment, and *one* use was missing:
 
-* ``Conditions/@NotBefore`` and ``@NotOnOrAfter`` are never read, so a captured
-  assertion stays valid forever.
-* ``AudienceRestriction`` is never read, so an assertion minted for a different
-  service provider is accepted here.
-* There is no replay cache, so the same assertion ID mints a session as many
-  times as it is presented.
+* ``Conditions/@NotBefore`` and ``@NotOnOrAfter`` were never read, so a captured
+  assertion stayed valid forever.
+* ``AudienceRestriction`` was never read, so an assertion minted for a different
+  service provider was accepted here.
+* There was no replay cache, so the same assertion ID minted a session as many
+  times as it was presented.
 
 A signature check alone does not provide any of these: a validly-signed
 assertion captured from a browser, or obtained from another SP that shares the
@@ -34,7 +34,9 @@ from cryptography.x509.oid import NameOID
 from lxml import etree
 from signxml import XMLSigner
 
+from snackbase.infrastructure.configuration.providers.saml.azure_ad import AzureADSAMLProvider
 from snackbase.infrastructure.configuration.providers.saml.generic import GenericSAMLProvider
+from snackbase.infrastructure.configuration.providers.saml.okta import OktaSAMLProvider
 
 SP_ENTITY_ID = "https://sp.snackbase.test/metadata"
 OTHER_SP_ENTITY_ID = "https://attacker-sp.example.com/metadata"
@@ -193,7 +195,6 @@ async def test_saml_asrt_002_tampered_assertion_rejected(
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(reason="H-03 fix pending", strict=True)
 async def test_saml_asrt_010_expired_assertion_rejected(
     provider: GenericSAMLProvider,
     saml_config: dict[str, Any],
@@ -209,7 +210,6 @@ async def test_saml_asrt_010_expired_assertion_rejected(
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(reason="H-03 fix pending", strict=True)
 async def test_saml_asrt_011_not_yet_valid_assertion_rejected(
     provider: GenericSAMLProvider,
     saml_config: dict[str, Any],
@@ -225,7 +225,6 @@ async def test_saml_asrt_011_not_yet_valid_assertion_rejected(
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(reason="H-03 fix pending", strict=True)
 async def test_saml_asrt_012_wrong_audience_rejected(
     provider: GenericSAMLProvider,
     saml_config: dict[str, Any],
@@ -239,7 +238,6 @@ async def test_saml_asrt_012_wrong_audience_rejected(
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(reason="H-03 fix pending", strict=True)
 async def test_saml_asrt_013_replayed_assertion_rejected(
     provider: GenericSAMLProvider,
     saml_config: dict[str, Any],
@@ -254,3 +252,25 @@ async def test_saml_asrt_013_replayed_assertion_rejected(
 
     with pytest.raises(ValueError):
         await provider.parse_saml_response(saml_config, response)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "provider_class",
+    [AzureADSAMLProvider, OktaSAMLProvider],
+)
+async def test_saml_asrt_014_every_provider_validates_the_assertion(
+    provider_class: type,
+    saml_config: dict[str, Any],
+    idp_keypair: dict[str, Any],
+) -> None:
+    """SAML-ASRT-014: the Azure and Okta providers must validate too.
+
+    All three providers carry their own copy of `parse_saml_response`. The shared
+    validation lives on the base class, but nothing structurally forces a copy to
+    call it — so assert each one does, using the audience check as the probe.
+    """
+    response = _signed_response(idp_keypair, audience=OTHER_SP_ENTITY_ID)
+
+    with pytest.raises(ValueError):
+        await provider_class().parse_saml_response(saml_config, response)

@@ -45,9 +45,11 @@ dropping a file into this tree is enough to have it selected by `-m security`.
 
 ## `xfail(strict=True)` convention
 
-Many findings' code fixes are not yet merged. A test that asserts the *secure*
-outcome would therefore fail today. Such tests are written against the target
-(secure) behaviour and marked:
+Some findings' code fixes are not yet merged — as of the H-tier remediation, the
+Critical and High findings are all fixed and their guards are unmarked; the 20
+remaining xfails are the Medium tier (M-01…M-10). A test that asserts the
+*secure* outcome for an unfixed finding would fail today, so such tests are
+written against the target (secure) behaviour and marked:
 
 ```python
 @pytest.mark.xfail(reason="H-01 fix pending", strict=True)
@@ -119,8 +121,8 @@ markers.
 | C-02 | Custom-endpoint aggregate SQL injection | `EP-SQLI-001/004/010` (exploitable), `EP-SQLI-002/003` (already refused) |
 | C-03 | Default signing secret accepted in production | `CFG-KEY-001` |
 | C-04 | Functions deploy RCE + sandbox | `FN-BUILD-001/002/010/020/021` (deploy), `FN-SBX-001/002/010/030` (invoke), `FN-POL-*` (policy); `FN-SBX-011/020/031` lock in what already worked |
-| H-01 | Webhook SSRF | `SSRF-WH-002/003/004/010/011` |
-| H-02 | Login brute force / rate limiting | `RATE-LOGIN-001/002/003/004/005` |
+| H-01 | Webhook SSRF | `SSRF-WH-002/003/004/010/011` + `SSRF-WH-012` (IP pinning) |
+| H-02 | Login brute force / rate limiting | `RATE-LOGIN-001/002/003/004/005` (per-IP throttle), `RATE-LOGIN-010/011` (per-account lockout), `RATE-LOGIN-012` (trusted-proxy client IP) |
 | H-03 | SAML assertion validation | `SAML-ASRT-010/011/012/013` |
 | H-04 | Dependency advisory drift | `DEP-001/010/011` + the `dependency-audit` CI job |
 | M-01 | Realtime authorization & payload filtering | `RT-010/011/012` |

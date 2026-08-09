@@ -82,18 +82,23 @@ class TestOktaSAMLProvider:
 
     @pytest.mark.asyncio
     @patch("snackbase.infrastructure.configuration.providers.saml.okta.XMLVerifier")
-    async def test_parse_saml_response_valid(self, mock_verifier_cls, provider, valid_config):
+    async def test_parse_saml_response_valid(
+        self, mock_verifier_cls, provider, valid_config, assertion_id, conditions
+    ):
         """Test parsing a valid SAML response."""
         # Mock XMLVerifier instance and verify method
         mock_verifier = MagicMock()
         mock_verifier_cls.return_value = mock_verifier
-        
+
         # Create a mock verified XML structure
         ns_saml = "urn:oasis:names:tc:SAML:2.0:assertion"
         ns_map = {"saml": ns_saml}
-        
-        assertion = etree.Element(f"{{{ns_saml}}}Assertion", nsmap=ns_map)
-        
+
+        assertion = etree.Element(f"{{{ns_saml}}}Assertion", nsmap=ns_map, ID=assertion_id)
+
+        # The provider validates conditions and audience before reading attributes.
+        assertion.append(etree.fromstring(f'<root xmlns:saml="{ns_saml}">{conditions}</root>')[0])
+
         subject = etree.SubElement(assertion, f"{{{ns_saml}}}Subject")
         name_id = etree.SubElement(subject, f"{{{ns_saml}}}NameID")
         name_id.text = "user@example.com"

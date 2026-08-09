@@ -196,6 +196,16 @@ class Settings(BaseSettings):
         description="Base lockout duration; doubles for each further lockout.",
     )
 
+    # SAML Settings
+    saml_clock_skew_seconds: int = Field(
+        default=60,
+        description=(
+            "Tolerance applied to SAML assertion NotBefore/NotOnOrAfter. Widen "
+            "only as far as your clock drift demands: it directly extends the "
+            "window in which a captured assertion stays usable."
+        ),
+    )
+
     # Superadmin Settings
     superadmin_email: str | None = Field(
         default=None,

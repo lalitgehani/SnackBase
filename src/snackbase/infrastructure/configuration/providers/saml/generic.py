@@ -159,10 +159,14 @@ class GenericSAMLProvider(SAMLProviderHandler):
 
             # Verify signature
             verified_data = XMLVerifier().verify(
-                xml_str, 
+                xml_str,
                 x509_cert=cert,
                 ignore_ambiguous_key_info=True
             ).signed_xml
+
+            # A valid signature only proves the IdP issued this. Bind it to us,
+            # to now, and to a single use before trusting anything inside it.
+            self._validate_assertion(verified_data, config)
 
             # Namespaces
             ns = {

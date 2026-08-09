@@ -13,6 +13,42 @@ from snackbase.infrastructure.configuration.providers.saml.generic import (
 )
 
 
+SAML_NS = "urn:oasis:names:tc:SAML:2.0:assertion"
+
+
+def _assertion(assertion_id: str, conditions: str, *, name_id: str, attributes: dict) -> object:
+    """Build a real signed-shaped assertion element.
+
+    Real XML rather than mocks, because the provider now walks the document to
+    validate conditions and audience before it reads any attributes — a mocked
+    `find` would only prove the mock was configured to agree.
+    """
+    attribute_xml = "".join(
+        f'<saml:Attribute Name="{name}">'
+        f"<saml:AttributeValue>{value}</saml:AttributeValue>"
+        f"</saml:Attribute>"
+        for name, value in attributes.items()
+    )
+
+    return etree.fromstring(
+        f'<saml:Assertion xmlns:saml="{SAML_NS}" ID="{assertion_id}">'
+        f"{conditions}"
+        f"<saml:Subject><saml:NameID>{name_id}</saml:NameID></saml:Subject>"
+        f"<saml:AttributeStatement>{attribute_xml}</saml:AttributeStatement>"
+        f"</saml:Assertion>"
+    )
+
+
+def _mocked_verifier(signed_xml: object):
+    """Patch XMLVerifier so tests need no real certificate or signature."""
+    mock_verifier = Mock(spec=XMLVerifier)
+    mock_verifier.verify.return_value.signed_xml = signed_xml
+    return patch(
+        "snackbase.infrastructure.configuration.providers.saml.generic.XMLVerifier",
+        return_value=mock_verifier,
+    )
+
+
 @pytest.fixture
 def provider():
     """Create a GenericSAMLProvider instance."""
@@ -73,54 +109,21 @@ async def test_get_authorization_url(provider, valid_config):
 
 
 @pytest.mark.asyncio
-async def test_parse_saml_response_valid(provider, valid_config):
+async def test_parse_saml_response_valid(provider, valid_config, assertion_id, conditions):
     """Test parsing a valid SAML response."""
-    # Mock XMLVerifier to avoid needing real cert/signature
-    mock_verifier = Mock(spec=XMLVerifier)
-    mock_signed_xml = Mock()
-    
-    # Create a mock XML structure for the assertion
-    ns = {
-        'saml': 'urn:oasis:names:tc:SAML:2.0:assertion',
-    }
-    
-    # Mock find/findall behavior
-    def mock_find(path, namespaces=None):
-        if path == ".//saml:NameID":
-            mock_name_id = Mock()
-            mock_name_id.text = "user@example.com"
-            return mock_name_id
-        return None
-        
-    def mock_findall(path, namespaces=None):
-        if path == ".//saml:AttributeStatement/saml:Attribute":
-            # Create attribute mocks
-            attr1 = Mock()
-            attr1.get.return_value = "firstName"
-            val1 = Mock()
-            val1.text = "John"
-            attr1.findall.return_value = [val1]
-            
-            attr2 = Mock()
-            attr2.get.return_value = "lastName"
-            val2 = Mock()
-            val2.text = "Doe"
-            attr2.findall.return_value = [val2]
-            
-            return [attr1, attr2]
-        return []
+    signed_xml = _assertion(
+        assertion_id,
+        conditions,
+        name_id="user@example.com",
+        attributes={"firstName": "John", "lastName": "Doe"},
+    )
 
-    mock_signed_xml.find.side_effect = mock_find
-    mock_signed_xml.findall.side_effect = mock_findall
-    
-    mock_verifier.verify.return_value.signed_xml = mock_signed_xml
-
-    with patch("snackbase.infrastructure.configuration.providers.saml.generic.XMLVerifier", return_value=mock_verifier):
+    with _mocked_verifier(signed_xml):
         # Input doesn't matter much as we mock verify
         saml_response = base64.b64encode(b"<xml>dummy</xml>").decode("utf-8")
-        
+
         user_info = await provider.parse_saml_response(valid_config, saml_response)
-        
+
         assert user_info["id"] == "user@example.com"
         assert user_info["email"] == "user@example.com"
         assert user_info["name"] == "John Doe"
@@ -129,44 +132,20 @@ async def test_parse_saml_response_valid(provider, valid_config):
 
 
 @pytest.mark.asyncio
-async def test_parse_saml_response_fallback_attributes(provider, valid_config):
+async def test_parse_saml_response_fallback_attributes(
+    provider, valid_config, assertion_id, conditions
+):
     """Test parsing logic for email/name fallback."""
-    mock_verifier = Mock(spec=XMLVerifier)
-    mock_signed_xml = Mock()
-    
-    def mock_find(path, namespaces=None):
-        if path == ".//saml:NameID":
-            mock_name_id = Mock()
-            mock_name_id.text = "random_id_123" # Not an email
-            return mock_name_id
-        return None
+    signed_xml = _assertion(
+        assertion_id,
+        conditions,
+        name_id="random_id_123",  # Not an email
+        attributes={"mail": "real@example.com", "displayName": "Admin User"},
+    )
 
-    def mock_findall(path, namespaces=None):
-        if path == ".//saml:AttributeStatement/saml:Attribute":
-            # Email attribute
-            attr1 = Mock()
-            attr1.get.return_value = "mail"
-            val1 = Mock()
-            val1.text = "real@example.com"
-            attr1.findall.return_value = [val1]
-            
-            # Display name 
-            attr2 = Mock()
-            attr2.get.return_value = "displayName"
-            val2 = Mock()
-            val2.text = "Admin User"
-            attr2.findall.return_value = [val2]
-            
-            return [attr1, attr2]
-        return []
-
-    mock_signed_xml.find.side_effect = mock_find
-    mock_signed_xml.findall.side_effect = mock_findall
-    mock_verifier.verify.return_value.signed_xml = mock_signed_xml
-
-    with patch("snackbase.infrastructure.configuration.providers.saml.generic.XMLVerifier", return_value=mock_verifier):
+    with _mocked_verifier(signed_xml):
         user_info = await provider.parse_saml_response(valid_config, "b64dummy")
-        
+
         assert user_info["id"] == "random_id_123"
         assert user_info["email"] == "real@example.com"
         assert user_info["name"] == "Admin User"

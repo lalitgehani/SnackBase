@@ -79,13 +79,14 @@ async def test_get_authorization_url(provider, valid_config):
 
 
 @pytest.mark.asyncio
-async def test_parse_saml_response_success(provider, valid_config):
+async def test_parse_saml_response_success(provider, valid_config, assertion_id, conditions):
     """Test parsing a valid SAML response from Azure AD."""
     # Mock XMLVerifier to avoid actual signature verification logic
     # and return a constructed XML element representing a valid assertion
     
-    mock_signed_xml = etree.fromstring("""
-    <saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion">
+    mock_signed_xml = etree.fromstring(f"""
+    <saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="{assertion_id}">
+        {conditions}
         <saml:Subject>
             <saml:NameID Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress">user@example.com</saml:NameID>
         </saml:Subject>
@@ -125,10 +126,11 @@ async def test_parse_saml_response_success(provider, valid_config):
 
 
 @pytest.mark.asyncio
-async def test_parse_saml_response_fallback_name(provider, valid_config):
+async def test_parse_saml_response_fallback_name(provider, valid_config, assertion_id, conditions):
     """Test parsing SAML response using DisplayName claim."""
-    mock_signed_xml = etree.fromstring("""
-    <saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion">
+    mock_signed_xml = etree.fromstring(f"""
+    <saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="{assertion_id}">
+        {conditions}
         <saml:Subject>
             <saml:NameID>user@example.com</saml:NameID>
         </saml:Subject>
@@ -153,10 +155,11 @@ async def test_parse_saml_response_fallback_name(provider, valid_config):
 
 
 @pytest.mark.asyncio
-async def test_parse_saml_response_upn_fallback(provider, valid_config):
+async def test_parse_saml_response_upn_fallback(provider, valid_config, assertion_id, conditions):
     """Test parsing SAML response using UPN claim for email."""
-    mock_signed_xml = etree.fromstring("""
-    <saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion">
+    mock_signed_xml = etree.fromstring(f"""
+    <saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="{assertion_id}">
+        {conditions}
         <saml:Subject>
             <saml:NameID>oid-12345</saml:NameID>
         </saml:Subject>

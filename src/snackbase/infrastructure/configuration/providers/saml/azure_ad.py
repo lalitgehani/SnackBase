@@ -135,20 +135,20 @@ class AzureADSAMLProvider(SAMLProviderHandler):
             if not cert.startswith("-----BEGIN CERTIFICATE"):
                 cert = f"-----BEGIN CERTIFICATE-----\n{cert}\n-----END CERTIFICATE-----"
 
-            # Azure AD requires checking audience restriction usually, but verify handles sign
             verified_data = XMLVerifier().verify(
-                xml_str, 
+                xml_str,
                 x509_cert=cert,
                 ignore_ambiguous_key_info=True
             ).signed_xml
-            
+
+            # A valid signature only proves the IdP issued this. Bind it to us,
+            # to now, and to a single use before trusting anything inside it.
+            self._validate_assertion(verified_data, config)
+
             ns = {
                 'saml': 'urn:oasis:names:tc:SAML:2.0:assertion',
                 'samlp': 'urn:oasis:names:tc:SAML:2.0:protocol'
             }
-
-            # Validating Audience is good practice (implicit in verify sometimes, but check manually if needed)
-            # For now relying on signature verification
 
             # Extract NameID
             name_id_node = verified_data.find(".//saml:NameID", ns)
