@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -104,15 +104,19 @@ export default function VersionCompareSheet({
 
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [showUnchanged, setShowUnchanged] = useState(false);
+  const [lastComparison, setLastComparison] =
+    useState<VersionCompareResult | null>(null);
 
-  useEffect(() => {
-    if (!comparison) {
-      setSelectedPath(null);
-      return;
-    }
-    setSelectedPath(firstInterestingFilePath(comparison.files));
+  // Reset the selection during render when the compared pair changes, rather
+  // than in an effect — an effect would render one frame with the previous
+  // file selected against the new comparison.
+  if (comparison !== lastComparison) {
+    setLastComparison(comparison);
+    setSelectedPath(
+      comparison ? firstInterestingFilePath(comparison.files) : null
+    );
     setShowUnchanged(false);
-  }, [comparison]);
+  }
 
   const selectedFile = comparison?.files.find((f) => f.path === selectedPath);
   const visibleFiles =

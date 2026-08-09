@@ -518,8 +518,10 @@ async def test_openapi_includes_codelist_paths(client: AsyncClient):
     # openapi may be disabled in some envs; check route registration via app
     from snackbase.infrastructure.api.app import app
 
-    paths = [getattr(r, "path", "") for r in app.routes]
-    assert any("/codelists" in p for p in paths)
+    # FastAPI keeps `include_router` results behind opaque router objects
+    # instead of flattening them into `app.routes`, so assert on the generated
+    # schema — the same registration, expressed as the public contract.
+    assert any("/codelists" in p for p in app.openapi()["paths"])
     # If openapi available
     r = await client.get("/openapi.json")
     if r.status_code == 200:

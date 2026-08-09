@@ -1,0 +1,14 @@
+# Accepted pip-audit advisories.
+#
+# Format — one advisory per line:
+#
+#     GHSA-xxxx-yyyy-zzzz  # why this advisory does not apply to SnackBase
+#
+# The justification comment is mandatory. The dependency-audit CI job parses
+# this file and fails on any entry without one, so an advisory can never be
+# silenced by simply pasting its ID.
+#
+# Keep entries short-lived: an accepted advisory is a decision to ship a known
+# issue, not a permanent exemption. Re-review whenever the dependency is bumped.
+#
+# (No accepted advisories at present.)

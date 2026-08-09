@@ -84,4 +84,9 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 filterwarnings = [
     "ignore:.*asyncio.iscoroutinefunction.*:DeprecationWarning",
+    # Starlette >=1.6 wants `httpx2` behind its TestClient. `httpx` is a direct
+    # runtime dependency here (webhooks, functions egress), so switching test
+    # clients is a separate migration; the warning is fired by FastAPI's own
+    # `fastapi.testclient` module on import.
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated.*",
 ]
