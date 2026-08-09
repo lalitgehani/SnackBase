@@ -53,9 +53,52 @@
         background-color: #dcfce7;
         color: var(--success-color);
       }
-      .status.failed {
+      .status.failed,
+      .status.error {
         background-color: #fee2e2;
         color: var(--failure-color);
+      }
+      .status.vulnerable {
+        background-color: #fee2e2;
+        color: #b91c1c;
+      }
+      .status.fixed {
+        background-color: #fef3c7;
+        color: #b45309;
+      }
+      .status.skipped {
+        background-color: #e5e7eb;
+        color: #4b5563;
+      }
+      .status.denied {
+        background-color: #dcfce7;
+        color: var(--success-color);
+      }
+      .status.allowed {
+        background-color: #dbeafe;
+        color: #1d4ed8;
+      }
+      .findings-panel {
+        background: #fff1f2;
+        border: 1px solid #fecaca;
+        border-radius: 0.5rem;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+      }
+      .findings-panel h2 {
+        color: #b91c1c;
+      }
+      .findings-panel td,
+      .findings-panel th {
+        text-align: left;
+        padding: 0.35rem 1rem 0.35rem 0;
+        vertical-align: top;
+        font-size: 0.9rem;
+      }
+      .detail-line {
+        font-size: 0.85rem;
+        color: #6b7280;
+        padding: 0 1.5rem 0.75rem;
       }
 
       section {
@@ -199,20 +242,30 @@
           <div class="metric-label">Tests Executed</div>
         </div>
         <div class="metric-card">
-          <div class="metric-value">{{ total_requests }}</div>
-          <div class="metric-label">Total Requests</div>
+          <div class="metric-value" style="color: var(--success-color)">
+            {{ passed_count }}
+          </div>
+          <div class="metric-label">Boundaries Holding</div>
         </div>
         <div class="metric-card">
-          <div class="metric-value" style="color: var(--success-color)">
-            {{ passed_requests }}
+          <div class="metric-value" style="color: #b91c1c">
+            {{ vulnerable_count }}
           </div>
-          <div class="metric-label">Passed</div>
+          <div class="metric-label">Confirmed Findings</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value" style="color: #b45309">{{ fixed_count }}</div>
+          <div class="metric-label">Fixed &mdash; Stale Marker</div>
         </div>
         <div class="metric-card">
           <div class="metric-value" style="color: var(--failure-color)">
-            {{ failed_requests }}
+            {{ failed_count }}
           </div>
-          <div class="metric-label">Failed</div>
+          <div class="metric-label">Failed / Errored</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value">{{ total_requests }}</div>
+          <div class="metric-label">HTTP Exchanges</div>
         </div>
         <div class="metric-card">
           <div class="metric-value">{{ duration_ms }}ms</div>
@@ -220,6 +273,28 @@
         </div>
       </div>
     </section>
+
+    {% if findings %}
+    <div class="findings-panel">
+      <h2>Confirmed Findings ({{ vulnerable_count }} checks)</h2>
+      <p>
+        Each row is a security property the suite asserts and the code does not
+        yet satisfy. These are expected failures only in the sense that the fix
+        has not landed &mdash; they are live gaps, and the guarding test flips to
+        <strong>FIXED</strong> the moment the behaviour changes.
+      </p>
+      <table>
+        <tr><th>Finding</th><th>Checks</th><th>Guarded by</th></tr>
+        {% for entry in findings %}
+        <tr>
+          <td><strong>{{ entry.finding }}</strong></td>
+          <td>{{ entry.count }}</td>
+          <td>{{ entry.tests | join(', ') }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+    {% endif %}
 
     {% for section in sections %}
     <div class="test-section">
@@ -231,6 +306,9 @@
             >{{ section.vulnerabilities | length }} Vulnerability Detected</span
           >
           {% endif %}
+          {% if section.finding %}
+          <span class="vuln-badge">{{ section.finding }}</span>
+          {% endif %}
           <span
             class="status {{ section.status | lower }}"
             style="margin-left: 1rem"
@@ -238,6 +316,9 @@
           >
         </div>
       </div>
+      {% if section.detail %}
+      <div class="detail-line">{{ section.detail }}</div>
+      {% endif %}
 
       {% if section.vulnerabilities %}
       <div

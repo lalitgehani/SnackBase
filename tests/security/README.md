@@ -15,6 +15,27 @@ uv run pytest -m "not security"      # everything except the security suite
 A consolidated HTML report is written at the end of every security session by
 `tests/security/reporter/html_reporter.py`; the path is printed to stdout.
 
+### How the report reads outcomes
+
+The report's status vocabulary is deliberately not pytest's, because pytest's
+"expected failure" is a security suite's headline result:
+
+| Report status | pytest outcome | Meaning |
+| ------------- | -------------- | ------- |
+| `PASSED`      | passed         | The boundary holds. |
+| `VULNERABLE`  | xfailed        | The asserted secure behaviour does **not** hold — a confirmed, unfixed finding. |
+| `FIXED`       | xpassed (strict) | The behaviour now holds; the `xfail` marker is stale and must be removed. |
+| `FAILED` / `ERROR` | failed / setup error | A real break. |
+| `SKIPPED`     | skipped        | Not exercised (e.g. a feature unavailable in the environment). |
+
+Overall status is `FAILED` if anything failed, errored, or carries a stale
+marker; `VULNERABLE` if confirmed findings remain; `PASSED` otherwise.
+
+Outcomes reach the report through `pytest_runtest_makereport` in
+`tests/security/conftest.py`. Logged HTTP exchanges are evidence, not verdicts —
+they are labelled `ALLOWED`/`DENIED` by what the server did, and the pass/fail
+meaning comes from the test outcome alone.
+
 ## The `security` marker
 
 The marker is registered in `pyproject.toml` and applied **automatically** to

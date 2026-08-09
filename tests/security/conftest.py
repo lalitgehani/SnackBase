@@ -36,6 +36,95 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(pytest.mark.security)
 
 
+_REPORTER: HTMLReporter | None = None
+
+
+def _get_reporter() -> HTMLReporter:
+    """Return the process-wide reporter.
+
+    Held as a module global rather than only as a fixture because
+    ``pytest_runtest_makereport`` is a hook and cannot request fixtures.
+    """
+    global _REPORTER
+    if _REPORTER is None:
+        _REPORTER = HTMLReporter(suite_name="Security Audit Suite")
+    return _REPORTER
+
+
+def _skip_reason(report: Any) -> str:
+    """Extract the human-readable reason from a skip report."""
+    longrepr = getattr(report, "longrepr", None)
+    if isinstance(longrepr, tuple) and len(longrepr) == 3:
+        return str(longrepr[2])
+    return str(longrepr or "")
+
+
+def _is_security_item(item: Any) -> bool:
+    try:
+        return SECURITY_SUITE_ROOT in Path(str(item.fspath)).parents
+    except Exception:
+        return False
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    """Record each security test's real outcome into the HTML report.
+
+    Without this the report only ever showed the hardcoded "PASSED" that
+    ``start_section`` writes, so a test guarding a *confirmed* vulnerability
+    was rendered as a pass. For a security artefact that is worse than no
+    report at all.
+
+    The mapping is deliberately not pytest's: an ``xfail`` here means "the
+    secure behaviour asserted by this test does not hold", i.e. a confirmed
+    finding, and an unexpected pass means the fix has landed and the marker is
+    now stale.
+    """
+    outcome = yield
+    report = outcome.get_result()
+
+    if not _is_security_item(item):
+        return
+
+    reporter = _get_reporter()
+
+    if report.when == "setup":
+        if report.failed:
+            reporter.record_outcome(item.nodeid, "ERROR", detail="fixture setup failed")
+        elif report.skipped:
+            # `pytest.mark.skip` and skips raised from a fixture never reach the
+            # call phase, so they must be recorded here or they render blank.
+            reporter.record_outcome(
+                item.nodeid, "SKIPPED", detail=_skip_reason(report)
+            )
+        return
+
+    if report.when != "call":
+        return
+
+    wasxfail = getattr(report, "wasxfail", None)
+    longrepr = report.longrepr if isinstance(report.longrepr, str) else ""
+
+    if report.skipped and wasxfail is not None:
+        status, detail = "VULNERABLE", wasxfail
+    elif wasxfail is not None or "XPASS(strict)" in longrepr:
+        # The asserted secure behaviour now holds — the xfail marker is stale.
+        status, detail = "FIXED", wasxfail or longrepr
+    elif report.skipped:
+        status, detail = "SKIPPED", longrepr
+    elif report.failed:
+        status, detail = "FAILED", str(report.longrepr)[:2000]
+    else:
+        status, detail = "PASSED", ""
+
+    reporter.record_outcome(
+        item.nodeid,
+        status,
+        detail=detail,
+        duration=getattr(report, "duration", 0.0),
+    )
+
+
 def _auth_header(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
@@ -57,7 +146,10 @@ class AttackClient:
     ) -> Any:
         response = await self.client.request(method, url, json=json, **kwargs)
 
-        status = "PASSED"
+        # An exchange is evidence, not a verdict — whether a 200 is good or bad
+        # depends on the test. Label it by what the server did and let the test
+        # outcome carry the pass/fail meaning.
+        status = "ALLOWED" if response.is_success else "DENIED"
         # Try to parse response body
         try:
             response_body = response.json()
@@ -95,7 +187,7 @@ class AttackClient:
 @pytest.fixture(scope="session")
 def security_reporter():
     """Shared reporter for the entire security test session."""
-    reporter = HTMLReporter(suite_name="Security Audit Suite")
+    reporter = _get_reporter()
     yield reporter
     # Generate the single consolidated report at the end of the session
     report_path = reporter.generate()
@@ -105,9 +197,8 @@ def security_reporter():
 @pytest.fixture(autouse=True)
 def setup_security_test_section(request, security_reporter):
     """Automatically starts a new section in the reporter for each test."""
-    # Only for security tests
-    if "security" in request.node.fspath.strpath:
-        security_reporter.start_section(request.node.name)
+    if _is_security_item(request.node):
+        security_reporter.start_section(request.node.name, nodeid=request.node.nodeid)
     yield
 
 
