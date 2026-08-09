@@ -28,6 +28,56 @@ def _is_blocked_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     )
 
 
+def classify_address(
+    host: str, port: int, *, allowed_hosts: Iterable[str] | None = None
+) -> str:
+    """Classify a `(host, port)` destination as 'allow' or raise EgressDeniedError.
+
+    This is the policy in its most primitive form: everything that reaches the
+    network — an httpx request, `urllib.urlopen`, a bare `socket.connect` —
+    resolves to a host and a port, so applying the rules here catches callers
+    that never build a URL at all.
+    """
+    if port in _BLOCKED_PORTS:
+        raise EgressDeniedError(f"Blocked destination port: {port}")
+
+    allowed = {h.lower() for h in (allowed_hosts or []) if h}
+    lowered = host.lower()
+    if lowered in allowed:
+        return "allow"
+
+    # A literal address needs no DNS round trip.
+    try:
+        literal = ipaddress.ip_address(host)
+    except ValueError:
+        literal = None
+    if literal is not None:
+        if _is_blocked_ip(literal):
+            raise EgressDeniedError(f"Blocked private/link-local address: {host}")
+        return "allow"
+
+    # Block obvious metadata / loopback hostnames without DNS
+    if lowered in {"localhost", "metadata.google.internal"} or lowered.endswith(".local"):
+        raise EgressDeniedError(f"Blocked host: {host}")
+
+    try:
+        infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except socket.gaierror as exc:
+        raise EgressDeniedError(f"DNS resolution failed for {host}") from exc
+
+    for info in infos:
+        sockaddr = info[4]
+        ip_str = sockaddr[0]
+        try:
+            ip = ipaddress.ip_address(ip_str)
+        except ValueError:
+            continue
+        if _is_blocked_ip(ip):
+            raise EgressDeniedError(f"Blocked private/link-local address for {host}")
+
+    return "allow"
+
+
 def classify_url(url: str, *, allowed_hosts: Iterable[str] | None = None) -> str:
     """Classify a URL as 'allow' or raise EgressDeniedError.
 
@@ -44,34 +94,8 @@ def classify_url(url: str, *, allowed_hosts: Iterable[str] | None = None) -> str
     port = parsed.port
     if port is None:
         port = 443 if parsed.scheme == "https" else 80
-    if port in _BLOCKED_PORTS:
-        raise EgressDeniedError(f"Blocked destination port: {port}")
 
-    allowed = {h.lower() for h in (allowed_hosts or []) if h}
-    if hostname.lower() in allowed:
-        return "allow"
-
-    # Block obvious metadata / loopback hostnames without DNS
-    lowered = hostname.lower()
-    if lowered in {"localhost", "metadata.google.internal"} or lowered.endswith(".local"):
-        raise EgressDeniedError(f"Blocked host: {hostname}")
-
-    try:
-        infos = socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM)
-    except socket.gaierror as exc:
-        raise EgressDeniedError(f"DNS resolution failed for {hostname}") from exc
-
-    for info in infos:
-        sockaddr = info[4]
-        ip_str = sockaddr[0]
-        try:
-            ip = ipaddress.ip_address(ip_str)
-        except ValueError:
-            continue
-        if _is_blocked_ip(ip):
-            raise EgressDeniedError(f"Blocked private/link-local address for {hostname}")
-
-    return "allow"
+    return classify_address(hostname, port, allowed_hosts=allowed_hosts)
 
 
 class SafeTransport(httpx.HTTPTransport):

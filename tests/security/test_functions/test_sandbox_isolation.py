@@ -1,21 +1,24 @@
 """FN-SBX-*: functions sandbox isolation checks (C-04).
 
-Functions run as an ordinary child process of the host: same user, same
-filesystem, same network stack. The only isolation that exists is a per-version
-virtualenv, an environment allowlist, and a wall-clock timeout.
+A tenant handler is arbitrary Python, so the boundaries it must not cross are
+enforced by the kernel rather than in-process:
 
-That leaves three gaps this module pins down:
+* **Filesystem** — the child is Landlock-restricted to its own function env
+  and work directory, so the host database file and other tenants' envs are
+  not reachable.
+* **Egress** — the policy is applied at ``socket.connect``, not only to
+  ``httpx``/``urllib``, so a handler opening a raw socket is still classified.
+* **Resources** — ``setrlimit`` bounds address space and CPU time, so a runaway
+  allocation is stopped by the kernel and not only by the wall clock.
 
-* **Filesystem** — nothing confines the child to its env directory, so it can
-  read the host database file or another tenant's function env.
-* **Egress** — ``egress_install`` monkey-patches ``httpx`` and
-  ``urllib.request``. A handler that opens a raw ``socket`` never touches
-  either and is unrestricted.
-* **Resources** — the child gets no ``setrlimit``/cgroup bound, so only the
-  wall-clock timeout stands between a runaway allocation and the host.
+The environment allowlist is locked in as a plain regression (FN-SBX-020).
 
-The environment allowlist *does* work and is locked in here as a plain
-regression (FN-SBX-020).
+Two of these depend on the platform, and are skipped rather than silently
+passing where the mechanism does not exist:
+
+* filesystem confinement needs Landlock, so it holds on Linux 5.13+ only;
+* macOS refuses ``setrlimit(RLIMIT_AS)`` outright, so the memory bound is
+  asserted on Linux only.
 
 Building the per-version venv shells out to ``uv``; the first build needs
 network access to install ``snackbase_fn`` and its ``httpx`` dependency. This
@@ -35,6 +38,16 @@ import pytest
 
 from snackbase.infrastructure.functions.env_builder import build_function_env, compute_version_sha
 from snackbase.infrastructure.functions.runner import FunctionRunner
+from snackbase.infrastructure.functions.sandbox import sandbox_available
+
+requires_sandbox = pytest.mark.skipif(
+    not sandbox_available(),
+    reason="filesystem confinement requires Landlock (Linux 5.13+)",
+)
+requires_rlimit_as = pytest.mark.skipif(
+    sys.platform != "linux",
+    reason="macOS rejects setrlimit(RLIMIT_AS); the bound applies on the Linux runtime",
+)
 
 HOST_FILE_MARKER = "HOST-DB-SECRET"
 OTHER_TENANT_MARKER = "OTHER-TENANT-SECRET"
@@ -159,7 +172,7 @@ def _invoke(
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(reason="C-04 fix pending", strict=True)
+@requires_sandbox
 def test_fn_sbx_001_cannot_read_host_state_file(
     sandbox_envs: dict[str, Path], tmp_path: Path
 ) -> None:
@@ -180,7 +193,7 @@ def test_fn_sbx_001_cannot_read_host_state_file(
     assert HOST_FILE_MARKER not in str(result.body)
 
 
-@pytest.mark.xfail(reason="C-04 fix pending", strict=True)
+@requires_sandbox
 def test_fn_sbx_002_cannot_read_other_tenants_function_env(
     sandbox_envs: dict[str, Path],
 ) -> None:
@@ -235,7 +248,6 @@ def loopback_listener() -> Iterator[int]:
     server.close()
 
 
-@pytest.mark.xfail(reason="C-04 fix pending", strict=True)
 def test_fn_sbx_010_raw_socket_egress_is_blocked(
     sandbox_envs: dict[str, Path], loopback_listener: int
 ) -> None:
@@ -298,7 +310,7 @@ def test_fn_sbx_020_child_env_excludes_master_secrets() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(reason="C-04 fix pending", strict=True)
+@requires_rlimit_as
 def test_fn_sbx_030_child_process_has_address_space_limit(
     sandbox_envs: dict[str, Path],
 ) -> None:

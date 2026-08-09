@@ -15,8 +15,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from snackbase.core.config import get_settings
 from snackbase.core.logging import get_logger
 from snackbase.infrastructure.functions.redaction import truncate_text
+from snackbase.infrastructure.functions.sandbox import (
+    SandboxUnavailableError,
+    create_filesystem_confinement,
+    preexec_hook,
+    resolve_sandbox_mode,
+    resource_limit_hook,
+)
 
 logger = get_logger(__name__)
 
@@ -51,12 +59,17 @@ class FunctionRunner:
         timeout_seconds: int = 30,
         streaming_timeout_seconds: int | None = None,
         stdout_max_bytes: int = 65_536,
+        memory_limit_mb: int | None = None,
+        sandbox_mode: str | None = None,
     ) -> None:
         self.timeout_seconds = timeout_seconds
         self.streaming_timeout_seconds = streaming_timeout_seconds or max(
             timeout_seconds, 120
         )
         self.stdout_max_bytes = stdout_max_bytes
+        settings = get_settings()
+        self.memory_limit_mb = memory_limit_mb or settings.function_memory_limit_mb
+        self.sandbox_mode = sandbox_mode or resolve_sandbox_mode(settings)
         # Persistent pushback buffer for stdout line reads (survives across lines)
         self._stdout_buf = b""
 
@@ -123,6 +136,19 @@ class FunctionRunner:
             child_env = self._build_child_env(extra_env or {}, exec_id)
 
             try:
+                confinement = create_filesystem_confinement(
+                    env_root=env_root, workdir=workdir, mode=self.sandbox_mode
+                )
+            except SandboxUnavailableError as exc:
+                return InvokeResult(
+                    status="failed",
+                    http_status=500,
+                    error_message=str(exc),
+                    execution_id=exec_id,
+                    duration_ms=int((time.monotonic() - start) * 1000),
+                )
+
+            try:
                 proc = subprocess.Popen(
                     [str(env_python), "-I", str(bootstrap_dest)],
                     stdin=subprocess.PIPE,
@@ -132,6 +158,16 @@ class FunctionRunner:
                     env=child_env,
                     start_new_session=True,
                     bufsize=0,
+                    # The ruleset fd has to survive into the child, which applies
+                    # it to itself just before exec.
+                    pass_fds=() if confinement is None else (confinement.fd,),
+                    preexec_fn=preexec_hook(  # noqa: PLW1509
+                        confinement=confinement,
+                        limits=resource_limit_hook(
+                            memory_mb=self.memory_limit_mb,
+                            cpu_seconds=self.timeout_seconds + 5,
+                        ),
+                    ),
                 )
             except OSError as exc:
                 return InvokeResult(
@@ -141,6 +177,9 @@ class FunctionRunner:
                     execution_id=exec_id,
                     duration_ms=int((time.monotonic() - start) * 1000),
                 )
+            finally:
+                if confinement is not None:
+                    confinement.close()
 
             assert proc.stdin is not None
             assert proc.stdout is not None

@@ -50,13 +50,29 @@ outcome would therefore fail today. Such tests are written against the target
 (secure) behaviour and marked:
 
 ```python
-@pytest.mark.xfail(reason="C-01 fix pending", strict=True)
+@pytest.mark.xfail(reason="H-01 fix pending", strict=True)
 ```
 
 `strict=True` means the test **fails the build if it unexpectedly passes**. When
 the corresponding fix lands, the marker must be removed in the same change and
 the test becomes a permanent regression guard. Always tag the reason with the
-finding ID so `grep "C-01"` finds both the test and its tracking note.
+finding ID so `grep "H-01"` finds both the test and its tracking note.
+
+## Platform-conditional guards
+
+A few boundaries are enforced by a kernel feature rather than by application
+code, so the test can only observe them where that feature exists. Those are
+`skipif`, never `xfail` — a skip reports honestly as "not exercised" instead of
+claiming a boundary holds on a platform where it does not:
+
+| Guard | Runs where | Mechanism |
+| ----- | ---------- | --------- |
+| `FN-SBX-001/002` | Linux 5.13+ | Landlock filesystem confinement |
+| `FN-SBX-030` | Linux | `setrlimit(RLIMIT_AS)`, which macOS rejects |
+
+They run in CI (`ubuntu-latest`) and in the runtime image, and skip on macOS
+development machines. `FN-POL-*` asserts the same policy decisions from the
+rules handed to the kernel, so the intent stays covered everywhere.
 
 ## Test ID groups
 
@@ -81,6 +97,8 @@ Test names carry an ID prefix so a finding can be traced to its guard by grep.
 | `EP-SQLI-*`  | `test_endpoints/`                | Custom-endpoint aggregate SQL injection   | C-02             |
 | `EP-ISO-*`   | `test_endpoints/`                | Custom-endpoint cross-tenant isolation    | —                |
 | `FN-SBX-*`   | `test_functions/`                | Functions sandbox isolation               | C-04             |
+| `FN-BUILD-*` | `test_functions/`                | Functions deploy-time build isolation     | C-04             |
+| `FN-POL-*`   | `test_functions/`                | Functions confinement policy              | C-04             |
 | `FN-ISO-*`   | `test_functions/`                | Functions cross-tenant isolation          | —                |
 | `RT-*`       | `test_realtime/`                 | Realtime authorization & payload filtering| M-01             |
 | `SSRF-WH-*`  | `test_ssrf/`                     | Webhook SSRF URL validation               | H-01             |
@@ -100,7 +118,7 @@ markers.
 | C-01 | Cross-tenant file path traversal | `FILE-TRV-001/002/010/011` + the sibling case in `tests/unit/domain/services/test_file_storage_service.py` |
 | C-02 | Custom-endpoint aggregate SQL injection | `EP-SQLI-001/004/010` (exploitable), `EP-SQLI-002/003` (already refused) |
 | C-03 | Default signing secret accepted in production | `CFG-KEY-001` |
-| C-04 | Functions sandbox isolation | `FN-SBX-001/002/010/030`; `FN-SBX-011/020/031` lock in what works |
+| C-04 | Functions deploy RCE + sandbox | `FN-BUILD-001/002/010/020/021` (deploy), `FN-SBX-001/002/010/030` (invoke), `FN-POL-*` (policy); `FN-SBX-011/020/031` lock in what already worked |
 | H-01 | Webhook SSRF | `SSRF-WH-002/003/004/010/011` |
 | H-02 | Login brute force / rate limiting | `RATE-LOGIN-001/002/003/004/005` |
 | H-03 | SAML assertion validation | `SAML-ASRT-010/011/012/013` |

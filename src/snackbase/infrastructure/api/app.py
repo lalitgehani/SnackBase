@@ -17,6 +17,7 @@ from snackbase.core.config import get_settings
 from snackbase.core.hooks import HookDecorator, HookEvent, HookRegistry
 from snackbase.core.logging import configure_logging, get_logger
 from snackbase.domain.entities.hook_context import HookContext
+from snackbase.infrastructure.functions.sandbox import log_sandbox_posture
 from snackbase.infrastructure.hooks import register_builtin_hooks
 from snackbase.infrastructure.persistence.database import (
     close_database,
@@ -58,6 +59,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
         # Configure logging (redundant if already done in CLI, but safe)
         configure_logging(settings)
+
+        # Surface the functions sandbox posture at boot rather than at the first
+        # invoke — an operator should learn about a missing sandbox from the
+        # startup log, not from a failed tenant request.
+        log_sandbox_posture(settings)
 
         # Create storage directory for file uploads
         storage_path = Path(settings.storage_path)

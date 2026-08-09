@@ -330,6 +330,19 @@ class Settings(BaseSettings):
             "(SNACKBASE_FUNCTION_DEPENDENCY_MODE)"
         ),
     )
+    function_sandbox_mode: Literal["auto", "required", "disabled"] = Field(
+        default="auto",
+        description=(
+            "OS-level confinement for function invokes. 'auto' sandboxes wherever "
+            "bubblewrap is available and is treated as 'required' in production; "
+            "'required' refuses to invoke without it; 'disabled' runs unconfined "
+            "(SNACKBASE_FUNCTION_SANDBOX_MODE)"
+        ),
+    )
+    function_memory_limit_mb: int = Field(
+        default=512,
+        description="Address-space limit for a function invoke child in MB",
+    )
     function_env_base_path: str = Field(
         default="./sb_data/function_envs",
         description="Base path for per-version function venvs (SNACKBASE_FUNCTION_ENV_BASE_PATH)",

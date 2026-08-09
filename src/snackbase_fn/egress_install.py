@@ -76,21 +76,74 @@ def install_egress_policy(*, allowed_hosts: set[str] | None = None) -> None:
 
         httpx.AsyncClient.__init__ = _async_init  # type: ignore[method-assign]
 
-    try:
-        import urllib.request
+    import urllib.request
 
-        _orig_urlopen = urllib.request.urlopen
+    _orig_urlopen = urllib.request.urlopen
 
-        def _safe_urlopen(url: Any, *args: Any, **kwargs: Any) -> Any:
-            if isinstance(url, str):
-                url_str = url
-            else:
-                url_str = getattr(url, "full_url", None) or str(url)
-            classify_url(url_str, allowed_hosts=hosts)
-            return _orig_urlopen(url, *args, **kwargs)
+    def _safe_urlopen(url: Any, *args: Any, **kwargs: Any) -> Any:
+        if isinstance(url, str):
+            url_str = url
+        else:
+            url_str = getattr(url, "full_url", None) or str(url)
+        classify_url(url_str, allowed_hosts=hosts)
+        return _orig_urlopen(url, *args, **kwargs)
 
-        urllib.request.urlopen = _safe_urlopen  # type: ignore[assignment]
-    except Exception:
-        pass
+    urllib.request.urlopen = _safe_urlopen  # type: ignore[assignment]
+
+    _install_socket_policy(hosts)
 
     _INSTALLED = True
+
+
+def _install_socket_policy(hosts: set[str]) -> None:
+    """Apply the egress policy at the socket layer.
+
+    Patching only httpx and urllib leaves `socket.create_connection` — and any
+    library built on it — completely unguarded. Classifying at `connect` covers
+    every caller that goes through the socket module, which is the last point
+    all of Python's networking shares.
+
+    This is defence in depth, not containment: handler code can still reach the
+    syscall through `ctypes`. Only the OS-level sandbox actually bounds egress.
+    """
+    import socket as _socket
+
+    from snackbase_fn.egress import classify_address
+
+    # By the time a connection reaches `connect`, the hostname has already been
+    # resolved, so an allowed host arrives as a bare IP. Resolve the allowlist
+    # once here or the SnackBase API itself — routinely on loopback in
+    # development — would be denied by its own policy.
+    allowed = set(hosts)
+    for host in hosts:
+        try:
+            for info in _socket.getaddrinfo(host, None, type=_socket.SOCK_STREAM):
+                allowed.add(str(info[4][0]))
+        except OSError:
+            continue
+
+    def _check(address: Any) -> None:
+        if not isinstance(address, tuple) or len(address) < 2:
+            return  # AF_UNIX and friends never leave the host
+        host, port = address[0], address[1]
+        if not isinstance(host, str) or not isinstance(port, int):
+            return
+        classify_address(host, port, allowed_hosts=allowed)
+
+    _orig_connect = _socket.socket.connect
+
+    def _safe_connect(self: Any, address: Any) -> Any:
+        if self.family in (_socket.AF_INET, _socket.AF_INET6):
+            _check(address)
+        return _orig_connect(self, address)
+
+    _socket.socket.connect = _safe_connect  # type: ignore[method-assign]
+
+    _orig_connect_ex = _socket.socket.connect_ex
+
+    def _safe_connect_ex(self: Any, address: Any) -> Any:
+        if self.family in (_socket.AF_INET, _socket.AF_INET6):
+            _check(address)
+        return _orig_connect_ex(self, address)
+
+    _socket.socket.connect_ex = _safe_connect_ex  # type: ignore[method-assign]

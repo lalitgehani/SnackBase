@@ -143,19 +143,33 @@ async def test_create_webhook_invalid_event(client: AsyncClient, user_token: str
 
 @pytest.mark.asyncio
 async def test_create_webhook_http_url_in_production_rejected(
-    client: AsyncClient, user_token: str, monkeypatch: pytest.MonkeyPatch
+    client: AsyncClient,
+    user_token: str,
+    account: AccountModel,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """HTTP URLs are rejected in production."""
     from snackbase.core.config import get_settings
 
     monkeypatch.setenv("SNACKBASE_ENVIRONMENT", "production")
-    # Production Settings reject the default encryption key; set a non-default value.
+    # Production Settings reject the shipped default encryption and signing
+    # secrets, so real values are needed for the app to build at all.
     monkeypatch.setenv(
         "SNACKBASE_ENCRYPTION_KEY", "production-test-encryption-key-32b"
     )
+    monkeypatch.setenv("SNACKBASE_SECRET_KEY", "production-test-secret-key-32byt")
+    monkeypatch.setenv("SNACKBASE_TOKEN_SECRET", "production-test-token-secret-32b")
     get_settings.cache_clear()
 
     try:
+        # `user_token` was signed with the development secret, which no longer
+        # verifies now that a production signing key is in force.
+        production_token = jwt_service.create_access_token(
+            user_id="wh-test-user",
+            account_id=account.id,
+            email="user@webhooktest.com",
+            role="user",
+        )
         response = await client.post(
             "/api/v1/webhooks",
             json={
@@ -163,13 +177,15 @@ async def test_create_webhook_http_url_in_production_rejected(
                 "collection": "posts",
                 "events": ["create"],
             },
-            headers={"Authorization": f"Bearer {user_token}"},
+            headers={"Authorization": f"Bearer {production_token}"},
         )
         assert response.status_code == 422
         assert "HTTPS" in response.json()["detail"]
     finally:
         monkeypatch.delenv("SNACKBASE_ENVIRONMENT", raising=False)
         monkeypatch.delenv("SNACKBASE_ENCRYPTION_KEY", raising=False)
+        monkeypatch.delenv("SNACKBASE_SECRET_KEY", raising=False)
+        monkeypatch.delenv("SNACKBASE_TOKEN_SECRET", raising=False)
         get_settings.cache_clear()
 
 

@@ -64,6 +64,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 # curl: docker-compose healthchecks. Do NOT install build-essential.
+# Functions confinement needs no package: it uses the kernel's Landlock LSM,
+# which requires neither extra capabilities nor a seccomp exemption.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
