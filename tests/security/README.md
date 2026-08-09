@@ -68,6 +68,36 @@ Test names carry an ID prefix so a finding can be traced to its guard by grep.
 | `CFG-LOG-*`  | `test_config/`                   | Production logging bootstrap              | M-10             |
 | `DEP-*`      | `test_config/`                   | Dependency version pins                   | H-04             |
 
+## Finding-to-test map
+
+Every Critical/High/Medium finding from the VAPT of 2026-08-09 maps to at least
+one test. `grep` the finding ID to reach both the tests and their `xfail`
+markers.
+
+| Finding | What it is | Guarded by |
+| ------- | ---------- | ---------- |
+| C-01 | Cross-tenant file path traversal | `FILE-TRV-001/002/010/011` + the sibling case in `tests/unit/domain/services/test_file_storage_service.py` |
+| C-02 | Custom-endpoint aggregate SQL injection | `EP-SQLI-001/004/010` (exploitable), `EP-SQLI-002/003` (already refused) |
+| C-03 | Default signing secret accepted in production | `CFG-KEY-001` |
+| C-04 | Functions sandbox isolation | `FN-SBX-001/002/010/030`; `FN-SBX-011/020/031` lock in what works |
+| H-01 | Webhook SSRF | `SSRF-WH-002/003/004/010/011` |
+| H-02 | Login brute force / rate limiting | `RATE-LOGIN-001/002/003/004/005` |
+| H-03 | SAML assertion validation | `SAML-ASRT-010/011/012/013` |
+| H-04 | Dependency advisory drift | `DEP-001/010/011` + the `dependency-audit` CI job |
+| M-01 | Realtime authorization & payload filtering | `RT-010/011/012` |
+| M-02 | File MIME content sniffing | `FILE-MIME-001/002` |
+| M-03 | Upload size limit / memory DoS | `FILE-SIZE-002` |
+| M-04 | File download per-record authorization | `FILE-AUTHZ-002` |
+| M-05 | Refresh-token reuse detection | `AUTH-RF-003/004` |
+| M-06 | Invitation-token hashing | `AUTH-INV-001` |
+| M-07 | Login user enumeration | `AUTH-LI-010/011/012` |
+| M-08 | Anonymous `X-Account-ID` tenant targeting | `ISO-ANON-010/011` (+ `ISO-ANON-001` characterisation) |
+| M-09 | Build/runtime config drift | `CFG-BUILD-010/011` |
+| M-10 | Production logging bootstrap | `CFG-LOG-001/002` |
+
+Beyond the one-to-one mapping, `EP-ISO-*` and `FN-ISO-*` extend the record
+router's isolation discipline to custom endpoints and functions.
+
 ## Shared fixtures and helpers
 
 `tests/security/conftest.py` provides the two-tenant harness:

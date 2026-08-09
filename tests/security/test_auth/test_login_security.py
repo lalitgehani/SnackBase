@@ -236,3 +236,124 @@ async def test_auth_li_008_timing_attack_prevention(attack_client: AttackClient,
         )
 
     assert diff < 0.2, f"Timing difference too high: {diff:.4f}s"
+
+
+# ---------------------------------------------------------------------------
+# AUTH-LI-* enumeration uniformity (M-07)
+#
+# When an account uses OAuth or SAML, `/auth/login` answers a password attempt
+# with 400 and a body naming `auth_provider`, `provider_name` and a redirect
+# URL — before any credential has been proven. An unknown address gets a
+# generic 401. The two are trivially distinguishable, so the endpoint is an
+# oracle for "does this address exist here, and which IdP does it use". The
+# second half is the more useful answer: it tells an attacker exactly which
+# identity provider to phish.
+# ---------------------------------------------------------------------------
+
+
+@pytest_asyncio.fixture
+async def sso_only_user(db_session: AsyncSession):
+    """A user in the same account whose auth_provider is SAML, not password."""
+    user_role = (
+        await db_session.execute(select(RoleModel).where(RoleModel.name == "user"))
+    ).scalar_one()
+
+    account = AccountModel(
+        id=str(uuid.uuid4()),
+        account_code="SS0001",
+        name="SSO Test Account",
+        slug=f"sso-test-{uuid.uuid4().hex[:6]}",
+    )
+    db_session.add(account)
+
+    user = UserModel(
+        id=str(uuid.uuid4()),
+        email=f"sso-{uuid.uuid4().hex[:6]}@example.com",
+        account_id=account.id,
+        password_hash=hash_password("IrrelevantPassword1!"),
+        role_id=user_role.id,
+        is_active=True,
+        email_verified=True,
+        auth_provider="saml",
+        auth_provider_name="okta",
+    )
+    db_session.add(user)
+    await db_session.commit()
+
+    return {
+        "email": user.email,
+        "account": account.account_code,
+    }
+
+
+@pytest.mark.asyncio
+@pytest.mark.xfail(reason="M-07 fix pending", strict=True)
+async def test_auth_li_010_sso_only_user_returns_generic_401(
+    attack_client: AttackClient, sso_only_user
+):
+    """AUTH-LI-010: an SSO-only user must answer like an unknown address."""
+    response = await attack_client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": sso_only_user["email"],
+            "password": "WrongPassword1!",
+            "account": sso_only_user["account"],
+        },
+        description="Password login attempt against an SSO-only user",
+    )
+
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED, (
+        f"SSO-only users are distinguishable from unknown users: {response.text}"
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.xfail(reason="M-07 fix pending", strict=True)
+async def test_auth_li_011_sso_response_discloses_no_provider_details(
+    attack_client: AttackClient, sso_only_user
+):
+    """AUTH-LI-011: no provider name or redirect may leak pre-authentication."""
+    response = await attack_client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": sso_only_user["email"],
+            "password": "WrongPassword1!",
+            "account": sso_only_user["account"],
+        },
+        description="Checking for provider disclosure before credential proof",
+    )
+
+    body = response.text
+    for marker in ("auth_provider", "provider_name", "redirect_url", "okta"):
+        assert marker not in body, (
+            f"login disclosed {marker!r} before any credential was proven"
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.xfail(reason="M-07 fix pending", strict=True)
+async def test_auth_li_012_sso_and_unknown_user_are_indistinguishable(
+    attack_client: AttackClient, sso_only_user
+):
+    """AUTH-LI-012: the two responses must match in status and body shape."""
+    sso_response = await attack_client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": sso_only_user["email"],
+            "password": "WrongPassword1!",
+            "account": sso_only_user["account"],
+        },
+        description="SSO-only user login attempt",
+    )
+    unknown_response = await attack_client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": f"nobody-{uuid.uuid4().hex[:6]}@example.com",
+            "password": "WrongPassword1!",
+            "account": sso_only_user["account"],
+        },
+        description="Unknown user login attempt",
+    )
+
+    assert sso_response.status_code == unknown_response.status_code
+    assert sorted(sso_response.json().keys()) == sorted(unknown_response.json().keys())
