@@ -18,12 +18,8 @@ Covers:
 - Dispatcher: 404 when no matching endpoint
 - Dispatcher: account mismatch → 403
 
-Not covered here: SQL injection through the ``aggregate_records`` action.
-``endpoint_executor._execute_aggregate_records`` interpolates ``collection``,
-``group_by`` and ``field`` into raw SQL, and the schema-validated parser tests
-(``test_aggregation_parser.py``, ``test_records_aggregate.py``) exercise the
-record-router path instead — a different code path that never reaches this
-executor. That injection surface is covered by
+Not covered here: identifier injection through the ``aggregate_records``
+action. That surface is covered by
 ``tests/security/test_endpoints/test_endpoint_sqli.py`` (EP-SQLI-*, C-02).
 """
 

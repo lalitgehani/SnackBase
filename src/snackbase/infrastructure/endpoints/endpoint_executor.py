@@ -30,6 +30,7 @@ New action types:
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -269,66 +270,96 @@ async def _execute_aggregate_records(
     function = config.get("function", "count").lower()
     agg_field = config.get("field")
     group_by = config.get("group_by")
+    filter_expr = config.get("filter")
 
     if not collection:
         raise ValueError("aggregate_records action requires a 'collection'")
-
-    valid_functions = {"count", "sum", "avg", "min", "max"}
-    if function not in valid_functions:
-        raise ValueError(
-            f"aggregate_records: unknown function '{function}'. "
-            f"Supported: {', '.join(sorted(valid_functions))}"
-        )
     if function != "count" and not agg_field:
-        raise ValueError(
-            f"aggregate_records: function '{function}' requires a 'field'"
-        )
+        raise ValueError(f"aggregate_records: function '{function}' requires a 'field'")
 
-    try:
-        from sqlalchemy import text
+    from sqlalchemy.exc import SQLAlchemyError
 
-        async with session_factory() as session:
-            # Build a raw SQL query against the dynamic table
-            # Using text() to stay DB-agnostic — the collection table must exist
-            table_name = collection.lower().replace("-", "_")
+    from snackbase.core.rules import (
+        AggregationParseError,
+        FilterCompilationError,
+        RuleSyntaxError,
+        compile_filter_to_sql,
+        parse_agg_functions,
+        validate_filter_expression,
+        validate_group_by,
+    )
+    from snackbase.infrastructure.persistence.repositories.record_repository import (
+        RecordRepository,
+        RuleFilter,
+    )
 
-            if group_by:
-                if function == "count":
-                    sql = text(
-                        f"SELECT {group_by}, COUNT(*) as value "  # noqa: S608
-                        f"FROM {table_name} "
-                        f"WHERE account_id = :account_id "
-                        f"GROUP BY {group_by}"
-                    )
-                else:
-                    sql = text(
-                        f"SELECT {group_by}, {function.upper()}({agg_field}) as value "  # noqa: S608
-                        f"FROM {table_name} "
-                        f"WHERE account_id = :account_id "
-                        f"GROUP BY {group_by}"
-                    )
-                result = await session.execute(sql, {"account_id": account_id})
-                rows = result.mappings().all()
-                return {"groups": [dict(row) for row in rows]}
-            else:
-                if function == "count":
-                    sql = text(
-                        f"SELECT COUNT(*) as value FROM {table_name} "  # noqa: S608
-                        f"WHERE account_id = :account_id"
-                    )
-                else:
-                    sql = text(
-                        f"SELECT {function.upper()}({agg_field}) as value "  # noqa: S608
-                        f"FROM {table_name} WHERE account_id = :account_id"
-                    )
-                result = await session.execute(sql, {"account_id": account_id})
-                row = result.mappings().first()
-                return {"value": row["value"] if row else None}
+    async with session_factory() as session:
+        # Every identifier below reaches this action through request templating
+        # ({{request.query.*}}), so none of it may be interpolated into SQL.
+        # Validate it against the collection schema with the same parsers the
+        # record router uses, then let the repository build the statement.
+        schema = await _load_collection_schema(session, collection)
+        schema_lookup = {field_def["name"]: field_def for field_def in schema}
 
-    except Exception as exc:
-        raise RuntimeError(
-            f"aggregate_records failed for collection '{collection}': {exc}"
-        ) from exc
+        try:
+            agg_functions = parse_agg_functions(
+                f"{function}({agg_field or ''})", schema_lookup
+            )
+            group_by_fields = (
+                validate_group_by(group_by, schema_lookup) if group_by else []
+            )
+        except AggregationParseError as exc:
+            raise ValueError(f"aggregate_records: {exc}") from exc
+
+        user_filter: RuleFilter | None = None
+        if filter_expr:
+            try:
+                validate_filter_expression(filter_expr, schema)
+                filter_sql, filter_params = compile_filter_to_sql(
+                    filter_expr, table_alias="r"
+                )
+            except (RuleSyntaxError, FilterCompilationError) as exc:
+                raise ValueError(f"aggregate_records: invalid filter: {exc}") from exc
+            if filter_sql != "1=1":
+                user_filter = RuleFilter(sql=filter_sql, params=filter_params)
+
+        try:
+            rows, _total_groups = await RecordRepository(session).aggregate_records(
+                collection_name=collection,
+                account_id=account_id,
+                agg_functions=agg_functions,
+                group_by_fields=group_by_fields,
+                user_filter=user_filter,
+                schema=schema,
+            )
+        except SQLAlchemyError as exc:
+            raise RuntimeError(
+                f"aggregate_records failed for collection '{collection}': {exc}"
+            ) from exc
+
+    # The action's contract predates the router's alias-keyed shape: a single
+    # aggregate is reported as "value".
+    alias = agg_functions[0].alias
+    if group_by_fields:
+        groups = [
+            {**{f: row.get(f) for f in group_by_fields}, "value": row.get(alias)}
+            for row in rows
+        ]
+        return {"groups": groups}
+    return {"value": rows[0].get(alias) if rows else None}
+
+
+async def _load_collection_schema(session: Any, collection: str) -> list[dict[str, Any]]:
+    """Return the field schema of a collection, or raise if it does not exist."""
+    from snackbase.infrastructure.persistence.repositories.collection_repository import (
+        CollectionRepository,
+    )
+
+    model = await CollectionRepository(session).get_by_name(collection)
+    if model is None:
+        raise ValueError(f"aggregate_records: unknown collection '{collection}'")
+    schema: list[dict[str, Any]] = json.loads(model.schema)
+    return schema
 
 
 async def _execute_transform(

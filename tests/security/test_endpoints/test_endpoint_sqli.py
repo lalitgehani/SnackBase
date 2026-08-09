@@ -1,21 +1,20 @@
 """EP-SQLI-*: custom-endpoint aggregate SQL-injection regression guards (C-02).
 
-``_execute_aggregate_records`` interpolates ``collection``, ``group_by`` and
-``field`` straight into a ``text()`` statement. Only ``account_id`` is bound as
-a parameter, so any of those three identifiers can carry a subquery or a ``--``
-comment that detaches the ``WHERE account_id = :account_id`` clause — turning
-an account-scoped aggregate into a cross-tenant read.
+``_execute_aggregate_records`` used to interpolate ``collection``, ``group_by``
+and ``field`` straight into a ``text()`` statement, binding only ``account_id``.
+Any of those three identifiers could carry a subquery or a ``--`` comment that
+detached the ``WHERE account_id = :account_id`` clause, turning an
+account-scoped aggregate into a cross-tenant read.
 
 The values are attacker-reachable at request time because endpoint action
 configs support ``{{request.query.*}}`` templating, so an account admin (not a
-superadmin) can build an endpoint that reads any other tenant's rows.
+superadmin) could build an endpoint that read any other tenant's rows.
 
 The secure behaviour asserted here: injected identifiers must be rejected, or
-the aggregate must stay scoped to the caller's own account.
-
-Note: the parser tests in ``tests/integration/test_records_aggregate.py`` and
-``test_aggregation_parser.py`` cover the schema-validated record-router path,
-which is a *different* code path and does not exercise this executor.
+the aggregate must stay scoped to the caller's own account. The action now
+resolves the collection through ``CollectionRepository`` and validates every
+identifier against its schema, so ``collection`` carries a collection name —
+not a physical table name — exactly as the docs have always specified.
 """
 
 from typing import Any
@@ -47,20 +46,19 @@ def _auth(token: str) -> dict[str, str]:
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(reason="C-02 fix pending", strict=True)
 async def test_ep_sqli_001_group_by_subquery_cannot_read_other_tenant(
     security_test_data: dict[str, Any],
     two_tenant_collection: dict[str, Any],
 ) -> None:
     """EP-SQLI-001: a subquery in `group_by` must not surface B's rows."""
-    table = two_tenant_collection["table"]
+    collection = two_tenant_collection["collection"]
 
     try:
         result = await _execute_aggregate_records(
             {
-                "collection": table,
+                "collection": collection,
                 "function": "count",
-                "group_by": f"(SELECT group_concat(secret) FROM {table})",
+                "group_by": f"(SELECT group_concat(secret) FROM col_{collection})",
             },
             _session_factory(),
             security_test_data["account_a"].id,
@@ -78,20 +76,20 @@ async def test_ep_sqli_002_group_by_comment_cannot_detach_account_filter(
 ) -> None:
     """EP-SQLI-002: a `--` comment in `group_by` must not drop the account filter.
 
-    Unlike the subquery form, this payload is already refused: commenting out
-    the tail also comments out ``:account_id``, and the driver rejects the
-    statement for supplying a binding the SQL no longer uses. That refusal is
-    incidental rather than designed, so it is locked in here — a future rewrite
-    of the statement builder must not make comment injection viable.
+    ``validate_group_by`` only accepts identifiers naming a schema field, so the
+    comment never reaches SQL. Locked in here because this payload was refused
+    even before the fix — for the incidental reason that commenting out the tail
+    also commented out ``:account_id`` — and a future rewrite of the statement
+    builder must not make comment injection viable again.
     """
-    table = two_tenant_collection["table"]
+    collection = two_tenant_collection["collection"]
 
     try:
         result = await _execute_aggregate_records(
             {
-                "collection": table,
+                "collection": collection,
                 "function": "count",
-                "group_by": f"secret FROM {table} --",
+                "group_by": f"secret FROM col_{collection} --",
             },
             _session_factory(),
             security_test_data["account_a"].id,
@@ -109,21 +107,22 @@ async def test_ep_sqli_003_collection_identifier_cannot_detach_account_filter(
 ) -> None:
     """EP-SQLI-003: an injected `collection` must not widen the row scope.
 
-    The ``WHERE account_id = :account_id`` clause trails the table name, so an
-    injected ``collection`` cannot escape the account filter without a comment
-    — and comments are refused (see EP-SQLI-002). Locked in as a regression.
+    The name is now resolved through ``CollectionRepository``, so anything with
+    SQL grafted onto it is simply an unknown collection. Before the fix the
+    payload was refused only incidentally, because the trailing
+    ``WHERE account_id = :account_id`` needed a comment to detach it.
     """
-    table = two_tenant_collection["table"]
+    collection = two_tenant_collection["collection"]
 
     scoped = await _execute_aggregate_records(
-        {"collection": table, "function": "count"},
+        {"collection": collection, "function": "count"},
         _session_factory(),
         security_test_data["account_a"].id,
     )
 
     try:
         injected = await _execute_aggregate_records(
-            {"collection": f"{table} WHERE 1=1 --", "function": "count"},
+            {"collection": f"{collection} WHERE 1=1 --", "function": "count"},
             _session_factory(),
             security_test_data["account_a"].id,
         )
@@ -136,20 +135,19 @@ async def test_ep_sqli_003_collection_identifier_cannot_detach_account_filter(
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(reason="C-02 fix pending", strict=True)
 async def test_ep_sqli_004_field_identifier_cannot_read_other_tenant(
     security_test_data: dict[str, Any],
     two_tenant_collection: dict[str, Any],
 ) -> None:
     """EP-SQLI-004: an injected `field` must not surface B's rows."""
-    table = two_tenant_collection["table"]
+    collection = two_tenant_collection["collection"]
 
     try:
         result = await _execute_aggregate_records(
             {
-                "collection": table,
+                "collection": collection,
                 "function": "max",
-                "field": f"(SELECT group_concat(secret) FROM {table})",
+                "field": f"(SELECT group_concat(secret) FROM col_{collection})",
             },
             _session_factory(),
             security_test_data["account_a"].id,
@@ -167,7 +165,7 @@ async def test_ep_sqli_005_benign_aggregate_stays_account_scoped(
 ) -> None:
     """EP-SQLI-005: positive control — a benign aggregate counts only A's rows."""
     result = await _execute_aggregate_records(
-        {"collection": two_tenant_collection["table"], "function": "count"},
+        {"collection": two_tenant_collection["collection"], "function": "count"},
         _session_factory(),
         security_test_data["account_a"].id,
     )
@@ -181,7 +179,7 @@ async def test_ep_sqli_005_benign_aggregate_stays_account_scoped(
 
 
 async def _create_leak_endpoint(
-    client: AsyncClient, token: str, table: str, path: str
+    client: AsyncClient, token: str, collection: str, path: str
 ) -> None:
     """Create an endpoint whose aggregate `group_by` comes from the query string."""
     response = await client.post(
@@ -194,7 +192,7 @@ async def _create_leak_endpoint(
             "actions": [
                 {
                     "type": "aggregate_records",
-                    "collection": table,
+                    "collection": collection,
                     "function": "count",
                     "group_by": "{{request.query.gb}}",
                 }
@@ -210,22 +208,21 @@ async def _create_leak_endpoint(
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(reason="C-02 fix pending", strict=True)
 async def test_ep_sqli_010_dispatcher_injection_does_not_leak_other_tenant(
     client: AsyncClient,
     security_test_data: dict[str, Any],
     two_tenant_collection: dict[str, Any],
 ) -> None:
     """EP-SQLI-010: an account admin cannot read B's rows through the dispatcher."""
-    table = two_tenant_collection["table"]
+    collection = two_tenant_collection["collection"]
     account_a = security_test_data["account_a"]
     await _create_leak_endpoint(
-        client, security_test_data["user_a_token"], table, "/leak"
+        client, security_test_data["user_a_token"], collection, "/leak"
     )
 
     response = await client.get(
         f"/api/v1/x/{account_a.slug}/leak",
-        params={"gb": f"(SELECT group_concat(secret) FROM {table})"},
+        params={"gb": f"(SELECT group_concat(secret) FROM col_{collection})"},
         headers=_auth(security_test_data["user_a_token"]),
     )
 
@@ -239,10 +236,10 @@ async def test_ep_sqli_011_dispatcher_benign_group_by_positive_control(
     two_tenant_collection: dict[str, Any],
 ) -> None:
     """EP-SQLI-011: positive control — `gb=secret` returns only A's own value."""
-    table = two_tenant_collection["table"]
+    collection = two_tenant_collection["collection"]
     account_a = security_test_data["account_a"]
     await _create_leak_endpoint(
-        client, security_test_data["user_a_token"], table, "/benign"
+        client, security_test_data["user_a_token"], collection, "/benign"
     )
 
     response = await client.get(
