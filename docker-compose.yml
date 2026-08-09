@@ -31,6 +31,7 @@ services:
       - SNACKBASE_STORAGE_PATH=${SNACKBASE_STORAGE_PATH:-./sb_data/files}
       - SNACKBASE_SUPERADMIN_EMAIL=${SNACKBASE_SUPERADMIN_EMAIL:-admin@admin.com}
       - SNACKBASE_SUPERADMIN_PASSWORD=${SNACKBASE_SUPERADMIN_PASSWORD:-Admin@123456}
+      - SNACKBASE_TOKEN_SECRET=${SNACKBASE_TOKEN_SECRET:-change-me-in-production-use-openssl-rand-hex-32}
     volumes:
       - ./sb_data:/app/sb_data
     healthcheck:

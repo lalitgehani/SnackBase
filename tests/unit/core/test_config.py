@@ -34,8 +34,10 @@ def test_settings_env_override():
         "SNACKBASE_ENVIRONMENT": "production",
         "SNACKBASE_DEBUG": "true",
         "SNACKBASE_PORT": "9000",
-        # Production requires a non-default encryption key
+        # Production requires non-default encryption and signing secrets
         "SNACKBASE_ENCRYPTION_KEY": "production-test-encryption-key-32b",
+        "SNACKBASE_SECRET_KEY": "production-test-secret-key-32bytes",
+        "SNACKBASE_TOKEN_SECRET": "production-test-token-secret-32by",
     }):
         settings = Settings()
         

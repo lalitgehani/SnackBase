@@ -31,7 +31,6 @@ VALID_ENCRYPTION_KEY = "production-encryption-key-value-32"
         ("token_secret", "SNACKBASE_TOKEN_SECRET"),
     ],
 )
-@pytest.mark.xfail(reason="C-03 fix pending", strict=True)
 def test_cfg_key_001_production_rejects_default_signing_secret(
     key_name: str, env_var: str
 ) -> None:

@@ -9,9 +9,13 @@ import json
 from functools import lru_cache
 from typing import Annotated, Any, Literal
 
-from pydantic import BeforeValidator, Field, field_validator, model_validator
+from pydantic import BeforeValidator, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic_settings.sources import DotEnvSettingsSource, EnvSettingsSource
+
+# The placeholder shipped in `.env.example`, `docker-compose.yml` and the docs.
+# Production refuses to boot on it — see `validate_production_signing_secrets`.
+DEFAULT_SIGNING_SECRET = "change-me-in-production-use-openssl-rand-hex-32"
 
 
 def _decode_complex_value(value: Any) -> Any:
@@ -115,11 +119,11 @@ class Settings(BaseSettings):
 
     # Security Settings
     secret_key: str = Field(
-        default="change-me-in-production-use-openssl-rand-hex-32",
+        default=DEFAULT_SIGNING_SECRET,
         description="Secret key for JWT token signing (legacy)",
     )
     token_secret: str = Field(
-        default="change-me-in-production-use-openssl-rand-hex-32",
+        default=DEFAULT_SIGNING_SECRET,
         description="Secret key for all SnackBase tokens (JWT, API Keys, etc.)",
     )
     encryption_key: str = Field(
@@ -367,16 +371,6 @@ class Settings(BaseSettings):
         description="Maximum function secrets per account",
     )
 
-    @field_validator("secret_key")
-    @classmethod
-    def validate_secret_key(cls, v: str) -> str:
-        """Validate secret key is not default in production."""
-        if v == "change-me-in-production-use-openssl-rand-hex-32":
-            # In production, this should be a proper secret key
-            # For now, we'll allow it but log a warning
-            pass
-        return v
-
     @property
     def is_production(self) -> bool:
         """Check if running in production environment."""
@@ -408,6 +402,32 @@ class Settings(BaseSettings):
             raise ValueError(
                 "SNACKBASE_ENCRYPTION_KEY must be set to a non-default value in production. "
                 "Generate one with: openssl rand -hex 32"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def validate_production_signing_secrets(self) -> "Settings":
+        """Reject the default signing secrets in production (fail-closed).
+
+        `secret_key` signs every JWT and `token_secret` signs API keys, so a
+        deployment left on the shipped placeholder is forgeable by anyone who
+        has read the repository.
+        """
+        if self.environment != "production":
+            return self
+
+        defaulted = [
+            env_var
+            for env_var, value in (
+                ("SNACKBASE_SECRET_KEY", self.secret_key),
+                ("SNACKBASE_TOKEN_SECRET", self.token_secret),
+            )
+            if value == DEFAULT_SIGNING_SECRET
+        ]
+        if defaulted:
+            raise ValueError(
+                f"{' and '.join(defaulted)} must be set to a non-default value in "
+                "production. Generate one with: openssl rand -hex 32"
             )
         return self
 
