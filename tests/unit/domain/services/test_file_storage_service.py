@@ -254,10 +254,29 @@ class TestFileStorageService:
         with pytest.raises(FileNotFoundError):
             storage_service.get_file_path("test-account", "test-account/nonexistent.txt")
 
-    def test_get_file_path_traversal_attack(self, storage_service):
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            # Escaping the storage root entirely — caught by the existing guard.
+            "test-account/../../../etc/passwd",
+            # Sideways into a sibling tenant's directory. This stays *inside*
+            # the storage root, so the root-confinement check passes and the
+            # traversal succeeds (C-01). The secure behaviour is to confine the
+            # resolved path to the caller's own account directory.
+            pytest.param(
+                "test-account/../other-account/secret.txt",
+                marks=pytest.mark.xfail(reason="C-01 fix pending", strict=True),
+            ),
+        ],
+    )
+    def test_get_file_path_traversal_attack(self, storage_service, temp_storage_path, payload):
         """Test that get_file_path prevents path traversal attacks."""
+        sibling = Path(temp_storage_path) / "other-account"
+        sibling.mkdir(parents=True, exist_ok=True)
+        (sibling / "secret.txt").write_text("sibling tenant data")
+
         with pytest.raises(ValueError, match="Invalid file path"):
-            storage_service.get_file_path("test-account", "test-account/../../../etc/passwd")
+            storage_service.get_file_path("test-account", payload)
 
     @pytest.mark.asyncio
     async def test_delete_file_success(self, storage_service, temp_storage_path):

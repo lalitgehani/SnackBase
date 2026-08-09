@@ -17,9 +17,17 @@ Covers:
 - Dispatcher: empty actions array returns 200
 - Dispatcher: 404 when no matching endpoint
 - Dispatcher: account mismatch → 403
+
+Not covered here: SQL injection through the ``aggregate_records`` action.
+``endpoint_executor._execute_aggregate_records`` interpolates ``collection``,
+``group_by`` and ``field`` into raw SQL, and the schema-validated parser tests
+(``test_aggregation_parser.py``, ``test_records_aggregate.py``) exercise the
+record-router path instead — a different code path that never reaches this
+executor. That injection surface is covered by
+``tests/security/test_endpoints/test_endpoint_sqli.py`` (EP-SQLI-*, C-02).
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 import pytest_asyncio
@@ -29,8 +37,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.infrastructure.auth.jwt_service import jwt_service
 from snackbase.infrastructure.persistence.models import AccountModel, RoleModel, UserModel
-from snackbase.infrastructure.persistence.models.endpoint import EndpointModel
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -75,7 +81,7 @@ async def user_token(db_session: AsyncSession, account: AccountModel) -> str:
         password_hash="hashed",
         role=role,
         is_active=True,
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
     db_session.add(user)
     await db_session.commit()
@@ -99,7 +105,7 @@ async def other_user_token(db_session: AsyncSession, other_account: AccountModel
         password_hash="hashed",
         role=role,
         is_active=True,
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
     db_session.add(user)
     await db_session.commit()
@@ -756,7 +762,6 @@ async def test_endpoint_limit_enforcement(
     # Patch the limit to 2 for this test
     import snackbase.core.config as config_module
 
-    original_settings = None
     try:
         settings = config_module.get_settings()
         original = settings.max_endpoints_per_account
