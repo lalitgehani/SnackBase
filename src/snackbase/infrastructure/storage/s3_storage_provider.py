@@ -66,6 +66,10 @@ class S3StorageProvider(StorageProvider):
         key = file_path[len(S3_PREFIX) :]
         if not key.startswith(f"{account_id}/"):
             raise ValueError("Invalid file path: does not belong to this account")
+        # A dot segment keeps the account prefix while addressing a sibling
+        # tenant on any backend that normalises keys as paths (C-01).
+        if ".." in key.split("/"):
+            raise ValueError("Invalid file path: outside the account directory")
         return key
 
     @staticmethod

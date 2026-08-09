@@ -246,7 +246,7 @@ class TestFileStorageService:
 
     def test_get_file_path_wrong_account(self, storage_service):
         """Test that get_file_path rejects files from different account."""
-        with pytest.raises(ValueError, match="does not belong to this account"):
+        with pytest.raises(ValueError, match="Invalid file path"):
             storage_service.get_file_path("account1", "account2/file.txt")
 
     def test_get_file_path_not_found(self, storage_service):
@@ -257,16 +257,12 @@ class TestFileStorageService:
     @pytest.mark.parametrize(
         "payload",
         [
-            # Escaping the storage root entirely — caught by the existing guard.
+            # Escaping the storage root entirely.
             "test-account/../../../etc/passwd",
             # Sideways into a sibling tenant's directory. This stays *inside*
-            # the storage root, so the root-confinement check passes and the
-            # traversal succeeds (C-01). The secure behaviour is to confine the
-            # resolved path to the caller's own account directory.
-            pytest.param(
-                "test-account/../other-account/secret.txt",
-                marks=pytest.mark.xfail(reason="C-01 fix pending", strict=True),
-            ),
+            # the storage root, so root confinement alone would let it through
+            # (C-01); the guard confines to the caller's own account directory.
+            "test-account/../other-account/secret.txt",
         ],
     )
     def test_get_file_path_traversal_attack(self, storage_service, temp_storage_path, payload):
@@ -310,5 +306,5 @@ class TestFileStorageService:
 
     def test_delete_file_wrong_account(self, storage_service):
         """Test that delete_file rejects files from different account."""
-        with pytest.raises(ValueError, match="does not belong to this account"):
+        with pytest.raises(ValueError, match="Invalid file path"):
             storage_service.delete_file("account1", "account2/file.txt")

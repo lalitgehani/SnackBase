@@ -54,7 +54,6 @@ def sibling_tenants() -> Any:
         }
 
 
-@pytest.mark.xfail(reason="C-01 fix pending", strict=True)
 def test_file_trv_001_get_file_path_rejects_sibling_account_traversal(
     sibling_tenants: dict[str, Any],
 ) -> None:
@@ -66,7 +65,6 @@ def test_file_trv_001_get_file_path_rejects_sibling_account_traversal(
         service.get_file_path(sibling_tenants["attacker"], payload)
 
 
-@pytest.mark.xfail(reason="C-01 fix pending", strict=True)
 def test_file_trv_002_delete_file_rejects_sibling_account_traversal(
     sibling_tenants: dict[str, Any],
 ) -> None:
@@ -159,7 +157,6 @@ async def _raw_asgi_get(path: str, token: str) -> Any:
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(reason="C-01 fix pending", strict=True)
 async def test_file_trv_010_raw_traversal_denied_over_http(
     client: AsyncClient,
     security_test_data: dict[str, Any],
@@ -178,7 +175,6 @@ async def test_file_trv_010_raw_traversal_denied_over_http(
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(reason="C-01 fix pending", strict=True)
 async def test_file_trv_011_encoded_traversal_denied_over_http(
     client: AsyncClient,
     security_test_data: dict[str, Any],

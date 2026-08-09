@@ -203,21 +203,17 @@ class FileStorageService:
             ValueError: If file path is invalid or file doesn't exist.
             FileNotFoundError: If file doesn't exist.
         """
-        # Validate that the file path starts with the account_id
-        if not file_path.startswith(f"{account_id}/"):
-            raise ValueError("Invalid file path: does not belong to this account")
-
-        # Construct absolute path
-        absolute_path = self.storage_path / file_path
-
-        # Ensure the path is within the storage directory (prevent path traversal)
+        # Confine the resolved path to the caller's own account directory. The
+        # storage root is not a sufficient boundary: a `..` segment stays inside
+        # the root while landing in a sibling tenant's directory.
+        account_root = self._get_account_directory(account_id).resolve()
         try:
-            absolute_path = absolute_path.resolve()
-            self.storage_path.resolve()
-            if not str(absolute_path).startswith(str(self.storage_path.resolve())):
-                raise ValueError("Invalid file path: path traversal detected")
+            absolute_path = (self.storage_path / file_path).resolve()
         except Exception as e:
             raise ValueError(f"Invalid file path: {e}")
+
+        if not absolute_path.is_relative_to(account_root):
+            raise ValueError("Invalid file path: outside the account directory")
 
         # Check if file exists
         if not absolute_path.exists():
