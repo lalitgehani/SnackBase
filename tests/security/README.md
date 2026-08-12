@@ -45,11 +45,15 @@ dropping a file into this tree is enough to have it selected by `-m security`.
 
 ## `xfail(strict=True)` convention
 
-Some findings' code fixes are not yet merged — as of the H-tier remediation, the
-Critical and High findings are all fixed and their guards are unmarked; the 20
-remaining xfails are the Medium tier (M-01…M-10). A test that asserts the
-*secure* outcome for an unfixed finding would fail today, so such tests are
-written against the target (secure) behaviour and marked:
+**Every Critical, High and Medium finding is now fixed, so the suite carries no
+`xfail` markers at all.** A run should report only `PASSED` and the three
+platform-conditional `SKIPPED` guards below; a `VULNERABLE` row means a fix has
+regressed.
+
+The convention stays documented because it is how a newly-found issue is
+guarded. A test that asserts the *secure* outcome for an unfixed finding would
+fail today, so such tests are written against the target (secure) behaviour and
+marked:
 
 ```python
 @pytest.mark.xfail(reason="H-01 fix pending", strict=True)
@@ -59,6 +63,18 @@ written against the target (secure) behaviour and marked:
 the corresponding fix lands, the marker must be removed in the same change and
 the test becomes a permanent regression guard. Always tag the reason with the
 finding ID so `grep "H-01"` finds both the test and its tracking note.
+
+A guard written before its fix can turn out to be unsatisfiable — asserting
+something a sibling guard contradicts, or asserting a decision the seam it drives
+cannot make. Four did, and each was reshaped when its fix landed, with the reason
+recorded in the test docstring and the commit:
+
+| Test | Reshaped because |
+| ---- | ---------------- |
+| `RT-010/011/012` | Drove a bare `ConnectionManager()` with no rule source while asserting view-rule and projection behaviour. They now build a real collection and use the shipped `RealtimeReadPolicy`, which is the shape F4.1 specified. |
+| `FILE-MIME-002` | Asserted the identical upload `FILE-MIME-001` requires to be refused would be accepted — the two halves of F4.2's "rejected **or** neutralized". It now uploads a genuine PNG under an attacker-chosen `.sh` name and asserts the stored extension follows the content. |
+| `ISO-ANON-001` | A declared characterisation of pre-fix behaviour, asserting the very request `ISO-ANON-011` requires to be denied. It now opts in and keeps the half that still holds: the tenant scoping is honest. |
+| `AUTH-TK-007` | Checked the rotated-in refresh token *after* replaying the spent one, which M-05 turns into family revocation. The two steps are now the other way round. |
 
 ## Platform-conditional guards
 
@@ -111,9 +127,9 @@ Test names carry an ID prefix so a finding can be traced to its guard by grep.
 
 ## Finding-to-test map
 
-Every Critical/High/Medium finding from the VAPT of 2026-08-09 maps to at least
-one test. `grep` the finding ID to reach both the tests and their `xfail`
-markers.
+Every Critical/High/Medium finding from the VAPT of 2026-08-09 is fixed and maps
+to at least one test. `grep` the finding ID to reach both the guard and the
+remediation note.
 
 | Finding | What it is | Guarded by |
 | ------- | ---------- | ---------- |
@@ -125,14 +141,14 @@ markers.
 | H-02 | Login brute force / rate limiting | `RATE-LOGIN-001/002/003/004/005` (per-IP throttle), `RATE-LOGIN-010/011` (per-account lockout), `RATE-LOGIN-012` (trusted-proxy client IP) |
 | H-03 | SAML assertion validation | `SAML-ASRT-010/011/012/013` |
 | H-04 | Dependency advisory drift | `DEP-001/010/011` + the `dependency-audit` CI job |
-| M-01 | Realtime authorization & payload filtering | `RT-010/011/012` |
-| M-02 | File MIME content sniffing | `FILE-MIME-001/002` |
+| M-01 | Realtime authorization & payload filtering | `RT-010/011/012` (rule, projection, PII) + `RT-013` (delete payload) |
+| M-02 | File MIME content sniffing | `FILE-MIME-001/002` + `TestDetectMimeType` in `tests/unit/domain/services/test_file_storage_service.py` |
 | M-03 | Upload size limit / memory DoS | `FILE-SIZE-002` |
-| M-04 | File download per-record authorization | `FILE-AUTHZ-002` |
+| M-04 | File download per-record authorization | `FILE-AUTHZ-002` (denied), `FILE-AUTHZ-005` (allowed through a readable record) |
 | M-05 | Refresh-token reuse detection | `AUTH-RF-003/004` |
-| M-06 | Invitation-token hashing | `AUTH-INV-001` |
+| M-06 | Invitation-token hashing | `AUTH-INV-001` (stored as a hash), `AUTH-INV-002` (issued token still resolves) |
 | M-07 | Login user enumeration | `AUTH-LI-010/011/012` |
-| M-08 | Anonymous `X-Account-ID` tenant targeting | `ISO-ANON-010/011` (+ `ISO-ANON-001` characterisation) |
+| M-08 | Anonymous `X-Account-ID` tenant targeting | `ISO-ANON-010/011` + the `allow_anonymous` cases in `tests/integration/test_anonymous_access.py` |
 | M-09 | Build/runtime config drift | `CFG-BUILD-010/011` |
 | M-10 | Production logging bootstrap | `CFG-LOG-001/002` |
 
