@@ -24,6 +24,7 @@ from snackbase.infrastructure.persistence.models.email_template import EmailTemp
 from snackbase.infrastructure.persistence.models.email_verification import (
     EmailVerificationTokenModel,
 )
+from snackbase.infrastructure.persistence.models.file import FileModel
 from snackbase.infrastructure.persistence.models.group import GroupModel
 from snackbase.infrastructure.persistence.models.invitation import InvitationModel
 from snackbase.infrastructure.persistence.models.macro import MacroModel
@@ -67,6 +68,7 @@ __all__ = [
     "EmailLogModel",
     "EmailTemplateModel",
     "EmailVerificationTokenModel",
+    "FileModel",
     "GroupModel",
     "InvitationModel",
     "MacroModel",

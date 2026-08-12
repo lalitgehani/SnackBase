@@ -1,5 +1,7 @@
 """File storage API endpoints for uploading and downloading files."""
 
+import json
+
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import FileResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,12 +14,26 @@ from snackbase.domain.services.file_storage_service import (
     detect_mime_type,
     size_limit_error,
 )
-from snackbase.infrastructure.api.dependencies import CurrentUser, get_current_user
+from snackbase.infrastructure.api.dependencies import (
+    SYSTEM_ACCOUNT_ID,
+    AuthContext,
+    AuthorizationContext,
+    CurrentUser,
+    get_current_user,
+)
+from snackbase.infrastructure.api.middleware import check_collection_permission
 from snackbase.infrastructure.api.schemas.file_schemas import (
     FileMetadataResponse,
     FileUploadResponse,
 )
 from snackbase.infrastructure.persistence.database import get_db_session
+from snackbase.infrastructure.persistence.models import FileModel
+from snackbase.infrastructure.persistence.repositories import (
+    CollectionRepository,
+    FileRepository,
+    RecordRepository,
+)
+from snackbase.infrastructure.persistence.repositories.record_repository import RuleFilter
 from snackbase.infrastructure.storage.storage_service import StorageService
 
 logger = get_logger(__name__)
@@ -40,6 +56,109 @@ def _declared_body_size(request: Request) -> int | None:
         return int(raw)
     except ValueError:
         return None
+
+
+async def _readable_through_a_record(
+    auth_context: AuthorizationContext,
+    account_id: str,
+    file_path: str,
+    db: AsyncSession,
+) -> bool:
+    """Return True if a record the caller may read references ``file_path``.
+
+    A file's permissions are the permissions of the record that carries it: the
+    collection rule governing the record has to govern its attachment too, or
+    the rule is only as strong as the secrecy of a path — and paths are not
+    secret. They come back in record payloads, in webhook bodies and in exports.
+
+    Every collection with a ``file`` field is considered, because the same file
+    may be referenced from more than one, and the first collection whose view
+    rule admits the caller settles it.
+    """
+    collection_repo = CollectionRepository(db)
+    record_repo = RecordRepository(db)
+
+    for collection in await collection_repo.list_all():
+        try:
+            schema = json.loads(collection.schema)
+        except (json.JSONDecodeError, TypeError):
+            continue
+
+        file_fields = [f["name"] for f in schema if f.get("type") == "file" and f.get("name")]
+        if not file_fields:
+            continue
+
+        try:
+            rule_filter = await check_collection_permission(
+                auth_context=auth_context,
+                collection=collection.name,
+                operation="view",
+                session=db,
+            )
+        except HTTPException:
+            # Locked, or no rules: this collection cannot grant the caller
+            # anything, so move on rather than failing the whole request.
+            continue
+
+        # Field names come from the collection schema, which is validated when
+        # the collection is defined — never from the request.
+        matches = " OR ".join(f'r."{field}" LIKE :file_path_like' for field in file_fields)
+        reference_filter = RuleFilter(
+            sql=f"({matches})", params={"file_path_like": f"%{file_path}%"}
+        )
+
+        _, total = await record_repo.find_all(
+            collection_name=collection.name,
+            account_id=account_id,
+            schema=schema,
+            limit=1,
+            user_filter=reference_filter,
+            rule_filter=rule_filter,
+        )
+        if total:
+            return True
+
+    return False
+
+
+async def _authorize_download(
+    auth_context: AuthorizationContext,
+    current_user: CurrentUser,
+    file_path: str,
+    db: AsyncSession,
+) -> None:
+    """Ensure the caller has a claim to this file, not merely its path.
+
+    Raises:
+        HTTPException: 403 if the caller has no claim to the file.
+    """
+    if current_user.account_id == SYSTEM_ACCOUNT_ID:
+        return
+
+    registered = await FileRepository(db).get_by_path(current_user.account_id, file_path)
+
+    # The uploader supplied the bytes, so they keep access regardless of where
+    # the file was later attached — this is also what makes the ordinary
+    # upload-then-attach flow work before any record exists.
+    if registered is not None and registered.uploaded_by == current_user.user_id:
+        return
+
+    if await _readable_through_a_record(
+        auth_context, current_user.account_id, file_path, db
+    ):
+        return
+
+    logger.warning(
+        "File download denied: no claim to the file",
+        account_id=current_user.account_id,
+        user_id=current_user.user_id,
+        file_path=file_path,
+        registered=registered is not None,
+    )
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="You do not have permission to access this file",
+    )
 
 
 @router.post(
@@ -109,6 +228,21 @@ async def upload_file(
             user_id=current_user.user_id,
         )
 
+        # Register the stored object so a later download can be authorized
+        # against who uploaded it and which record references it, rather than
+        # against knowledge of the path.
+        await FileRepository(db).create(
+            FileModel(
+                account_id=account_id,
+                path=file_metadata.path,
+                filename=file_metadata.filename,
+                mime_type=file_metadata.mime_type,
+                size=file_metadata.size,
+                uploaded_by=current_user.user_id,
+            )
+        )
+        await db.commit()
+
         return FileUploadResponse(
             success=True,
             file=FileMetadataResponse(
@@ -151,6 +285,7 @@ async def upload_file(
 )
 async def download_file(
     file_path: str,
+    auth_context: AuthContext,
     current_user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> Response:
@@ -158,9 +293,16 @@ async def download_file(
 
     The file path should be in the format: {account_id}/{uuid_filename}
 
-    Requires authentication. Users can only download files from their own account.
+    Requires authentication. The account boundary is enforced by the storage
+    layer; on top of that a caller must have a claim to this particular file —
+    either they uploaded it, or a record they are allowed to read references it.
+    Knowing the path is not itself a claim.
     """
     account_id = current_user.account_id
+
+    # Outside the try below: its `except Exception` would otherwise turn a
+    # deliberate 403 into a 500.
+    await _authorize_download(auth_context, current_user, file_path, db)
 
     # Create storage service (routes by file path/provider)
     storage_service = StorageService(db)

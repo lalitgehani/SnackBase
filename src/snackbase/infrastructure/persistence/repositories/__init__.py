@@ -30,6 +30,9 @@ from snackbase.infrastructure.persistence.repositories.email_verification_reposi
 from snackbase.infrastructure.persistence.repositories.password_reset_repository import (
     PasswordResetRepository,
 )
+from snackbase.infrastructure.persistence.repositories.file_repository import (
+    FileRepository,
+)
 from snackbase.infrastructure.persistence.repositories.invitation_repository import (
     InvitationRepository,
 )
@@ -77,6 +80,7 @@ __all__ = [
     "EmailTemplateRepository",
     "EmailVerificationRepository",
     "GroupRepository",
+    "FileRepository",
     "InvitationRepository",
     "MacroRepository",
     "OAuthStateRepository",

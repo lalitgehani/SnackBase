@@ -146,7 +146,6 @@ async def test_file_authz_001_peer_cannot_read_the_owning_record(
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(reason="M-04 fix pending", strict=True)
 async def test_file_authz_002_peer_denied_record_cannot_download_its_file(
     client: AsyncClient, restricted_attachment: dict[str, Any]
 ) -> None:
@@ -186,3 +185,61 @@ async def test_file_authz_004_cross_account_download_still_denied(
     )
 
     assert_denied(response, leak_markers=(OWNER_FILE_MARKER,))
+
+
+@pytest.mark.asyncio
+async def test_file_authz_005_reader_of_the_record_can_download_its_file(
+    client: AsyncClient,
+    superadmin_token: str,
+    restricted_attachment: dict[str, Any],
+) -> None:
+    """FILE-AUTHZ-005: a file follows its record — including for non-uploaders.
+
+    The peer neither uploaded this file nor may read the restricted record, so
+    every claim it has comes from the second, readable record created here. This
+    is the positive half of FILE-AUTHZ-002: attachments stay shareable, they just
+    stop being reachable by path alone.
+    """
+    shared_collection = f"shared_{uuid.uuid4().hex[:8]}"
+    admin_headers = _auth(superadmin_token)
+
+    created = await client.post(
+        "/api/v1/collections",
+        json={
+            "name": shared_collection,
+            "schema": [
+                {"name": "title", "type": "text", "required": True},
+                {"name": "attachment", "type": "file", "required": False},
+            ],
+        },
+        headers=admin_headers,
+    )
+    assert created.status_code == 201, created.text
+
+    rules = await client.put(
+        f"/api/v1/collections/{shared_collection}/rules",
+        json={"list_rule": "", "view_rule": "", "create_rule": ""},
+        headers=admin_headers,
+    )
+    assert rules.status_code == 200, rules.text
+
+    attachment = json.dumps({
+        "filename": "private.txt",
+        "size": len(OWNER_FILE_MARKER),
+        "mime_type": "text/plain",
+        "path": restricted_attachment["file_path"],
+    })
+    shared_record = await client.post(
+        f"/api/v1/records/{shared_collection}",
+        json={"title": "Shared with the account", "attachment": attachment},
+        headers=_auth(restricted_attachment["owner_token"]),
+    )
+    assert shared_record.status_code == 201, shared_record.text
+
+    response = await client.get(
+        f"/api/v1/files/{restricted_attachment['file_path']}",
+        headers=_auth(restricted_attachment["peer_token"]),
+    )
+
+    assert response.status_code == 200, response.text
+    assert OWNER_FILE_MARKER in response.text
