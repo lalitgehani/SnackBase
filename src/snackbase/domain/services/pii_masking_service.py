@@ -216,3 +216,45 @@ class PIIMaskingService:
         else:
             # Unknown mask type, return original value
             return value
+
+    @classmethod
+    def mask_record(
+        cls,
+        record: dict[str, Any],
+        schema: list[dict],
+        user_groups: list[str],
+        account_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Mask the PII fields of a record for a given user.
+
+        Shared by every delivery path — REST responses and realtime events —
+        so a subscriber cannot see what a reader of the same row cannot.
+
+        Args:
+            record: The record data to mask.
+            schema: The collection schema with PII field definitions.
+            user_groups: List of group names the user belongs to.
+            account_id: Optional account ID for superadmin PII bypass.
+
+        Returns:
+            Record with PII fields masked unless the user has pii_access.
+        """
+        if not cls.should_mask_for_user(user_groups, account_id):
+            return record
+
+        masked_record = record.copy()
+
+        for field in schema:
+            field_name = field.get("name")
+            if not field.get("pii", False):
+                continue
+            if field_name not in masked_record or masked_record[field_name] is None:
+                continue
+
+            # Default to full masking when the schema does not say how.
+            masked_record[field_name] = cls.mask_value(
+                masked_record[field_name],
+                field.get("mask_type") or "full",
+            )
+
+        return masked_record

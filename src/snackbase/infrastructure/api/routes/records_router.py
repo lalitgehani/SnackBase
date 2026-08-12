@@ -82,49 +82,9 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 
-def _mask_record_pii(
-    record: dict[str, Any],
-    schema: list[dict],
-    user_groups: list[str],
-    account_id: str | None = None,
-) -> dict[str, Any]:
-    """Mask PII fields in a record based on user groups.
-
-    Args:
-        record: The record data to mask.
-        schema: The collection schema with PII field definitions.
-        user_groups: List of group names the user belongs to.
-        account_id: Optional account ID for superadmin PII bypass.
-
-    Returns:
-        Record with PII fields masked if user doesn't have pii_access group.
-    """
-    # Check if user has pii_access group or is superadmin
-    if not PIIMaskingService.should_mask_for_user(user_groups, account_id):
-        # User has pii_access or is superadmin, return unmasked data
-        return record
-
-    # User doesn't have pii_access, mask PII fields
-    masked_record = record.copy()
-
-    for field in schema:
-        field_name = field.get("name")
-        is_pii = field.get("pii", False)
-        mask_type = field.get("mask_type")
-
-        if is_pii and field_name in masked_record and masked_record[field_name] is not None:
-            # Determine mask type (use default if not specified)
-            if not mask_type:
-                # Default to 'full' masking if no mask_type specified
-                mask_type = "full"
-
-            # Apply masking
-            masked_record[field_name] = PIIMaskingService.mask_value(
-                masked_record[field_name],
-                mask_type,
-            )
-
-    return masked_record
+# Realtime delivery has to mask exactly as REST does, so the implementation
+# lives on the shared service rather than in this router.
+_mask_record_pii = PIIMaskingService.mask_record
 
 
 def _get_encryption_service(request: Request) -> EncryptionService:

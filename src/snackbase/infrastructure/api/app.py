@@ -131,11 +131,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             logger.info("ON_SERVE hooks triggered")
 
 
-        # Initialize Realtime components
+        # Initialize Realtime components. The read policy makes a subscription
+        # answer to the same rules as a REST read; broadcasts run detached from
+        # the originating request, so it gets the session factory rather than a
+        # session.
         from snackbase.infrastructure.realtime.event_broadcaster import EventBroadcaster
         from snackbase.infrastructure.realtime.realtime_manager import ConnectionManager
+        from snackbase.infrastructure.realtime.realtime_policy import RealtimeReadPolicy
 
-        connection_manager = ConnectionManager()
+        connection_manager = ConnectionManager(
+            policy=RealtimeReadPolicy(db_manager.session_factory)
+        )
         event_broadcaster = EventBroadcaster(connection_manager)
 
         app.state.connection_manager = connection_manager
