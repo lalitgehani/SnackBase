@@ -1,9 +1,7 @@
 """Integration tests for Anonymous / Public Access.
 
-Anonymous access takes two things: the per-collection `allow_anonymous` opt-in,
-and an empty ("") rule for the operation. These tests keep the opt-in on and
-verify the rule half — empty allows, locked (None) returns 403, an expression
-returns 401 — plus the opt-in half itself at the end of the module.
+Verifies that collection rules with empty string ("") allow unauthenticated access,
+while locked (None) rules return 403 and expression rules return 401 for anonymous.
 """
 
 import pytest
@@ -34,14 +32,10 @@ async def setup_collection(client: AsyncClient, superadmin_token, regular_user_t
     )
     assert resp.status_code == 201, f"Failed to create collection: {resp.text}"
 
-    # Open create rule so we can seed a record; individual tests will override rules as needed.
-    # `allow_anonymous` is the per-collection opt-in that anonymous access needs on
-    # top of an empty rule (M-08); these tests are about the rule semantics, so the
-    # opt-in stays on throughout and has its own tests below.
+    # Open create rule so we can seed a record; individual tests will override rules as needed
     resp = await client.put(
         f"/api/v1/collections/{COLLECTION}/rules",
         json={
-            "allow_anonymous": True,
             "list_rule": "",
             "view_rule": "",
             "create_rule": "",
@@ -72,7 +66,6 @@ async def _set_rules(client, superadmin_token, **kwargs):
     """Helper to PUT collection rules."""
     headers = {"Authorization": f"Bearer {superadmin_token}"}
     default = {
-        "allow_anonymous": True,
         "list_rule": None,
         "view_rule": None,
         "create_rule": None,
@@ -381,72 +374,3 @@ async def test_anonymous_cannot_see_other_accounts_records(
     # Cleanup second account
     second_account_id = second_account_resp.json()["id"]
     await client.delete(f"/api/v1/accounts/{second_account_id}", headers=sa_headers)
-
-
-# ---------------------------------------------------------------------------
-# The allow_anonymous opt-in (M-08)
-# ---------------------------------------------------------------------------
-
-@pytest.mark.asyncio
-async def test_empty_rules_alone_do_not_allow_anonymous_access(
-    client: AsyncClient, superadmin_token
-):
-    """Without the opt-in, empty rules are not anonymously reachable.
-
-    An empty rule means "no restriction for my users". Anonymous callers choose
-    their tenant with the X-Account-ID header, so opening a collection to them
-    is a separate decision and has to be made explicitly.
-    """
-    await _set_rules(
-        client,
-        superadmin_token,
-        allow_anonymous=False,
-        list_rule="",
-        view_rule="",
-        create_rule="",
-    )
-
-    listed = await client.get(
-        f"/api/v1/records/{COLLECTION}", headers={"X-Account-ID": ACCOUNT_SLUG}
-    )
-    created = await client.post(
-        f"/api/v1/records/{COLLECTION}",
-        json={"title": "Planted"},
-        headers={"X-Account-ID": ACCOUNT_SLUG},
-    )
-
-    assert listed.status_code == 401
-    assert created.status_code == 401
-
-
-@pytest.mark.asyncio
-async def test_opt_in_without_an_empty_rule_still_denies(
-    client: AsyncClient, superadmin_token
-):
-    """The opt-in is permission to ask, not permission to read.
-
-    With the flag on but the operation locked, the answer is still no — the two
-    controls are independent and both have to allow.
-    """
-    await _set_rules(client, superadmin_token, allow_anonymous=True, list_rule=None)
-
-    response = await client.get(
-        f"/api/v1/records/{COLLECTION}", headers={"X-Account-ID": ACCOUNT_SLUG}
-    )
-
-    assert response.status_code == 403
-
-
-@pytest.mark.asyncio
-async def test_authenticated_access_is_unaffected_by_the_opt_in(
-    client: AsyncClient, superadmin_token, regular_user_token
-):
-    """A logged-in user's access does not depend on the anonymous opt-in."""
-    await _set_rules(client, superadmin_token, allow_anonymous=False, list_rule="")
-
-    response = await client.get(
-        f"/api/v1/records/{COLLECTION}",
-        headers={"Authorization": f"Bearer {regular_user_token}"},
-    )
-
-    assert response.status_code == 200

@@ -31,7 +31,6 @@ const collection: Collection = {
 const defaultRules = {
   id: 'rule_1',
   collection_id: 'col_abc123',
-  allow_anonymous: false,
   list_rule: null as string | null,
   view_rule: null as string | null,
   create_rule: null as string | null,
@@ -144,72 +143,22 @@ describe('CollectionRulesTab', () => {
     })
   })
 
-  describe('anonymous access warning', () => {
-    it('warns only when empty rules are combined with the opt-in', async () => {
-      // An empty rule means "no restriction for my users"; unauthenticated
-      // reachability additionally needs allow_anonymous (M-08), so that is what
-      // the warning is about.
-      setupRulesHandler({
-        ...defaultRules,
-        allow_anonymous: true,
-        list_rule: '',
-        view_rule: '',
-      })
+  describe('public access warning', () => {
+    it('shows public access warning when rules are empty strings', async () => {
+      setupRulesHandler({ ...defaultRules, list_rule: '', view_rule: '' })
       render(<CollectionRulesTab collection={collection} />)
       await waitFor(() => {
-        expect(screen.getByText(/anonymous access enabled/i)).toBeInTheDocument()
+        expect(screen.getByText(/public access enabled/i)).toBeInTheDocument()
       })
       expect(screen.getByTestId('rules-status-strip')).toHaveTextContent(
         /Public: List, View/i,
       )
-      expect(screen.getByTestId('rules-anonymous-chip')).toHaveTextContent(
-        /Anonymous: List, View/i,
-      )
-    })
-
-    it('does not warn for empty rules without the opt-in', async () => {
-      setupRulesHandler({ ...defaultRules, list_rule: '', view_rule: '' })
-      render(<CollectionRulesTab collection={collection} />)
-      await waitFor(() => {
-        expect(screen.getByTestId('rules-status-strip')).toHaveTextContent(
-          /Public: List, View/i,
-        )
-      })
-      expect(
-        screen.queryByText(/anonymous access enabled/i),
-      ).not.toBeInTheDocument()
-      expect(screen.queryByTestId('rules-anonymous-chip')).not.toBeInTheDocument()
-    })
-
-    it('sends the opt-in when the toggle is turned on', async () => {
-      const user = userEvent.setup()
-      let saved: Record<string, unknown> | null = null
-      setupRulesHandler({ ...defaultRules, list_rule: '' })
-      server.use(
-        http.put('/api/v1/collections/:name/rules', async ({ request }) => {
-          saved = (await request.json()) as Record<string, unknown>
-          return HttpResponse.json({ ...defaultRules, list_rule: '', ...saved })
-        }),
-      )
-      render(<CollectionRulesTab collection={collection} />)
-      await waitForRulesLoaded()
-
-      await user.click(screen.getByRole('switch', { name: /allow anonymous access/i }))
-      await waitFor(() => {
-        expect(screen.getByTestId('rules-dirty-bar')).toBeInTheDocument()
-      })
-      await user.click(screen.getByRole('button', { name: /save rules/i }))
-
-      await waitFor(() => {
-        expect(saved).not.toBeNull()
-      })
-      expect(saved).toMatchObject({ allow_anonymous: true })
     })
 
     it('does not show public warning when all rules are null', async () => {
       render(<CollectionRulesTab collection={collection} />)
       await waitForRulesLoaded()
-      expect(screen.queryByText(/anonymous access enabled/i)).not.toBeInTheDocument()
+      expect(screen.queryByText(/public access enabled/i)).not.toBeInTheDocument()
     })
   })
 

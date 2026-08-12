@@ -261,13 +261,6 @@ class CollectionRuleResponse(BaseModel):
 
     id: str = Field(..., description="Collection rule ID (UUID)")
     collection_id: str = Field(..., description="Collection ID")
-    allow_anonymous: bool = Field(
-        False,
-        description=(
-            "Whether unauthenticated callers may reach this collection. An empty "
-            "rule alone does not expose it: anonymous access also requires this flag."
-        ),
-    )
     list_rule: str | None = Field(
         None, description="Filter expression for listing records (null=locked, ''=public)"
     )
@@ -296,14 +289,6 @@ class CollectionRuleResponse(BaseModel):
 class UpdateCollectionRulesRequest(BaseModel):
     """Request schema for updating collection rules."""
 
-    allow_anonymous: bool | None = Field(
-        default=None,
-        description=(
-            "Allow unauthenticated access to this collection (omit=no change). "
-            "Required in addition to an empty rule for anonymous callers, who "
-            "choose their tenant with the X-Account-ID header."
-        ),
-    )
     list_rule: str | None = Field(
         default=None,
         description="Filter expression for listing records (null=locked, ''=public, omit=no change)",
@@ -370,7 +355,6 @@ class UpdateCollectionRulesRequest(BaseModel):
 class CollectionExportRules(BaseModel):
     """Rules in export format."""
 
-    allow_anonymous: bool = False
     list_rule: str | None = None
     view_rule: str | None = None
     create_rule: str | None = None

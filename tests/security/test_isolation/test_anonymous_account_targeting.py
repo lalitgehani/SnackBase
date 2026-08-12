@@ -1,24 +1,35 @@
-"""ISO-ANON-*: anonymous tenant targeting on public collections (M-08).
+"""ISO-ANON-*: the anonymous access model (M-08, accepted).
 
 ``_resolve_account_id`` scopes an unauthenticated request by whatever the caller
 puts in ``X-Account-ID``, validating only that the account exists. A collection
-whose rule was ``""`` (no restriction) was therefore reachable *for every tenant
-at once*: the anonymous caller chose which tenant to read from and — with an
-empty create rule — which tenant to write into.
+whose rule is ``""`` is therefore reachable anonymously *for every tenant at
+once*: the caller chooses which tenant to read from and, with an empty create
+rule, which one to write into.
 
-Anonymous access now takes two independent allowances, and both have to be
-present:
+**M-08 is accepted rather than fixed.** The VAPT asked for a separate
+per-collection opt-in on top of the rule, and that was built and then reverted:
+it added no authorization the rules did not already have. ``""`` is the
+documented "no rule" value, an expression such as ``@request.auth.id != ""``
+already means "authenticated callers only, no row restriction", and both the
+rules and the flag are superadmin-owned — so the flag moved no decision and
+closed no gap, while duplicating the control. Anonymous reachability therefore
+stays a property of the rules alone, as designed in
+``PRD_APP_BUILDER_FOUNDATION.md`` F6.3 (public forms, landing pages, public
+APIs).
 
-* **The ``allow_anonymous`` opt-in**, per collection, off by default. ``""``
-  means "no rule", the natural way to say "no restriction for my users"; it must
-  not silently also mean "reachable by the internet". Collections and their
-  rules are superadmin-owned, so opening one is an operator's decision, which is
-  what makes a public form or public API deliberate rather than incidental.
-* **An empty rule for the operation**, unchanged.
+What that leaves standing, and what these tests pin down:
 
-Public writes survive the change (``PRD_APP_BUILDER_FOUNDATION.md`` F6.3 built
-anonymous access for public forms and landing pages) but only where an operator
-has said so.
+* An empty rule means the collection is reachable by anyone, in whichever tenant
+  the header names. Setting one is a deliberate superadmin act.
+* Because collections and their rules are global, opening one opens it for every
+  account holding rows in it. Tenant admins cannot set rules and so cannot
+  consent — the residual risk of the model.
+* Scoping is still honest: a caller naming account A sees only A's rows, so this
+  is a reachability decision and not a cross-tenant leak.
+
+The two guards that asserted the opt-in (``ISO-ANON-010/011``) were removed with
+the flag; asserting a control that was deliberately not built is not a guard, it
+is a permanently failing test.
 """
 
 from __future__ import annotations
@@ -30,8 +41,6 @@ import pytest
 import pytest_asyncio
 from httpx import AsyncClient
 
-from tests.security.helpers import assert_denied
-
 ALPHA_MARKER = "ALPHA-PUBLIC-ROW"
 BETA_MARKER = "BETA-PUBLIC-ROW"
 
@@ -40,29 +49,13 @@ def _auth(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-async def _opt_in_to_anonymous(
-    client: AsyncClient, superadmin_token: str, collection: str
-) -> None:
-    """Turn on anonymous reachability for a collection."""
-    response = await client.put(
-        f"/api/v1/collections/{collection}/rules",
-        json={"allow_anonymous": True},
-        headers=_auth(superadmin_token),
-    )
-    assert response.status_code == 200, response.text
-
-
 @pytest_asyncio.fixture
 async def public_collection(
     client: AsyncClient,
     superadmin_token: str,
     security_test_data: dict[str, Any],
 ) -> dict[str, Any]:
-    """A collection with empty (unrestricted) rules, holding one row per tenant.
-
-    Deliberately does *not* set `allow_anonymous`: empty rules alone are exactly
-    the configuration that used to be reachable anonymously across every tenant.
-    """
+    """A fully public collection holding one row per tenant."""
     name = f"public_{uuid.uuid4().hex[:8]}"
     admin_headers = _auth(superadmin_token)
 
@@ -96,23 +89,21 @@ async def public_collection(
 
 
 @pytest.mark.asyncio
-async def test_iso_anon_001_opted_in_anonymous_read_is_scoped_to_the_header(
+async def test_iso_anon_001_anonymous_read_is_scoped_to_the_named_tenant(
     client: AsyncClient,
-    superadmin_token: str,
     security_test_data: dict[str, Any],
     public_collection: dict[str, Any],
 ) -> None:
-    """ISO-ANON-001: with the opt-in on, `X-Account-ID` scoping stays honest.
+    """ISO-ANON-001: `X-Account-ID` picks the tenant scope, and only that scope.
 
-    Originally a characterisation of pre-fix behaviour: it asserted that empty
-    rules alone made the collection anonymously readable, which is precisely
-    what ISO-ANON-011 requires to be denied. The half worth keeping is that the
-    scoping does not leak — choosing A returns A's rows and only A's rows — so
-    the collection is opted in here and that is what is asserted. The header is
-    resolved by slug or account code, not by account ID.
+    An empty rule is what makes this collection anonymously reachable, and the
+    header decides which account's rows the caller sees. The guard is that the
+    scoping holds: choosing A returns A's rows and none of B's, so the exposure
+    is the reachability the rule asked for and not a cross-tenant leak.
+
+    The header is resolved by slug or account code, not by account ID.
     """
     collection = public_collection["collection"]
-    await _opt_in_to_anonymous(client, superadmin_token, collection)
 
     as_a = await client.get(
         f"/api/v1/records/{collection}",
@@ -131,68 +122,22 @@ async def test_iso_anon_001_opted_in_anonymous_read_is_scoped_to_the_header(
 
 @pytest.mark.asyncio
 async def test_iso_anon_002_anonymous_request_without_header_is_rejected(
-    client: AsyncClient, superadmin_token: str, public_collection: dict[str, Any]
+    client: AsyncClient, public_collection: dict[str, Any]
 ) -> None:
-    """ISO-ANON-002: regression — an anonymous request must name a tenant.
-
-    Asserted on an opted-in collection: without the opt-in the answer is 401
-    before the header is ever considered, which is the point of ISO-ANON-011.
-    """
-    collection = public_collection["collection"]
-    await _opt_in_to_anonymous(client, superadmin_token, collection)
-
-    response = await client.get(f"/api/v1/records/{collection}")
+    """ISO-ANON-002: regression — an anonymous request must name a tenant."""
+    response = await client.get(f"/api/v1/records/{public_collection['collection']}")
 
     assert response.status_code == 400
 
 
 @pytest.mark.asyncio
 async def test_iso_anon_003_unknown_account_header_is_rejected(
-    client: AsyncClient, superadmin_token: str, public_collection: dict[str, Any]
+    client: AsyncClient, public_collection: dict[str, Any]
 ) -> None:
     """ISO-ANON-003: regression — a non-existent account is not silently accepted."""
-    collection = public_collection["collection"]
-    await _opt_in_to_anonymous(client, superadmin_token, collection)
-
     response = await client.get(
-        f"/api/v1/records/{collection}",
+        f"/api/v1/records/{public_collection['collection']}",
         headers={"X-Account-ID": "NO0000"},
     )
 
     assert response.status_code == 404
-
-
-@pytest.mark.asyncio
-async def test_iso_anon_010_anonymous_write_cannot_attribute_to_a_chosen_account(
-    client: AsyncClient,
-    security_test_data: dict[str, Any],
-    public_collection: dict[str, Any],
-) -> None:
-    """ISO-ANON-010: an anonymous create must not land in an arbitrary tenant."""
-    response = await client.post(
-        f"/api/v1/records/{public_collection['collection']}",
-        json={"title": "PLANTED-BY-ANONYMOUS"},
-        headers={"X-Account-ID": security_test_data["account_a"].slug},
-    )
-
-    assert_denied(response, allowed=(400, 401, 403))
-
-
-@pytest.mark.asyncio
-async def test_iso_anon_011_public_access_requires_explicit_opt_in(
-    client: AsyncClient,
-    superadmin_token: str,
-    security_test_data: dict[str, Any],
-    public_collection: dict[str, Any],
-) -> None:
-    """ISO-ANON-011: an empty rule alone must not expose a collection anonymously.
-
-    Anonymous reachability should require a deliberate per-collection flag, so
-    "no rule for my users" cannot be mistaken for "open to the internet".
-    """
-    response = await client.get(
-        f"/api/v1/records/{public_collection['collection']}",
-        headers={"X-Account-ID": security_test_data["account_a"].slug},
-    )
-
-    assert_denied(response, allowed=(401, 403), leak_markers=(ALPHA_MARKER,))

@@ -21,10 +21,7 @@ import {
 import RuleEditor from './RuleEditor';
 import FieldPermissionSelector from './FieldPermissionSelector';
 import RuleTesterDialog from './RuleTesterDialog';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import {
-  getAnonymousOperations,
   getCustomOperations,
   getLockedOperations,
   getPublicOperations,
@@ -114,12 +111,6 @@ export default function CollectionRulesTab({
     setError(null);
   };
 
-  const handleToggleAnonymous = (checked: boolean) => {
-    if (!draft || readOnly) return;
-    setDraft({ ...draft, allow_anonymous: checked });
-    setError(null);
-  };
-
   const handleDiscard = () => {
     if (!baseline) return;
     setDraft({ ...baseline });
@@ -132,7 +123,6 @@ export default function CollectionRulesTab({
     setError(null);
 
     const updateData: UpdateCollectionRulesData = {
-      allow_anonymous: draft.allow_anonymous,
       list_rule: draft.list_rule,
       view_rule: draft.view_rule,
       create_rule: draft.create_rule,
@@ -248,7 +238,6 @@ export default function CollectionRulesTab({
     .concat(['id', 'created_at', 'updated_at', 'created_by', 'account_id']);
 
   const publicOps = getPublicOperations(draft);
-  const anonymousOps = getAnonymousOperations(draft);
   const lockedOps = getLockedOperations(draft);
   const customOps = getCustomOperations(draft);
 
@@ -289,11 +278,9 @@ export default function CollectionRulesTab({
               bypass rules.
             </li>
             <li>
-              <strong className="text-foreground">Public</strong>: no restriction
-              for authenticated clients. Unauthenticated callers additionally need{' '}
-              <strong className="text-foreground">Allow anonymous access</strong>{' '}
-              below — an empty rule alone does not expose the collection to the
-              internet.
+              <strong className="text-foreground">Public</strong>: anyone including
+              unauthenticated users may perform the operation (rate limiting
+              applies).
             </li>
             <li>
               <strong className="text-foreground">Custom</strong>: requires
@@ -321,15 +308,6 @@ export default function CollectionRulesTab({
             Public: {publicOps.join(', ')}
           </span>
         )}
-        {anonymousOps.length > 0 && (
-          <span
-            className="inline-flex items-center gap-1.5 rounded-md border border-amber-500/40 bg-amber-50 px-2.5 py-1 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400"
-            data-testid="rules-anonymous-chip"
-          >
-            <Globe className="h-3.5 w-3.5" />
-            Anonymous: {anonymousOps.join(', ')}
-          </span>
-        )}
         {customOps.length > 0 && (
           <span className="inline-flex items-center gap-1.5 rounded-md border border-blue-500/40 bg-blue-50 px-2.5 py-1 text-blue-700 dark:bg-blue-950/30 dark:text-blue-400">
             <Shield className="h-3.5 w-3.5" />
@@ -344,56 +322,20 @@ export default function CollectionRulesTab({
         </div>
       )}
 
-      {anonymousOps.length > 0 && (
+      {publicOps.length > 0 && (
         <Alert className="border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800">
           <Globe className="h-4 w-4 text-amber-600 dark:text-amber-400" />
           <AlertTitle className="text-amber-800 dark:text-amber-400">
-            Anonymous access enabled
+            Public access enabled
           </AlertTitle>
           <AlertDescription className="text-amber-700 dark:text-amber-500">
-            Unauthenticated callers may:{' '}
-            <strong>{anonymousOps.join(', ')}</strong>. They choose which account
-            they act in with the <code className="font-mono text-xs">X-Account-ID</code>{' '}
-            header, so this applies to every account using this collection. Rate
-            limiting applies.
+            This collection allows unauthenticated access for:{' '}
+            <strong>{publicOps.join(', ')}</strong>. Rate limiting applies.
           </AlertDescription>
         </Alert>
       )}
 
       <div className="grid gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Anonymous access</CardTitle>
-            <CardDescription>
-              Off by default. Turn this on only for public forms, landing pages or
-              public APIs — an unauthenticated caller names the account it acts in,
-              so this opens the collection for every account that uses it.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-1">
-                <Label htmlFor="allow-anonymous" className="text-sm font-medium">
-                  Allow anonymous access
-                </Label>
-                <p className="text-sm text-muted-foreground">
-                  Required in addition to an empty rule. With this off, the
-                  operations marked Public stay available to authenticated clients
-                  only.
-                </p>
-              </div>
-              <Switch
-                id="allow-anonymous"
-                checked={draft.allow_anonymous}
-                onCheckedChange={(checked) =>
-                  handleToggleAnonymous(checked === true)
-                }
-                aria-label="Allow anonymous access"
-              />
-            </div>
-          </CardContent>
-        </Card>
-
         <Card>
           <CardHeader>
             <CardTitle>Access rules by operation</CardTitle>

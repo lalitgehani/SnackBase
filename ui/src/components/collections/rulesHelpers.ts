@@ -2,13 +2,8 @@
  * Helpers for collection access-rule draft comparison and status display.
  * Semantics match authorization middleware:
  * - null → locked (403 for non-superadmin)
- * - "" → unrestricted for authenticated users
+ * - "" → public (unauthenticated allowed)
  * - non-empty → custom expression (auth required)
- *
- * Unauthenticated access additionally requires `allow_anonymous`: an empty rule
- * says "no restriction for my users", and anonymous callers pick their tenant
- * with the X-Account-ID header, so exposing a collection to them is a separate
- * decision (M-08).
  */
 
 import type { CollectionRule } from '@/services/collections.service';
@@ -36,7 +31,6 @@ export const RULE_OPERATIONS: { key: RuleOperationKey; label: string }[] = [
 
 /** Snapshot of rule fields used for dirty comparison and saves. */
 export interface RulesSnapshot {
-  allow_anonymous: boolean;
   list_rule: string | null;
   view_rule: string | null;
   create_rule: string | null;
@@ -52,7 +46,6 @@ export function toRulesSnapshot(
   rules: Pick<CollectionRule, keyof RulesSnapshot>,
 ): RulesSnapshot {
   return {
-    allow_anonymous: rules.allow_anonymous,
     list_rule: rules.list_rule,
     view_rule: rules.view_rule,
     create_rule: rules.create_rule,
@@ -77,16 +70,10 @@ export function isRulesDirty(
   return normalizeRulesForCompare(draft) !== normalizeRulesForCompare(baseline);
 }
 
-/** Operations with no rule — unrestricted for authenticated users. */
 export function getPublicOperations(rules: RulesSnapshot): string[] {
   return RULE_OPERATIONS.filter(({ key }) => rules[key] === '').map(
     ({ label }) => label,
   );
-}
-
-/** Operations actually reachable without authentication. */
-export function getAnonymousOperations(rules: RulesSnapshot): string[] {
-  return rules.allow_anonymous ? getPublicOperations(rules) : [];
 }
 
 export function getLockedOperations(rules: RulesSnapshot): string[] {

@@ -236,18 +236,6 @@ async def check_collection_permission(
                 detail=f"Permission denied for {operation} on {collection} (no rules defined)",
             )
 
-        # Anonymous reachability is opt-in per collection. An empty rule is how
-        # an owner says "no restriction for my users"; on its own it must not
-        # also open the collection to the internet, because the account an
-        # anonymous caller lands in is whichever one the X-Account-ID header
-        # names — the caller picks the tenant.
-        if not rules.allow_anonymous:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Authentication required to access this resource",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-
         rule_expr = None
         allowed_fields: list | str = "*"
 

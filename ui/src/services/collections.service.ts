@@ -61,8 +61,6 @@ export interface UpdateCollectionData {
 export interface CollectionRule {
   id: string;
   collection_id: string;
-  /** Anonymous callers may reach this collection at all (needed on top of an empty rule). */
-  allow_anonymous: boolean;
   list_rule: string | null;
   view_rule: string | null;
   create_rule: string | null;
@@ -77,7 +75,6 @@ export interface CollectionRule {
 }
 
 export interface UpdateCollectionRulesData {
-  allow_anonymous?: boolean;
   list_rule?: string | null;
   view_rule?: string | null;
   create_rule?: string | null;

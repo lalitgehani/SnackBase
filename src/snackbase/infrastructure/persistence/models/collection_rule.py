@@ -5,7 +5,7 @@ Collection rules store row-level security rules for collections.
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, false, func
+from sqlalchemy import DateTime, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from snackbase.infrastructure.persistence.database import Base
@@ -20,8 +20,6 @@ class CollectionRuleModel(Base):
     Attributes:
         id: Primary key (UUID string).
         collection_id: Foreign key to collections table.
-        allow_anonymous: Whether unauthenticated callers may reach this
-            collection at all.
         list_rule: Filter expression for listing records.
         view_rule: Filter expression for viewing single record.
         create_rule: Validation expression for creating records.
@@ -49,18 +47,6 @@ class CollectionRuleModel(Base):
         unique=True,
         index=True,
         comment="Foreign key to collections table",
-    )
-
-    # Anonymous reachability is a separate, deliberate decision. An empty rule
-    # means "no restriction for my users", which is the natural way to express
-    # that and must not silently also mean "reachable by anyone on the internet,
-    # in whichever tenant the X-Account-ID header names".
-    allow_anonymous: Mapped[bool] = mapped_column(
-        Boolean,
-        nullable=False,
-        default=False,
-        server_default=false(),
-        comment="Whether unauthenticated callers may reach this collection",
     )
 
     # 5 operation rules (NULL = locked, "" = public, "expr" = filter)

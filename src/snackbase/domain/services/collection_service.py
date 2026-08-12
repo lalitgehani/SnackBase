@@ -102,9 +102,6 @@ class CollectionService:
         rule = CollectionRuleModel(
             id=str(uuid.uuid4()),
             collection_id=collection_id,
-            # Closed to anonymous callers unless asked for explicitly, so a new
-            # collection is never reachable from the internet by accident.
-            allow_anonymous=bool(rules_dict.get("allow_anonymous", False)),
             list_rule=rules_dict.get("list_rule"),
             view_rule=rules_dict.get("view_rule"),
             create_rule=rules_dict.get("create_rule"),

@@ -45,10 +45,10 @@ dropping a file into this tree is enough to have it selected by `-m security`.
 
 ## `xfail(strict=True)` convention
 
-**Every Critical, High and Medium finding is now fixed, so the suite carries no
-`xfail` markers at all.** A run should report only `PASSED` and the three
-platform-conditional `SKIPPED` guards below; a `VULNERABLE` row means a fix has
-regressed.
+**The suite carries no `xfail` markers.** Every Critical and High finding is
+fixed, as are nine of the ten Mediums; M-08 is accepted rather than fixed (below).
+A run should report only `PASSED` and the three platform-conditional `SKIPPED`
+guards; a `VULNERABLE` row means a fix has regressed.
 
 The convention stays documented because it is how a newly-found issue is
 guarded. A test that asserts the *secure* outcome for an unfixed finding would
@@ -73,8 +73,30 @@ recorded in the test docstring and the commit:
 | ---- | ---------------- |
 | `RT-010/011/012` | Drove a bare `ConnectionManager()` with no rule source while asserting view-rule and projection behaviour. They now build a real collection and use the shipped `RealtimeReadPolicy`, which is the shape F4.1 specified. |
 | `FILE-MIME-002` | Asserted the identical upload `FILE-MIME-001` requires to be refused would be accepted — the two halves of F4.2's "rejected **or** neutralized". It now uploads a genuine PNG under an attacker-chosen `.sh` name and asserts the stored extension follows the content. |
-| `ISO-ANON-001` | A declared characterisation of pre-fix behaviour, asserting the very request `ISO-ANON-011` requires to be denied. It now opts in and keeps the half that still holds: the tenant scoping is honest. |
+| `ISO-ANON-001` | A declared characterisation of pre-fix behaviour, asserting the very request `ISO-ANON-011` required to be denied. With M-08 accepted it documents the shipped model instead: anonymous reads are scoped to the tenant the header names and leak nothing across it. |
 | `AUTH-TK-007` | Checked the rotated-in refresh token *after* replaying the spent one, which M-05 turns into family revocation. The two steps are now the other way round. |
+
+## Accepted findings
+
+A finding can be closed by deciding not to change the behaviour. That decision
+belongs in this file, not in a permanently failing test: a guard asserting a
+control nobody built is noise, and `xfail` would report it as an open
+vulnerability forever.
+
+**M-08 — anonymous `X-Account-ID` tenant targeting.** The VAPT asked for an
+explicit per-collection opt-in on top of the rule. It was built and reverted,
+because it granted nothing the rules did not already express: `""` is the
+documented "no rule" value, `@request.auth.id != ""` already means
+"authenticated callers only, no row restriction", and rules and flag alike are
+superadmin-owned — so the flag duplicated an existing control without moving a
+decision. Anonymous reachability stays a property of the rules, as designed in
+`PRD_APP_BUILDER_FOUNDATION.md` F6.3.
+
+Residual risk, accepted knowingly: collections and their rules are global, so
+opening one for anonymous access opens it for every account with rows in it, and
+tenant admins cannot set rules and therefore cannot consent. `ISO-ANON-001`
+pins down what still must hold — the scoping is honest, so this is a
+reachability decision and not a cross-tenant leak.
 
 ## Platform-conditional guards
 
@@ -148,7 +170,7 @@ remediation note.
 | M-05 | Refresh-token reuse detection | `AUTH-RF-003/004` |
 | M-06 | Invitation-token hashing | `AUTH-INV-001` (stored as a hash), `AUTH-INV-002` (issued token still resolves) |
 | M-07 | Login user enumeration | `AUTH-LI-010/011/012` |
-| M-08 | Anonymous `X-Account-ID` tenant targeting | `ISO-ANON-010/011` + the `allow_anonymous` cases in `tests/integration/test_anonymous_access.py` |
+| M-08 | Anonymous `X-Account-ID` tenant targeting | **Accepted, not fixed** — see below. The model is documented by `ISO-ANON-001/002/003` and `tests/integration/test_anonymous_access.py`. |
 | M-09 | Build/runtime config drift | `CFG-BUILD-010/011` |
 | M-10 | Production logging bootstrap | `CFG-LOG-001/002` |
 
