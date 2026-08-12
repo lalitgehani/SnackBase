@@ -189,13 +189,14 @@ async def test_oauth_user_cannot_login_with_password(client: AsyncClient, db_ses
     }
     
     res = await client.post("/api/v1/auth/login", json=payload)
-    assert res.status_code == 400
+
+    # The refusal is the generic 401 an unknown address gets: naming the
+    # provider pre-authentication is user enumeration (M-07, AUTH-LI-010/011/012).
+    assert res.status_code == 401
     data = res.json()
-    assert data["error"] == "Wrong authentication method"
-    assert "OAuth" in data["message"]
-    assert data["auth_provider"] == "oauth"
-    assert data["provider_name"] == "google"
-    assert "/api/v1/auth/oauth/google/authorize" in data["redirect_url"]
+    assert data["error"] == "Authentication failed"
+    for leaked in ("oauth", "google", "authorize"):
+        assert leaked not in res.text.lower()
 
 
 @pytest.mark.asyncio
@@ -243,10 +244,10 @@ async def test_saml_user_cannot_login_with_password(client: AsyncClient, db_sess
     }
     
     res = await client.post("/api/v1/auth/login", json=payload)
-    assert res.status_code == 400
+
+    # Same generic 401 as an unknown address — see the OAuth case above.
+    assert res.status_code == 401
     data = res.json()
-    assert data["error"] == "Wrong authentication method"
-    assert "SAML" in data["message"]
-    assert data["auth_provider"] == "saml"
-    assert data["provider_name"] == "okta"
-    assert "/api/v1/auth/saml/okta/login" in data["redirect_url"]
+    assert data["error"] == "Authentication failed"
+    for leaked in ("saml", "okta", "login flow"):
+        assert leaked not in res.text.lower()

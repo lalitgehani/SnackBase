@@ -287,7 +287,6 @@ async def sso_only_user(db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(reason="M-07 fix pending", strict=True)
 async def test_auth_li_010_sso_only_user_returns_generic_401(
     attack_client: AttackClient, sso_only_user
 ):
@@ -308,7 +307,6 @@ async def test_auth_li_010_sso_only_user_returns_generic_401(
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(reason="M-07 fix pending", strict=True)
 async def test_auth_li_011_sso_response_discloses_no_provider_details(
     attack_client: AttackClient, sso_only_user
 ):
@@ -331,7 +329,6 @@ async def test_auth_li_011_sso_response_discloses_no_provider_details(
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(reason="M-07 fix pending", strict=True)
 async def test_auth_li_012_sso_and_unknown_user_are_indistinguishable(
     attack_client: AttackClient, sso_only_user
 ):

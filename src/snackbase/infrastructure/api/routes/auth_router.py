@@ -410,7 +410,8 @@ async def login(
     0. Refuse outright if this client IP has spent its failed-attempt budget
     1. Resolve account by slug or ID
     2. Look up user by email in account
-    3. Check authentication provider (OAuth/SAML users must use their respective flows)
+    3. Check authentication provider (OAuth/SAML users must use their respective
+       flows; the refusal is the same generic 401, never a provider disclosure)
     4. Verify password using timing-safe comparison, honouring any account lockout
     5. Check if user is active
     6. Update last_login timestamp and clear the failure counters
@@ -516,7 +517,13 @@ async def login(
         return auth_error
 
     # 3. Check authentication provider
-    # Users with OAuth or SAML must use their respective authentication flows
+    #    Users with OAuth or SAML must use their respective authentication flows.
+    #    The refusal is the same generic 401 an unknown address gets: naming the
+    #    provider here would answer "does this address exist here, and which IdP
+    #    does it use" before any credential has been proven — which tells an
+    #    attacker exactly which identity provider to phish. The available flows
+    #    are discoverable per account through the provider configuration API,
+    #    which requires authentication.
     if user.auth_provider != "password":
         # Still verify password to maintain constant-time behavior (prevent timing attacks)
         verify_password(request.password, DUMMY_PASSWORD_HASH)
@@ -528,31 +535,8 @@ async def login(
             auth_provider=user.auth_provider,
             provider_name=user.auth_provider_name,
         )
-
-        # Determine the correct authentication URL based on provider type
-        if user.auth_provider == "oauth":
-            provider_name = user.auth_provider_name or "oauth"
-            redirect_url = f"/api/v1/auth/oauth/{provider_name}/authorize"
-            message = "This account uses OAuth authentication. Please use the OAuth login flow."
-        elif user.auth_provider == "saml":
-            provider_name = user.auth_provider_name or "saml"
-            redirect_url = f"/api/v1/auth/saml/{provider_name}/login"
-            message = "This account uses SAML authentication. Please use the SAML SSO flow."
-        else:
-            # Unknown provider type - return generic error
-            redirect_url = None
-            message = f"This account uses {user.auth_provider} authentication. Please use the correct login method."
-
-        return JSONResponse(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            content={
-                "error": "Wrong authentication method",
-                "message": message,
-                "auth_provider": user.auth_provider,
-                "provider_name": user.auth_provider_name,
-                "redirect_url": redirect_url,
-            },
-        )
+        record_ip_failure(client_ip)
+        return auth_error
 
     # 4. Verify password using timing-safe comparison
     if not verify_password(request.password, user.password_hash):
