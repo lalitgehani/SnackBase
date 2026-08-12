@@ -1134,6 +1134,15 @@ wheels = [
 ]
 
 [[package]]
+name = "puremagic"
+version = "2.2.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/24/74/ce5987ab9b8aec4ced06e2723ebb604205c9eb58abdad91453da93166380/puremagic-2.2.0.tar.gz", hash = "sha256:eb4bddf07c177c4b434554b92165b67449f5a51e152b976202d6254498810eef", size = 1189752, upload-time = "2026-04-08T01:39:55.562Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/95/81/314320aeffd88dadeac553ff9eb10f54507ab41deccd0c69f6221d254a0a/puremagic-2.2.0-py3-none-any.whl", hash = "sha256:c4f7ed7307f056c787199acfda839555921be1df13abba61e8e6db0c787ae1d0", size = 71971, upload-time = "2026-04-08T01:39:54.169Z" },
+]
+
+[[package]]
 name = "pycparser"
 version = "3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1502,6 +1511,7 @@ dependencies = [
     { name = "httpx" },
     { name = "jinja2" },
     { name = "lxml" },
+    { name = "puremagic" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pyjwt" },
@@ -1546,6 +1556,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "jinja2", specifier = ">=3.1.6" },
     { name = "lxml", specifier = ">=6.0.2" },
+    { name = "puremagic", specifier = ">=2.2.0" },
     { name = "pydantic", specifier = ">=2.10.0" },
     { name = "pydantic-settings", specifier = ">=2.6.0" },
     { name = "pyjwt", specifier = ">=2.8.0" },

@@ -7,7 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from snackbase.core.config import get_settings
 from snackbase.core.logging import get_logger
 from snackbase.domain.services.file_storage_service import (
+    SNIFF_BYTES,
     buffer_upload_within_limit,
+    detect_mime_type,
     size_limit_error,
 )
 from snackbase.infrastructure.api.dependencies import CurrentUser, get_current_user
@@ -66,9 +68,10 @@ async def upload_file(
     """
     account_id = current_user.account_id
 
-    # Get file info
+    # Get file info. The declared type is a claim to be checked against the
+    # bytes, not an answer.
     filename = file.filename or "unnamed"
-    mime_type = file.content_type or "application/octet-stream"
+    declared_mime_type = file.content_type or "application/octet-stream"
 
     max_size = get_settings().max_file_size
 
@@ -82,7 +85,12 @@ async def upload_file(
 
         content, size = await buffer_upload_within_limit(file.read, max_size)
 
-        # Save file (this validates size and MIME type)
+        head = content.read(SNIFF_BYTES)
+        content.seek(0)
+        mime_type = detect_mime_type(head, declared_mime_type)
+
+        # Save file (this validates size and MIME type, and names the stored
+        # file from the detected type)
         file_metadata = await storage_service.save_file(
             account_id=account_id,
             file_content=content,
@@ -96,6 +104,8 @@ async def upload_file(
             account_id=account_id,
             filename=filename,
             size=size,
+            mime_type=mime_type,
+            declared_mime_type=declared_mime_type,
             user_id=current_user.user_id,
         )
 

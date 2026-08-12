@@ -140,8 +140,9 @@ async def test_create_record_with_file_field(
     )
     assert collection_response.status_code == 201
 
-    # Upload a file
-    file_content = b"document content"
+    # Upload a file. The bytes have to actually be a PDF: uploads are validated
+    # by content, not by the declared Content-Type (M-02).
+    file_content = b"%PDF-1.4\n1 0 obj\n<< >>\nendobj\ntrailer\n<< >>\n%%EOF\n"
     files = {"file": ("document.pdf", BytesIO(file_content), "application/pdf")}
 
     upload_response = await client.post(

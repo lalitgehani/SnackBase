@@ -52,7 +52,6 @@ def _cleanup(account_id: str) -> None:
         ("payload.bin", ELF_HEADER_BYTES),
     ],
 )
-@pytest.mark.xfail(reason="M-02 fix pending", strict=True)
 async def test_file_mime_001_spoofed_content_type_is_rejected(
     client: AsyncClient,
     security_test_data: dict[str, Any],
@@ -75,14 +74,22 @@ async def test_file_mime_001_spoofed_content_type_is_rejected(
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(reason="M-02 fix pending", strict=True)
 async def test_file_mime_002_stored_extension_derives_from_content(
     client: AsyncClient, security_test_data: dict[str, Any]
 ) -> None:
-    """FILE-MIME-002: the stored extension must not be attacker-chosen."""
+    """FILE-MIME-002: the stored extension must not be attacker-chosen.
+
+    The payload is a *genuine* PNG carrying an attacker-chosen `.sh` filename.
+    As first written this case uploaded the shell script that FILE-MIME-001
+    requires to be refused, and asserted it was accepted (201) with a
+    neutralised extension — the two halves of F4.2's "rejected **or**
+    neutralized". The fix rejects, so the two assertions could not both hold;
+    what remains testable, and is what the finding asks for, is that the
+    extension on disk comes from the content rather than from the request.
+    """
     response = await client.post(
         "/api/v1/files/upload",
-        files={"file": ("payload.sh", BytesIO(SHELL_SCRIPT_BYTES), "image/png")},
+        files={"file": ("payload.sh", BytesIO(PNG_BYTES), "image/png")},
         headers=_auth(security_test_data["user_a_token"]),
     )
 
@@ -91,6 +98,9 @@ async def test_file_mime_002_stored_extension_derives_from_content(
         stored_path = response.json()["file"]["path"]
         assert not stored_path.endswith(".sh"), (
             f"the request-supplied extension was preserved on disk: {stored_path}"
+        )
+        assert stored_path.endswith(".png"), (
+            f"the stored extension does not reflect the detected type: {stored_path}"
         )
     finally:
         _cleanup(security_test_data["account_a"].id)

