@@ -720,10 +720,21 @@ async def refresh_tokens(
         return auth_error
 
     if token_model.is_revoked:
+        # A revoked token being presented again is not an ordinary error: the
+        # token was already spent, so two parties hold it and one of them is an
+        # attacker. Which one cannot be told apart from here, so the whole
+        # family dies and both are forced to re-authenticate — the tokens
+        # issued before the theft was detected are just as compromised.
+        revoked = await refresh_token_repo.revoke_all_for_user(
+            token_model.user_id, token_model.account_id
+        )
+        await session.commit()
         logger.warning(
-            "Token refresh failed: token already revoked",
+            "Refresh token reuse detected: revoked every session for the user",
             token_id=token_model.id,
             user_id=token_model.user_id,
+            account_id=token_model.account_id,
+            tokens_revoked=revoked,
         )
         return auth_error
 

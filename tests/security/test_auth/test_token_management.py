@@ -209,7 +209,13 @@ async def test_auth_tk_006_used_refresh_token_replay(attack_client: AttackClient
 
 @pytest.mark.asyncio
 async def test_auth_tk_007_refresh_token_rotation(attack_client: AttackClient, token_test_user):
-    """AUTH-TK-007: Verify refresh token rotation (old one invalidated)."""
+    """AUTH-TK-007: Verify refresh token rotation (old one invalidated).
+
+    The rotated-in token is exercised *before* the spent one is replayed: since
+    M-05, a replay is treated as a stolen-token signal and revokes the whole
+    family, so checking the new token afterwards would assert the pre-M-05
+    behaviour. Family revocation itself is covered by `AUTH-RF-003/004`.
+    """
     # This is essentially AUTH-TK-006 but focuses on the rotation logic
     # 1. Login
     login_payload = {
@@ -226,13 +232,13 @@ async def test_auth_tk_007_refresh_token_rotation(attack_client: AttackClient, t
 
     assert new_refresh_token != old_refresh_token
 
-    # 3. Verify old is invalid
-    response = await attack_client.post("/api/v1/auth/refresh", json={"refresh_token": old_refresh_token}, description="Verify old token is invalid")
-    assert response.status_code == status.HTTP_401_UNAUTHORIZED
-
-    # 4. Verify new is valid
+    # 3. Verify new is valid
     response = await attack_client.post("/api/v1/auth/refresh", json={"refresh_token": new_refresh_token}, description="Verify new token is valid")
     assert response.status_code == status.HTTP_200_OK
+
+    # 4. Verify old is invalid
+    response = await attack_client.post("/api/v1/auth/refresh", json={"refresh_token": old_refresh_token}, description="Verify old token is invalid")
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
 @pytest.mark.asyncio

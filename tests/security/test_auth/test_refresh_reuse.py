@@ -114,7 +114,6 @@ async def test_auth_rf_002_rotated_out_token_is_refused(
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(reason="M-05 fix pending", strict=True)
 async def test_auth_rf_003_reuse_revokes_the_whole_token_family(
     client: AsyncClient, refresh_user: dict[str, Any]
 ) -> None:
@@ -137,7 +136,6 @@ async def test_auth_rf_003_reuse_revokes_the_whole_token_family(
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(reason="M-05 fix pending", strict=True)
 async def test_auth_rf_004_reuse_revokes_other_sessions(
     client: AsyncClient, refresh_user: dict[str, Any]
 ) -> None:

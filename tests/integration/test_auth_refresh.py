@@ -69,14 +69,19 @@ async def test_refresh_token_flow(client: AsyncClient, db_session: AsyncSession)
     assert refresh_token_2 != refresh_token_1
     assert access_token_2 != access_token_1
     
-    # 4. Verify old refresh token is invalid (Rotation)
-    # Note: Depending on implementation, reused tokens might be just invalid or trigger security alerts
-    reuse_res = await client.post("/api/v1/auth/refresh", json={"refresh_token": refresh_token_1})
-    assert reuse_res.status_code == 401
-    
-    # 5. Verify new refresh token works
+    # 4. Verify new refresh token works
     refresh_res_2 = await client.post("/api/v1/auth/refresh", json={"refresh_token": refresh_token_2})
     assert refresh_res_2.status_code == 200
+
+    # 5. Verify old refresh token is invalid (Rotation)
+    # Replaying a spent token is treated as a stolen-token signal: it 401s and
+    # revokes every refresh token for the user (M-05), so this comes last.
+    reuse_res = await client.post("/api/v1/auth/refresh", json={"refresh_token": refresh_token_1})
+    assert reuse_res.status_code == 401
+
+    # 6. The family revocation forces re-authentication
+    after_reuse = await client.post("/api/v1/auth/refresh", json={"refresh_token": refresh_res_2.json()["refresh_token"]})
+    assert after_reuse.status_code == 401
 
 @pytest.mark.asyncio
 async def test_refresh_token_invalid(client: AsyncClient):
