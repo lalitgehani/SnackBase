@@ -1,10 +1,17 @@
 # SnackBase multi-stage image: React admin UI + Python API.
 # Runtime keeps `uv` for Functions env builds, but not the C toolchain.
+#
+# Every base image is pinned by digest as well as tag: a floating tag resolves
+# to whatever the registry serves at build time, so the same commit would not
+# produce the same image and a compromised upstream tag would go unnoticed.
+# The Python minor must match `.python-version` — otherwise CI validates an
+# interpreter that never ships. Refresh a digest with:
+#   docker buildx imagetools inspect <image>:<tag>
 
 # ---------------------------------------------------------------------------
 # Stage 1: Build React frontend
 # ---------------------------------------------------------------------------
-FROM node:22-alpine AS frontend-builder
+FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS frontend-builder
 
 WORKDIR /app/ui
 
@@ -26,10 +33,10 @@ RUN npm run build
 # ---------------------------------------------------------------------------
 # Stage 2: Install Python dependencies (wheels only — no compiler)
 # ---------------------------------------------------------------------------
-FROM python:3.12-slim AS python-builder
+FROM python:3.14-slim@sha256:a7fb1e634c4a578f9e0bd6327f11a3cde11b7a9395f48e24360c0988bcc5c2bc AS python-builder
 
 # Pin uv; bump intentionally when upgrading the Functions installer.
-COPY --from=ghcr.io/astral-sh/uv:0.12.1 /uv /bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.12.1@sha256:cf4eedcaa81655197f625739489effcbe71b61ceb1506f332c3facae5deceded /uv /bin/uv
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -53,7 +60,7 @@ RUN uv sync --frozen --no-dev --no-editable \
 # ---------------------------------------------------------------------------
 # Stage 3: Slim runtime (no gcc; uv kept for Functions)
 # ---------------------------------------------------------------------------
-FROM python:3.12-slim
+FROM python:3.14-slim@sha256:a7fb1e634c4a578f9e0bd6327f11a3cde11b7a9395f48e24360c0988bcc5c2bc
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -71,7 +78,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # uv is required at runtime for Functions per-version env builds.
-COPY --from=ghcr.io/astral-sh/uv:0.12.1 /uv /bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.12.1@sha256:cf4eedcaa81655197f625739489effcbe71b61ceb1506f332c3facae5deceded /uv /bin/uv
 
 # Application virtualenv and source
 COPY --from=python-builder /app/.venv /app/.venv

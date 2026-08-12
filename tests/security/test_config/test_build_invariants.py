@@ -19,8 +19,6 @@ import re
 import tomllib
 from pathlib import Path
 
-import pytest
-
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DOCKERFILE = REPO_ROOT / "Dockerfile"
 PYTHON_VERSION_FILE = REPO_ROOT / ".python-version"
@@ -67,7 +65,6 @@ def test_cfg_build_002_requires_python_covers_the_declared_version() -> None:
     )
 
 
-@pytest.mark.xfail(reason="M-09 fix pending", strict=True)
 def test_cfg_build_010_dockerfile_python_matches_declared_version() -> None:
     """CFG-BUILD-010: the runtime image must use the pinned Python minor."""
     declared = _declared_python_minor()
@@ -81,7 +78,6 @@ def test_cfg_build_010_dockerfile_python_matches_declared_version() -> None:
     )
 
 
-@pytest.mark.xfail(reason="M-09 fix pending", strict=True)
 def test_cfg_build_011_base_images_are_digest_pinned() -> None:
     """CFG-BUILD-011: every base image must be pinned by digest."""
     floating = [
