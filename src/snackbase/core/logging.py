@@ -134,10 +134,12 @@ def configure_logging(settings: Any | None = None) -> None:
             cache_logger_on_first_use=True,
         )
 
-        # Configure standard logging for third-party libraries
+        # Configure standard logging for third-party libraries. `stream` and
+        # `handlers` are mutually exclusive in basicConfig — passing both raises
+        # ValueError on a fresh root logger, i.e. at production boot. The handler
+        # already writes to stdout, so only `handlers` is passed.
         logging.basicConfig(
             format="%(message)s",
-            stream=sys.stdout,
             level=getattr(logging, settings.log_level),
             handlers=[logging.StreamHandler(sys.stdout)],
         )

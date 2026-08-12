@@ -57,7 +57,6 @@ def pristine_root_logger() -> Iterator[None]:
         structlog.configure(**saved_structlog)
 
 
-@pytest.mark.xfail(reason="M-10 fix pending", strict=True)
 def test_cfg_log_001_production_json_logging_configures_cleanly() -> None:
     """CFG-LOG-001: the shipping default must not raise during bootstrap."""
     settings = Settings(environment="production", log_format="json", **VALID_SECRETS)
@@ -66,7 +65,6 @@ def test_cfg_log_001_production_json_logging_configures_cleanly() -> None:
         configure_logging(settings)
 
 
-@pytest.mark.xfail(reason="M-10 fix pending", strict=True)
 def test_cfg_log_002_app_factory_starts_under_production_json_logging() -> None:
     """CFG-LOG-002: the app must be constructible under the same settings."""
     from snackbase.infrastructure.api.app import create_app
