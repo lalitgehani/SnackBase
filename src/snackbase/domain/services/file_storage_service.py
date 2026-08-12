@@ -6,8 +6,10 @@ Files are stored in account-specific directories with UUID-based filenames.
 
 import json
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
+from tempfile import SpooledTemporaryFile
 from typing import BinaryIO
 
 from snackbase.core.config import get_settings
@@ -15,6 +17,68 @@ from snackbase.core.logging import get_logger
 
 logger = get_logger(__name__)
 settings = get_settings()
+
+# Upload bodies are consumed in slices of this size. Small enough that a
+# rejected upload never costs more than one slice of memory, large enough that
+# a legitimate upload is not thousands of round trips.
+UPLOAD_CHUNK_SIZE = 1024 * 1024  # 1 MiB
+
+
+def size_limit_error(size: int, max_size: int) -> ValueError:
+    """Build the canonical over-size rejection error.
+
+    Shared so every path that enforces the cap — the streaming reader, the
+    domain service, the storage providers — reports it identically.
+    """
+    return ValueError(
+        f"File size ({size / (1024 * 1024):.2f}MB) exceeds maximum allowed "
+        f"size ({max_size / (1024 * 1024):.2f}MB)"
+    )
+
+
+async def buffer_upload_within_limit(
+    read: Callable[[int], Awaitable[bytes]],
+    max_size: int,
+    chunk_size: int = UPLOAD_CHUNK_SIZE,
+) -> tuple[BinaryIO, int]:
+    """Consume an upload in bounded slices, refusing it the moment it is too big.
+
+    Reading the whole body first and checking the size afterwards costs exactly
+    as much memory as accepting it would have, which makes the limit useless as
+    a memory bound. Here the running total is checked after every slice, so an
+    over-limit upload is abandoned mid-stream.
+
+    Args:
+        read: Awaitable reader accepting a maximum byte count, e.g.
+            ``UploadFile.read``. Never called without a bound.
+        max_size: Maximum accepted size in bytes.
+        chunk_size: Bytes to request per read.
+
+    Returns:
+        Tuple of (rewound stream positioned at 0, total bytes read).
+
+    Raises:
+        ValueError: If the upload exceeds ``max_size``.
+    """
+    # Spools to disk past one chunk, so a large accepted upload does not sit in
+    # memory either.
+    buffered: SpooledTemporaryFile[bytes] = SpooledTemporaryFile(max_size=chunk_size)
+    total = 0
+
+    while True:
+        chunk = await read(chunk_size)
+        if not chunk:
+            break
+
+        total += len(chunk)
+        if total > max_size:
+            buffered.close()
+            raise size_limit_error(total, max_size)
+
+        buffered.write(chunk)
+
+    buffered.seek(0)
+    return buffered, total
 
 
 @dataclass
@@ -110,12 +174,7 @@ class FileStorageService:
             ValueError: If file size exceeds the limit.
         """
         if size > settings.max_file_size:
-            max_size_mb = settings.max_file_size / (1024 * 1024)
-            actual_size_mb = size / (1024 * 1024)
-            raise ValueError(
-                f"File size ({actual_size_mb:.2f}MB) exceeds maximum allowed "
-                f"size ({max_size_mb:.2f}MB)"
-            )
+            raise size_limit_error(size, settings.max_file_size)
 
     def validate_mime_type(self, mime_type: str) -> None:
         """Validate MIME type against allowed types.

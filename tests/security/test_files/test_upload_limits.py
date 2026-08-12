@@ -75,7 +75,6 @@ async def test_file_size_001_over_limit_upload_is_rejected(
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(reason="M-03 fix pending", strict=True)
 async def test_file_size_002_over_limit_upload_is_not_fully_buffered(
     client: AsyncClient,
     security_test_data: dict[str, Any],

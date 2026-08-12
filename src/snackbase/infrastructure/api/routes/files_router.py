@@ -1,10 +1,15 @@
 """File storage API endpoints for uploading and downloading files."""
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import FileResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from snackbase.core.config import get_settings
 from snackbase.core.logging import get_logger
+from snackbase.domain.services.file_storage_service import (
+    buffer_upload_within_limit,
+    size_limit_error,
+)
 from snackbase.infrastructure.api.dependencies import CurrentUser, get_current_user
 from snackbase.infrastructure.api.schemas.file_schemas import (
     FileMetadataResponse,
@@ -17,6 +22,23 @@ logger = get_logger(__name__)
 
 router = APIRouter(tags=["files"])
 
+# A multipart body carries part headers and boundaries on top of the file
+# itself, so a body a little over the cap can still hold a legal file. Only a
+# body that cannot possibly be within the cap is refused up front; anything
+# that slips past is caught by the bounded read.
+_MULTIPART_ENVELOPE_ALLOWANCE = 8 * 1024
+
+
+def _declared_body_size(request: Request) -> int | None:
+    """Return the request's declared Content-Length, if it sent a usable one."""
+    raw = request.headers.get("content-length")
+    if raw is None:
+        return None
+    try:
+        return int(raw)
+    except ValueError:
+        return None
+
 
 @router.post(
     "/upload",
@@ -26,6 +48,7 @@ router = APIRouter(tags=["files"])
     description="Upload a file to storage. Returns file metadata including path for use in records.",
 )
 async def upload_file(
+    request: Request,
     file: UploadFile = File(..., description="File to upload"),
     current_user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
@@ -36,6 +59,10 @@ async def upload_file(
     Returns metadata that should be stored in a record's file field.
 
     Requires authentication. File size and MIME type are validated against configured limits.
+
+    The body is never read in one unbounded call: an obviously-too-large
+    declaration is refused before reading anything, and the rest is consumed in
+    bounded slices that abort as soon as the running total crosses the limit.
     """
     account_id = current_user.account_id
 
@@ -43,20 +70,22 @@ async def upload_file(
     filename = file.filename or "unnamed"
     mime_type = file.content_type or "application/octet-stream"
 
-    # Read file content
-    content = await file.read()
-    size = len(content)
+    max_size = get_settings().max_file_size
 
     # Create storage service (resolves active configured provider)
     storage_service = StorageService(db)
 
     try:
-        # Save file (this validates size and MIME type)
-        from io import BytesIO
+        declared = _declared_body_size(request)
+        if declared is not None and declared > max_size + _MULTIPART_ENVELOPE_ALLOWANCE:
+            raise size_limit_error(declared, max_size)
 
+        content, size = await buffer_upload_within_limit(file.read, max_size)
+
+        # Save file (this validates size and MIME type)
         file_metadata = await storage_service.save_file(
             account_id=account_id,
-            file_content=BytesIO(content),
+            file_content=content,
             filename=filename,
             mime_type=mime_type,
             size=size,
