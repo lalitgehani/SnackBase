@@ -408,6 +408,35 @@ describe('InvitationsPage', () => {
       const copyButtons = screen.getAllByTitle(/copy link/i)
       expect(copyButtons.length).toBeGreaterThanOrEqual(1)
     })
+
+    it('copies the freshly issued token, not one from the listing', async () => {
+      // The server stores only a hash of the invitation token, so a listing
+      // cannot hand out a usable one — copying issues a new token via resend.
+      const written: string[] = []
+      const user = userEvent.setup({ writeToClipboard: false })
+      vi.spyOn(navigator.clipboard, 'writeText').mockImplementation((text: string) => {
+        written.push(text)
+        return Promise.resolve()
+      })
+      server.use(
+        http.post('/api/v1/invitations/inv-1/resend', () =>
+          HttpResponse.json({ message: 'Invitation email resent successfully', token: 'tok-rotated' }),
+        ),
+      )
+
+      renderPage()
+      await waitFor(() => {
+        expect(screen.getByText('pending@example.com')).toBeInTheDocument()
+      })
+
+      await user.click(screen.getAllByTitle(/copy link/i)[0])
+
+      await waitFor(() => {
+        expect(written).toHaveLength(1)
+      })
+      expect(written[0]).toContain('token=tok-rotated')
+      expect(written[0]).not.toContain('tok-pending-1')
+    })
   })
 
   // -------------------------------------------------------------------------

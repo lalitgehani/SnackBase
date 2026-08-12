@@ -21,7 +21,9 @@ class InvitationModel(Base):
         id: Primary key (UUID string).
         account_id: Foreign key to accounts table.
         email: Email address of the invited user.
-        token: Secure random token for accepting the invitation.
+        token: SHA-256 hash of the token the invitee uses to accept. The
+            plaintext is issued once (mailed and returned by the API) and is not
+            recoverable afterwards; resending rotates it.
         invited_by: Foreign key to users table.
         expires_at: Timestamp when the invitation expires.
         accepted_at: Timestamp when the invitation was accepted.
@@ -55,7 +57,7 @@ class InvitationModel(Base):
         nullable=False,
         unique=True,
         index=True,
-        comment="Secure random token for accepting invitation",
+        comment="SHA-256 hash of the invitation acceptance token",
     )
     invited_by: Mapped[str] = mapped_column(
         String(36),

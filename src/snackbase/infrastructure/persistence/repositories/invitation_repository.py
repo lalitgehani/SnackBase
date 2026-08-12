@@ -1,5 +1,6 @@
 """Invitation repository for database operations."""
 
+import hashlib
 from datetime import datetime, timezone
 
 from sqlalchemy import and_, delete, or_, select
@@ -33,17 +34,33 @@ class InvitationRepository:
         await self.session.flush()
         return invitation
 
-    async def get_by_token(self, token: str) -> InvitationModel | None:
-        """Get an invitation by token.
+    @staticmethod
+    def hash_token(token: str) -> str:
+        """Hash an invitation token using SHA-256.
+
+        Invitations grant account membership, so the column holds the hash and
+        never the live credential — the same treatment refresh and password-reset
+        tokens already get.
 
         Args:
-            token: Invitation token.
+            token: The raw token string as issued to the invitee.
+
+        Returns:
+            SHA-256 hex digest of the token (64 characters).
+        """
+        return hashlib.sha256(token.encode()).hexdigest()
+
+    async def get_by_token(self, token: str) -> InvitationModel | None:
+        """Get an invitation by its token.
+
+        Args:
+            token: Invitation token as presented by the invitee (plaintext).
 
         Returns:
             Invitation model if found, None otherwise.
         """
         result = await self.session.execute(
-            select(InvitationModel).where(InvitationModel.token == token)
+            select(InvitationModel).where(InvitationModel.token == self.hash_token(token))
         )
         return result.scalar_one_or_none()
 

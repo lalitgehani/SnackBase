@@ -50,7 +50,6 @@ async def _stored_token(db_session: AsyncSession, invitation_id: str) -> str:
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(reason="M-06 fix pending", strict=True)
 async def test_auth_inv_001_stored_token_is_not_the_plaintext(
     client: AsyncClient,
     db_session: AsyncSession,

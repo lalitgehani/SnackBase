@@ -97,7 +97,7 @@ export default function InvitationsPage() {
             await resendInvitation(id);
             toast({
                 title: "Success",
-                description: "Invitation email resent successfully",
+                description: "Invitation email resent with a new link. Any earlier link no longer works.",
             });
             await fetchInvitations();
         } catch (err) {
@@ -109,20 +109,25 @@ export default function InvitationsPage() {
         }
     };
 
-    const handleCopyLink = async (token: string) => {
+    // The server stores only a hash of the invitation token, so a link can no
+    // longer be rebuilt from the listing. Resending issues a fresh token and
+    // returns it once — that new token is what gets copied, and any link
+    // already in flight stops working.
+    const handleCopyLink = async (id: string) => {
         try {
-            // Construct URL based on current origin
+            const { token } = await resendInvitation(id);
             const url = `${window.location.origin}/accept-invitation?token=${token}`;
             await navigator.clipboard.writeText(url);
             toast({
                 title: "Copied",
-                description: "Invitation link copied to clipboard",
+                description: "A new invitation link was issued and copied. Any earlier link no longer works.",
             });
-        } catch {
+            await fetchInvitations();
+        } catch (err) {
             toast({
                 variant: "destructive",
                 title: "Error",
-                description: "Failed to copy link",
+                description: handleApiError(err),
             });
         }
     };
@@ -234,8 +239,8 @@ export default function InvitationsPage() {
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={(e) => { e.stopPropagation(); handleCopyLink(inv.token); }}
-                                title="Copy Link"
+                                onClick={(e) => { e.stopPropagation(); handleCopyLink(inv.id); }}
+                                title="Copy link (issues a new one)"
                             >
                                 <Copy className="h-4 w-4" />
                             </Button>

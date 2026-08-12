@@ -46,7 +46,14 @@ class InvitationResponse(BaseModel):
     email_sent: bool = Field(False, description="Whether the invitation email has been sent")
     email_sent_at: datetime | None = Field(None, description="Timestamp when the email was sent")
     status: InvitationStatus = Field(..., description="Current invitation status")
-    token: str = Field(..., description="Invitation token for constructing acceptance URL")
+    token: str | None = Field(
+        None,
+        description=(
+            "Invitation token for constructing the acceptance URL. Present only "
+            "in the create and resend responses — the stored value is a hash, so "
+            "the plaintext is never recoverable later. Resending issues a new one."
+        ),
+    )
 
     model_config = ConfigDict(from_attributes=True)
 

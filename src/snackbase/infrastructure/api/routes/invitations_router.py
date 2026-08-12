@@ -161,7 +161,9 @@ async def create_invitation(
             },
         )
 
-    # 4. Generate secure token
+    # 4. Generate secure token. Only its hash is stored: this token grants
+    #    account membership, so read access to the table — a backup, a replica,
+    #    an over-broad support query — must not yield live credentials.
     invitation_token = token_service.generate_token(32)  # 64 hex characters
 
     # 5. Create invitation record
@@ -173,7 +175,7 @@ async def create_invitation(
         id=invitation_id,
         account_id=target_account_id,
         email=request.email,
-        token=invitation_token,
+        token=invitation_repo.hash_token(invitation_token),
         invited_by=current_user.user_id,
         expires_at=expires_at,
     )
@@ -235,7 +237,8 @@ async def create_invitation(
         # Continue execution - invitation is created even if email fails
         # The UI can show email_sent=False status
 
-    # 7. Return invitation details (including token)
+    # 7. Return invitation details, including the one and only copy of the
+    #    plaintext token (the row holds its hash).
     return InvitationResponse(
         id=invitation.id,
         account_id=invitation.account_id,
@@ -248,7 +251,7 @@ async def create_invitation(
         email_sent=invitation.email_sent,
         email_sent_at=invitation.email_sent_at,
         status=get_invitation_status(invitation),
-        token=invitation.token,
+        token=invitation_token,
     )
 
 @router.post(
@@ -265,9 +268,12 @@ async def resend_invitation(
     email_service: EmailService = Depends(get_email_service),
     session: AsyncSession = Depends(get_db_session),
 ) -> JSONResponse:
-    """Resend an invitation email.
-    
-    Resends the invitation email for a pending invitation.
+    """Resend an invitation email with a freshly issued token.
+
+    The stored token is a hash, so the original plaintext cannot be mailed
+    again. Resending therefore rotates: a new token is issued, its hash
+    replaces the old one — invalidating any link already in flight — and the
+    plaintext is mailed and returned once so the inviter can share it directly.
     """
     invitation_repo = InvitationRepository(session)
     account_repo = AccountRepository(session)
@@ -302,22 +308,28 @@ async def resend_invitation(
     inviter = await user_repo.get_by_id(invitation.invited_by)
     inviter_name = inviter.email if inviter else "Team Member"
     
+    # Rotate the token: the row holds only a hash, so a fresh secret is issued
+    # and any link already in flight stops working.
+    invitation_token = token_service.generate_token(32)
+    invitation.token = invitation_repo.hash_token(invitation_token)
+    await session.commit()
+
     try:
         app_url = "http://localhost:8000"  # TODO: Config
-        invitation_url = f"{app_url}/accept-invitation?token={invitation.token}"
-        
+        invitation_url = f"{app_url}/accept-invitation?token={invitation_token}"
+
         # Ensure expires_at is timezone-aware for strftime
         expires_at = invitation.expires_at
         if expires_at.tzinfo is None:
             expires_at = expires_at.replace(tzinfo=timezone.utc)
-        
+
         email_sent = await email_service.send_template_email(
             session=session,
             to=invitation.email,
             template_type="invitation",
             variables={
                 "invitation_url": invitation_url,
-                "token": invitation.token,
+                "token": invitation_token,
                 "email": invitation.email,
                 "account_name": account_name,
                 "invited_by": inviter_name,
@@ -330,10 +342,13 @@ async def resend_invitation(
             invitation.email_sent = True
             invitation.email_sent_at = datetime.now(timezone.utc)
             await session.commit()
-            
+
         return JSONResponse(
             status_code=status.HTTP_200_OK,
-            content={"message": "Invitation email resent successfully"},
+            content={
+                "message": "Invitation email resent successfully",
+                "token": invitation_token,
+            },
         )
         
     except Exception as e:
@@ -714,7 +729,9 @@ async def list_invitations(
                 email_sent=inv.email_sent,
                 email_sent_at=inv.email_sent_at,
                 status=get_invitation_status(inv),
-                token=inv.token,
+                # Only the hash is stored, so a listing cannot hand out a
+                # usable token. `POST /{id}/resend` issues a fresh one.
+                token=None,
             )
         )
 

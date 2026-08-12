@@ -16,6 +16,7 @@ from snackbase.infrastructure.persistence.models import (
 )
 from sqlalchemy import select
 from snackbase.infrastructure.auth import hash_password
+from snackbase.infrastructure.persistence.repositories import InvitationRepository
 
 @pytest.mark.asyncio
 async def test_get_invitation_details(db_session):
@@ -54,7 +55,7 @@ async def test_get_invitation_details(db_session):
         id=invitation_id,
         account_id=account_id,
         email=invite_email,
-        token=invitation_token,
+        token=InvitationRepository.hash_token(invitation_token),
         invited_by=admin_user.id,
         expires_at=expires_at,
         email_sent=True,
@@ -120,7 +121,7 @@ async def test_get_invitation_expired(db_session):
         id=str(uuid.uuid4()),
         account_id=account_id,
         email=f"expired-{uuid.uuid4().hex[:8]}@example.com",
-        token=invitation_token,
+        token=InvitationRepository.hash_token(invitation_token),
         invited_by=admin_user.id,
         expires_at=expires_at,
     )
@@ -171,7 +172,7 @@ async def test_get_invitation_already_accepted(db_session):
         id=str(uuid.uuid4()),
         account_id=account_id,
         email=f"accepted-{uuid.uuid4().hex[:8]}@example.com",
-        token=invitation_token,
+        token=InvitationRepository.hash_token(invitation_token),
         invited_by=admin_user.id,
         expires_at=expires_at,
         accepted_at=datetime.now(timezone.utc) # Accepted just now

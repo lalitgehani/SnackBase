@@ -12,7 +12,11 @@ export interface Invitation {
   email_sent: boolean;
   email_sent_at: string | null;
   status: 'pending' | 'accepted' | 'expired' | 'cancelled';
-  token: string;
+  /**
+   * Present only on create and resend responses. The server stores a hash of
+   * the token, so a listing cannot hand one out; resending issues a new one.
+   */
+  token: string | null;
 }
 
 export interface InvitationListResponse {
@@ -49,8 +53,12 @@ export const cancelInvitation = async (invitationId: string): Promise<void> => {
   await api.delete(`/invitations/${invitationId}`);
 };
 
-export const resendInvitation = async (invitationId: string): Promise<{ message: string }> => {
-  const response = await api.post<{ message: string }>(`/invitations/${invitationId}/resend`);
+export const resendInvitation = async (
+  invitationId: string
+): Promise<{ message: string; token: string }> => {
+  const response = await api.post<{ message: string; token: string }>(
+    `/invitations/${invitationId}/resend`
+  );
   return response.data;
 };
 
