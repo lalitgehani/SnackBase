@@ -1,22 +1,24 @@
 """ISO-ANON-*: anonymous tenant targeting on public collections (M-08).
 
-``_resolve_account_id`` scopes an unauthenticated request by whatever the
-caller puts in ``X-Account-ID``, validating only that the account exists. Any
-collection whose rule is ``""`` (public) is therefore public *for every tenant
-at once*: the anonymous caller chooses which tenant to read from, and — for a
-public create rule — which tenant to write into.
+``_resolve_account_id`` scopes an unauthenticated request by whatever the caller
+puts in ``X-Account-ID``, validating only that the account exists. A collection
+whose rule was ``""`` (no restriction) was therefore reachable *for every tenant
+at once*: the anonymous caller chose which tenant to read from and — with an
+empty create rule — which tenant to write into.
 
-Two things are missing:
+Anonymous access now takes two independent allowances, and both have to be
+present:
 
-* **Per-collection opt-in.** ``""`` means "no rule", which is the natural way
-  to express "no restriction for my users". It should not silently also mean
-  "reachable by the internet across every tenant".
-* **Write attribution.** An anonymous create currently lands in whichever
-  account the header names, so a caller can plant records in a tenant they have
-  no relationship with.
+* **The ``allow_anonymous`` opt-in**, per collection, off by default. ``""``
+  means "no rule", the natural way to say "no restriction for my users"; it must
+  not silently also mean "reachable by the internet". Collections and their
+  rules are superadmin-owned, so opening one is an operator's decision, which is
+  what makes a public form or public API deliberate rather than incidental.
+* **An empty rule for the operation**, unchanged.
 
-The first test characterises today's behaviour so the change is deliberate and
-visible; the rest assert the target model.
+Public writes survive the change (``PRD_APP_BUILDER_FOUNDATION.md`` F6.3 built
+anonymous access for public forms and landing pages) but only where an operator
+has said so.
 """
 
 from __future__ import annotations
@@ -38,13 +40,29 @@ def _auth(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
+async def _opt_in_to_anonymous(
+    client: AsyncClient, superadmin_token: str, collection: str
+) -> None:
+    """Turn on anonymous reachability for a collection."""
+    response = await client.put(
+        f"/api/v1/collections/{collection}/rules",
+        json={"allow_anonymous": True},
+        headers=_auth(superadmin_token),
+    )
+    assert response.status_code == 200, response.text
+
+
 @pytest_asyncio.fixture
 async def public_collection(
     client: AsyncClient,
     superadmin_token: str,
     security_test_data: dict[str, Any],
 ) -> dict[str, Any]:
-    """A fully public collection holding one row per tenant."""
+    """A collection with empty (unrestricted) rules, holding one row per tenant.
+
+    Deliberately does *not* set `allow_anonymous`: empty rules alone are exactly
+    the configuration that used to be reachable anonymously across every tenant.
+    """
     name = f"public_{uuid.uuid4().hex[:8]}"
     admin_headers = _auth(superadmin_token)
 
@@ -78,20 +96,23 @@ async def public_collection(
 
 
 @pytest.mark.asyncio
-async def test_iso_anon_001_characterisation_anonymous_selects_tenant(
+async def test_iso_anon_001_opted_in_anonymous_read_is_scoped_to_the_header(
     client: AsyncClient,
+    superadmin_token: str,
     security_test_data: dict[str, Any],
     public_collection: dict[str, Any],
 ) -> None:
-    """ISO-ANON-001: characterisation — `X-Account-ID` picks the tenant scope.
+    """ISO-ANON-001: with the opt-in on, `X-Account-ID` scoping stays honest.
 
-    The header is resolved by slug or account code, not by account ID.
-
-    Documents current behaviour so the hardening below is an intentional
-    change, not an accidental regression. It also shows the scoping itself is
-    honest: choosing A returns only A's rows.
+    Originally a characterisation of pre-fix behaviour: it asserted that empty
+    rules alone made the collection anonymously readable, which is precisely
+    what ISO-ANON-011 requires to be denied. The half worth keeping is that the
+    scoping does not leak — choosing A returns A's rows and only A's rows — so
+    the collection is opted in here and that is what is asserted. The header is
+    resolved by slug or account code, not by account ID.
     """
     collection = public_collection["collection"]
+    await _opt_in_to_anonymous(client, superadmin_token, collection)
 
     as_a = await client.get(
         f"/api/v1/records/{collection}",
@@ -110,21 +131,31 @@ async def test_iso_anon_001_characterisation_anonymous_selects_tenant(
 
 @pytest.mark.asyncio
 async def test_iso_anon_002_anonymous_request_without_header_is_rejected(
-    client: AsyncClient, public_collection: dict[str, Any]
+    client: AsyncClient, superadmin_token: str, public_collection: dict[str, Any]
 ) -> None:
-    """ISO-ANON-002: regression — an anonymous request must name a tenant."""
-    response = await client.get(f"/api/v1/records/{public_collection['collection']}")
+    """ISO-ANON-002: regression — an anonymous request must name a tenant.
+
+    Asserted on an opted-in collection: without the opt-in the answer is 401
+    before the header is ever considered, which is the point of ISO-ANON-011.
+    """
+    collection = public_collection["collection"]
+    await _opt_in_to_anonymous(client, superadmin_token, collection)
+
+    response = await client.get(f"/api/v1/records/{collection}")
 
     assert response.status_code == 400
 
 
 @pytest.mark.asyncio
 async def test_iso_anon_003_unknown_account_header_is_rejected(
-    client: AsyncClient, public_collection: dict[str, Any]
+    client: AsyncClient, superadmin_token: str, public_collection: dict[str, Any]
 ) -> None:
     """ISO-ANON-003: regression — a non-existent account is not silently accepted."""
+    collection = public_collection["collection"]
+    await _opt_in_to_anonymous(client, superadmin_token, collection)
+
     response = await client.get(
-        f"/api/v1/records/{public_collection['collection']}",
+        f"/api/v1/records/{collection}",
         headers={"X-Account-ID": "NO0000"},
     )
 
@@ -132,7 +163,6 @@ async def test_iso_anon_003_unknown_account_header_is_rejected(
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(reason="M-08 fix pending", strict=True)
 async def test_iso_anon_010_anonymous_write_cannot_attribute_to_a_chosen_account(
     client: AsyncClient,
     security_test_data: dict[str, Any],
@@ -149,7 +179,6 @@ async def test_iso_anon_010_anonymous_write_cannot_attribute_to_a_chosen_account
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(reason="M-08 fix pending", strict=True)
 async def test_iso_anon_011_public_access_requires_explicit_opt_in(
     client: AsyncClient,
     superadmin_token: str,
