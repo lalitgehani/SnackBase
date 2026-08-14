@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import sys
+
 import pytest
 
 from snackbase.infrastructure.functions.syntax_preflight import (
@@ -43,6 +45,12 @@ def test_valid_python_passes() -> None:
 
 def test_py312_match_syntax_passes() -> None:
     validate_python_syntax({"handler.py": VALID_PY312})
+
+
+@pytest.mark.skipif(sys.version_info < (3, 14), reason="PEP 750 t-strings need 3.14")
+def test_runtime_314_syntax_is_accepted() -> None:
+    """Preflight must accept 3.14 syntax; feature_version=(3, 12) rejects t-strings."""
+    validate_python_syntax({"handler.py": 'greeting = t"hello"\n'})
 
 
 def test_unavailable_imports_still_pass_syntax() -> None:

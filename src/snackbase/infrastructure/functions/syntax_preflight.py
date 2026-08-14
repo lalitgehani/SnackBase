@@ -1,12 +1,14 @@
 """Python syntax preflight for Function deploys.
 
-Parses ``.py`` / ``.pyi`` sources with the compile() builtin using python 3.14
-syntax. Does not import, execute, or resolve dependencies.
+Parses ``.py`` / ``.pyi`` sources with the compile() builtin using the running
+interpreter's syntax (python 3.14). Does not import, execute, or resolve
+dependencies.
 """
 
 from __future__ import annotations
 
 import ast
+import sys
 
 
 class SyntaxPreflightError(ValueError):
@@ -33,8 +35,9 @@ def validate_python_syntax(files: dict[str, str]) -> None:
         try:
             # compile() reports precise line/offset; mode=exec matches module sources.
             compile(content, path, "exec", dont_inherit=True)
-            # Also build an AST to ensure we exercise the parser without executing.
-            ast.parse(content, filename=path, feature_version=(3, 12))
+            # Parse with the same grammar compile() used (the running interpreter).
+            # Pinning an older feature_version would reject valid runtime syntax.
+            ast.parse(content, filename=path, feature_version=sys.version_info[:2])
         except SyntaxError as exc:
             line = int(exc.lineno or 1)
             # offset is 1-based column when present
