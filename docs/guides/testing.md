@@ -358,7 +358,7 @@ class TestPostsAPI:
     ):
         """Creating a post with valid data should return 201."""
         response = await client.post(
-            "/api/v1/posts",
+            "/api/v1/records/posts",
             headers={"Authorization": f"Bearer {superadmin_token}"},
             json={
                 "title": "Test Post",
@@ -382,7 +382,7 @@ class TestPostsAPI:
     ):
         """Creating a post without auth should return 401."""
         response = await client.post(
-            "/api/v1/posts",
+            "/api/v1/records/posts",
             json={"title": "Test Post"}
         )
 
@@ -395,7 +395,7 @@ class TestPostsAPI:
     ):
         """Creating a post without required fields should return 422."""
         response = await client.post(
-            "/api/v1/posts",
+            "/api/v1/records/posts",
             headers={"Authorization": f"Bearer {superadmin_token}"},
             json={}  # Missing required fields
         )
@@ -429,7 +429,7 @@ class TestPermissions:
     ):
         """Viewer role should not be able to delete posts."""
         response = await client.delete(
-            f"/api/v1/posts/{test_post['id']}",
+            f"/api/v1/records/posts/{test_post['id']}",
             headers={"Authorization": f"Bearer {viewer_token}"}
         )
 
@@ -443,7 +443,7 @@ class TestPermissions:
     ):
         """Editor should be able to update their own draft posts."""
         response = await client.put(
-            f"/api/v1/posts/{test_post['id']}",
+            f"/api/v1/records/posts/{test_post['id']}",
             headers={"Authorization": f"Bearer {editor_token}"},
             json={"title": "Updated Title"}
         )
@@ -545,7 +545,7 @@ async def test_with_fixtures(
     """Test using fixtures."""
     # Use client for API calls
     response = await client.get(
-        "/api/v1/posts",
+        "/api/v1/records/posts",
         headers={"Authorization": f"Bearer {superadmin_token}"}
     )
 

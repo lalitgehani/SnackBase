@@ -1437,23 +1437,22 @@ API keys provide an alternative authentication method designed for service-to-se
 
 ### API Key Format
 
-API keys follow a structured format:
+API keys are JWT-style signed tokens:
 
 ```
-sb_sk_<account_code>_<random_32_characters>
+sb_ak.<payload>.<signature>
 ```
 
-**Example**: `sb_sk_AB1234_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6`
+**Example**: `sb_ak.eyJ2ZXJzaW9uIjoxLCJ0eXBlIjoiYXBpX2tleSIsLi4uLng5azI=`
 
 **Components:**
 
-- `sb_sk` - SnackBase Secret Key prefix (identifies the key type)
-- `AB1234` - Account code (human-readable account identifier)
-- `a1b2c3...o5p6` - 32-character cryptographically secure random string
+- `sb_ak` - SnackBase API Key prefix (identifies the key type)
+- `<payload>` - Base64-encoded key payload (user, account, role, scopes, expiry)
+- `<signature>` - HMAC signature created with the server's token secret
 
-> **Screenshot Placeholder 21**
->
-> **Description**: A visual breakdown of an API key showing its three components: prefix (sb_sk), account code (AB1234), and random string.
+The key embeds the owner's user ID, account ID, role, and optional scopes and
+expiration. Only the SHA-256 hash of the full key is stored server-side.
 
 ### API Key Authentication Flow
 
@@ -1466,17 +1465,17 @@ sb_sk_<account_code>_<random_32_characters>
        │
        ▼
 ┌─────────────────────────────────┐
-│ POST /api/v1/api-keys/         │
+│ POST /api/v1/admin/api-keys     │
 │ {                               │
-│   "name": "Production Service", │
-│   "description": "Backend API"  │
+│   "name": "Production Service"  │
 │ }                               │
 └──────┬──────────────────────────┘
        │
        ▼
 ┌─────────────────────────────────┐
 │ System generates API key:       │
-│ - Format: sb_sk_<code>_<random> │
+│ - Format: sb_ak.<p>.<sig>       │
+│ - Signed with token secret      │
 │ - Store SHA-256 hash in DB      │
 │ - Return full key (ONCE ONLY)   │
 └──────┬──────────────────────────┘
@@ -1492,17 +1491,18 @@ sb_sk_<account_code>_<random_32_characters>
        ▼
 ┌─────────────────────────────────┐
 │ Service uses API key:           │
-│ Authorization: Bearer sb_sk_... │
+│ Authorization: Bearer sb_ak.... │
 └──────┬──────────────────────────┘
        │
        ▼
 ┌─────────────────────────────────┐
 │ Server validates:               │
 │ 1. Extract key from header      │
-│ 2. Hash with SHA-256            │
-│ 3. Lookup hash in database      │
-│ 4. Check not revoked            │
-│ 5. Get associated user/account  │
+│ 2. Verify signature (secret)    │
+│ 3. Check blacklist for token_id │
+│ 4. Hash with SHA-256            │
+│ 5. Lookup hash in database      │
+│ 6. Get associated user/account  │
 └──────┬──────────────────────────┘
        │
        ▼
@@ -1521,26 +1521,25 @@ sb_sk_<account_code>_<random_32_characters>
 ```python
 # API Key in Database
 {
-  "id": "ak_abc123xyz",                     # Key ID (public)
+  "id": "9cae062c-6828-475e-9515-0a0b4cda8b60", # Key ID (public)
   "key_hash": "<SHA-256 hash>",              # Hashed API key (never plaintext)
   "account_id": "550e8400-...",              # Associated account
-  "account_code": "AB1234",                  # Human-readable account code
-  "created_by": "usr_abc123",                # User who created the key
+  "user_id": "28ebb381-...",                 # User who owns the key
   "name": "Production Service",              # Human-readable name
-  "description": "Backend API for prod",     # Optional description
+  "scopes": ["records:secrets:read"],        # Approved scopes (optional)
+  "expires_at": null,                        # Optional expiration
   "last_used_at": "2026-01-17T15:45:00Z",   # Last authentication timestamp
-  "is_revoked": false,                       # Revocation status
   "created_at": "2026-01-01T00:00:00Z",
-  "revoked_at": null,                        # Set when revoked
-  "revoked_by": null                         # User who revoked it
+  "revoked_at": null                         # Set when revoked
 }
 ```
 
 **Security Properties:**
 
+- **Signed tokens**: Keys are signed with the server's token secret and verified on every request
 - **SHA-256 Hashing**: Keys are hashed before storage (plaintext never persisted)
 - **Single-User Association**: Each key is linked to one user in one account
-- **Immediate Revocation**: Keys can be revoked instantly
+- **Immediate Revocation**: Revoked key token IDs are added to the blacklist instantly
 - **Audit Trail**: Tracks creation, last used, and revocation
 - **Account Scoping**: Keys are automatically scoped to their account
 
@@ -1569,12 +1568,11 @@ sb_sk_<account_code>_<random_32_characters>
 
 ```bash
 # Create API key
-curl -X POST http://localhost:8000/api/v1/api-keys/ \
+curl -X POST http://localhost:8000/api/v1/admin/api-keys \
   -H "Authorization: Bearer <jwt_token>" \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "Production Service",
-    "description": "Backend API for production environment"
+    "name": "Production Service"
   }'
 
 # Response (only time full key is shown)
@@ -1582,7 +1580,7 @@ curl -X POST http://localhost:8000/api/v1/api-keys/ \
   "id": "ak_abc123xyz",
   "name": "Production Service",
   "description": "Backend API for production environment",
-  "key": "sb_sk_AB1234_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6",  # SAVE THIS!
+  "key": "sb_ak.eyJ2ZXJzaW9uIjoxLCJ0eXBlIjoiYXBpX2tleSIsLi4uLng5azI=",  # SAVE THIS!
   "account_id": "AB1234",
   "created_at": "2026-01-17T10:30:00Z"
 }
@@ -1602,12 +1600,12 @@ API keys use the standard `Authorization: Bearer` header:
 
 ```bash
 # Using API key for authentication
-curl -X GET http://localhost:8000/api/v1/posts \
-  -H "Authorization: Bearer sb_sk_AB1234_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"
+curl -X GET http://localhost:8000/api/v1/records/posts \
+  -H "Authorization: Bearer sb_ak.eyJ2ZXJzaW9uIjoxLCJ0eXBlIjoiYXBpX2tleSIsLi4uLng5azI="
 
 # Creating a record
-curl -X POST http://localhost:8000/api/v1/posts \
-  -H "Authorization: Bearer sb_sk_AB1234_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6" \
+curl -X POST http://localhost:8000/api/v1/records/posts \
+  -H "Authorization: Bearer sb_ak.eyJ2ZXJzaW9uIjoxLCJ0eXBlIjoiYXBpX2tleSIsLi4uLng5azI=" \
   -H "Content-Type: application/json" \
   -d '{
     "title": "Hello World",
@@ -1621,21 +1619,21 @@ curl -X POST http://localhost:8000/api/v1/posts \
 import requests
 
 # Configure API key
-API_KEY = "sb_sk_AB1234_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"
+API_KEY = "sb_ak.eyJ2ZXJzaW9uIjoxLCJ0eXBlIjoiYXBpX2tleSIsLi4uLng5azI="
 headers = {"Authorization": f"Bearer {API_KEY}"}
 
 # Make requests
 response = requests.get(
-    "http://localhost:8000/api/v1/posts",
+    "http://localhost:8000/api/v1/records/posts",
     headers=headers
 )
 ```
 
 ```javascript
 // Using fetch
-const API_KEY = "sb_sk_AB1234_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6";
+const API_KEY = "sb_ak.eyJ2ZXJzaW9uIjoxLCJ0eXBlIjoiYXBpX2tleSIsLi4uLng5azI=";
 
-const response = await fetch("http://localhost:8000/api/v1/posts", {
+const response = await fetch("http://localhost:8000/api/v1/records/posts", {
   headers: {
     Authorization: `Bearer ${API_KEY}`,
   },
@@ -1647,7 +1645,7 @@ const response = await fetch("http://localhost:8000/api/v1/posts", {
 **List API Keys**:
 
 ```bash
-curl -X GET http://localhost:8000/api/v1/api-keys/ \
+curl -X GET http://localhost:8000/api/v1/admin/api-keys \
   -H "Authorization: Bearer <jwt_token>"
 ```
 
@@ -1657,9 +1655,8 @@ curl -X GET http://localhost:8000/api/v1/api-keys/ \
 {
   "items": [
     {
-      "id": "ak_abc123xyz",
+      "id": "9cae062c-6828-475e-9515-0a0b4cda8b60",
       "name": "Production Service",
-      "description": "Backend API",
       "created_at": "2026-01-17T10:30:00Z",
       "last_used_at": "2026-01-17T15:45:00Z",
       "is_revoked": false
@@ -1671,14 +1668,14 @@ curl -X GET http://localhost:8000/api/v1/api-keys/ \
 **Revoke API Key**:
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/api-keys/ak_abc123xyz/revoke \
+curl -X DELETE http://localhost:8000/api/v1/admin/api-keys/<key_id> \
   -H "Authorization: Bearer <jwt_token>"
 ```
 
 **Get Key Details**:
 
 ```bash
-curl -X GET http://localhost:8000/api/v1/api-keys/ak_abc123xyz \
+curl -X GET http://localhost:8000/api/v1/admin/api-keys/<key_id> \
   -H "Authorization: Bearer <jwt_token>"
 ```
 
@@ -1698,7 +1695,7 @@ response = client.get_secret_value(SecretId='snackbase/api_key')
 API_KEY = response['SecretString']
 
 # ❌ Bad: Hardcoded in source
-API_KEY = "sb_sk_AB1234_..."  # NEVER do this
+API_KEY = "sb_ak.eyJ2..."  # NEVER do this
 
 # ❌ Bad: Committed to version control
 # .env files should be in .gitignore
@@ -1708,7 +1705,7 @@ API_KEY = "sb_sk_AB1234_..."  # NEVER do this
 
 ```bash
 # 1. Create new key
-new_key_response=$(curl -s -X POST http://localhost:8000/api/v1/api-keys/ \
+new_key_response=$(curl -s -X POST http://localhost:8000/api/v1/admin/api-keys \
   -H "Authorization: Bearer <jwt_token>" \
   -H "Content-Type: application/json" \
   -d '{"name": "Rotated Key"}')
@@ -1723,7 +1720,7 @@ export SNACKBASE_API_KEY="$new_key"
 curl -H "Authorization: Bearer $new_key" http://localhost:8000/api/v1/auth/me
 
 # 5. Revoke old key
-curl -X POST http://localhost:8000/api/v1/api-keys/ak_old_key/revoke \
+curl -X DELETE http://localhost:8000/api/v1/admin/api-keys/<old_key_id> \
   -H "Authorization: Bearer <jwt_token>"
 ```
 
@@ -1731,8 +1728,7 @@ curl -X POST http://localhost:8000/api/v1/api-keys/ak_old_key/revoke \
 
 ```json
 {
-  "name": "Production - Payment Service",
-  "description": "Used by payment processing service in production environment"
+  "name": "Production - Payment Service"
 }
 ```
 
@@ -1746,7 +1742,7 @@ Use descriptive names to identify:
 
 ```bash
 # Check for unused keys
-curl -X GET http://localhost:8000/api/v1/api-keys/ \
+curl -X GET http://localhost:8000/api/v1/admin/api-keys \
   -H "Authorization: Bearer <jwt_token>" | \
   jq '.items[] | select(.last_used_at == null)'
 
@@ -1812,7 +1808,7 @@ headers = {"Authorization": f"Bearer {API_KEY}"}
 
 def create_post(title, content):
     response = requests.post(
-        "http://localhost:8000/api/v1/posts",
+        "http://localhost:8000/api/v1/records/posts",
         headers=headers,
         json={"title": title, "content": content}
     )
@@ -1823,7 +1819,7 @@ def create_post(title, content):
 
 ```bash
 # Configure CLI with API key
-snackbase config set api-key sb_sk_AB1234_...
+snackbase config set api-key sb_ak....
 
 # CLI uses stored key for all commands
 snackbase posts list
@@ -1839,7 +1835,7 @@ from fastapi import Header, HTTPException
 async def webhook_handler(
     authorization: str = Header(...)
 ):
-    if not authorization.startswith("Bearer sb_sk_"):
+    if not authorization.startswith("Bearer sb_ak."):
         raise HTTPException(401, "Invalid API key")
 
     # Process webhook

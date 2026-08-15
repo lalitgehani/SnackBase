@@ -31,7 +31,7 @@ SnackBase uses **FastAPI** for REST API endpoints. All endpoints are organized i
 | `roles_router.py` | Role management | `/api/v1/roles/*` |
 | `permissions_router.py` | Permission management | `/api/v1/permissions/*` |
 | `collections_router.py` | Collection CRUD | `/api/v1/collections/*` |
-| `records_router.py` | Dynamic record CRUD | `/api/v1/{collection}/*` |
+| `records_router.py` | Dynamic record CRUD | `/api/v1/records/{collection}/*` |
 | `groups_router.py` | Group management | `/api/v1/groups/*` |
 | `invitations_router.py` | User invitations | `/api/v1/invitations/*` |
 | `macros_router.py` | SQL macros | `/api/v1/macros/*` |

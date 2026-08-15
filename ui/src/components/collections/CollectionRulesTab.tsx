@@ -347,7 +347,7 @@ export default function CollectionRulesTab({
           <CardContent className="space-y-8">
             <RuleEditor
               label="List Rule"
-              description="Filter applied to list operations (e.g. GET /api/v1/{collection})"
+              description="Filter applied to list operations (e.g. GET /api/v1/records/{collection})"
               value={draft.list_rule}
               onChange={(v) => handleUpdateRule('list_rule', v)}
               onTest={() => openTester(draft.list_rule)}

@@ -168,12 +168,11 @@ Users can belong to multiple accounts with the same email address. User identity
 
 Alternative authentication method for service-to-service communication:
 
-- API keys use format: `sb_sk_<account_code>_<random_32_chars>`
-- Keys are hashed using SHA-256 before storage (plaintext only shown once at creation)
+- API keys use format: `sb_ak.<payload>.<signature>` — JWT-style tokens signed with the token secret; the SHA-256 hash of the full key is stored server-side
 - Authenticate via `Authorization: Bearer <api_key>` header
-- Scoped to account level with optional name/description for identification
-- Can be revoked via API or admin UI
-- Managed via `/api/v1/api-keys/` endpoint
+- Scoped to account level with optional name for identification
+- Can be revoked via API (`DELETE /api/v1/admin/api-keys/{key_id}`) or admin UI
+- Managed via `/api/v1/admin/api-keys` endpoints
 
 ### Single-Tenant Mode
 
@@ -284,7 +283,7 @@ status in ["draft", "published"]
 └── /{collection}/              # Dynamic collection CRUD (records_router)
 ```
 
-**Route Registration Order Matters**: `records_router` (dynamic `/api/v1/{collection}`) must be registered last to avoid capturing specific routes like `/invitations`.
+**Route Registration Order Matters**: `records_router` (dynamic `/api/v1/records/{collection}`) must be registered last to avoid capturing specific routes like `/invitations`.
 
 ## Testing
 

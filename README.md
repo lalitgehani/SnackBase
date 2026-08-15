@@ -229,7 +229,7 @@ open http://localhost:8000
 
 ### Additional Features
 
-- **API Key Authentication** - Service-to-service authentication with `sb_sk_` prefixed keys, SHA-256 hashing, optional expiration, and revocation support
+- **API Key Authentication** - Service-to-service authentication with signed `sb_ak.`-prefixed keys (JWT-style, signed with the token secret), SHA-256 hashing, optional expiration, and revocation support
 - **Collection Export/Import** - Export collections with all records to JSON and import to migrate or backup data
 - **Security Headers** - Configurable HSTS, CSP, and Permissions-Policy headers for enhanced security
 - **Two-Phase Collection Deletion** - Safe deletion with confirmation to prevent accidental data loss

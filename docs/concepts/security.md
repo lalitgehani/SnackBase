@@ -114,7 +114,7 @@ Authentication (Who are you?):
 └── Result: "You are alice@acme.com"
 
 Authorization (What can you do?):
-├── User requests DELETE /api/v1/posts/123
+├── User requests DELETE /api/v1/records/posts/123
 ├── System checks permissions
 ├── User has "editor" role
 ├── Editor role does NOT have "delete" permission
@@ -488,7 +488,7 @@ Attempting to access another account's data:
 
 ```bash
 # User from AB1001 tries to access XY2048 data
-GET /api/v1/posts?account_id=XY2048
+GET /api/v1/records/posts?account_id=XY2048
 
 # Result: 403 Forbidden
 # The account_id filter is overridden and reset to AB1001
@@ -607,7 +607,7 @@ def test_editor_cannot_delete_posts():
     editor_user = create_user(role="editor")
     client = login_as(editor_user)
 
-    response = client.delete("/api/v1/posts/123")
+    response = client.delete("/api/v1/records/posts/123")
 
     assert response.status_code == 403
 ```

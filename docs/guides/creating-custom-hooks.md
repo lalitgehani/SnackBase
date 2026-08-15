@@ -273,7 +273,7 @@ SLACK_WEBHOOK_URL=https://hooks.slack.com/services/YOUR/WEBHOOK/URL
 
 ```bash
 # Update a post to published
-curl -X PUT http://localhost:8000/api/v1/posts/post_abc123 \
+curl -X PUT http://localhost:8000/api/v1/records/posts/post_abc123 \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{

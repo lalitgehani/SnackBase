@@ -137,7 +137,7 @@ SnackBase **automatically filters** all queries by `account_id`. Users never see
 
 ```bash
 # User from AB1001 requests all posts
-GET /api/v1/posts
+GET /api/v1/records/posts
 
 # SQL executed (simplified):
 SELECT * FROM col_posts WHERE account_id = '550e8400-e29b-41d4-a716-446655440000'

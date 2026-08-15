@@ -320,41 +320,40 @@ API keys provide an alternative authentication method for service-to-service com
 
 ### API Key Format
 
-API keys follow this format:
+API keys are JWT-style signed tokens:
 
 ```
-sb_sk_<account_code>_<random_32_characters>
+sb_ak.<payload>.<signature>
 ```
 
 Example:
 
 ```
-sb_sk_AB1234_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
+sb_ak.eyJ2ZXJzaW9uIjoxLCJ0eXBlIjoiYXBpX2tleSIsLi4uLng5azI=
 ```
 
 **Components:**
 
-- `sb_sk` - SnackBase Secret Key prefix
-- `AB1234` - Account code (human-readable identifier)
-- `a1b2c3...o5p6` - 32-character cryptographically secure random string
+- `sb_ak` - SnackBase API Key prefix
+- `<payload>` - Base64-encoded key payload (user, account, role, scopes, expiry)
+- `<signature>` - HMAC signature created with the server's token secret
 
 ### 1. Create an API Key
 
 Generate a new API key for your account.
 
-**Endpoint**: `POST /api/v1/api-keys/`
+**Endpoint**: `POST /api/v1/admin/api-keys`
 
 **Authentication**: Required (JWT bearer token)
 
 **Request**:
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/api-keys/ \
+curl -X POST http://localhost:8000/api/v1/admin/api-keys \
   -H "Authorization: Bearer <jwt_token>" \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "Production API",
-    "description": "Used by production backend service"
+    "name": "Production API"
   }'
 ```
 
@@ -362,11 +361,10 @@ curl -X POST http://localhost:8000/api/v1/api-keys/ \
 
 ```json
 {
-  "id": "ak_abc123xyz",
+  "id": "9cae062c-6828-475e-9515-0a0b4cda8b60",
   "name": "Production API",
-  "description": "Used by production backend service",
-  "key": "sb_sk_AB1234_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6",
-  "account_id": "AB1234",
+  "key": "sb_ak.eyJ2ZXJzaW9uIjoxLCJ0eXBlIjoiYXBpX2tleSIsLi4uLng5azI=",
+  "account_id": "550e8400-e29b-41d4-a716-446655440000",
   "created_by": "usr_abc123",
   "created_at": "2026-01-17T10:30:00Z",
   "last_used_at": null,
@@ -380,7 +378,7 @@ curl -X POST http://localhost:8000/api/v1/api-keys/ \
 
 ```bash
 # Create and save to environment variable
-response=$(curl -s -X POST http://localhost:8000/api/v1/api-keys/ \
+response=$(curl -s -X POST http://localhost:8000/api/v1/admin/api-keys \
   -H "Authorization: Bearer <jwt_token>" \
   -H "Content-Type: application/json" \
   -d '{"name": "My Service"}')
@@ -396,14 +394,14 @@ echo "API Key saved to SNACKBASE_API_KEY"
 
 Get all API keys for the current account.
 
-**Endpoint**: `GET /api/v1/api-keys/`
+**Endpoint**: `GET /api/v1/admin/api-keys`
 
 **Authentication**: Required (JWT bearer token)
 
 **Request**:
 
 ```bash
-curl -X GET http://localhost:8000/api/v1/api-keys/ \
+curl -X GET http://localhost:8000/api/v1/admin/api-keys \
   -H "Authorization: Bearer <jwt_token>"
 ```
 
@@ -413,21 +411,17 @@ curl -X GET http://localhost:8000/api/v1/api-keys/ \
 {
   "items": [
     {
-      "id": "ak_abc123xyz",
+      "id": "9cae062c-6828-475e-9515-0a0b4cda8b60",
       "name": "Production API",
-      "description": "Used by production backend service",
-      "account_id": "AB1234",
-      "created_by": "usr_abc123",
+      "account_id": "550e8400-e29b-41d4-a716-446655440000",
       "created_at": "2026-01-17T10:30:00Z",
       "last_used_at": "2026-01-17T15:45:00Z",
       "is_revoked": false
     },
     {
-      "id": "ak_def456uvw",
+      "id": "f3a1b2c4-d5e6-4789-90ab-cdef01234567",
       "name": "Development CLI",
-      "description": "Local development tools",
-      "account_id": "AB1234",
-      "created_by": "usr_abc123",
+      "account_id": "550e8400-e29b-41d4-a716-446655440000",
       "created_at": "2026-01-15T09:00:00Z",
       "last_used_at": "2026-01-17T08:20:00Z",
       "is_revoked": false
@@ -456,15 +450,15 @@ Use an API key instead of JWT token for API requests.
 ```bash
 # Using API key in Authorization header
 curl -X GET http://localhost:8000/api/v1/auth/me \
-  -H "Authorization: Bearer sb_sk_AB1234_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"
+  -H "Authorization: Bearer sb_ak.eyJ2ZXJzaW9uIjoxLCJ0eXBlIjoiYXBpX2tleSIsLi4uLng5azI="
 
-# Using API key with records
-curl -X GET http://localhost:8000/api/v1/posts \
-  -H "Authorization: Bearer sb_sk_AB1234_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"
+# Using API key with records (records live under /api/v1/records/)
+curl -X GET http://localhost:8000/api/v1/records/posts \
+  -H "Authorization: Bearer sb_ak.eyJ2ZXJzaW9uIjoxLCJ0eXBlIjoiYXBpX2tleSIsLi4uLng5azI="
 
 # Creating a record
-curl -X POST http://localhost:8000/api/v1/posts \
-  -H "Authorization: Bearer sb_sk_AB1234_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6" \
+curl -X POST http://localhost:8000/api/v1/records/posts \
+  -H "Authorization: Bearer sb_ak.eyJ2ZXJzaW9uIjoxLCJ0eXBlIjoiYXBpX2tleSIsLi4uLng5azI=" \
   -H "Content-Type: application/json" \
   -d '{
     "title": "Hello World",
@@ -491,33 +485,18 @@ curl -X POST http://localhost:8000/api/v1/posts \
 
 Invalidate an API key immediately (useful for security incidents or key rotation).
 
-**Endpoint**: `POST /api/v1/api-keys/{key_id}/revoke`
+**Endpoint**: `DELETE /api/v1/admin/api-keys/{key_id}`
 
 **Authentication**: Required (JWT bearer token)
 
 **Request**:
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/api-keys/ak_abc123xyz/revoke \
+curl -X DELETE http://localhost:8000/api/v1/admin/api-keys/9cae062c-6828-475e-9515-0a0b4cda8b60 \
   -H "Authorization: Bearer <jwt_token>"
 ```
 
-**Response** (200 OK):
-
-```json
-{
-  "id": "ak_abc123xyz",
-  "name": "Production API",
-  "description": "Used by production backend service",
-  "account_id": "AB1234",
-  "created_by": "usr_abc123",
-  "created_at": "2026-01-17T10:30:00Z",
-  "last_used_at": "2026-01-17T15:45:00Z",
-  "is_revoked": true,
-  "revoked_at": "2026-01-17T16:00:00Z",
-  "revoked_by": "usr_abc123"
-}
-```
+**Response** (204 No Content)
 
 **Note**: Once revoked, an API key cannot be restored. You must create a new key.
 
@@ -527,14 +506,14 @@ curl -X POST http://localhost:8000/api/v1/api-keys/ak_abc123xyz/revoke \
 
 Get details about a specific API key.
 
-**Endpoint**: `GET /api/v1/api-keys/{key_id}`
+**Endpoint**: `GET /api/v1/admin/api-keys/{key_id}`
 
 **Authentication**: Required (JWT bearer token)
 
 **Request**:
 
 ```bash
-curl -X GET http://localhost:8000/api/v1/api-keys/ak_abc123xyz \
+curl -X GET http://localhost:8000/api/v1/admin/api-keys/9cae062c-6828-475e-9515-0a0b4cda8b60 \
   -H "Authorization: Bearer <jwt_token>"
 ```
 
@@ -561,12 +540,12 @@ curl -X GET http://localhost:8000/api/v1/api-keys/ak_abc123xyz \
 
 ```bash
 # ✅ Good: Environment variable
-export SNACKBASE_API_KEY="sb_sk_..."
+export SNACKBASE_API_KEY="sb_ak...."
 
 # ✅ Good: Secure credential store (AWS Secrets Manager, Vault, etc.)
 
 # ❌ Bad: Hardcoded in source code
-api_key = "sb_sk_..."  # NEVER do this
+api_key = "sb_ak...."  # NEVER do this
 
 # ❌ Bad: Committed to version control
 git add .env  # NEVER commit API keys

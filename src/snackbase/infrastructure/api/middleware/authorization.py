@@ -54,8 +54,8 @@ def extract_collection_from_path(path: str) -> str | None:
     """Extract collection name from URL path.
     
     Matches patterns like:
-    - /api/v1/{collection}
-    - /api/v1/{collection}/{record_id}
+    - /api/v1/records/{collection}
+    - /api/v1/records/{collection}/{record_id}
     
     Args:
         path: URL path.
@@ -63,7 +63,7 @@ def extract_collection_from_path(path: str) -> str | None:
     Returns:
         Collection name if found, None otherwise.
     """
-    # Pattern: /api/v1/{collection} or /api/v1/{collection}/{record_id}
+    # Pattern: /api/v1/records/{collection} or /api/v1/records/{collection}/{record_id}
     # Exclude specific routes like /auth, /permissions, /collections, /invitations, /macros
     excluded_routes = {
         "auth",
@@ -75,7 +75,7 @@ def extract_collection_from_path(path: str) -> str | None:
         "live",
     }
 
-    # Match /api/v1/{collection} or /api/v1/{collection}/{anything}
+    # Match /api/v1/records/{collection} or /api/v1/records/{collection}/{anything}
     pattern = r"^/api/v\d+/([^/]+)(?:/.*)?$"
     match = re.match(pattern, path)
 

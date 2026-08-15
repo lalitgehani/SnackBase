@@ -276,7 +276,7 @@ Click **New collection** (or pick a starter template such as **Posts** on the em
 
 On the full-page create form:
 - Optionally choose a **starter template** (Posts, Products, Contacts) or **Blank**
-- **Name**: e.g. `posts` (API endpoint: `/api/v1/posts` or dynamic records path for the collection)
+- **Name**: e.g. `posts` (API endpoint: `/api/v1/records/posts`)
 - Edit pre-filled columns as needed, then **Create collection**
 
 You are taken to the **Schema** tab. A toast reminds you to configure **Rules** (defaults are locked for non-superadmin clients).
