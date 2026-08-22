@@ -5,10 +5,9 @@
 import { describe, it, expect } from 'vitest'
 import { execSync } from 'node:child_process'
 import { readFileSync, rmSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { join, resolve } from 'node:path'
 
-const uiRoot = fileURLToPath(new URL('../..', import.meta.url))
+const uiRoot = resolve(process.cwd())
 const sentinel = '__SNACKBASE_PLATFORM_BUILD_SENTINEL__'
 
 function distHasSentinel(distDir: string): boolean {
@@ -35,12 +34,12 @@ describe('platform build elimination', () => {
   it('excludes platform sentinel from self-host production build', () => {
     build(false)
     expect(distHasSentinel(join(uiRoot, 'dist'))).toBe(false)
-  })
+  }, 60_000)
 
   it('includes platform sentinel in platform production build', () => {
     build(true)
     expect(distHasSentinel(join(uiRoot, 'dist'))).toBe(true)
     rmSync(join(uiRoot, 'dist'), { recursive: true, force: true })
     build(false)
-  })
+  }, 120_000)
 })

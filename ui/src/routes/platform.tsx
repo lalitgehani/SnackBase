@@ -14,13 +14,12 @@ import ProtectedRoute from '@/components/platform/ProtectedRoute';
 import { ProjectStudioRoot, PlatformAdminRedirect } from '@/routes/ProjectStudioRoot';
 import { StudioChildRoutes } from '@/routes/studioRoutes';
 import { Toaster } from '@/components/ui/toaster';
-import { getPlatformSentinel } from '@/lib/platform-only';
-
-void getPlatformSentinel;
+import { PLATFORM_SENTINEL } from '@/lib/__platform_sentinel__';
 
 export default function PlatformRoutes() {
   return (
     <>
+      <div hidden data-platform-sentinel={PLATFORM_SENTINEL} />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />

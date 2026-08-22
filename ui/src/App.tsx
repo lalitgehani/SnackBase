@@ -3,8 +3,9 @@ import { Suspense, lazy } from 'react';
 import { IS_PLATFORM } from '@/lib/config';
 import { Loader2 } from 'lucide-react';
 
-const SelfHostRoutes = lazy(() => import('@/routes/selfHost'));
-const PlatformRoutes = lazy(() => import('@/routes/platform'));
+const AppRoutes = lazy(() =>
+  IS_PLATFORM ? import('@/routes/platform') : import('@/routes/selfHost'),
+);
 
 function RouteFallback() {
   return (
@@ -17,7 +18,7 @@ function RouteFallback() {
 function App() {
   return (
     <Suspense fallback={<RouteFallback />}>
-      {IS_PLATFORM ? <PlatformRoutes /> : <SelfHostRoutes />}
+      <AppRoutes />
     </Suspense>
   );
 }
