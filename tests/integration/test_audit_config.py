@@ -93,7 +93,7 @@ async def test_ready_check_audit_status(client):
 async def test_audit_log_api_metadata(client, superadmin_token):
     """Verify audit log API metadata includes status."""
     headers = {"Authorization": f"Bearer {superadmin_token}"}
-    response = await client.get("/api/v1/audit-logs/", headers=headers)
+    response = await client.get("/api/v1/audit-logs", headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert "audit_logging_enabled" in data

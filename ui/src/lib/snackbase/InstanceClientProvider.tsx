@@ -20,6 +20,8 @@ import { SnackBaseClient } from '@snackbase/sdk';
 import { IS_PLATFORM, loadConfig, platformBaseUrl } from '@/lib/config';
 import { setInstanceClient } from '@/lib/snackbase/instanceClientRef';
 import { AUTH_STORAGE_KEY } from '@/lib/snackbase/constants';
+import { instanceIdentityFromMe } from '@/lib/snackbase/instanceIdentity';
+import { useAuthStore } from '@/stores/auth.store';
 
 export const InstanceClientContext = createContext<SnackBaseClient | null>(null);
 
@@ -132,6 +134,31 @@ export function InstanceClientProvider({
   useEffect(() => {
     return () => {
       client.realtime.disconnect();
+    };
+  }, [client]);
+
+  useEffect(() => {
+    if (!IS_PLATFORM) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const raw = await client.auth.getCurrentUser();
+        if (cancelled) return;
+        const identity = instanceIdentityFromMe(raw);
+        if (!identity) return;
+        useAuthStore.setState({
+          user: identity.user,
+          account: identity.account,
+          isAuthenticated: true,
+          isLoading: false,
+          error: null,
+        });
+      } catch (error) {
+        console.error('[InstanceClientProvider] failed to hydrate instance identity', error);
+      }
+    })();
+    return () => {
+      cancelled = true;
     };
   }, [client]);
 

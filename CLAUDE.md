@@ -189,8 +189,16 @@ Optional deployment mode where all users join a pre-configured account instead o
 Instances can optionally accept RS256/ES256 access tokens from a configured external issuer (SnackBase Cloud or a self-hosted OIDC provider). **Every `SNACKBASE_PLATFORM_*` setting defaults to unset** — an instance with no platform configuration behaves exactly as it does without this feature: no JWKS fetch, no key cache, no alternate auth path.
 
 - Enable with `SNACKBASE_PLATFORM_ISSUER`, `SNACKBASE_PLATFORM_JWKS_URL`, and `SNACKBASE_PLATFORM_AUDIENCE`
-- Requires single-tenant mode (`SNACKBASE_SINGLE_TENANT_MODE=true`); multi-tenant instances must not enable platform auth
-- Platform principals are JIT-mapped to real users in the single-tenant account; audit entries record `auth_method=platform`
+- Independent of instance tenancy: single- and multi-tenant instances both support it
+- A platform principal is the **operator of the instance** and resolves into the system
+  account (`SY0000`) — the same identity a self-hosted superadmin logs in as. The accounts
+  inside a multi-tenant instance are the customer's own end-tenants, who authenticate
+  directly against the instance and never traverse the platform gateway
+- Only `snackbase_role: admin` is accepted; any other role is rejected at authentication,
+  because `require_superadmin` admits on system-account membership alone
+- If the instance's bootstrap superadmin already exists with the same email, that row is
+  adopted unmodified so break-glass password login keeps working
+- Audit entries record `auth_method=platform`
 - Realtime connections authenticate through the same `Authenticator` as HTTP; platform socket lifetime is capped separately from token `exp`
 - Cloud Console integrated Studio lives in `ui/` platform mode (`VITE_IS_PLATFORM=true`); docs in `docs/guides/cloud-studio.mdx` and `docs/guides/platform-oidc-self-host.mdx`
 

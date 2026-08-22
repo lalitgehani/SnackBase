@@ -226,7 +226,7 @@ async def test_platform_token_audit_auth_method(
     assert create.status_code == status.HTTP_201_CREATED
 
     logs = await client.get(
-        "/api/v1/audit-logs/",
+        "/api/v1/audit-logs",
         headers={"Authorization": f"Bearer {superadmin_token}"},
         params={"auth_method": "platform"},
     )
@@ -302,7 +302,7 @@ async def test_local_jwt_audit_auth_method_not_platform(
     assert create.status_code == status.HTTP_201_CREATED
 
     logs = await client.get(
-        "/api/v1/audit-logs/",
+        "/api/v1/audit-logs",
         headers={"Authorization": f"Bearer {superadmin_token}"},
         params={"auth_method": "jwt"},
     )

@@ -19,7 +19,10 @@ router = APIRouter()
 
 
 @router.get(
-    "/",
+    # "" (not "/") so the mounted path is /api/v1/audit-logs, matching every other
+    # router. With "/" the endpoint only answered /api/v1/audit-logs/, and the SPA
+    # catch-all swallowed the unslashed form instead of redirecting to it.
+    "",
     status_code=status.HTTP_200_OK,
     response_model=AuditLogListResponse,
     responses={

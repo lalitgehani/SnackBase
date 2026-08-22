@@ -567,11 +567,22 @@ def register_frontend(app: FastAPI) -> None:
 
     static_dir_resolved = static_dir.resolve()
 
+    settings = get_settings()
+    api_prefix = settings.api_prefix.strip("/")
+
     @app.get("/{full_path:path}", include_in_schema=False)
     async def serve_frontend(full_path: str) -> Response:
         # Serve index.html for the root path
         if not full_path:
             return FileResponse(str(static_dir / "index.html"))
+
+        # Never answer an API path with the SPA. This catch-all is registered last, so it
+        # otherwise swallows unmatched API routes and hands back index.html with a 200 --
+        # which reaches clients as "JSON expected, got HTML" rather than a 404, and
+        # preempts FastAPI's trailing-slash redirect (e.g. /api/v1/audit-logs ->
+        # /api/v1/audit-logs/) because the catch-all counts as a match.
+        if full_path == api_prefix or full_path.startswith(f"{api_prefix}/"):
+            return JSONResponse(status_code=404, content={"detail": "Not Found"})
 
         candidate = (static_dir / full_path).resolve()
 

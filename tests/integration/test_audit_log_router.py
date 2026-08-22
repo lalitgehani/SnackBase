@@ -70,7 +70,7 @@ async def sample_logs(db_session):
 async def test_list_audit_logs_success(client, superadmin_token, sample_logs):
     """Test listing audit logs with superadmin access."""
     response = await client.get(
-        "/api/v1/audit-logs/",
+        "/api/v1/audit-logs",
         headers={"Authorization": f"Bearer {superadmin_token}"}
     )
 
@@ -85,7 +85,7 @@ async def test_list_audit_logs_filters(client, superadmin_token, sample_logs):
     """Test filtering audit logs."""
     # Filter by table_name
     response = await client.get(
-        "/api/v1/audit-logs/?table_name=users",
+        "/api/v1/audit-logs?table_name=users",
         headers={"Authorization": f"Bearer {superadmin_token}"}
     )
     assert response.status_code == 200
@@ -93,7 +93,7 @@ async def test_list_audit_logs_filters(client, superadmin_token, sample_logs):
 
     # Filter by operation
     response = await client.get(
-        "/api/v1/audit-logs/?operation=DELETE",
+        "/api/v1/audit-logs?operation=DELETE",
         headers={"Authorization": f"Bearer {superadmin_token}"}
     )
     assert response.status_code == 200
@@ -140,7 +140,7 @@ async def test_export_audit_logs_csv(client, superadmin_token, sample_logs):
 async def test_audit_logs_requires_superadmin(client, regular_user_token, sample_logs):
     """Test that regular users cannot access audit logs."""
     response = await client.get(
-        "/api/v1/audit-logs/",
+        "/api/v1/audit-logs",
         headers={"Authorization": f"Bearer {regular_user_token}"}
     )
     assert response.status_code == 403
