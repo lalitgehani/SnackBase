@@ -40,6 +40,11 @@ import { IS_PLATFORM } from '@/lib/config';
 
 /** Shared Studio child routes (relative to /admin or /project/:ref). */
 export function StudioChildRoutes() {
+  return studioChildRouteElements();
+}
+
+/** Route elements for nesting under a parent `<Route>` — call as `{studioChildRouteElements()}`, not `<… />`. */
+export function studioChildRouteElements() {
   return (
     <>
       <Route index element={<Navigate to="dashboard" replace />} />

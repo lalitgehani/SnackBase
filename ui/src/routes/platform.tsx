@@ -12,7 +12,7 @@ import ConsoleLayout from '@/layouts/platform/ConsoleLayout';
 import PlatformStudioLayout from '@/layouts/platform/PlatformStudioLayout';
 import ProtectedRoute from '@/components/platform/ProtectedRoute';
 import { ProjectStudioRoot, PlatformAdminRedirect } from '@/routes/ProjectStudioRoot';
-import { StudioChildRoutes } from '@/routes/studioRoutes';
+import { studioChildRouteElements } from '@/routes/studioRoutes';
 import { Toaster } from '@/components/ui/toaster';
 import { PLATFORM_SENTINEL } from '@/lib/__platform_sentinel__';
 
@@ -66,7 +66,7 @@ export default function PlatformRoutes() {
             </ProtectedRoute>
           }
         >
-          <StudioChildRoutes />
+          {studioChildRouteElements()}
         </Route>
 
         <Route path="/admin/*" element={<PlatformAdminRedirect />} />

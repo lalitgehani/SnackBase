@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { EnvironmentStatusBadge } from '@/components/platform/EnvironmentStatusBadge';
 import { platformBaseUrl } from '@/lib/config';
 import { useControlPlaneAccessToken } from '@/lib/platform/useControlPlaneAccessToken';
+import { environmentRefLookupFilter } from '@/lib/control-plane/env-ref';
 import type { Environment, EnvironmentStatus } from '@/types/control-plane';
 
 const SUPPRESS_MS = 400;
@@ -72,7 +73,7 @@ export function EnvironmentColdStartGate({ ref, children }: EnvironmentColdStart
     queryKey: ['platform-environment', ref],
     queryFn: async () => {
       const res = await client.records.list<Environment>('environments', {
-        filter: `slug = "${ref}" OR id = "${ref}"`,
+        filter: environmentRefLookupFilter(ref),
         limit: 1,
       });
       return res.items[0] ?? null;

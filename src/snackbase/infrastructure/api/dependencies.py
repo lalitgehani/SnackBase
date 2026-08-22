@@ -9,9 +9,11 @@ from typing import TYPE_CHECKING, Annotated
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from snackbase.core.config import get_settings
 from snackbase.core.logging import get_logger
 from snackbase.infrastructure.auth.token_types import (
     AuthenticatedUser as AuthUser,
+    TokenType,
 )
 from snackbase.infrastructure.persistence.database import get_db_session
 
@@ -75,30 +77,35 @@ ANONYMOUS_USER_ID = "anonymous"
 async def require_superadmin(
     current_user: AuthenticatedUser,
 ) -> AuthUser:
-    """Ensure the current user is a superadmin.
+    """Ensure the current user may access instance admin APIs.
 
-    Superadmins are users linked to the special system account (UUID: nil UUID, Code: SY0000).
-
-    Args:
-        current_user: The authenticated user.
-
-    Returns:
-        AuthUser: The validated superadmin user.
-
-    Raises:
-        HTTPException: 403 if user is not a superadmin.
+    Self-host admins authenticate into the system account (SY0000). Integrated
+    Studio forwards platform JWTs for single-tenant instances; those callers
+    authenticate as tenant ``admin`` users instead.
     """
-    if current_user.account_id != SYSTEM_ACCOUNT_ID:
-        logger.info(
-            "Superadmin access denied",
-            user_id=current_user.user_id,
-            account_id=current_user.account_id,
-        )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Superadmin access required",
-        )
-    return current_user
+    if current_user.account_id == SYSTEM_ACCOUNT_ID:
+        return current_user
+
+    settings = get_settings()
+    if (
+        settings.platform_auth_enabled
+        and settings.single_tenant_mode
+        and current_user.token_type == TokenType.PLATFORM
+        and str(current_user.role).lower() == "admin"
+    ):
+        return current_user
+
+    logger.info(
+        "Superadmin access denied",
+        user_id=current_user.user_id,
+        account_id=current_user.account_id,
+        token_type=current_user.token_type,
+        role=current_user.role,
+    )
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Superadmin access required",
+    )
 
 
 async def get_user_role_id(

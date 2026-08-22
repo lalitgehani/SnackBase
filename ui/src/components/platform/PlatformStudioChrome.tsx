@@ -3,6 +3,7 @@ import { ChevronRight } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useSnackBase } from '@snackbase/react';
 import { EnvironmentStatusBadge } from '@/components/platform/EnvironmentStatusBadge';
+import { environmentRefLookupFilter, environmentRouteRef } from '@/lib/control-plane/env-ref';
 import { normalizeToAdminPath } from '@/lib/platform/studioPath';
 import type { Environment, Organization, Project } from '@/types/control-plane';
 
@@ -20,7 +21,7 @@ export function PlatformStudioChrome() {
     queryFn: async () => {
       if (!ref) return null;
       const res = await client.records.list<Environment>('environments', {
-        filter: `slug = "${ref}" OR id = "${ref}"`,
+        filter: environmentRefLookupFilter(ref),
         limit: 1,
       });
       return res.items[0] ?? null;
@@ -104,7 +105,7 @@ export function PlatformStudioChrome() {
           data-testid="environment-switcher"
         >
           {siblingEnvs.map((env) => (
-            <option key={env.id} value={env.slug || env.id}>
+            <option key={env.id} value={environmentRouteRef(env)}>
               {env.name} ({env.slug})
             </option>
           ))}

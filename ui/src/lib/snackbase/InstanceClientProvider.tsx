@@ -54,6 +54,19 @@ function redirectToLogin(): void {
   }
 }
 
+function createPlatformInstanceAuthErrorHandler(
+  getAccessToken: () => string | null,
+): (error: unknown) => void {
+  return (error: unknown) => {
+    // Control-plane session may still be valid; only redirect when the bridge token is gone.
+    if (IS_PLATFORM && getAccessToken()) {
+      console.error('[InstanceClientProvider] instance API auth failed', error);
+      return;
+    }
+    redirectToLogin();
+  };
+}
+
 export function InstanceClientProvider({
   children,
   envRef,
@@ -81,11 +94,12 @@ export function InstanceClientProvider({
           'InstanceClientProvider requires getAccessToken in platform mode',
         );
       }
+      const onInstanceAuthError = createPlatformInstanceAuthErrorHandler(getAccessToken);
       return new SnackBaseClient({
         baseUrl,
         getAccessToken,
         storageBackend: 'memory',
-        onAuthError: redirectToLogin,
+        onAuthError: onInstanceAuthError,
       });
     }
 
@@ -98,12 +112,14 @@ export function InstanceClientProvider({
     });
   }, [baseUrl, getAccessToken]);
 
+  // Register before child useEffects run (bindService/getInstanceClient).
+  setInstanceClient(client);
+
   useEffect(() => {
-    setInstanceClient(client);
     return () => {
       setInstanceClient(null);
     };
-  }, [client]);
+  }, []);
 
   useEffect(() => {
     const previous = previousClientRef.current;

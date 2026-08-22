@@ -46,13 +46,10 @@ import {
 import { getErrorMessage } from '@/lib/errors'
 import { slugifyName } from '@/lib/slug'
 import { loadConfig } from '@/lib/config'
+import { environmentRouteRef } from '@/lib/control-plane/env-ref'
 import type { Environment, Organization, Project } from '@/types/control-plane'
 
 const IN_FLIGHT = new Set(['pending', 'provisioning', 'deleting'])
-
-function envRef(env: Environment): string {
-  return env.slug || env.id
-}
 
 function isSingleTenant(env: Environment, project?: Project | null): boolean {
   const mode = env.tenancy_mode ?? project?.tenancy_mode
@@ -195,7 +192,7 @@ export default function EnvironmentsPage() {
   const breakGlassMutation = useMutation({
     mutationFn: async (env: Environment) => {
       const token = requireToken()
-      const ref = envRef(env)
+      const ref = environmentRouteRef(env)
       return invokeBreakGlass({ envRef: ref, accessToken: token })
     },
     onSuccess: (result) => {
@@ -569,7 +566,7 @@ const client = new SnackBaseClient({
                         asChild
                         data-testid={`open-studio-${env.id}`}
                       >
-                        <Link to={`/project/${envRef(env)}/collections`}>
+                        <Link to={`/project/${environmentRouteRef(env)}/collections`}>
                           Open Studio
                         </Link>
                       </Button>

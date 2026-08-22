@@ -44,6 +44,8 @@ export interface Environment {
   project: string
   name: string
   slug: string
+  /** Stable 20-char URL identity for platform proxy / Studio routes */
+  ref?: string
   status: EnvironmentStatus
   instance_url?: string | null
   error_message?: string | null

@@ -3,7 +3,7 @@ import LoginPage from '@/pages/LoginPage';
 import AcceptInvitationPage from '@/pages/AcceptInvitationPage';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { InstanceClientProvider } from '@/lib/snackbase/InstanceClientProvider';
-import { AdminLayout, StudioChildRoutes } from '@/routes/studioRoutes';
+import { AdminLayout, studioChildRouteElements } from '@/routes/studioRoutes';
 import { Toaster } from '@/components/ui/toaster';
 import { DemoBanner } from '@/components/DemoBanner';
 
@@ -26,7 +26,7 @@ export default function SelfHostRoutes() {
               </ProtectedRoute>
             }
           >
-            <StudioChildRoutes />
+            {studioChildRouteElements()}
           </Route>
 
           <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />

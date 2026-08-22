@@ -32,7 +32,10 @@ export default function LoginPage() {
   const { login } = useAuth()
   const [error, setError] = useState<string | null>(null)
 
+  const searchParams = new URLSearchParams(location.search)
+  const returnTo = searchParams.get('returnTo')
   const from =
+    (returnTo && returnTo.startsWith('/') ? returnTo : null) ??
     (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ??
     '/organizations'
 

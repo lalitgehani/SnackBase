@@ -1,6 +1,7 @@
 import type { SnackBaseClient } from '@snackbase/sdk'
 import { isValidSlug } from '@/lib/slug'
 import { getErrorMessage } from '@/lib/errors'
+import { createEnvironmentWithRef } from '@/lib/control-plane/env-ref'
 import type { Environment, Project, TenancyMode } from '@/types/control-plane'
 
 export interface CreateEnvironmentInput {
@@ -54,14 +55,17 @@ export async function createEnvironment(
   }
 
   try {
-    return await client.records.create<Environment>('environments', {
-      project: projectId,
-      name,
-      slug,
-      status: 'pending',
-      region,
-      tenancy_mode: tenancyMode,
-    })
+    return await createEnvironmentWithRef(
+      (data) => client.records.create<Environment>('environments', data),
+      {
+        project: projectId,
+        name,
+        slug,
+        status: 'pending',
+        region,
+        tenancy_mode: tenancyMode,
+      },
+    )
   } catch (err) {
     throw new Error(getErrorMessage(err, 'Failed to create environment'))
   }

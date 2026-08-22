@@ -40,18 +40,15 @@ describe('createEnvironment', () => {
     })
     expect(env.slug).toBe('staging')
     expect(env.status).toBe('pending')
-    expect(client.records.create).toHaveBeenCalledWith(
-      'environments',
-      expect.objectContaining({
-        region: 'eu-01',
-        tenancy_mode: 'single',
-        status: 'pending',
-      }),
-    )
+    expect(client.records.create).toHaveBeenCalledTimes(1)
     const payload = vi.mocked(client.records.create).mock.calls[0]?.[1] as Record<
       string,
       unknown
     >
+    expect(payload.region).toBe('eu-01')
+    expect(payload.tenancy_mode).toBe('single')
+    expect(payload.status).toBe('pending')
+    expect(payload.ref).toMatch(/^[a-z0-9]{20}$/)
     expect(payload.snackbase_secret_key).toBeUndefined()
     expect(payload.snackbase_superadmin_password).toBeUndefined()
   })

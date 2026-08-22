@@ -6,6 +6,7 @@ import {
   useInstanceClient,
   InstanceClientProviderError,
 } from '../InstanceClientProvider';
+import { getInstanceClient } from '../instanceClientRef';
 
 vi.mock('@/lib/config', () => ({
   IS_PLATFORM: false,
@@ -27,6 +28,14 @@ describe('InstanceClientProvider', () => {
     const mod = await import('../InstanceClientProvider');
     expect(Object.keys(mod)).not.toContain('SnackBaseProvider');
     expect(Object.keys(mod)).not.toContain('useSnackBase');
+  });
+
+  it('registers instance client for bindService before child effects', () => {
+    const wrapper = ({ children }: { children: ReactNode }) =>
+      createElement(InstanceClientProvider, null, children);
+
+    renderHook(() => useInstanceClient(), { wrapper });
+    expect(() => getInstanceClient()).not.toThrow();
   });
 
   it('constructs one self-host client with configured base URL', () => {

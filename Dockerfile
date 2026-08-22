@@ -15,14 +15,20 @@ FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a55
 
 WORKDIR /app/ui
 
-# Copy package files for layer caching
-COPY ui/package.json ui/package-lock.json* ./
-
-# Install dependencies
-RUN npm ci
-
-# Copy source files and build
+# Copy source (local file: SDK deps are patched before install)
 COPY ui/ .
+
+# Docker build context is SnackBase/ only — replace file: SDK paths with published versions.
+RUN node <<'EOF'
+const fs = require('fs')
+const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'))
+pkg.dependencies['@snackbase/sdk'] = '0.8.0'
+pkg.dependencies['@snackbase/react'] = '0.5.0'
+fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n')
+try { fs.unlinkSync('package-lock.json') } catch {}
+EOF
+
+RUN npm install --legacy-peer-deps
 
 # Inject demo flag at build time so Vite inlines it into the bundle.
 # VITE_* vars are read from process.env by Vite at build time only.

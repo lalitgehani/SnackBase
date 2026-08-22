@@ -87,6 +87,7 @@ describe('EnvironmentsPage', () => {
           project: 'p1',
           name: 'Production',
           slug: 'production',
+          ref: 'abc123def456ghi789jk',
           status: 'ready',
           tenancy_mode: 'single',
           instance_url: 'https://api.example.local',
@@ -101,7 +102,7 @@ describe('EnvironmentsPage', () => {
     expect(screen.getByTestId('copy-url-e1')).toBeInTheDocument()
     expect(screen.getByTestId('open-studio-e1')).toHaveAttribute(
       'href',
-      '/project/production/collections',
+      '/project/abc123def456ghi789jk/collections',
     )
   })
 

@@ -205,6 +205,42 @@ async def test_platform_token_audit_auth_method(
 
 
 @pytest.mark.asyncio
+async def test_platform_admin_can_list_collections(
+    client, db_session, single_tenant_account, platform_keys, jwks_mock
+):
+    private_key, _ = platform_keys
+    token = _platform_token(
+        private_key,
+        sub="studio-admin",
+        email="studio-admin@platform.example.com",
+        role="admin",
+    )
+    response = await client.get(
+        "/api/v1/collections",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == status.HTTP_200_OK, response.text
+
+
+@pytest.mark.asyncio
+async def test_platform_user_cannot_list_collections(
+    client, db_session, single_tenant_account, platform_keys, jwks_mock
+):
+    private_key, _ = platform_keys
+    token = _platform_token(
+        private_key,
+        sub="studio-user",
+        email="studio-user@platform.example.com",
+        role="user",
+    )
+    response = await client.get(
+        "/api/v1/collections",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+
+
+@pytest.mark.asyncio
 async def test_local_jwt_audit_auth_method_not_platform(
     client, db_session, superadmin_token, single_tenant_account, platform_keys, jwks_mock
 ):

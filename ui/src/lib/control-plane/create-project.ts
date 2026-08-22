@@ -2,6 +2,7 @@ import type { SnackBaseClient } from '@snackbase/sdk'
 import { isValidSlug } from '@/lib/slug'
 import { getErrorMessage } from '@/lib/errors'
 import { isRegionAvailable, listAvailableRegions } from '@/lib/control-plane/regions'
+import { createEnvironmentWithRef } from '@/lib/control-plane/env-ref'
 import type { Environment, Project, TenancyMode } from '@/types/control-plane'
 
 export interface CreateProjectInput {
@@ -95,14 +96,17 @@ export async function createProject(
   }
 
   try {
-    const environment = await client.records.create<Environment>('environments', {
-      project: project.id,
-      name: 'Production',
-      slug: 'production',
-      status: 'pending',
-      region,
-      tenancy_mode: tenancyMode,
-    })
+    const environment = await createEnvironmentWithRef(
+      (data) => client.records.create<Environment>('environments', data),
+      {
+        project: project.id,
+        name: 'Production',
+        slug: 'production',
+        status: 'pending',
+        region,
+        tenancy_mode: tenancyMode,
+      },
+    )
     return { project, environment }
   } catch (envErr) {
     // Best-effort compensate: delete project if caller is admin
