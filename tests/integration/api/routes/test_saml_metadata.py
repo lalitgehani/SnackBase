@@ -1,9 +1,10 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 from fastapi import status
 
 from snackbase.core.configuration.config_registry import ConfigurationRegistry
-from snackbase.infrastructure.configuration.providers.saml.okta import OktaSAMLProvider
+
 
 @pytest.mark.asyncio
 async def test_get_metadata_success(client, db_session):
@@ -21,7 +22,7 @@ async def test_get_metadata_success(client, db_session):
 
     # 2. Mock ConfigRegistry
     mock_registry = MagicMock(spec=ConfigurationRegistry)
-    
+
     # Mock get_effective_config to return a valid Okta config
     mock_config = {
         "idp_entity_id": "http://www.okta.com/exk123456",
@@ -31,7 +32,7 @@ async def test_get_metadata_success(client, db_session):
         "assertion_consumer_url": "http://localhost:8000/api/v1/auth/saml/acs",
     }
     mock_registry.get_effective_config = AsyncMock(return_value=mock_config)
-    
+
     # Inject mock registry into app state
     client._transport.app.state.config_registry = mock_registry
 
@@ -45,7 +46,7 @@ async def test_get_metadata_success(client, db_session):
     assert response.status_code == status.HTTP_200_OK
     assert response.headers["content-type"] == "application/xml"
     assert 'attachment; filename="saml-metadata.xml"' in response.headers["content-disposition"]
-    
+
     content = response.text
     assert "EntityDescriptor" in content
     assert 'entityID="http://localhost:8000/api/v1/auth/saml/metadata"' in content
@@ -63,7 +64,7 @@ async def test_get_metadata_account_not_found(client, db_session):
         "/api/v1/auth/saml/metadata",
         params={"account": "non-existent", "provider": "okta"}
     )
-    
+
     assert response.status_code == status.HTTP_404_NOT_FOUND
     assert "Account 'non-existent' not found" in response.json()["detail"]
 
@@ -92,7 +93,7 @@ async def test_get_metadata_provider_not_configured(client, db_session):
         "/api/v1/auth/saml/metadata",
         params={"account": "test-account", "provider": "okta"}
     )
-    
+
     assert response.status_code == status.HTTP_404_NOT_FOUND
     assert "SAML provider 'okta' not configured" in response.json()["detail"]
 
@@ -113,7 +114,7 @@ async def test_get_metadata_auto_provider_selection(client, db_session):
 
     # 2. Mock ConfigRegistry
     mock_registry = MagicMock(spec=ConfigurationRegistry)
-    
+
     # Mock to return config for any SAML provider
     async def side_effect(category, account_id, provider_name, repository):
         return {
@@ -132,6 +133,6 @@ async def test_get_metadata_auto_provider_selection(client, db_session):
         "/api/v1/auth/saml/metadata",
         params={"account": "test-account"}
     )
-    
+
     assert response.status_code == status.HTTP_200_OK
     assert "EntityDescriptor" in response.text

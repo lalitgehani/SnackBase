@@ -3,7 +3,7 @@
 Provides safe template rendering with HTML escaping and error handling.
 """
 
-from jinja2 import Environment, Template, TemplateSyntaxError, UndefinedError
+from jinja2 import TemplateSyntaxError, UndefinedError
 from jinja2.sandbox import SandboxedEnvironment
 
 from snackbase.core.logging import get_logger

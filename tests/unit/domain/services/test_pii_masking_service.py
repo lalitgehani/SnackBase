@@ -1,6 +1,5 @@
 """Unit tests for PII masking service."""
 
-import pytest
 
 from snackbase.domain.services import PIIMaskingService
 from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID

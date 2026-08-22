@@ -203,7 +203,7 @@ class UserRepository:
             List of (YYYY-MM-DD, count) pairs for days with activity.
             Missing days are not included; callers should zero-fill.
         """
-        from sqlalchemy import cast, Date, func, String
+        from sqlalchemy import Date, String, cast, func
 
         bind = self.session.get_bind()
         dialect_name = bind.dialect.name if bind is not None else "sqlite"

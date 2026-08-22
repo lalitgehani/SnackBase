@@ -1,10 +1,10 @@
 """Pydantic schemas for audit log endpoints."""
 
 from datetime import datetime
-from enum import Enum
-from typing import Any, Optional
+from enum import StrEnum
+from typing import Any
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class AuditLogResponse(BaseModel):
@@ -18,21 +18,21 @@ class AuditLogResponse(BaseModel):
     table_name: str = Field(..., description="Table/collection name")
     record_id: str = Field(..., description="ID of the affected record")
     column_name: str = Field(..., description="Name of the changed column")
-    old_value: Optional[str] = Field(None, description="Previous value")
-    new_value: Optional[str] = Field(None, description="New value")
+    old_value: str | None = Field(None, description="Previous value")
+    new_value: str | None = Field(None, description="New value")
     user_id: str = Field(..., description="ID of user who made the change")
     user_email: str = Field(..., description="Email of user who made the change")
     user_name: str = Field(..., description="Name of user who made the change")
-    es_username: Optional[str] = Field(None, description="Electronic signature username")
-    es_reason: Optional[str] = Field(None, description="Electronic signature reason")
-    es_timestamp: Optional[datetime] = Field(None, description="Electronic signature timestamp")
-    ip_address: Optional[str] = Field(None, description="Client IP address")
-    user_agent: Optional[str] = Field(None, description="User agent string")
-    request_id: Optional[str] = Field(None, description="Correlation ID")
+    es_username: str | None = Field(None, description="Electronic signature username")
+    es_reason: str | None = Field(None, description="Electronic signature reason")
+    es_timestamp: datetime | None = Field(None, description="Electronic signature timestamp")
+    ip_address: str | None = Field(None, description="Client IP address")
+    user_agent: str | None = Field(None, description="User agent string")
+    request_id: str | None = Field(None, description="Correlation ID")
     occurred_at: datetime = Field(..., description="Timestamp of the change (UTC)")
-    checksum: Optional[str] = Field(None, description="SHA-256 hash of this entry")
-    previous_hash: Optional[str] = Field(None, description="Checksum of the previous entry")
-    extra_metadata: Optional[dict[str, Any]] = Field(None, description="Additional metadata")
+    checksum: str | None = Field(None, description="SHA-256 hash of this entry")
+    previous_hash: str | None = Field(None, description="Checksum of the previous entry")
+    extra_metadata: dict[str, Any] | None = Field(None, description="Additional metadata")
 
 
 class AuditLogListResponse(BaseModel):
@@ -45,7 +45,7 @@ class AuditLogListResponse(BaseModel):
     audit_logging_enabled: bool = Field(True, description="Whether audit logging is currently enabled")
 
 
-class AuditLogExportFormat(str, Enum):
+class AuditLogExportFormat(StrEnum):
     """Available export formats for audit logs."""
 
     CSV = "csv"

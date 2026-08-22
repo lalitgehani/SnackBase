@@ -293,9 +293,6 @@ class CodelistService:
                 scope = "account"
                 is_system = False
 
-        existing = await self.repo.get_value_by_code(
-            codelist.id, code, account_id=owner
-        )
         # Check exact owner uniqueness
         all_vals = await self.repo.list_values(
             codelist.id,

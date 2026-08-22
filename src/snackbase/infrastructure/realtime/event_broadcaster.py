@@ -1,5 +1,6 @@
-from typing import Any, Dict, Optional
 import asyncio
+from typing import Any
+
 from snackbase.core.logging import get_logger
 from snackbase.infrastructure.realtime.realtime_manager import ConnectionManager
 
@@ -11,14 +12,14 @@ class EventBroadcaster:
         self.connection_manager = connection_manager
 
     async def publish_event(
-        self, 
-        account_id: str, 
-        collection: str, 
-        operation: str, 
+        self,
+        account_id: str,
+        collection: str,
+        operation: str,
         data: Any
     ) -> None:
         """Publish a data event to all authorized subscribers.
-        
+
         Args:
             account_id: The account the event belongs to.
             collection: The collection name.
@@ -37,14 +38,14 @@ class EventBroadcaster:
                 )
             )
             logger.debug(
-                "Event published for broadcast", 
-                account_id=account_id, 
-                collection=collection, 
+                "Event published for broadcast",
+                account_id=account_id,
+                collection=collection,
                 operation=operation
             )
         except Exception as e:
             logger.error(
-                "Failed to publish event for broadcast", 
+                "Failed to publish event for broadcast",
                 error=str(e),
                 collection=collection,
                 operation=operation

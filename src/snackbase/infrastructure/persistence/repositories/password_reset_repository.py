@@ -4,7 +4,7 @@ Provides database operations for creating, retrieving, and managing reset tokens
 """
 
 import hashlib
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -52,15 +52,15 @@ class PasswordResetRepository:
         """Convert infrastructure model to domain entity."""
         expires_at = model.expires_at
         if expires_at and expires_at.tzinfo is None:
-            expires_at = expires_at.replace(tzinfo=timezone.utc)
+            expires_at = expires_at.replace(tzinfo=UTC)
 
         created_at = model.created_at
         if created_at and created_at.tzinfo is None:
-            created_at = created_at.replace(tzinfo=timezone.utc)
+            created_at = created_at.replace(tzinfo=UTC)
 
         used_at = model.used_at
         if used_at and used_at.tzinfo is None:
-            used_at = used_at.replace(tzinfo=timezone.utc)
+            used_at = used_at.replace(tzinfo=UTC)
 
         return PasswordResetToken(
             id=model.id,
@@ -119,7 +119,7 @@ class PasswordResetRepository:
         stmt = (
             update(PasswordResetTokenModel)
             .where(PasswordResetTokenModel.id == token_id)
-            .values(used_at=datetime.now(timezone.utc))
+            .values(used_at=datetime.now(UTC))
         )
         result = await self._session.execute(stmt)
         return result.rowcount > 0
@@ -130,7 +130,7 @@ class PasswordResetRepository:
         Returns:
             Number of tokens deleted.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         stmt = delete(PasswordResetTokenModel).where(
             PasswordResetTokenModel.expires_at < now
         )
@@ -147,7 +147,7 @@ class PasswordResetRepository:
         Returns:
             The PasswordResetToken entity if found, None otherwise.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         stmt = select(PasswordResetTokenModel).where(
             PasswordResetTokenModel.user_id == user_id,
             PasswordResetTokenModel.email == email,

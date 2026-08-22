@@ -1,10 +1,13 @@
-import pytest
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
-from snackbase.infrastructure.auth.authenticator import Authenticator, AuthenticationError
-from snackbase.infrastructure.auth.token_types import TokenType, TokenPayload
+
+import pytest
+
+from snackbase.infrastructure.auth.authenticator import AuthenticationError, Authenticator
 from snackbase.infrastructure.auth.jwt_service import TokenExpiredError
+from snackbase.infrastructure.auth.token_types import TokenPayload, TokenType
+
 
 @pytest.fixture
 def authenticator():
@@ -35,7 +38,7 @@ def sample_payload():
 async def test_authenticate_expired_jwt(authenticator):
     """Test that expired JWT tokens are rejected."""
     token = "expired.jwt.token"
-    
+
     with patch("snackbase.infrastructure.auth.authenticator.jwt_service.validate_access_token", side_effect=TokenExpiredError("Token expired")):
         with pytest.raises(AuthenticationError, match="Token expired"):
             await authenticator.authenticate({"Authorization": f"Bearer {token}"})
@@ -44,7 +47,7 @@ async def test_authenticate_expired_jwt(authenticator):
 async def test_authenticate_expired_sb_token(authenticator, sample_payload):
     """Test that expired SnackBase tokens are rejected."""
     token = "sb_ak.expired.sig"
-    
+
     with patch("snackbase.infrastructure.auth.authenticator.TokenCodec.decode", return_value=sample_payload):
         with pytest.raises(AuthenticationError, match="Token has expired"):
             await authenticator.authenticate({"X-API-Key": token})
@@ -53,10 +56,10 @@ async def test_authenticate_expired_sb_token(authenticator, sample_payload):
 async def test_authenticate_expired_legacy_api_key(authenticator, mock_session):
     """Test that expired legacy API keys are rejected."""
     token = "sb_sk_EXPIRED"
-    
+
     mock_key = MagicMock()
     # Expired 1 hour ago
-    mock_key.expires_at = datetime.now(timezone.utc).replace(year=2020)
+    mock_key.expires_at = datetime.now(UTC).replace(year=2020)
     mock_key.is_active = True
 
     mock_result = MagicMock()

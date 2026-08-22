@@ -1,12 +1,12 @@
 """Macro Execution Engine."""
 
 import json
+from datetime import UTC
 from enum import Enum
 from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.sql.expression import TextClause
 
 from snackbase.infrastructure.persistence.repositories.macro_repository import (
     MacroRepository,
@@ -68,12 +68,12 @@ class MacroExecutionEngine:
         lookup_name = name
         if lookup_name.startswith("@"):
             lookup_name = lookup_name[1:]
-            
+
         macro = await self.macro_repo.get_by_name(lookup_name)
         if not macro:
             # Try with @ just in case
             macro = await self.macro_repo.get_by_name(name)
-            
+
         if macro:
             return await self._execute_sql_macro(macro, args, context)
 
@@ -91,16 +91,16 @@ class MacroExecutionEngine:
         user = context.get("user")
         if not user:
             return False
-            
+
         groups = []
         if isinstance(user, dict):
             groups = user.get("groups", [])
         else:
             groups = getattr(user, "groups", [])
-            
+
         if not groups:
             return False
-            
+
         return group_name in groups
 
     def _execute_has_role(self, args: list[Any], context: dict[str, Any]) -> bool:
@@ -111,54 +111,54 @@ class MacroExecutionEngine:
         user = context.get("user")
         if not user:
             return False
-            
+
         role = None
         if isinstance(user, dict):
             role = user.get("role")
         else:
             role = getattr(user, "role", None)
-            
+
         return role == role_name
 
     def _execute_owns_record(self, args: list[Any], context: dict[str, Any]) -> bool:
         """Check if user owns the record."""
         if len(args) != 0:
             return False
-            
+
         user = context.get("user")
         record = context.get("record")
-        
+
         if not user or not record:
             return False
-            
+
         user_id = None
         if isinstance(user, dict):
             user_id = user.get("id")
         else:
             user_id = getattr(user, "id", None)
-            
+
         owner_id = None
         if isinstance(record, dict):
             owner_id = record.get("owner_id")
         else:
             owner_id = getattr(record, "owner_id", None)
-            
+
         if user_id is None or owner_id is None:
             return False
-            
+
         return str(user_id) == str(owner_id)
 
     def _execute_in_time_range(self, args: list[Any], context: dict[str, Any]) -> bool:
         """Check if current time is in range (UTC)."""
-        from datetime import datetime, timezone
-        
+        from datetime import datetime
+
         if len(args) != 2:
             return False
-        
+
         try:
             start_hour = float(args[0])
             end_hour = float(args[1])
-            current_hour = datetime.now(timezone.utc).hour
+            current_hour = datetime.now(UTC).hour
             return start_hour <= current_hour < end_hour
         except (ValueError, TypeError):
             return False
@@ -167,18 +167,18 @@ class MacroExecutionEngine:
         """Check specific permission."""
         if len(args) != 2:
             return False
-            
+
         action = args[0]
         collection = args[1]
-        
+
         permissions = context.get("permissions")
         if not permissions or not isinstance(permissions, dict):
             return False
-            
+
         collection_perms = permissions.get(collection)
         if not collection_perms or not isinstance(collection_perms, list):
             return False
-            
+
         return action in collection_perms
 
     async def _execute_sql_macro(
@@ -190,14 +190,14 @@ class MacroExecutionEngine:
         # If context implicitly affects query (e.g. RLS), then caching might be risky if not keyed by context?
         # But macros are simple SELECTs. If arguments are the same, result should be same for the same request.
         # We assume MacroExecutionEngine is scoped to a request.
-        
+
         # Create cache key
         cache_key = (macro.name, tuple(args))
-        
+
         # Check if we have a cache
         if not hasattr(self, "_cache"):
             self._cache = {}
-            
+
         if cache_key in self._cache:
             return self._cache[cache_key]
 
@@ -217,23 +217,23 @@ class MacroExecutionEngine:
         bind_params = {}
         for i, param_name in enumerate(param_names):
             bind_params[param_name] = args[i]
-            
+
         # 4. Execute Query
         try:
             stmt = text(macro.sql_query)
             # Bind parameters
             stmt = stmt.bindparams(**bind_params)
-            
+
             # Enforce 5 second timeout
             stmt = stmt.execution_options(timeout=5)
-            
+
             result = await self.session.execute(stmt)
             val = result.scalar()
-            
+
             # Cache result
             self._cache[cache_key] = val
-            
+
             return val
-            
+
         except Exception:
             return False

@@ -24,7 +24,6 @@ from snackbase.infrastructure.hooks.action_executor import (
     execute_actions,
 )
 
-
 # ---------------------------------------------------------------------------
 # Template resolution
 # ---------------------------------------------------------------------------

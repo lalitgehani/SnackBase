@@ -1,10 +1,10 @@
 """Unit tests for email provider selection logic."""
 
-import pytest
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
-from snackbase.infrastructure.security.encryption import EncryptionService
+import pytest
+
 from snackbase.infrastructure.persistence.repositories.configuration_repository import (
     ConfigurationRepository,
 )
@@ -14,10 +14,11 @@ from snackbase.infrastructure.persistence.repositories.email_log_repository impo
 from snackbase.infrastructure.persistence.repositories.email_template_repository import (
     EmailTemplateRepository,
 )
-from snackbase.infrastructure.services.email.smtp_provider import SMTPProvider
+from snackbase.infrastructure.security.encryption import EncryptionService
 from snackbase.infrastructure.services.email.aws_ses_provider import AWSESProvider
 from snackbase.infrastructure.services.email.resend_provider import ResendProvider
-from snackbase.infrastructure.services.email_service import EmailService, SYSTEM_ACCOUNT_ID
+from snackbase.infrastructure.services.email.smtp_provider import SMTPProvider
+from snackbase.infrastructure.services.email_service import SYSTEM_ACCOUNT_ID, EmailService
 
 
 @pytest.fixture
@@ -39,7 +40,7 @@ def email_service(mock_encryption_service, mock_config_repository):
     """Create an email service instance for testing."""
     template_repo = MagicMock(spec=EmailTemplateRepository)
     log_repo = MagicMock(spec=EmailLogRepository)
-    
+
     return EmailService(
         template_repository=template_repo,
         log_repository=log_repo,
@@ -65,20 +66,20 @@ async def test_select_provider_with_account_config(email_service, mock_config_re
         "from_email": "test@example.com",
         "from_name": "Test",
     }
-    
+
     mock_config_repository.list_configs = AsyncMock(return_value=[mock_config])
     mock_session = AsyncMock()
-    
+
     # Execute
     provider, from_email, from_name, reply_to = await email_service._select_provider(
         mock_session, account_id
     )
-    
+
     # Verify
     assert isinstance(provider, SMTPProvider)
     assert from_email == "test@example.com"
     assert from_name == "Test"
-    
+
     # Verify it checked account-specific config first
     mock_config_repository.list_configs.assert_called_once_with(
         category="email_providers",
@@ -92,7 +93,7 @@ async def test_select_provider_with_account_config(email_service, mock_config_re
 async def test_select_provider_fallback_to_system(email_service, mock_config_repository):
     """Test fallback to system-level provider when no account config exists."""
     account_id = "test-account-123"
-    
+
     # Setup mock: no account config, but system config exists
     system_config = MagicMock()
     system_config.provider_name = "aws_ses"
@@ -104,29 +105,29 @@ async def test_select_provider_fallback_to_system(email_service, mock_config_rep
         "from_email": "system@example.com",
         "from_name": "System",
     }
-    
+
     # First call returns empty (no account config), second returns system config
     mock_config_repository.list_configs = AsyncMock(side_effect=[[], [system_config]])
     mock_session = AsyncMock()
-    
+
     # Execute
     provider, from_email, from_name, reply_to = await email_service._select_provider(
         mock_session, account_id
     )
-    
+
     # Verify
     assert isinstance(provider, AWSESProvider)
     assert from_email == "system@example.com"
     assert from_name == "System"
-    
+
     # Verify it tried account config first, then system
     assert mock_config_repository.list_configs.call_count == 2
     calls = mock_config_repository.list_configs.call_args_list
-    
+
     # First call: account-specific
     assert calls[0][1]["account_id"] == account_id
     assert calls[0][1]["is_system"] is False
-    
+
     # Second call: system-level
     assert calls[1][1]["account_id"] == SYSTEM_ACCOUNT_ID
     assert calls[1][1]["is_system"] is True
@@ -136,15 +137,15 @@ async def test_select_provider_fallback_to_system(email_service, mock_config_rep
 async def test_select_provider_no_enabled_provider(email_service, mock_config_repository):
     """Test error when no enabled provider is found."""
     account_id = "test-account-123"
-    
+
     # Setup mock: no configs at all
     mock_config_repository.list_configs = AsyncMock(return_value=[])
     mock_session = AsyncMock()
-    
+
     # Execute and verify exception
     with pytest.raises(ValueError) as exc_info:
         await email_service._select_provider(mock_session, account_id)
-    
+
     assert "No enabled email provider configured" in str(exc_info.value)
 
 
@@ -152,17 +153,17 @@ async def test_select_provider_no_enabled_provider(email_service, mock_config_re
 async def test_select_provider_only_enabled(email_service, mock_config_repository):
     """Test that only enabled providers are considered."""
     account_id = "test-account-123"
-    
+
     # This is implicitly tested by the enabled_only=True parameter
     # Just verify the parameter is passed correctly
     mock_config_repository.list_configs = AsyncMock(return_value=[])
     mock_session = AsyncMock()
-    
+
     try:
         await email_service._select_provider(mock_session, account_id)
     except ValueError:
         pass  # Expected
-    
+
     # Verify enabled_only was passed
     calls = mock_config_repository.list_configs.call_args_list
     for call in calls:
@@ -173,7 +174,7 @@ async def test_select_provider_only_enabled(email_service, mock_config_repositor
 async def test_provider_cache_hit(email_service, mock_config_repository):
     """Test that cached provider is returned on subsequent calls."""
     account_id = "test-account-123"
-    
+
     mock_config = MagicMock()
     mock_config.provider_name = "resend"
     mock_config.is_system = False
@@ -182,19 +183,19 @@ async def test_provider_cache_hit(email_service, mock_config_repository):
         "from_email": "test@example.com",
         "from_name": "Test",
     }
-    
+
     mock_config_repository.list_configs = AsyncMock(return_value=[mock_config])
     mock_session = AsyncMock()
-    
+
     # First call - should query database
     provider1, _, _, _ = await email_service._get_provider(mock_session, account_id)
-    
+
     # Second call - should use cache
     provider2, _, _, _ = await email_service._get_provider(mock_session, account_id)
-    
+
     # Verify same provider instance is returned (from cache)
     assert provider1 is provider2
-    
+
     # Verify database was only queried once
     assert mock_config_repository.list_configs.call_count == 1
 
@@ -203,7 +204,7 @@ async def test_provider_cache_hit(email_service, mock_config_repository):
 async def test_provider_cache_ttl_expiry(email_service, mock_config_repository):
     """Test that cache expires after TTL."""
     account_id = "test-account-123"
-    
+
     mock_config = MagicMock()
     mock_config.provider_name = "smtp"
     mock_config.is_system = False
@@ -216,13 +217,13 @@ async def test_provider_cache_ttl_expiry(email_service, mock_config_repository):
         "from_email": "test@example.com",
         "from_name": "Test",
     }
-    
+
     mock_config_repository.list_configs = AsyncMock(return_value=[mock_config])
     mock_session = AsyncMock()
-    
+
     # First call
     await email_service._get_provider(mock_session, account_id)
-    
+
     # Manually expire the cache by manipulating the timestamp
     cache_key = f"provider:{account_id}"
     if cache_key in email_service._provider_cache._cache:
@@ -232,10 +233,10 @@ async def test_provider_cache_ttl_expiry(email_service, mock_config_repository):
             provider,
             datetime.now(UTC) - timedelta(seconds=360)
         )
-    
+
     # Second call - should query database again
     await email_service._get_provider(mock_session, account_id)
-    
+
     # Verify database was queried twice
     assert mock_config_repository.list_configs.call_count == 2
 
@@ -244,7 +245,7 @@ async def test_provider_cache_ttl_expiry(email_service, mock_config_repository):
 async def test_provider_cache_invalidation(email_service, mock_config_repository):
     """Test that cache can be invalidated."""
     account_id = "test-account-123"
-    
+
     mock_config = MagicMock()
     mock_config.provider_name = "smtp"
     mock_config.is_system = False
@@ -257,19 +258,19 @@ async def test_provider_cache_invalidation(email_service, mock_config_repository
         "from_email": "test@example.com",
         "from_name": "Test",
     }
-    
+
     mock_config_repository.list_configs = AsyncMock(return_value=[mock_config])
     mock_session = AsyncMock()
-    
+
     # First call - populate cache
     await email_service._get_provider(mock_session, account_id)
-    
+
     # Invalidate cache
     email_service.invalidate_provider_cache(account_id)
-    
+
     # Second call - should query database again
     await email_service._get_provider(mock_session, account_id)
-    
+
     # Verify database was queried twice
     assert mock_config_repository.list_configs.call_count == 2
 
@@ -288,7 +289,7 @@ async def test_provider_factory_creates_correct_providers(email_service):
     }
     smtp_provider = email_service._create_provider("smtp", smtp_config)
     assert isinstance(smtp_provider, SMTPProvider)
-    
+
     # Test AWS SES
     ses_config = {
         "region": "us-east-1",
@@ -298,7 +299,7 @@ async def test_provider_factory_creates_correct_providers(email_service):
     }
     ses_provider = email_service._create_provider("aws_ses", ses_config)
     assert isinstance(ses_provider, AWSESProvider)
-    
+
     # Test Resend
     resend_config = {
         "api_key": "re_123456",
@@ -306,7 +307,7 @@ async def test_provider_factory_creates_correct_providers(email_service):
     }
     resend_provider = email_service._create_provider("resend", resend_config)
     assert isinstance(resend_provider, ResendProvider)
-    
+
     # Test unknown provider
     with pytest.raises(ValueError) as exc_info:
         email_service._create_provider("unknown", {})
@@ -340,7 +341,7 @@ async def test_get_specific_provider(email_service, mock_config_repository):
     # Verify
     assert isinstance(provider, ResendProvider)
     assert from_email == "test@example.com"
-    
+
     mock_config_repository.get_config.assert_called_once_with(
         category="email_providers",
         account_id=account_id,
@@ -350,11 +351,11 @@ async def test_get_specific_provider(email_service, mock_config_repository):
 
     # Test failure case (not found/disabled)
     mock_config_repository.get_config = AsyncMock(return_value=None)
-    
+
     with pytest.raises(ValueError) as exc_info:
         await email_service._get_specific_provider(
             mock_session, account_id, provider_name
         )
-    
+
     assert f"Provider '{provider_name}' is not configured or enabled" in str(exc_info.value)
 

@@ -5,14 +5,14 @@ CREATE, UPDATE, DELETE operations on models using the synchronous
 audit logging mechanism.
 """
 
-import pytest
-from datetime import datetime, timezone
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 
-from snackbase.core.context import set_current_context, clear_current_context
+import pytest
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from snackbase.core.context import clear_current_context, set_current_context
 from snackbase.domain.entities.hook_context import HookContext
-from snackbase.infrastructure.persistence.models import UserModel, AccountModel
+from snackbase.infrastructure.persistence.models import AccountModel, UserModel
 from snackbase.infrastructure.persistence.models.audit_log import AuditLogModel
 from snackbase.infrastructure.persistence.repositories.audit_log_repository import (
     AuditLogRepository,
@@ -25,10 +25,10 @@ pytestmark = pytest.mark.enable_audit_hooks
 @pytest.mark.asyncio
 async def test_audit_capture_create(db_session: AsyncSession):
     """Test that CREATE operations generate audit log entries."""
-    
+
     # 1. Setup Context
     from dataclasses import dataclass
-    
+
     @dataclass
     class MockUser:
         id: str
@@ -55,7 +55,7 @@ async def test_audit_capture_create(db_session: AsyncSession):
             slug="test-account",
         )
         db_session.add(account)
-        
+
         # Create a test user
         user = UserModel(
             id="user-123",
@@ -65,16 +65,16 @@ async def test_audit_capture_create(db_session: AsyncSession):
             role_id=1,
         )
         db_session.add(user)
-        
+
         # 2. Trigger Audit (via commit/flush)
         await db_session.commit()
-        
+
         # 3. Verify
         # Verify audit logs were created
         audit_repo = AuditLogRepository(db_session)
         count = await audit_repo.count_all()
         assert count > 0, "No audit log entries were created"
-        
+
         # Check specific logs for user creation
         result = await db_session.execute(
             select(AuditLogModel)
@@ -82,9 +82,9 @@ async def test_audit_capture_create(db_session: AsyncSession):
             .where(AuditLogModel.record_id == "user-123")
         )
         audit_logs = list(result.scalars().all())
-        
+
         assert len(audit_logs) > 0, "No audit logs found for user creation"
-        
+
         for log in audit_logs:
             assert log.operation == "CREATE"
             assert log.user_id == "admin-123"
@@ -102,7 +102,7 @@ async def test_audit_capture_create(db_session: AsyncSession):
 @pytest.mark.asyncio
 async def test_audit_capture_update(db_session: AsyncSession):
     """Test that UPDATE operations generate audit log entries."""
-    
+
     # 1. Setup Initial Data (without context, or allow it)
     account = AccountModel(
         id="test-account-456",
@@ -111,7 +111,7 @@ async def test_audit_capture_update(db_session: AsyncSession):
         slug="test-account-2",
     )
     db_session.add(account)
-    
+
     user = UserModel(
         id="user-456",
         email="original@example.com",
@@ -121,7 +121,7 @@ async def test_audit_capture_update(db_session: AsyncSession):
     )
     db_session.add(user)
     await db_session.commit()
-    
+
     # 2. Setup Context for Update
     from dataclasses import dataclass
     @dataclass
@@ -139,15 +139,15 @@ async def test_audit_capture_update(db_session: AsyncSession):
         user_name="Admin User 2",
     )
     set_current_context(context)
-    
+
     try:
         # 3. Perform Update
         # Need to fetch fresh instance attached to session
         user = await db_session.get(UserModel, "user-456")
         user.email = "updated@example.com"
-        
+
         await db_session.commit()
-        
+
         # 4. Verify
         result = await db_session.execute(
             select(AuditLogModel)
@@ -157,13 +157,13 @@ async def test_audit_capture_update(db_session: AsyncSession):
             .where(AuditLogModel.operation == "UPDATE")
         )
         audit_logs = list(result.scalars().all())
-        
+
         assert len(audit_logs) >= 1, "No audit logs found for user update"
-        
+
         # Check specific log for email
         email_logs = [log for log in audit_logs if log.column_name == "email"]
         assert len(email_logs) == 1, "Should have exactly one email audit log"
-        
+
         email_log = email_logs[0]
         assert email_log.operation == "UPDATE"
         assert email_log.old_value == "original@example.com"
@@ -177,7 +177,7 @@ async def test_audit_capture_update(db_session: AsyncSession):
 @pytest.mark.asyncio
 async def test_audit_capture_delete(db_session: AsyncSession):
     """Test that DELETE operations generate audit log entries."""
-    
+
     # 1. Setup Initial Data
     account = AccountModel(
         id="test-account-789",
@@ -186,7 +186,7 @@ async def test_audit_capture_delete(db_session: AsyncSession):
         slug="test-account-3",
     )
     db_session.add(account)
-    
+
     user = UserModel(
         id="user-789",
         email="delete@example.com",
@@ -196,7 +196,7 @@ async def test_audit_capture_delete(db_session: AsyncSession):
     )
     db_session.add(user)
     await db_session.commit()
-    
+
     # 2. Setup Context for Delete
     from dataclasses import dataclass
     @dataclass
@@ -214,13 +214,13 @@ async def test_audit_capture_delete(db_session: AsyncSession):
         user_name="Admin User 3",
     )
     set_current_context(context)
-    
+
     try:
         # 3. Perform Delete
         user = await db_session.get(UserModel, "user-789")
         await db_session.delete(user)
         await db_session.commit()
-        
+
         # 4. Verify
         result = await db_session.execute(
             select(AuditLogModel)
@@ -229,9 +229,9 @@ async def test_audit_capture_delete(db_session: AsyncSession):
             .where(AuditLogModel.operation == "DELETE")
         )
         audit_logs = list(result.scalars().all())
-        
+
         assert len(audit_logs) > 0, "No audit logs found for user deletion"
-        
+
         for log in audit_logs:
             assert log.operation == "DELETE"
             assert log.new_value is None
@@ -244,10 +244,10 @@ async def test_audit_capture_delete(db_session: AsyncSession):
 @pytest.mark.asyncio
 async def test_audit_capture_without_context(db_session: AsyncSession):
     """Test that audit capture gracefully handles missing context (no logs created)."""
-    
+
     # Ensure no context is set
     clear_current_context()
-    
+
     account = AccountModel(
         id="test-account-999",
         account_code="AC0004",
@@ -255,7 +255,7 @@ async def test_audit_capture_without_context(db_session: AsyncSession):
         slug="test-account-4",
     )
     db_session.add(account)
-    
+
     user = UserModel(
         id="user-999",
         email="nocontext@example.com",
@@ -265,7 +265,7 @@ async def test_audit_capture_without_context(db_session: AsyncSession):
     )
     db_session.add(user)
     await db_session.commit()
-    
+
     # Verify NO audit logs were created
     result = await db_session.execute(
         select(AuditLogModel)
@@ -273,5 +273,5 @@ async def test_audit_capture_without_context(db_session: AsyncSession):
         .where(AuditLogModel.record_id == "user-999")
     )
     audit_logs = list(result.scalars().all())
-    
+
     assert len(audit_logs) == 0, "Audit logs should not be created without context"

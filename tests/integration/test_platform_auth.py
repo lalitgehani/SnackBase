@@ -15,8 +15,10 @@ from tests.helpers.platform_tokens import (
 )
 
 from snackbase.core.config import get_settings
+from snackbase.infrastructure.auth.authenticator import SYSTEM_ACCOUNT_ID
 from snackbase.infrastructure.auth.platform_jwks import reset_platform_jwks_client
-from snackbase.infrastructure.persistence.models import AccountModel, UserModel
+from snackbase.infrastructure.persistence.models import AccountModel, RoleModel, UserModel
+from snackbase.infrastructure.persistence.repositories import AccountRepository
 from snackbase.infrastructure.persistence.table_builder import TableBuilder
 
 pytestmark = pytest.mark.enable_audit_hooks
@@ -54,16 +56,17 @@ def jwks_mock(platform_keys):
 
 
 @pytest.fixture
-async def single_tenant_account(db_session):
-    account = AccountModel(
-        id="00000000-0000-0000-0000-00000000aa01",
-        account_code="PA0001",
-        name="Platform App",
-        slug="platform-app",
-    )
-    db_session.add(account)
-    await db_session.commit()
-    return account
+async def system_account(db_session):
+    """The instance system account (SY0000).
+
+    Platform principals are instance operators and resolve here, regardless of the
+    instance's own tenancy. Idempotent, so it composes with conftest's
+    ``superadmin_token`` fixture in either order.
+    """
+    from snackbase.domain.services.superadmin_service import SuperadminService
+
+    await SuperadminService.ensure_system_account_exists(db_session)
+    return await AccountRepository(db_session).get_by_id(SYSTEM_ACCOUNT_ID)
 
 
 def _platform_token(private_key, **kwargs) -> str:
@@ -98,26 +101,58 @@ async def _create_collection_with_public_rules(
 
 
 @pytest.mark.asyncio
-async def test_admin_and_user_roles_authenticate(
-    client, db_session, single_tenant_account, platform_keys, jwks_mock
+async def test_operator_role_authenticates_into_system_account(
+    client, db_session, system_account, platform_keys, jwks_mock
 ):
+    """An `admin` platform principal is the instance operator: it authenticates and is
+    provisioned into SY0000, on an instance that is NOT in single-tenant mode."""
     private_key, _ = platform_keys
-    for role, sub, email in [
-        ("admin", "admin-sub", "admin@platform.example.com"),
-        ("user", "user-sub", "user@platform.example.com"),
-    ]:
-        token = _platform_token(private_key, role=role, sub=sub, email=email)
-        response = await client.get(
-            "/api/v1/auth/me",
-            headers={"Authorization": f"Bearer {token}"},
+    token = _platform_token(
+        private_key, role="admin", sub="admin-sub", email="admin@platform.example.com"
+    )
+    response = await client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == status.HTTP_200_OK, response.text
+    assert response.json()["email"] == "admin@platform.example.com"
+    assert response.json()["account_id"] == SYSTEM_ACCOUNT_ID
+
+    row = (
+        await db_session.execute(select(UserModel).where(UserModel.id == "admin-sub"))
+    ).scalar_one()
+    assert row.account_id == SYSTEM_ACCOUNT_ID
+    assert row.auth_provider == "platform"
+
+
+@pytest.mark.asyncio
+async def test_non_operator_role_rejected_and_creates_no_user(
+    client, db_session, system_account, platform_keys, jwks_mock
+):
+    """A non-admin platform role has no identity to map to: `require_superadmin` admits
+    on account membership alone, so anything landing in SY0000 would be an operator.
+    It must fail closed at authentication, before any row is written."""
+    private_key, _ = platform_keys
+    token = _platform_token(
+        private_key, role="user", sub="user-sub", email="user@platform.example.com"
+    )
+    response = await client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED, response.text
+
+    count = (
+        await db_session.execute(
+            select(func.count()).select_from(UserModel).where(UserModel.id == "user-sub")
         )
-        assert response.status_code == status.HTTP_200_OK, response.text
-        assert response.json()["email"] == email
+    ).scalar_one()
+    assert count == 0
 
 
 @pytest.mark.asyncio
 async def test_same_sub_produces_one_user_row(
-    client, db_session, single_tenant_account, platform_keys, jwks_mock
+    client, db_session, system_account, platform_keys, jwks_mock
 ):
     private_key, _ = platform_keys
     token = _platform_token(private_key, sub="stable-sub", email="stable@example.com")
@@ -139,14 +174,14 @@ async def test_same_sub_produces_one_user_row(
 
 @pytest.mark.asyncio
 async def test_jit_user_cannot_password_login(
-    client, db_session, single_tenant_account, platform_keys, jwks_mock
+    client, db_session, system_account, platform_keys, jwks_mock
 ):
     private_key, _ = platform_keys
     token = _platform_token(
         private_key,
         sub="jit-user",
         email="jit@example.com",
-        role="user",
+        role="admin",
     )
     me = await client.get(
         "/api/v1/auth/me",
@@ -159,7 +194,7 @@ async def test_jit_user_cannot_password_login(
         json={
             "email": "jit@example.com",
             "password": "any-password",
-            "account": "platform-app",
+            "account": "system",
         },
     )
     assert login.status_code == status.HTTP_401_UNAUTHORIZED
@@ -167,7 +202,7 @@ async def test_jit_user_cannot_password_login(
 
 @pytest.mark.asyncio
 async def test_platform_token_audit_auth_method(
-    client, db_session, superadmin_token, single_tenant_account, platform_keys, jwks_mock
+    client, db_session, superadmin_token, system_account, platform_keys, jwks_mock
 ):
     collection_name = "platform_audit_col"
     schema = [{"name": "title", "type": "text"}]
@@ -206,7 +241,7 @@ async def test_platform_token_audit_auth_method(
 
 @pytest.mark.asyncio
 async def test_platform_admin_can_list_collections(
-    client, db_session, single_tenant_account, platform_keys, jwks_mock
+    client, db_session, system_account, platform_keys, jwks_mock
 ):
     private_key, _ = platform_keys
     token = _platform_token(
@@ -223,9 +258,11 @@ async def test_platform_admin_can_list_collections(
 
 
 @pytest.mark.asyncio
-async def test_platform_user_cannot_list_collections(
-    client, db_session, single_tenant_account, platform_keys, jwks_mock
+async def test_platform_user_token_rejected_at_authentication(
+    client, db_session, system_account, platform_keys, jwks_mock
 ):
+    """Rejection moved from authorization to authentication, so this is now 401 rather
+    than 403 — no principal is established at all."""
     private_key, _ = platform_keys
     token = _platform_token(
         private_key,
@@ -237,12 +274,12 @@ async def test_platform_user_cannot_list_collections(
         "/api/v1/collections",
         headers={"Authorization": f"Bearer {token}"},
     )
-    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
 @pytest.mark.asyncio
 async def test_local_jwt_audit_auth_method_not_platform(
-    client, db_session, superadmin_token, single_tenant_account, platform_keys, jwks_mock
+    client, db_session, superadmin_token, system_account, platform_keys, jwks_mock
 ):
     from snackbase.infrastructure.persistence.models import CollectionModel
 
@@ -278,9 +315,26 @@ async def test_local_jwt_audit_auth_method_not_platform(
 
 
 @pytest.mark.asyncio
-async def test_cross_account_record_access_denied(
-    client, db_session, single_tenant_account, platform_keys, jwks_mock
+async def test_platform_operator_reaches_all_instance_accounts(
+    client, db_session, system_account, platform_keys, jwks_mock
 ):
+    """DELIBERATE CHANGE OF INVARIANT — do not "fix" this back to a 403/404.
+
+    This test previously asserted that a platform principal could not read another
+    account, which was correct while platform principals were provisioned into a *tenant*
+    account. They are now instance operators in SY0000.
+
+    Cloud provisions one dedicated instance per environment, so every account on this
+    instance belongs to the customer operating it — those are their own application's
+    end-tenants, not other customers. Reading across them is the operator's own data, and
+    is exactly what a self-hosted superadmin can do. Cross-*customer* isolation is enforced
+    at the control plane, which resolves an environment to its owner before minting a
+    token at all.
+
+    The isolation that still matters is asserted by
+    ``test_non_operator_role_rejected_and_creates_no_user``: a non-admin never becomes an
+    operator in the first place.
+    """
     other_account = AccountModel(
         id="00000000-0000-0000-0000-00000000bb02",
         account_code="OB0002",
@@ -297,30 +351,130 @@ async def test_cross_account_record_access_denied(
         f"/api/v1/accounts/{other_account.id}",
         headers={"Authorization": f"Bearer {token}"},
     )
-    assert response.status_code in {
-        status.HTTP_403_FORBIDDEN,
-        status.HTTP_404_NOT_FOUND,
-    }
+    assert response.status_code == status.HTTP_200_OK, response.text
+    assert response.json()["id"] == other_account.id
+
+
+@pytest.mark.asyncio
+async def test_legacy_platform_user_is_migrated_to_system_account(
+    client, db_session, system_account, platform_keys, jwks_mock
+):
+    """Rows provisioned by the pre-operator-model code landed in the instance's tenant
+    account. Without in-place reconciliation the lookup would return early and the
+    operator would silently lose Studio access after upgrading."""
+    tenant = AccountModel(
+        id="00000000-0000-0000-0000-00000000aa01",
+        account_code="PA0001",
+        name="Platform App",
+        slug="platform-app",
+    )
+    db_session.add(tenant)
+    await db_session.commit()
+
+    role_id = (
+        await db_session.execute(select(RoleModel.id).where(RoleModel.name == "admin"))
+    ).scalar_one()
+    db_session.add(
+        UserModel(
+            id="legacy-sub",
+            account_id=tenant.id,
+            email="legacy@platform.example.com",
+            password_hash="x",
+            role_id=role_id,
+            is_active=True,
+            auth_provider="platform",
+            external_id="legacy-sub",
+        )
+    )
+    await db_session.commit()
+
+    private_key, _ = platform_keys
+    token = _platform_token(
+        private_key, sub="legacy-sub", role="admin", email="legacy@platform.example.com"
+    )
+    response = await client.get(
+        "/api/v1/collections",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == status.HTTP_200_OK, response.text
+
+    row = (
+        await db_session.execute(select(UserModel).where(UserModel.id == "legacy-sub"))
+    ).scalar_one()
+    await db_session.refresh(row)
+    assert row.account_id == SYSTEM_ACCOUNT_ID
+
+
+@pytest.mark.asyncio
+async def test_platform_sub_never_adopts_a_local_user(
+    client, db_session, system_account, platform_keys, jwks_mock
+):
+    """`sub` is an id minted by another system. Without the auth_provider predicate a
+    colliding id would authenticate the caller as that local user — and the migration
+    above would then move an unrelated local user into SY0000."""
+    tenant = AccountModel(
+        id="00000000-0000-0000-0000-00000000cc03",
+        account_code="CC0003",
+        name="Tenant",
+        slug="tenant-co",
+    )
+    db_session.add(tenant)
+    await db_session.commit()
+
+    role_id = (
+        await db_session.execute(select(RoleModel.id).where(RoleModel.name == "admin"))
+    ).scalar_one()
+    db_session.add(
+        UserModel(
+            id="collide",
+            account_id=tenant.id,
+            email="local@tenant.example.com",
+            password_hash="x",
+            role_id=role_id,
+            is_active=True,
+            auth_provider="password",
+            external_id=None,
+        )
+    )
+    await db_session.commit()
+
+    private_key, _ = platform_keys
+    token = _platform_token(
+        private_key, sub="collide", role="admin", email="operator@platform.example.com"
+    )
+    await client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
+
+    local = (
+        await db_session.execute(
+            select(UserModel).where(
+                UserModel.id == "collide", UserModel.auth_provider == "password"
+            )
+        )
+    ).scalar_one()
+    await db_session.refresh(local)
+    assert local.account_id == tenant.id, "a local user must never be adopted or moved"
+    assert local.email == "local@tenant.example.com"
 
 
 @pytest.mark.asyncio
 async def test_realtime_authenticate_accepts_platform_token(
-    db_session, single_tenant_account, platform_keys, jwks_mock
+    db_session, system_account, platform_keys, jwks_mock
 ):
     from snackbase.infrastructure.auth.token_types import TokenType
     from snackbase.infrastructure.realtime.realtime_auth import authenticate_realtime
 
     private_key, _ = platform_keys
-    token = _platform_token(private_key, sub="rt-user", role="user", email="rt@example.com")
+    token = _platform_token(private_key, sub="rt-user", role="admin", email="rt@example.com")
 
     user = await authenticate_realtime(token, session=db_session)
     assert user.token_type == TokenType.PLATFORM
     assert user.email == "rt@example.com"
+    assert user.account_id == SYSTEM_ACCOUNT_ID
 
 
 @pytest.mark.asyncio
 async def test_expired_platform_token_rejected_at_realtime_connect(
-    db_session, single_tenant_account, platform_keys, jwks_mock
+    db_session, system_account, platform_keys, jwks_mock
 ):
     from fastapi import HTTPException
 

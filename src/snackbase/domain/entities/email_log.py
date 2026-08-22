@@ -5,7 +5,7 @@ including success/failure status and error messages.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 
 @dataclass
@@ -33,7 +33,7 @@ class EmailLog:
     status: str
     error_message: str | None = None
     variables: dict[str, str] | None = None
-    sent_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    sent_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self) -> None:
         """Validate email log data after initialization."""

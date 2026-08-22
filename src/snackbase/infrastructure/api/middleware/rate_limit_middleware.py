@@ -4,7 +4,6 @@ This middleware protects the API from abuse by limiting the number of requests
 from a specific IP address or authenticated user within a time window.
 """
 
-import time
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import JSONResponse
@@ -12,9 +11,9 @@ from starlette.responses import JSONResponse
 from snackbase.core.config import get_settings
 from snackbase.core.context import get_current_context
 from snackbase.core.logging import get_logger
+from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID
 from snackbase.infrastructure.api.middleware.client_ip import get_client_ip
 from snackbase.infrastructure.api.middleware.rate_limit_storage import rate_limit_storage
-from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID
 
 logger = get_logger(__name__)
 

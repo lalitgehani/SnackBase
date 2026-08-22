@@ -77,13 +77,16 @@ def platform_settings_env(
     issuer: str = "https://platform.example.com",
     jwks_url: str = "http://localhost:9999/jwks",
     audience: str = "snackbase-instance",
-    single_tenant_account: str = "platform-app",
 ) -> dict[str, str]:
-    """Environment overrides for a enabled platform-auth single-tenant instance."""
+    """Environment overrides for an instance with platform auth enabled.
+
+    Deliberately does not set ``SNACKBASE_SINGLE_TENANT_*``: platform principals are
+    instance operators resolved into the system account, so platform auth is independent
+    of instance tenancy. Every test using this helper therefore runs against a
+    multi-tenant instance, which is the case that used to be unsupported.
+    """
     return {
         "SNACKBASE_PLATFORM_ISSUER": issuer,
         "SNACKBASE_PLATFORM_JWKS_URL": jwks_url,
         "SNACKBASE_PLATFORM_AUDIENCE": audience,
-        "SNACKBASE_SINGLE_TENANT_MODE": "true",
-        "SNACKBASE_SINGLE_TENANT_ACCOUNT": single_tenant_account,
     }

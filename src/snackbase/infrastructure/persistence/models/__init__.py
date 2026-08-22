@@ -7,14 +7,14 @@ automatically created on application startup in development mode.
 from snackbase.infrastructure.persistence.models.account import AccountModel
 from snackbase.infrastructure.persistence.models.api_key import APIKeyModel
 from snackbase.infrastructure.persistence.models.audit_log import AuditLogModel
-from snackbase.infrastructure.persistence.models.collection import CollectionModel
-from snackbase.infrastructure.persistence.models.collection_rule import CollectionRuleModel
 from snackbase.infrastructure.persistence.models.codelist import (
     CodelistAccountOverrideModel,
     CodelistModel,
     CodelistValueLabelModel,
     CodelistValueModel,
 )
+from snackbase.infrastructure.persistence.models.collection import CollectionModel
+from snackbase.infrastructure.persistence.models.collection_rule import CollectionRuleModel
 from snackbase.infrastructure.persistence.models.configuration import (
     ConfigurationModel,
     OAuthStateModel,
@@ -24,31 +24,30 @@ from snackbase.infrastructure.persistence.models.email_template import EmailTemp
 from snackbase.infrastructure.persistence.models.email_verification import (
     EmailVerificationTokenModel,
 )
-from snackbase.infrastructure.persistence.models.file import FileModel
-from snackbase.infrastructure.persistence.models.group import GroupModel
-from snackbase.infrastructure.persistence.models.invitation import InvitationModel
-from snackbase.infrastructure.persistence.models.macro import MacroModel
-from snackbase.infrastructure.persistence.models.password_reset import PasswordResetTokenModel
-from snackbase.infrastructure.persistence.models.refresh_token import RefreshTokenModel
-from snackbase.infrastructure.persistence.models.role import RoleModel
-from snackbase.infrastructure.persistence.models.token_blacklist import TokenBlacklistModel
-
-from snackbase.infrastructure.persistence.models.user import UserModel
-from snackbase.infrastructure.persistence.models.users_groups import UsersGroupsModel
-from snackbase.infrastructure.persistence.models.webhook import (
-    WebhookDeliveryModel,
-    WebhookModel,
-)
-from snackbase.infrastructure.persistence.models.hook import HookModel
-from snackbase.infrastructure.persistence.models.hook_execution import HookExecutionModel
-from snackbase.infrastructure.persistence.models.job import JobModel
 from snackbase.infrastructure.persistence.models.endpoint import EndpointModel
 from snackbase.infrastructure.persistence.models.endpoint_execution import EndpointExecutionModel
+from snackbase.infrastructure.persistence.models.file import FileModel
 from snackbase.infrastructure.persistence.models.function import (
     FunctionExecutionModel,
     FunctionModel,
     FunctionSecretModel,
     FunctionVersionModel,
+)
+from snackbase.infrastructure.persistence.models.group import GroupModel
+from snackbase.infrastructure.persistence.models.hook import HookModel
+from snackbase.infrastructure.persistence.models.hook_execution import HookExecutionModel
+from snackbase.infrastructure.persistence.models.invitation import InvitationModel
+from snackbase.infrastructure.persistence.models.job import JobModel
+from snackbase.infrastructure.persistence.models.macro import MacroModel
+from snackbase.infrastructure.persistence.models.password_reset import PasswordResetTokenModel
+from snackbase.infrastructure.persistence.models.refresh_token import RefreshTokenModel
+from snackbase.infrastructure.persistence.models.role import RoleModel
+from snackbase.infrastructure.persistence.models.token_blacklist import TokenBlacklistModel
+from snackbase.infrastructure.persistence.models.user import UserModel
+from snackbase.infrastructure.persistence.models.users_groups import UsersGroupsModel
+from snackbase.infrastructure.persistence.models.webhook import (
+    WebhookDeliveryModel,
+    WebhookModel,
 )
 from snackbase.infrastructure.persistence.models.workflow import WorkflowModel
 from snackbase.infrastructure.persistence.models.workflow_instance import WorkflowInstanceModel

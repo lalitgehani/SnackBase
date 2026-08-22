@@ -9,8 +9,8 @@ Built-in hooks in Phase 1:
 - account_isolation_hook: Ensures account_id is set on records
 """
 
-from datetime import datetime, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from snackbase.core.hooks.hook_events import HookEvent
 from snackbase.core.hooks.hook_registry import HookRegistry
@@ -22,9 +22,9 @@ logger = get_logger(__name__)
 
 async def timestamp_hook(
     event: str,
-    data: Optional[dict[str, Any]],
-    context: Optional[HookContext],
-) -> Optional[dict[str, Any]]:
+    data: dict[str, Any] | None,
+    context: HookContext | None,
+) -> dict[str, Any] | None:
     """Built-in hook to set created_at and updated_at timestamps.
 
     This hook automatically sets:
@@ -42,7 +42,7 @@ async def timestamp_hook(
     if data is None:
         return data
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     if event == HookEvent.ON_RECORD_BEFORE_CREATE:
         # Set both created_at and updated_at on create
@@ -60,9 +60,9 @@ async def timestamp_hook(
 
 async def account_isolation_hook(
     event: str,
-    data: Optional[dict[str, Any]],
-    context: Optional[HookContext],
-) -> Optional[dict[str, Any]]:
+    data: dict[str, Any] | None,
+    context: HookContext | None,
+) -> dict[str, Any] | None:
     """Built-in hook to ensure account_id isolation.
 
     This hook enforces multi-tenancy by:
@@ -97,9 +97,9 @@ async def account_isolation_hook(
 
 async def created_by_hook(
     event: str,
-    data: Optional[dict[str, Any]],
-    context: Optional[HookContext],
-) -> Optional[dict[str, Any]]:
+    data: dict[str, Any] | None,
+    context: HookContext | None,
+) -> dict[str, Any] | None:
     """Built-in hook to set created_by and updated_by fields.
 
     Args:
@@ -131,9 +131,9 @@ async def created_by_hook(
 
 async def audit_capture_hook(
     event: str,
-    data: Optional[dict[str, Any]],
-    context: Optional[HookContext],
-) -> Optional[dict[str, Any]]:
+    data: dict[str, Any] | None,
+    context: HookContext | None,
+) -> dict[str, Any] | None:
     """Built-in hook to capture audit log entries for model operations.
 
     This hook automatically captures audit trails for CREATE, UPDATE, DELETE
@@ -172,10 +172,10 @@ async def audit_capture_hook(
     if record_data is not None and collection_name is not None:
         from snackbase.infrastructure.persistence.record_snapshot import RecordSnapshot
         from snackbase.infrastructure.persistence.table_builder import TableBuilder
-        
+
         table_name = TableBuilder.generate_table_name(collection_name)
         model = RecordSnapshot(table_name, record_data)
-    
+
     if model is None:
         logger.warning("Audit capture hook: failed to resolve model/record", hook_event=event)
         return data
@@ -189,7 +189,7 @@ async def audit_capture_hook(
     # Get account_id from model or context
     # Use robust extraction to handle AccountModel which doesn't have account_id field
     account_id = getattr(model, "account_id", None) or context.account_id
-    
+
     # Special case: If audit is for AccountModel creation, use its own ID if not found
     if not account_id and hasattr(model, "__tablename__") and model.__tablename__ == "accounts":
          account_id = getattr(model, "id", None)
@@ -213,7 +213,7 @@ async def audit_capture_hook(
 
     try:
         audit_service = AuditLogService(session)
-        
+
         # Extract auth method
         # Check for token_type attribute, default to 'unknown' if missing
         auth_method = getattr(user, "token_type", "unknown")
@@ -222,7 +222,7 @@ async def audit_capture_hook(
             auth_method = auth_method.value
         else:
             auth_method = str(auth_method)
-            
+
         extra_metadata = {"auth_method": auth_method}
 
         # Capture audit based on event type
@@ -265,7 +265,7 @@ async def audit_capture_hook(
                 extra_metadata=extra_metadata,
             )
 
-        # We DO NOT commit here. We use the passed session and let the 
+        # We DO NOT commit here. We use the passed session and let the
         # caller (repository or session manager) handle the commit/rollback.
         # This ensures the audit log is atomic with the main operation.
 
@@ -347,7 +347,7 @@ def register_builtin_hooks(registry: HookRegistry) -> list[str]:
 
     # Audit capture hooks - run after all other hooks (positive priority)
     # Use priority 100 to run after user hooks
-    
+
     # Model events (ORM)
     # Model events (ORM)
     # NOTE: Model audit logging is now handled synchronously in event_listeners.py

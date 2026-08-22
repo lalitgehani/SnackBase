@@ -1,21 +1,23 @@
 """Integration tests for password reset API."""
 
-import pytest
-from httpx import AsyncClient, ASGITransport
-from sqlalchemy import select
+from datetime import UTC
 from unittest.mock import AsyncMock
+
+import pytest
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 
 from snackbase.infrastructure.api.app import app
 from snackbase.infrastructure.api.dependencies import get_db_session, get_email_service
+from snackbase.infrastructure.auth import hash_password
+from snackbase.infrastructure.auth.token_types import TokenType
 from snackbase.infrastructure.persistence.models import (
-    UserModel,
     AccountModel,
     PasswordResetTokenModel,
     RefreshTokenModel,
     RoleModel,
+    UserModel,
 )
-from snackbase.infrastructure.auth import hash_password, jwt_service
-from snackbase.infrastructure.auth.token_types import TokenType
 
 
 @pytest.mark.asyncio
@@ -191,7 +193,7 @@ async def test_reset_password_invalidates_refresh_tokens(db_session):
 
     # 1. Setup - create account, user, and refresh tokens
     import uuid
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     account_id = str(uuid.uuid4())
     account = AccountModel(
@@ -220,7 +222,7 @@ async def test_reset_password_invalidates_refresh_tokens(db_session):
         token_hash="hash1",
         user_id=user_id,
         account_id=account_id,
-        expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+        expires_at=datetime.now(UTC) + timedelta(days=7),
         is_revoked=False,
     )
     token2 = RefreshTokenModel(
@@ -228,7 +230,7 @@ async def test_reset_password_invalidates_refresh_tokens(db_session):
         token_hash="hash2",
         user_id=user_id,
         account_id=account_id,
-        expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+        expires_at=datetime.now(UTC) + timedelta(days=7),
         is_revoked=False,
     )
     db_session.add(token1)
@@ -323,11 +325,13 @@ async def test_superadmin_reset_password_direct(db_session):
     await db_session.commit()
 
     # Mock superadmin
-    from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID
-    
     # Mock current user to be a superadmin
-    from snackbase.infrastructure.api.dependencies import get_current_user, CurrentUser
-    
+    from snackbase.infrastructure.api.dependencies import (
+        SYSTEM_ACCOUNT_ID,
+        CurrentUser,
+        get_current_user,
+    )
+
     async def override_get_current_user():
         return CurrentUser(
             user_id="admin-id",
@@ -395,8 +399,12 @@ async def test_superadmin_reset_password_link(db_session):
         return_value={"app_url": "http://localhost:3000"}
     )
 
-    from snackbase.infrastructure.api.dependencies import get_current_user, CurrentUser, SYSTEM_ACCOUNT_ID
-    
+    from snackbase.infrastructure.api.dependencies import (
+        SYSTEM_ACCOUNT_ID,
+        CurrentUser,
+        get_current_user,
+    )
+
     async def override_get_current_user():
         return CurrentUser(
             user_id="admin-id",
@@ -427,7 +435,7 @@ async def test_superadmin_reset_password_link(db_session):
 
     # Verify email was sent
     assert mock_email_service.send_template_email.called
-    
+
     # Verify token exists in DB
     from snackbase.infrastructure.persistence.models import PasswordResetTokenModel
     result = await db_session.execute(

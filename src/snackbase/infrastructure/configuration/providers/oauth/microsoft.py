@@ -1,8 +1,10 @@
 """Microsoft OAuth 2.0 provider handler implementation."""
 
-from typing import Any, Dict, Optional
+from typing import Any
 from urllib.parse import urlencode
+
 import httpx
+
 from snackbase.infrastructure.configuration.providers.oauth.oauth_handler import (
     OAuthProviderHandler,
 )
@@ -29,7 +31,7 @@ class MicrosoftOAuthHandler(OAuthProviderHandler):
         return "/assets/providers/microsoft.svg"
 
     @property
-    def config_schema(self) -> Dict[str, Any]:
+    def config_schema(self) -> dict[str, Any]:
         return {
             "type": "object",
             "properties": {
@@ -68,7 +70,7 @@ class MicrosoftOAuthHandler(OAuthProviderHandler):
 
     async def get_authorization_url(
         self,
-        config: Dict[str, Any],
+        config: dict[str, Any],
         redirect_uri: str,
         state: str,
     ) -> str:
@@ -92,10 +94,10 @@ class MicrosoftOAuthHandler(OAuthProviderHandler):
 
     async def exchange_code_for_tokens(
         self,
-        config: Dict[str, Any],
+        config: dict[str, Any],
         code: str,
         redirect_uri: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Exchange authorization code for access and refresh tokens."""
         tenant = config.get("tenant_id", "common")
         token_url = f"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token"
@@ -126,9 +128,9 @@ class MicrosoftOAuthHandler(OAuthProviderHandler):
 
     async def get_user_info(
         self,
-        config: Dict[str, Any],
+        config: dict[str, Any],
         access_token: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Fetch user information from Microsoft Graph /me endpoint."""
         userinfo_url = "https://graph.microsoft.com/v1.0/me"
 
@@ -157,7 +159,7 @@ class MicrosoftOAuthHandler(OAuthProviderHandler):
                 "picture": None,  # Microsoft Graph requires separate call for photo
             }
 
-    async def test_connection(self, config: Dict[str, Any]) -> tuple[bool, str]:
+    async def test_connection(self, config: dict[str, Any]) -> tuple[bool, str]:
         """Validate Microsoft OAuth configuration."""
         tenant = config.get("tenant_id", "common")
         discovery_url = f"https://login.microsoftonline.com/{tenant}/v2.0/.well-known/openid-configuration"

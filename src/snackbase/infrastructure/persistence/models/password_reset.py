@@ -71,7 +71,7 @@ class PasswordResetTokenModel(Base):
     )
 
     # Relationships
-    user: Mapped["UserModel"] = relationship(  # noqa: F821
+    user: Mapped[UserModel] = relationship(  # noqa: F821
         "UserModel",
         back_populates="password_reset_tokens",
     )

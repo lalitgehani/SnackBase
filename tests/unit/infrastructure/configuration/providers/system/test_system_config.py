@@ -1,6 +1,5 @@
 """Unit tests for SystemConfiguration provider."""
 
-import pytest
 
 from snackbase.infrastructure.configuration.providers.system import SystemConfiguration
 

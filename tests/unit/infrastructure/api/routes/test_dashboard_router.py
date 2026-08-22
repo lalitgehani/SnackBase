@@ -1,6 +1,6 @@
 """Unit tests for dashboard router."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -17,7 +17,7 @@ from snackbase.infrastructure.api.schemas import (
 
 
 def _empty_time_series(days: int = 7) -> TimeSeriesStats:
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     points = [
         TimeSeriesPoint(date=(today - timedelta(days=i)).isoformat(), count=0)
         for i in range(days - 1, -1, -1)
@@ -61,7 +61,7 @@ def sample_dashboard_stats():
                 account_id="AC0001",
                 account_code="AC0001",
                 account_name="Test Account",
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
             )
         ],
         system_health=SystemHealthStats(

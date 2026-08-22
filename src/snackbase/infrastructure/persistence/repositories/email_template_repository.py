@@ -3,7 +3,7 @@
 Provides CRUD operations for email templates with account-level fallback to system defaults.
 """
 
-from typing import Sequence
+from collections.abc import Sequence
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession

@@ -37,11 +37,11 @@ def _build_computed_select_parts(
         - Merged params dict that must be passed when executing the query.
         Returns ([], {}) if there are no computed fields.
     """
+    from snackbase.core.rules.exceptions import RuleSyntaxError
     from snackbase.core.rules.expression_compiler import (
         ExpressionCompilationError,
         compile_expression_to_sql,
     )
-    from snackbase.core.rules.exceptions import RuleSyntaxError
 
     non_computed = {
         f["name"] for f in schema
@@ -850,8 +850,8 @@ class RecordRepository:
         account_id: str | None,
         agg_functions: list[Any],
         group_by_fields: list[str],
-        user_filter: "RuleFilter | None" = None,
-        rule_filter: "RuleFilter | None" = None,
+        user_filter: RuleFilter | None = None,
+        rule_filter: RuleFilter | None = None,
         having_sql: str | None = None,
         having_params: dict[str, Any] | None = None,
         schema: list[dict[str, Any]] | None = None,

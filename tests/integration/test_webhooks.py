@@ -1,6 +1,6 @@
 """Integration tests for outbound webhooks (F7.1)."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -9,13 +9,12 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from snackbase.infrastructure.auth.jwt_service import jwt_service
 from snackbase.infrastructure.persistence.models import AccountModel, RoleModel, UserModel
 from snackbase.infrastructure.persistence.models.webhook import (
     WebhookDeliveryModel,
     WebhookModel,
 )
-from snackbase.infrastructure.auth.jwt_service import jwt_service
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -50,7 +49,7 @@ async def user_token(db_session: AsyncSession, account: AccountModel) -> str:
         password_hash="hashed",
         role=user_role,
         is_active=True,
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
     db_session.add(user)
     await db_session.commit()
@@ -339,7 +338,7 @@ async def test_list_deliveries_with_records(
         status="delivered",
         response_status=200,
         attempt_number=1,
-        delivered_at=datetime.now(timezone.utc),
+        delivered_at=datetime.now(UTC),
     )
     db_session.add(delivery)
     await db_session.commit()

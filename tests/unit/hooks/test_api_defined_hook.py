@@ -23,7 +23,6 @@ from snackbase.infrastructure.hooks.api_defined_hook import (
     register_api_defined_hooks,
 )
 
-
 # ---------------------------------------------------------------------------
 # register_api_defined_hooks
 # ---------------------------------------------------------------------------

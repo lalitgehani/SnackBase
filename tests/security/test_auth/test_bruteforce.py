@@ -28,9 +28,9 @@ import pytest
 import pytest_asyncio
 from fastapi import status
 from httpx import AsyncClient
-from starlette.datastructures import Headers
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.datastructures import Headers
 
 from snackbase.core.config import Settings, get_settings
 from snackbase.infrastructure.api.middleware.client_ip import get_client_ip

@@ -93,11 +93,11 @@ class InvitationModel(Base):
     )
 
     # Relationships
-    account: Mapped["AccountModel"] = relationship(  # noqa: F821
+    account: Mapped[AccountModel] = relationship(  # noqa: F821
         "AccountModel",
         back_populates="invitations",
     )
-    inviter: Mapped["UserModel"] = relationship(  # noqa: F821
+    inviter: Mapped[UserModel] = relationship(  # noqa: F821
         "UserModel",
         back_populates="invitations_sent",
     )

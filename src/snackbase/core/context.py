@@ -7,17 +7,16 @@ explicit parameter passing.
 """
 
 from contextvars import ContextVar
-from typing import Optional
 
 from snackbase.domain.entities.hook_context import HookContext
 
 # Global context variable for HookContext
-_current_hook_context: ContextVar[Optional[HookContext]] = ContextVar(
+_current_hook_context: ContextVar[HookContext | None] = ContextVar(
     "current_hook_context", default=None
 )
 
 
-def get_current_context() -> Optional[HookContext]:
+def get_current_context() -> HookContext | None:
     """Get the current hook context.
 
     Returns:

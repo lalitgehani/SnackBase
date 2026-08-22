@@ -1,25 +1,24 @@
 """Integration tests for audit log router."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 import pytest_asyncio
-from httpx import AsyncClient
-from sqlalchemy import select
 
+from snackbase.infrastructure.persistence.models.audit_log import AuditLogModel
+from snackbase.infrastructure.persistence.repositories.audit_log_repository import (
+    AuditLogRepository,
+)
 
 # Enable audit hooks for all tests in this module
 pytestmark = pytest.mark.enable_audit_hooks
-
-from snackbase.infrastructure.persistence.models.audit_log import AuditLogModel
-from snackbase.infrastructure.persistence.repositories.audit_log_repository import AuditLogRepository
 
 
 @pytest_asyncio.fixture
 async def sample_logs(db_session):
     """Create sample audit logs for testing."""
     repo = AuditLogRepository(db_session)
-    
+
     logs = [
         AuditLogModel(
             account_id="00000000-0000-0000-0000-000000000001",
@@ -32,7 +31,7 @@ async def sample_logs(db_session):
             user_id="admin1",
             user_email="admin1@example.com",
             user_name="Admin One",
-            occurred_at=datetime.now(timezone.utc) - timedelta(hours=2),
+            occurred_at=datetime.now(UTC) - timedelta(hours=2),
         ),
         AuditLogModel(
             account_id="00000000-0000-0000-0000-000000000001",
@@ -45,7 +44,7 @@ async def sample_logs(db_session):
             user_id="admin1",
             user_email="admin1@example.com",
             user_name="Admin One",
-            occurred_at=datetime.now(timezone.utc) - timedelta(hours=1),
+            occurred_at=datetime.now(UTC) - timedelta(hours=1),
         ),
         AuditLogModel(
             account_id="00000000-0000-0000-0000-000000000002",
@@ -58,10 +57,10 @@ async def sample_logs(db_session):
             user_id="admin2",
             user_email="admin2@example.com",
             user_name="Admin Two",
-            occurred_at=datetime.now(timezone.utc),
+            occurred_at=datetime.now(UTC),
         ),
     ]
-    
+
     await repo.create_batch(logs)
     await db_session.commit()
     return logs
@@ -74,7 +73,7 @@ async def test_list_audit_logs_success(client, superadmin_token, sample_logs):
         "/api/v1/audit-logs/",
         headers={"Authorization": f"Bearer {superadmin_token}"}
     )
-    
+
     assert response.status_code == 200
     data = response.json()
     assert len(data["items"]) == 3
@@ -91,7 +90,7 @@ async def test_list_audit_logs_filters(client, superadmin_token, sample_logs):
     )
     assert response.status_code == 200
     assert len(response.json()["items"]) == 2
-    
+
     # Filter by operation
     response = await client.get(
         "/api/v1/audit-logs/?operation=DELETE",
@@ -110,7 +109,7 @@ async def test_get_audit_log_detail(client, superadmin_token, sample_logs):
         f"/api/v1/audit-logs/{log_id}",
         headers={"Authorization": f"Bearer {superadmin_token}"}
     )
-    
+
     assert response.status_code == 200
     data = response.json()
     assert data["id"] == log_id
@@ -126,11 +125,11 @@ async def test_export_audit_logs_csv(client, superadmin_token, sample_logs):
         "/api/v1/audit-logs/export?format=csv",
         headers={"Authorization": f"Bearer {superadmin_token}"}
     )
-    
+
     assert response.status_code == 200
     assert response.headers["content-type"] == "text/csv; charset=utf-8"
     assert "attachment; filename=audit_logs" in response.headers["content-disposition"]
-    
+
     content = response.text
     lines = content.strip().split("\n")
     assert len(lines) == 4  # Header + 3 rows

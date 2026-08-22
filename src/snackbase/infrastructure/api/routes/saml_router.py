@@ -3,32 +3,35 @@
 Provides endpoints for SAML 2.0 Single Sign-On (SSO) flows.
 """
 
-from typing import Optional
-
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status, Form
-from fastapi.responses import RedirectResponse
-from sqlalchemy.ext.asyncio import AsyncSession
 import base64
 import json
 import uuid
-import secrets
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, status
+from fastapi.responses import RedirectResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from snackbase.core.logging import get_logger
+from snackbase.infrastructure.api.schemas.auth_schemas import (
+    AccountResponse,
+    OAuthCallbackResponse,
+    UserResponse,
+)
 from snackbase.infrastructure.auth import (
     generate_random_password,
     hash_password,
     jwt_service,
 )
-from snackbase.infrastructure.api.schemas.auth_schemas import (
-    AccountResponse,
-    UserResponse,
-    OAuthCallbackResponse,
+from snackbase.infrastructure.configuration.providers.saml import (
+    AzureADSAMLProvider,
+    GenericSAMLProvider,
+    OktaSAMLProvider,
 )
+from snackbase.infrastructure.persistence.database import get_db_session
 from snackbase.infrastructure.persistence.models import (
-    AccountModel,
     RefreshTokenModel,
     UserModel,
-    GroupModel
 )
 from snackbase.infrastructure.persistence.repositories import (
     AccountRepository,
@@ -36,18 +39,7 @@ from snackbase.infrastructure.persistence.repositories import (
     RefreshTokenRepository,
     RoleRepository,
     UserRepository,
-    GroupRepository
 )
-from snackbase.domain.services import AccountCodeGenerator
-from snackbase.domain.services.pii_masking_service import PIIMaskingService
-
-from snackbase.core.logging import get_logger
-from snackbase.infrastructure.configuration.providers.saml import (
-    AzureADSAMLProvider,
-    GenericSAMLProvider,
-    OktaSAMLProvider,
-)
-from snackbase.infrastructure.persistence.database import get_db_session
 
 logger = get_logger(__name__)
 
@@ -72,8 +64,8 @@ SAML_HANDLERS = {
 async def sso(
     request: Request,
     account: str = Query(..., description="Account slug or ID"),
-    provider: Optional[str] = Query(None, description="Specific provider name to force use of"),
-    relay_state: Optional[str] = Query(None, description="Client state to preserve"),
+    provider: str | None = Query(None, description="Specific provider name to force use of"),
+    relay_state: str | None = Query(None, description="Client state to preserve"),
     session: AsyncSession = Depends(get_db_session),
 ) -> RedirectResponse:
     """Initiate SAML Single Sign-On flow.
@@ -138,7 +130,7 @@ async def sso(
         # We need to check each one to see if it's enabled for this account
         # Since get_effective_config handles hierarchy, we can check known providers
         # or use get_account_configs if available (but that only gives account level overrides)
-        
+
         # Strategy: Iterate through supported SAML providers and find the first enabled one
         # This assumes single SAML provider per account is the common case, or arbitrary priority
         # A better approach in ConfigRegistry would be "get_active_providers(category, account_id)"
@@ -155,7 +147,7 @@ async def sso(
                  found_config = conf
                  selected_provider_name = name
                  break
-        
+
         if found_config:
             config_dict = found_config
         else:
@@ -189,10 +181,10 @@ async def sso(
         "r": relay_state
     }
     encoded_relay_state = base64.urlsafe_b64encode(json.dumps(relay_state_data).encode()).decode()
-    
+
     # ACS URL where IdP should post response
     acs_url = f"{settings.external_url.rstrip('/')}{settings.api_prefix}/auth/saml/acs"
-    
+
     try:
         auth_url = await handler.get_authorization_url(
             config=config_dict,
@@ -233,7 +225,7 @@ async def sso(
 async def acs(
     request: Request,
     SAMLResponse: str = Form(...),
-    RelayState: Optional[str] = Form(None),
+    RelayState: str | None = Form(None),
     session: AsyncSession = Depends(get_db_session),
 ) -> OAuthCallbackResponse:
     """SAML Assertion Consumer Service (ACS) endpoint.
@@ -370,7 +362,7 @@ async def acs(
         # Update existing user
         user.external_email = email
         user.profile_data = user_info
-        user.last_login = datetime.now(timezone.utc)
+        user.last_login = datetime.now(UTC)
         await user_repo.update(user)
     else:
         # Check if user exists with same email but different provider?
@@ -466,7 +458,7 @@ async def acs(
         token_hash=refresh_token_repo.hash_token(refresh_token),
         user_id=user.id,
         account_id=user.account_id,
-        expires_at=datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_expire_days),
+        expires_at=datetime.now(UTC) + timedelta(days=settings.refresh_token_expire_days),
     )
     await refresh_token_repo.create(refresh_token_model)
     await session.commit()
@@ -511,7 +503,7 @@ async def acs(
 async def metadata(
     request: Request,
     account: str = Query(..., description="Account slug or ID"),
-    provider: Optional[str] = Query(None, description="Specific provider name to force use of"),
+    provider: str | None = Query(None, description="Specific provider name to force use of"),
     session: AsyncSession = Depends(get_db_session),
 ):
     """Download SAML Service Provider Metadata XML.
@@ -575,7 +567,7 @@ async def metadata(
                  found_config = conf
                  selected_provider_name = name
                  break
-        
+
         if found_config:
             config_dict = found_config
         else:
@@ -607,7 +599,7 @@ async def metadata(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error generating SAML metadata: {str(e)}",
         )
-    
+
     # 5. Return response
     from fastapi.responses import Response
     return Response(

@@ -20,7 +20,7 @@ from __future__ import annotations
 import asyncio
 import time
 from datetime import UTC, datetime
-from typing import Any, Optional, Set
+from typing import Any
 
 from snackbase.core.hooks.hook_events import HookEvent
 from snackbase.core.hooks.hook_registry import HookRegistry
@@ -30,7 +30,7 @@ from snackbase.domain.entities.hook_context import HookContext
 logger = get_logger(__name__)
 
 # Keep references to prevent background tasks from being GC'd early
-_background_tasks: Set[asyncio.Task] = set()
+_background_tasks: set[asyncio.Task] = set()
 
 # Map internal hook event names → public API event string
 _EVENT_MAP: dict[str, str] = {
@@ -68,12 +68,12 @@ def register_api_defined_hooks(registry: HookRegistry, session_factory: Any) -> 
     for internal_event, api_event in _EVENT_MAP.items():
         async def _dispatcher(
             _event: str,
-            data: Optional[dict[str, Any]],
-            context: Optional[HookContext],
+            data: dict[str, Any] | None,
+            context: HookContext | None,
             _api_event: str = api_event,
             _internal_event: str = internal_event,
             _session_factory: Any = session_factory,
-        ) -> Optional[dict[str, Any]]:
+        ) -> dict[str, Any] | None:
             # Dispatch as a background task so it never blocks the caller
             task = asyncio.create_task(
                 _dispatch_api_hooks(
@@ -104,8 +104,8 @@ def register_api_defined_hooks(registry: HookRegistry, session_factory: Any) -> 
 async def _dispatch_api_hooks(
     internal_event: str,
     api_event: str,
-    data: Optional[dict[str, Any]],
-    context: Optional[HookContext],
+    data: dict[str, Any] | None,
+    context: HookContext | None,
     session_factory: Any,
 ) -> None:
     """Query matching hooks and execute them.
@@ -133,12 +133,8 @@ async def _dispatch_api_hooks(
         # For auth events, build a synthetic record from whatever is available
         record = {k: v for k, v in data.items() if k not in ("session",)}
 
-    from snackbase.infrastructure.persistence.repositories.hook_repository import HookRepository
-    from snackbase.infrastructure.persistence.repositories.hook_execution_repository import (
-        HookExecutionRepository,
-    )
-    from snackbase.infrastructure.persistence.models.hook_execution import HookExecutionModel
     from snackbase.infrastructure.hooks.action_executor import execute_actions
+    from snackbase.infrastructure.persistence.repositories.hook_repository import HookRepository
 
     try:
         async with session_factory() as session:
@@ -172,7 +168,7 @@ async def _run_hook(
     hook: Any,
     trigger_type: str,
     record: dict[str, Any],
-    context: Optional[HookContext],
+    context: HookContext | None,
     session_factory: Any,
     execute_actions: Any,
 ) -> None:
@@ -280,7 +276,7 @@ def _evaluate_condition(condition: str, record: dict[str, Any]) -> bool:
 
 async def execute_hook_manually(
     hook: Any,
-    context: Optional[HookContext],
+    context: HookContext | None,
     session_factory: Any,
 ) -> tuple[int, str | None]:
     """Execute a hook's actions directly (for manual triggers).
@@ -302,12 +298,11 @@ async def execute_hook_manually(
         status = "partial" if actions_executed > 0 else "failed"
 
     try:
+        from snackbase.infrastructure.persistence.models.hook import HookModel
         from snackbase.infrastructure.persistence.models.hook_execution import HookExecutionModel
         from snackbase.infrastructure.persistence.repositories.hook_execution_repository import (
             HookExecutionRepository,
         )
-
-        from snackbase.infrastructure.persistence.models.hook import HookModel
 
         async with session_factory() as session:
             exec_repo = HookExecutionRepository(session)

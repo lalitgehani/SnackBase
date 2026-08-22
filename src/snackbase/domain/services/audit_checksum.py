@@ -8,7 +8,7 @@ SyncAuditLogRepository.
 import hashlib
 import json
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 
 class AuditChecksum:
@@ -21,20 +21,20 @@ class AuditChecksum:
         table_name: str,
         record_id: str,
         column_name: str,
-        old_value: Optional[str],
-        new_value: Optional[str],
+        old_value: str | None,
+        new_value: str | None,
         user_id: str,
         user_email: str,
         user_name: str,
-        es_username: Optional[str],
-        es_reason: Optional[str],
-        es_timestamp: Optional[datetime],
-        ip_address: Optional[str],
-        user_agent: Optional[str],
-        request_id: Optional[str],
+        es_username: str | None,
+        es_reason: str | None,
+        es_timestamp: datetime | None,
+        ip_address: str | None,
+        user_agent: str | None,
+        request_id: str | None,
         occurred_at: datetime,
-        previous_hash: Optional[str],
-        extra_metadata: Optional[dict[str, Any]],
+        previous_hash: str | None,
+        extra_metadata: dict[str, Any] | None,
     ) -> str:
         """Calculate SHA-256 checksum for an audit log entry.
 
@@ -64,7 +64,7 @@ class AuditChecksum:
         """
         # Helper to normalize datetime - remove timezone info for consistent hashing
         # mimicking the logic originally in AuditLogRepository
-        def normalize_dt(dt: Optional[datetime]) -> Optional[str]:
+        def normalize_dt(dt: datetime | None) -> str | None:
             if dt is None:
                 return None
             if hasattr(dt, 'replace') and dt.tzinfo is not None:

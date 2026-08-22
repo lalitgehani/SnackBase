@@ -49,7 +49,7 @@ class APIKeyService:
         permissions: list[str] | None = None,
         scopes: list[str] | None = None,
         expires_at: datetime | None = None,
-    ) -> tuple[str, "APIKeyModel"]:
+    ) -> tuple[str, APIKeyModel]:
         """Create a new JWT-like API key and store it in the database.
 
         Args:

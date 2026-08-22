@@ -1,30 +1,31 @@
 
-import sys
 import asyncio
-from datetime import datetime
-from dataclasses import dataclass
-from typing import List, Optional, Any
 
 # Adjust path to find snackbase package
 import os
+import sys
+from dataclasses import dataclass
+from datetime import datetime
+
 sys.path.append(os.getcwd() + "/src")
 
-from snackbase.core.rules import evaluate_rule, parse_rule
 from snackbase.core.macros.engine import MacroExecutionEngine
+from snackbase.core.rules import evaluate_rule, parse_rule
+
 
 @dataclass
 class UserContext:
     id: int
     role: str
-    groups: List[str]
-    settings: Optional[dict] = None
+    groups: list[str]
+    settings: dict | None = None
 
 async def run_verification():
     print("Verifying Built-in Macros...")
-    
+
     # Initialize engine without session (built-ins only)
     engine = MacroExecutionEngine()
-    
+
     # 1. @has_group
     user_g = UserContext(id=1, role="user", groups=["admin", "editor"])
     ctx_g = {"user": user_g}
@@ -44,7 +45,7 @@ async def run_verification():
     rec_o = {"owner_id": 10, "title": "My Record"}
     ctx_o = {"user": user_o, "record": rec_o}
     assert await evaluate_rule(parse_rule("@owns_record()"), ctx_o, engine) is True
-    
+
     rec_other = {"owner_id": 99}
     ctx_other = {"user": user_o, "record": rec_other}
     assert await evaluate_rule(parse_rule("@owns_record()"), ctx_other, engine) is False
@@ -52,14 +53,14 @@ async def run_verification():
 
     # 4. @in_time_range
     # Using current time, so we pick a wide range covering "now"
-    now_hour = datetime.now().hour
+    datetime.now().hour
     # Range 0-24 should always be true
     assert await evaluate_rule(parse_rule("@in_time_range(0, 24)"), {}, engine) is True
     # Range 25-26 should always be false
     assert await evaluate_rule(parse_rule("@in_time_range(25, 26)"), {}, engine) is False
-    
+
     print("✅ @in_time_range verified")
-    
+
     # 5. @has_permission
     ctx_p = {
         "permissions": {

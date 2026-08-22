@@ -104,8 +104,8 @@ class APIKeyModel(Base):
     )
 
     # Relationships
-    user: Mapped["UserModel"] = relationship("UserModel")  # noqa: F821
-    account: Mapped["AccountModel"] = relationship("AccountModel")  # noqa: F821
+    user: Mapped[UserModel] = relationship("UserModel")  # noqa: F821
+    account: Mapped[AccountModel] = relationship("AccountModel")  # noqa: F821
 
     def __repr__(self) -> str:
         return f"<APIKey(id={self.id}, name={self.name}, user_id={self.user_id})>"

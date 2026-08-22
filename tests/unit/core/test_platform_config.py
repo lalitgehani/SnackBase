@@ -36,8 +36,6 @@ def test_complete_platform_config_enables_auth():
         platform_issuer="https://platform.example.com",
         platform_jwks_url="http://localhost:9999/jwks",
         platform_audience="snackbase-instance",
-        single_tenant_mode=True,
-        single_tenant_account="my-app",
     )
     assert settings.platform_auth_enabled is True
     assert settings.platform_role_claim == "snackbase_role"
@@ -49,8 +47,6 @@ def test_platform_role_claim_overridable():
         platform_jwks_url="http://localhost:9999/jwks",
         platform_audience="snackbase-instance",
         platform_role_claim="custom_role",
-        single_tenant_mode=True,
-        single_tenant_account="my-app",
     )
     assert settings.platform_role_claim == "custom_role"
 
@@ -70,8 +66,6 @@ def test_http_jwks_rejected_in_production():
                 platform_issuer="https://platform.example.com",
                 platform_jwks_url="http://localhost:9999/jwks",
                 platform_audience="snackbase-instance",
-                single_tenant_mode=True,
-                single_tenant_account="my-app",
             )
         assert "https://" in str(exc_info.value)
 
@@ -82,17 +76,18 @@ def test_http_jwks_allowed_in_development():
         platform_issuer="https://platform.example.com",
         platform_jwks_url="http://localhost:9999/jwks",
         platform_audience="snackbase-instance",
-        single_tenant_mode=True,
-        single_tenant_account="my-app",
     )
     assert settings.platform_jwks_url == "http://localhost:9999/jwks"
 
 
-def test_platform_auth_requires_single_tenant_mode():
-    with pytest.raises(ValidationError) as exc_info:
-        Settings(
-            platform_issuer="https://platform.example.com",
-            platform_jwks_url="https://platform.example.com/jwks",
-            platform_audience="snackbase-instance",
-        )
-    assert "single-tenant" in str(exc_info.value).lower()
+def test_platform_auth_allowed_without_single_tenant_mode():
+    """Platform principals are instance operators resolved into the system account,
+    so platform auth is independent of instance tenancy. Multi-tenant instances must
+    be able to enable it."""
+    settings = Settings(
+        platform_issuer="https://platform.example.com",
+        platform_jwks_url="https://platform.example.com/jwks",
+        platform_audience="snackbase-instance",
+    )
+    assert settings.platform_auth_enabled is True
+    assert settings.single_tenant_mode is False

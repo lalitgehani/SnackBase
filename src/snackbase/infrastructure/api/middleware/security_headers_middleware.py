@@ -17,10 +17,10 @@ logger = get_logger(__name__)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Middleware to add security headers to all responses.
-    
+
     This middleware implements defense-in-depth security by adding multiple
     security headers that instruct browsers to enforce security policies.
-    
+
     Headers added:
     - X-Content-Type-Options: Prevents MIME type sniffing
     - X-Frame-Options: Prevents clickjacking attacks

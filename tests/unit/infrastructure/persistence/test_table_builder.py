@@ -1,10 +1,11 @@
 """Unit tests for TableBuilder."""
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from snackbase.infrastructure.persistence.table_builder import TableBuilder, get_system_columns
 from snackbase.domain.services.collection_validator import FieldType, OnDeleteAction
+from snackbase.infrastructure.persistence.table_builder import TableBuilder, get_system_columns
 
 # Use SQLite system columns for tests (default behavior)
 SYSTEM_COLUMNS = get_system_columns("sqlite")

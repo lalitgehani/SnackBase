@@ -3,13 +3,11 @@
 import pytest
 
 from snackbase.core.rules.aggregation_parser import (
-    AggFunction,
     AggregationParseError,
     parse_agg_functions,
     parse_having,
     validate_group_by,
 )
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 

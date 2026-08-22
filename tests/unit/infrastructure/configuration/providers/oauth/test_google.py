@@ -1,8 +1,10 @@
 """Unit tests for GoogleOAuthHandler."""
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
+
 import httpx
+import pytest
+
 from snackbase.infrastructure.configuration.providers.oauth.google import GoogleOAuthHandler
 
 
@@ -44,9 +46,9 @@ class TestGoogleOAuthHandler:
         """Test authorization URL generation."""
         state = "test_state"
         redirect_uri = "https://app.com/callback"
-        
+
         url = await handler.get_authorization_url(config, redirect_uri, state)
-        
+
         assert "accounts.google.com" in url
         assert "client_id=test_client_id" in url
         assert "redirect_uri=https%3A%2F%2Fapp.com%2Fcallback" in url
@@ -61,11 +63,11 @@ class TestGoogleOAuthHandler:
         state = "test_state"
         redirect_uri = "https://app.com/callback"
         code_challenge = "test_challenge"
-        
+
         url = await handler.get_authorization_url(
             config, redirect_uri, state, code_challenge=code_challenge
         )
-        
+
         assert "code_challenge=test_challenge" in url
         assert "code_challenge_method=S256" in url
 
@@ -83,15 +85,15 @@ class TestGoogleOAuthHandler:
             "token_type": "Bearer",
         }
         mock_post.return_value = mock_response
-        
+
         tokens = await handler.exchange_code_for_tokens(
             config, "auth_code", "https://example.com/callback"
         )
-        
+
         assert tokens["access_token"] == "test_access_token"
         assert tokens["refresh_token"] == "test_refresh_token"
         assert tokens["id_token"] == "test_id_token"
-        
+
         # Verify call parameters
         args, kwargs = mock_post.call_args
         assert args[0] == "https://oauth2.googleapis.com/token"
@@ -106,7 +108,7 @@ class TestGoogleOAuthHandler:
         mock_response.status_code = 400
         mock_response.json.return_value = {"error": "invalid_grant", "error_description": "Invalid code"}
         mock_post.return_value = mock_response
-        
+
         with pytest.raises(ValueError, match="Failed to exchange Google OAuth code: Invalid code"):
             await handler.exchange_code_for_tokens(
                 config, "invalid_code", "https://example.com/callback"
@@ -126,15 +128,15 @@ class TestGoogleOAuthHandler:
             "verified_email": True,
         }
         mock_get.return_value = mock_response
-        
+
         user_info = await handler.get_user_info(config, "test_token")
-        
+
         assert user_info["id"] == "12345"
         assert user_info["email"] == "user@google.com"
         assert user_info["name"] == "Google User"
         assert user_info["picture"] == "https://goog.com/pic.jpg"
         assert user_info["verified_email"] is True
-        
+
         # Verify call parameters
         args, kwargs = mock_get.call_args
         assert args[0] == "https://www.googleapis.com/oauth2/v2/userinfo"
@@ -147,11 +149,11 @@ class TestGoogleOAuthHandler:
         mock_response = MagicMock(spec=httpx.Response)
         mock_response.status_code = 200
         mock_get.return_value = mock_response
-        
+
         result, message = await handler.test_connection(config)
         assert result is True
         assert "Discovery endpoint reached" in message
-        
+
         # Verify it called the discovery endpoint
         args, _ = mock_get.call_args
         assert "openid-configuration" in args[0]

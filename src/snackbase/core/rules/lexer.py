@@ -1,8 +1,8 @@
 """Lexer for rule expressions - SQL-centric syntax."""
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Iterator
 
 from .exceptions import RuleSyntaxError
 

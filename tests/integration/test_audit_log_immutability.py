@@ -1,16 +1,16 @@
 """Integration tests for audit log immutability constraints (F3.6)."""
 
+from datetime import UTC, datetime
+
 import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from datetime import datetime, timezone
 
+from snackbase.infrastructure.persistence.models.audit_log import AuditLogModel
 
 # Enable audit hooks for all tests in this module
 pytestmark = pytest.mark.enable_audit_hooks
-
-from snackbase.infrastructure.persistence.models.audit_log import AuditLogModel
 
 
 @pytest.mark.asyncio
@@ -27,7 +27,7 @@ async def test_audit_log_insert_succeeds(db_session: AsyncSession):
         user_id="test-user-id",
         user_email="test@example.com",
         user_name="Test User",
-        occurred_at=datetime.now(timezone.utc),
+        occurred_at=datetime.now(UTC),
     )
 
     db_session.add(audit_entry)
@@ -52,7 +52,7 @@ async def test_audit_log_update_prevented(db_session: AsyncSession):
         user_id="test-user-id",
         user_email="test@example.com",
         user_name="Test User",
-        occurred_at=datetime.now(timezone.utc),
+        occurred_at=datetime.now(UTC),
     )
 
     db_session.add(audit_entry)
@@ -66,8 +66,8 @@ async def test_audit_log_update_prevented(db_session: AsyncSession):
         await db_session.execute(
             text(
                 """
-                UPDATE audit_log 
-                SET new_value = 'modified_value' 
+                UPDATE audit_log
+                SET new_value = 'modified_value'
                 WHERE id = :id
                 """
             ),
@@ -98,7 +98,7 @@ async def test_audit_log_delete_prevented(db_session: AsyncSession):
         user_id="test-user-id",
         user_email="test@example.com",
         user_name="Test User",
-        occurred_at=datetime.now(timezone.utc),
+        occurred_at=datetime.now(UTC),
     )
 
     db_session.add(audit_entry)
@@ -158,7 +158,7 @@ async def test_operation_constraint(db_session: AsyncSession):
             user_id="test-user-id",
             user_email="test@example.com",
             user_name="Test User",
-            occurred_at=datetime.now(timezone.utc),
+            occurred_at=datetime.now(UTC),
         )
         db_session.add(audit_entry)
         await db_session.commit()
@@ -176,7 +176,7 @@ async def test_operation_constraint(db_session: AsyncSession):
             user_id="test-user-id",
             user_email="test@example.com",
             user_name="Test User",
-            occurred_at=datetime.now(timezone.utc),
+            occurred_at=datetime.now(UTC),
         )
         db_session.add(audit_entry)
         await db_session.commit()
@@ -201,7 +201,7 @@ async def test_sequence_number_auto_increment(db_session: AsyncSession):
             user_id="test-user-id",
             user_email="test@example.com",
             user_name="Test User",
-            occurred_at=datetime.now(timezone.utc),
+            occurred_at=datetime.now(UTC),
         )
         db_session.add(audit_entry)
         await db_session.flush()

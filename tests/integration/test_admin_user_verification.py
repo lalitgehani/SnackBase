@@ -1,7 +1,6 @@
 """Integration tests for Admin User Verification API."""
 
 import uuid
-from typing import AsyncGenerator
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -9,7 +8,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from snackbase.infrastructure.persistence.models import AccountModel, RoleModel, UserModel
+from snackbase.infrastructure.persistence.models import AccountModel, RoleModel
 
 
 @pytest.mark.asyncio
@@ -86,10 +85,10 @@ async def test_admin_resend_verification(client: AsyncClient, superadmin_token: 
 
         # 3. Resend Verification
         response = await client.post(f"/api/v1/users/{user_id}/resend-verification", headers=headers)
-        
+
         assert response.status_code == 200
         assert "Verification email sent" in response.json()["message"]
-        
+
         # Verify mocked service was called correctly
         mock_send.assert_called_once()
         call_args = mock_send.call_args[1]

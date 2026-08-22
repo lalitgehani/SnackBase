@@ -25,6 +25,7 @@ from snackbase.infrastructure.api.dependencies import (
     get_password_reset_service,
     get_verification_service,
 )
+from snackbase.infrastructure.api.middleware.client_ip import get_client_ip
 from snackbase.infrastructure.api.schemas import (
     AccountResponse,
     AuthResponse,
@@ -42,7 +43,6 @@ from snackbase.infrastructure.api.schemas import (
     VerifyEmailRequest,
     VerifyResetTokenResponse,
 )
-from snackbase.infrastructure.api.middleware.client_ip import get_client_ip
 from snackbase.infrastructure.auth import (
     DUMMY_PASSWORD_HASH,
     InvalidTokenError,
@@ -910,7 +910,6 @@ async def verify_email(
     }
 
 
-from fastapi import Request
 
 
 @router.post(

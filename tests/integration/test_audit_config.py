@@ -2,12 +2,10 @@
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 
-from snackbase.core.context import set_current_context, clear_current_context
+from snackbase.core.context import clear_current_context, set_current_context
 from snackbase.domain.entities.hook_context import HookContext
-from snackbase.infrastructure.persistence.models import UserModel, AccountModel
-from snackbase.infrastructure.persistence.models.audit_log import AuditLogModel
+from snackbase.infrastructure.persistence.models import AccountModel
 from snackbase.infrastructure.persistence.repositories.audit_log_repository import (
     AuditLogRepository,
 )
@@ -67,7 +65,7 @@ async def test_audit_logs_not_created_when_disabled(db_session: AsyncSession, wi
 
         audit_repo = AuditLogRepository(db_session)
         count = await audit_repo.count_all()
-        # We might have logs from previous tests if they use the same database, 
+        # We might have logs from previous tests if they use the same database,
         # but here we use db_session which is fresh per test.
         assert count == 0, "Audit logs should NOT be created when disabled"
     finally:

@@ -299,7 +299,7 @@ async def send_test_email(
         config_repo = ConfigurationRepository(db)
         log_repo = EmailLogRepository()
         registry = request.app.state.config_registry
-        
+
         email_service = EmailService(
             template_repository=template_repo,
             log_repository=log_repo,

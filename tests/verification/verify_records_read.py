@@ -1,9 +1,9 @@
 import asyncio
-import httpx
+import sqlite3
 import sys
 import uuid
-import sqlite3
-import os
+
+import httpx
 
 BASE_URL = "http://localhost:8000/api/v1"
 DB_PATH = "sb_data/snackbase.db"
@@ -70,7 +70,7 @@ async def create_record(token: str, collection: str, data: dict):
 def promote_to_superadmin(user_id: str):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    
+
     # 1. Ensure SY0000 account exists
     cursor.execute("SELECT id FROM accounts WHERE id = 'SY0000'")
     if not cursor.fetchone():
@@ -79,7 +79,7 @@ def promote_to_superadmin(user_id: str):
             INSERT INTO accounts (id, slug, name, created_at, updated_at)
             VALUES ('SY0000', 'system', 'System Account', datetime('now'), datetime('now'))
         """)
-    
+
     # 2. Update user account_id
     print(f"Moving user {user_id} to SY0000...")
     cursor.execute("UPDATE users SET account_id = 'SY0000' WHERE id = ?", (user_id,))
@@ -94,23 +94,22 @@ async def main():
     print(f"Registering User A: {email_a}")
     auth_a = await register_user(email_a, password, account_name_a)
     user_id_a = auth_a["user"]["id"]
-    
+
     # Promote A to superadmin
     promote_to_superadmin(user_id_a)
-    
+
     # Login A again to get superadmin token
     print("Logging in as User A (Superadmin)...")
     auth_a = await login_user(email_a, password, "SY0000")
     token_a = auth_a["token"]
-    account_id_a = "SY0000"
-    
+
     # 2. Register Admin User B
     email_b = f"admin_b_{uuid.uuid4().hex[:8]}@example.com"
     account_name_b = f"Account B {uuid.uuid4().hex[:8]}"
     print(f"Registering User B: {email_b}")
     auth_b = await register_user(email_b, password, account_name_b)
     token_b = auth_b["token"]
-    account_id_b = auth_b["account"]["id"] # Still using user's own account
+    auth_b["account"]["id"] # Still using user's own account
 
     # 3. Create Collection
     collection_name = f"notes_{uuid.uuid4().hex[:8]}"
@@ -118,7 +117,7 @@ async def main():
         {"name": "title", "type": "text", "required": True},
         {"name": "priority", "type": "number", "default": 1}
     ]
-    
+
     print(f"Creating collection {collection_name} as User A (Superadmin)")
     # We call create_collection with token_a (superadmin)
     async with httpx.AsyncClient() as client:
@@ -182,7 +181,7 @@ async def main():
         sorted_items = data["items"]
         assert sorted_items[0]["priority"] == 49, f"Expected priority 49, got {sorted_items[0]['priority']}"
         print("Sorting OK")
-        
+
     # 8. Verify Filtering
     print("Verifying Filtering (priority=10)...")
     async with httpx.AsyncClient() as client:
@@ -207,7 +206,7 @@ async def main():
         data = resp.json()
         assert data["total"] == 0, f"User B should see 0 records, got {data['total']}"
         print("Isolation OK")
-        
+
     # 10. Verify Get Single
     record_id = items[0]["id"]
     print(f"Verifying Get Single ({record_id})...")
@@ -219,7 +218,7 @@ async def main():
         assert resp.status_code == 200
         assert resp.json()["id"] == record_id
         print("Get Single OK")
-        
+
     # 11. Verify Get Single Isolation (User B)
     print("Verifying Get Single Isolation (User B)...")
     async with httpx.AsyncClient() as client:

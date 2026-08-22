@@ -30,7 +30,7 @@ class TestApplyFieldFilter:
         }
         allowed_fields = ["name", "email"]
         result = apply_field_filter(data, allowed_fields, is_request=False)
-        
+
         # Should include allowed fields + system fields
         assert "name" in result
         assert "email" in result
@@ -47,7 +47,7 @@ class TestApplyFieldFilter:
         }
         allowed_fields = ["name", "email"]
         result = apply_field_filter(data, allowed_fields, is_request=True)
-        
+
         # Should only include allowed fields (no system fields for requests)
         assert "name" in result
         assert "email" in result
@@ -64,7 +64,7 @@ class TestApplyFieldFilter:
         }
         allowed_fields = ["name"]
         result = apply_field_filter(data, allowed_fields, is_request=False)
-        
+
         # All system fields should be present
         for field in SYSTEM_FIELDS:
             if field in data:
@@ -76,7 +76,7 @@ class TestApplyFieldFilter:
         data = {"name": "John", "id": "123"}
         allowed_fields = ["name"]
         result = apply_field_filter(data, allowed_fields, is_request=True)
-        
+
         # Should only have allowed fields, not system fields
         assert result == {"name": "John"}
         assert "id" not in result
@@ -86,7 +86,7 @@ class TestApplyFieldFilter:
         data = {"name": "John", "email": "john@example.com"}
         allowed_fields = []
         result = apply_field_filter(data, allowed_fields, is_request=False)
-        
+
         # Should only include system fields
         assert "name" not in result
         assert "email" not in result
@@ -96,7 +96,7 @@ class TestApplyFieldFilter:
         data = {"name": "John", "email": "john@example.com"}
         allowed_fields = "invalid"  # Not "*" but still a string
         result = apply_field_filter(data, allowed_fields)
-        
+
         # Should return data unchanged as fallback
         assert result == data
 
@@ -108,14 +108,14 @@ class TestValidateRequestFields:
         """Test that valid request with allowed fields passes."""
         data = {"name": "John", "email": "john@example.com"}
         allowed_fields = ["name", "email", "department"]
-        
+
         # Should not raise exception
         validate_request_fields(data, allowed_fields, "create")
 
     def test_wildcard_allows_all_non_system_fields(self):
         """Test that wildcard allows all fields except system fields."""
         data = {"name": "John", "email": "john@example.com", "salary": 50000}
-        
+
         # Should not raise exception
         validate_request_fields(data, "*", "create")
 
@@ -123,10 +123,10 @@ class TestValidateRequestFields:
         """Test that unauthorized field in request raises HTTPException."""
         data = {"name": "John", "salary": 50000}
         allowed_fields = ["name", "email"]
-        
+
         with pytest.raises(HTTPException) as exc_info:
             validate_request_fields(data, allowed_fields, "create")
-        
+
         assert exc_info.value.status_code == 422
         assert "salary" in str(exc_info.value.detail)
         assert exc_info.value.detail["field_type"] == "restricted"
@@ -136,10 +136,10 @@ class TestValidateRequestFields:
         """Test that system field in request raises HTTPException."""
         data = {"name": "John", "id": "custom-id"}
         allowed_fields = ["name", "email"]
-        
+
         with pytest.raises(HTTPException) as exc_info:
             validate_request_fields(data, allowed_fields, "create")
-        
+
         assert exc_info.value.status_code == 422
         assert "id" in str(exc_info.value.detail)
         assert exc_info.value.detail["field_type"] == "system"
@@ -148,10 +148,10 @@ class TestValidateRequestFields:
     def test_system_field_with_wildcard_raises_error(self):
         """Test that system field raises error even with wildcard permission."""
         data = {"name": "John", "created_at": "2024-01-01"}
-        
+
         with pytest.raises(HTTPException) as exc_info:
             validate_request_fields(data, "*", "update")
-        
+
         assert exc_info.value.status_code == 422
         assert "created_at" in str(exc_info.value.detail)
         assert exc_info.value.detail["field_type"] == "system"
@@ -160,10 +160,10 @@ class TestValidateRequestFields:
         """Test error message with multiple unauthorized fields."""
         data = {"name": "John", "salary": 50000, "ssn": "123-45-6789"}
         allowed_fields = ["name", "email"]
-        
+
         with pytest.raises(HTTPException) as exc_info:
             validate_request_fields(data, allowed_fields, "create")
-        
+
         assert exc_info.value.status_code == 422
         unauthorized = exc_info.value.detail["unauthorized_fields"]
         assert "salary" in unauthorized
@@ -174,27 +174,27 @@ class TestValidateRequestFields:
         """Test that error message includes the operation type."""
         data = {"name": "John", "salary": 50000}
         allowed_fields = ["name"]
-        
+
         with pytest.raises(HTTPException) as exc_info:
             validate_request_fields(data, allowed_fields, "update")
-        
+
         assert "update" in exc_info.value.detail["message"]
 
     def test_error_includes_allowed_fields(self):
         """Test that error detail includes list of allowed fields."""
         data = {"name": "John", "salary": 50000}
         allowed_fields = ["name", "email", "department"]
-        
+
         with pytest.raises(HTTPException) as exc_info:
             validate_request_fields(data, allowed_fields, "create")
-        
+
         assert exc_info.value.detail["allowed_fields"] == sorted(allowed_fields)
 
     def test_empty_data_passes(self):
         """Test that empty data passes validation."""
         data = {}
         allowed_fields = ["name", "email"]
-        
+
         # Should not raise exception
         validate_request_fields(data, allowed_fields, "create")
 
@@ -202,6 +202,6 @@ class TestValidateRequestFields:
         """Test that non-wildcard string is handled gracefully."""
         data = {"name": "John"}
         allowed_fields = "invalid"  # Not "*" but still a string
-        
+
         # Should not raise exception (fallback behavior)
         validate_request_fields(data, allowed_fields, "create")

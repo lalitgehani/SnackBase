@@ -1,7 +1,7 @@
 """Repository for background job queue database operations."""
 
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
-from typing import Sequence
 
 from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession

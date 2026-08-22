@@ -70,6 +70,32 @@ ignore = ["E501"]
 [tool.ruff.lint.isort]
 known-first-party = ["snackbase"]
 
+[tool.ruff.lint.per-file-ignores]
+# Names below are fixed by an external contract; renaming them breaks behaviour rather
+# than improving style. Scoped per file so the rules stay active everywhere else.
+
+# N818: `AbortHookException` is part of the hooks API, which is stable at v1.0.
+# Renaming it to an `Error` suffix would break every published hook.
+"src/snackbase/domain/entities/hook_context.py" = ["N818"]
+
+# N803: `SAMLResponse` / `RelayState` are SAML POST binding field names. FastAPI binds
+# `Form(...)` parameters by name, so these must match the protocol exactly.
+"src/snackbase/infrastructure/api/routes/saml_router.py" = ["N803"]
+
+# N803: `RoleModel` is a model class passed as a parameter, so PascalCase is correct.
+# N806: `SYSTEM_ACCOUNT_ID` is a local constant mirroring the module-level constant.
+"src/snackbase/infrastructure/persistence/database.py" = ["N803", "N806"]
+"src/snackbase/infrastructure/services/email_service.py" = ["N806"]
+
+# N803: mirrors the boto3 S3 API, whose keyword arguments are PascalCase.
+"tests/integration/test_file_storage_integration.py" = ["N803"]
+
+# N806: patched mock classes bound in tests; PascalCase reads as the class it stands in for.
+"tests/unit/api/routes/test_auth_router.py" = ["N806"]
+"tests/unit/domain/services/test_collection_export_import.py" = ["N806"]
+"tests/unit/infrastructure/configuration/providers/saml/test_azure_ad_provider.py" = ["N806"]
+"tests/verification/verify_invitation_account_name.py" = ["N806"]
+
 [tool.mypy]
 python_version = "3.14"
 strict = true

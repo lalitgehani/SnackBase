@@ -12,8 +12,9 @@ IMPORTANT: This is a STABLE API. Changes to the registration interface
 
 import inspect
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional
+from typing import Any
 
 from snackbase.core.logging import get_logger
 from snackbase.domain.entities.hook_context import (
@@ -92,7 +93,7 @@ class HookRegistry:
         self,
         event: str,
         callback: Callable,
-        filters: Optional[dict[str, Any]] = None,
+        filters: dict[str, Any] | None = None,
         priority: int = 0,
         stop_on_error: bool = False,
         is_builtin: bool = False,
@@ -201,9 +202,9 @@ class HookRegistry:
     async def trigger(
         self,
         event: str,
-        data: Optional[dict[str, Any]] = None,
-        context: Optional[HookContext] = None,
-        filters: Optional[dict[str, Any]] = None,
+        data: dict[str, Any] | None = None,
+        context: HookContext | None = None,
+        filters: dict[str, Any] | None = None,
     ) -> HookResult:
         """Execute all registered hooks for an event.
 
@@ -306,8 +307,8 @@ class HookRegistry:
         self,
         hook: RegisteredHook,
         event: str,
-        data: Optional[dict[str, Any]],
-        context: Optional[HookContext],
+        data: dict[str, Any] | None,
+        context: HookContext | None,
     ) -> Any:
         """Execute a single hook callback.
 
@@ -338,7 +339,7 @@ class HookRegistry:
     def _filter_hooks(
         self,
         hooks: list[RegisteredHook],
-        filters: Optional[dict[str, Any]],
+        filters: dict[str, Any] | None,
     ) -> list[RegisteredHook]:
         """Filter hooks based on trigger filters.
 
@@ -401,7 +402,7 @@ class HookRegistry:
         """
         return {event: hooks.copy() for event, hooks in self._hooks.items()}
 
-    def get_hook_by_id(self, hook_id: str) -> Optional[RegisteredHook]:
+    def get_hook_by_id(self, hook_id: str) -> RegisteredHook | None:
         """Get a hook by its ID.
 
         Args:

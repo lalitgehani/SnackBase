@@ -39,7 +39,7 @@ async def test_create_macro(macro_repository, mock_session):
     mock_session.add.assert_called_once()
     mock_session.commit.assert_called_once()
     mock_session.refresh.assert_called_once()
-    
+
     assert macro.name == "test_macro"
     assert macro.sql_query == "SELECT 1"
     assert macro.parameters == '["param1"]'
@@ -63,13 +63,13 @@ async def test_create_macro_duplicate_name(macro_repository, mock_session):
 async def test_get_by_id(macro_repository, mock_session):
     """Test getting a macro by ID."""
     expected_macro = MacroModel(id=1, name="test")
-    
+
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = expected_macro
     mock_session.execute.return_value = mock_result
 
     found = await macro_repository.get_by_id(1)
-    
+
     mock_session.execute.assert_called_once()
     assert found == expected_macro
 
@@ -111,7 +111,7 @@ async def test_list_all(macro_repository, mock_session):
     mock_session.execute.return_value = mock_result
 
     macros = await macro_repository.list_all()
-    
+
     assert len(macros) == 2
     assert macros == expected_macros
 
@@ -120,7 +120,7 @@ async def test_list_all(macro_repository, mock_session):
 async def test_update_macro(macro_repository, mock_session):
     """Test updating a macro."""
     existing_macro = MacroModel(id=1, name="old", sql_query="SELECT 1")
-    
+
     # Mock get_by_id to return existing macro
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = existing_macro
@@ -136,7 +136,7 @@ async def test_update_macro(macro_repository, mock_session):
 
     mock_session.commit.assert_called_once()
     mock_session.refresh.assert_called_once()
-    
+
     assert updated.name == "updated_macro"
     assert updated.sql_query == "SELECT 2"
     assert updated.parameters == '["p1"]'
@@ -161,14 +161,14 @@ async def test_update_macro_not_found(macro_repository, mock_session):
 async def test_delete_macro(macro_repository, mock_session):
     """Test deleting a macro."""
     existing_macro = MacroModel(id=1, name="test")
-    
+
     # Mock get_by_id
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = existing_macro
     mock_session.execute.return_value = mock_result
 
     deleted = await macro_repository.delete(1)
-    
+
     mock_session.delete.assert_called_once_with(existing_macro)
     mock_session.commit.assert_called_once()
     assert deleted is True

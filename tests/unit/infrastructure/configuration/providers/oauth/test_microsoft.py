@@ -1,8 +1,10 @@
 """Unit tests for MicrosoftOAuthHandler."""
 
-import pytest
 from unittest.mock import MagicMock, patch
+
 import httpx
+import pytest
+
 from snackbase.infrastructure.configuration.providers.oauth.microsoft import MicrosoftOAuthHandler
 
 
@@ -46,9 +48,9 @@ class TestMicrosoftOAuthHandler:
         """Test authorization URL generation."""
         state = "test_state"
         redirect_uri = "https://app.com/callback"
-        
+
         url = await handler.get_authorization_url(config, redirect_uri, state)
-        
+
         assert "login.microsoftonline.com/common/oauth2/v2.0/authorize" in url
         assert "client_id=test_client_id" in url
         assert "redirect_uri=https%3A%2F%2Fapp.com%2Fcallback" in url
@@ -63,9 +65,9 @@ class TestMicrosoftOAuthHandler:
         config["tenant_id"] = "my_tenant"
         state = "test_state"
         redirect_uri = "https://app.com/callback"
-        
+
         url = await handler.get_authorization_url(config, redirect_uri, state)
-        
+
         assert "login.microsoftonline.com/my_tenant/oauth2/v2.0/authorize" in url
 
     @pytest.mark.asyncio
@@ -81,14 +83,14 @@ class TestMicrosoftOAuthHandler:
             "token_type": "Bearer",
         }
         mock_post.return_value = mock_response
-        
+
         tokens = await handler.exchange_code_for_tokens(
             config, "auth_code", "https://example.com/callback"
         )
-        
+
         assert tokens["access_token"] == "test_access_token"
         assert tokens["refresh_token"] == "test_refresh_token"
-        
+
         # Verify call parameters
         args, kwargs = mock_post.call_args
         assert args[0] == "https://login.microsoftonline.com/common/oauth2/v2.0/token"
@@ -105,7 +107,7 @@ class TestMicrosoftOAuthHandler:
         mock_response.status_code = 400
         mock_response.json.return_value = {"error": "invalid_grant", "error_description": "Invalid code"}
         mock_post.return_value = mock_response
-        
+
         with pytest.raises(ValueError, match="Failed to exchange Microsoft OAuth code: Invalid code"):
             await handler.exchange_code_for_tokens(
                 config, "invalid_code", "https://example.com/callback"
@@ -124,14 +126,14 @@ class TestMicrosoftOAuthHandler:
             "userPrincipalName": "user_upn@microsoft.com",
         }
         mock_get.return_value = mock_response
-        
+
         user_info = await handler.get_user_info(config, "test_token")
-        
+
         assert user_info["id"] == "12345"
         assert user_info["email"] == "user@microsoft.com"
         assert user_info["name"] == "Microsoft User"
         assert user_info["picture"] is None
-        
+
         # Verify call parameters
         args, kwargs = mock_get.call_args
         assert args[0] == "https://graph.microsoft.com/v1.0/me"
@@ -150,7 +152,7 @@ class TestMicrosoftOAuthHandler:
             "userPrincipalName": "user_upn@microsoft.com",
         }
         mock_get.return_value = mock_response
-        
+
         user_info = await handler.get_user_info(config, "test_token")
         assert user_info["email"] == "user_upn@microsoft.com"
 
@@ -161,11 +163,11 @@ class TestMicrosoftOAuthHandler:
         mock_response = MagicMock(spec=httpx.Response)
         mock_response.status_code = 200
         mock_get.return_value = mock_response
-        
+
         result, message = await handler.test_connection(config)
         assert result is True
         assert "Discovery endpoint reached" in message
-        
+
         # Verify it called the discovery endpoint
         args, _ = mock_get.call_args
         assert "login.microsoftonline.com/common/v2.0/.well-known/openid-configuration" in args[0]

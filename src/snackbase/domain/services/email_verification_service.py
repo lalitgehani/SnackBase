@@ -3,8 +3,10 @@
 Handles token generation, sending verification emails, and validating tokens.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from snackbase.core.logging import get_logger
 from snackbase.domain.entities.email_verification import EmailVerificationToken
 from snackbase.infrastructure.persistence.models.user import UserModel
@@ -66,7 +68,7 @@ class EmailVerificationService:
         # We fetch system variables from the email service since it already knows how to do it
         system_vars = await self.email_service._get_system_variables(self.session, account_id)
         app_url = system_vars.get("app_url", "")
-        
+
         # Build verification URL
         # Format: {app_url}/verify-email?token={token}
         verification_url = f"{app_url.rstrip('/')}/verify-email?token={raw_token}"
@@ -124,7 +126,7 @@ class EmailVerificationService:
 
         # Mark user as verified
         user.email_verified = True
-        user.email_verified_at = datetime.now(timezone.utc)
+        user.email_verified_at = datetime.now(UTC)
         await self.user_repo.update(user)
 
         # Mark token as used

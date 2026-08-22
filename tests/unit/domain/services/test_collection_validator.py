@@ -1,18 +1,16 @@
 
-import pytest
 from snackbase.domain.services.collection_validator import (
+    RESERVED_FIELD_NAMES,
     CollectionValidator,
-    CollectionValidationError,
     FieldType,
-    OnDeleteAction,
     MaskType,
-    RESERVED_FIELD_NAMES
 )
 
+
 class TestCollectionValidator:
-    
+
     # --- Name Validation ---
-    
+
     def test_validate_name_valid(self):
         valid_names = ["posts", "user_profiles", "data_2024", "MyCollection"]
         for name in valid_names:

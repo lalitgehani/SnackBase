@@ -14,6 +14,9 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from snackbase.core.logging import get_logger
 from snackbase.domain.services import CollectionService
 from snackbase.infrastructure.api.dependencies import SuperadminUser
+from snackbase.infrastructure.api.routes.collection_rules_router import (
+    router as collection_rules_router,
+)
 from snackbase.infrastructure.api.schemas import (
     CollectionListItem,
     CollectionListResponse,
@@ -33,9 +36,6 @@ from snackbase.infrastructure.persistence.database import get_db_session
 from snackbase.infrastructure.persistence.repositories import CollectionRepository
 from snackbase.infrastructure.persistence.repositories.collection_rule_repository import (
     CollectionRuleRepository,
-)
-from snackbase.infrastructure.api.routes.collection_rules_router import (
-    router as collection_rules_router,
 )
 from snackbase.infrastructure.persistence.table_builder import TableBuilder
 from snackbase.infrastructure.security.encryption import EncryptionService

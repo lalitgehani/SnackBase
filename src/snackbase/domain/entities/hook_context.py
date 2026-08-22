@@ -7,7 +7,7 @@ Contains the core data structures used by the hook system:
 """
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from starlette.requests import Request
@@ -61,13 +61,13 @@ class HookContext:
     """
 
     app: Any  # Avoid circular import - will be SnackBase app
-    user: Optional["User"] = None
-    account_id: Optional[str] = None
+    user: User | None = None
+    account_id: str | None = None
     request_id: str = ""
-    request: Optional["Request"] = None
-    ip_address: Optional[str] = None
-    user_agent: Optional[str] = None
-    user_name: Optional[str] = None
+    request: Request | None = None
+    ip_address: str | None = None
+    user_agent: str | None = None
+    user_name: str | None = None
 
     def __post_init__(self) -> None:
         """Validate context after initialization."""
@@ -92,7 +92,7 @@ class HookResult:
 
     success: bool = True
     aborted: bool = False
-    abort_message: Optional[str] = None
+    abort_message: str | None = None
     abort_status_code: int = 400
     errors: list[str] = field(default_factory=list)
-    data: Optional[dict[str, Any]] = None
+    data: dict[str, Any] | None = None

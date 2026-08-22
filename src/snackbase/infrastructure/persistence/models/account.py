@@ -62,37 +62,37 @@ class AccountModel(Base):
     )
 
     # Relationships
-    users: Mapped[list["UserModel"]] = relationship(  # noqa: F821
+    users: Mapped[list[UserModel]] = relationship(  # noqa: F821
         "UserModel",
         back_populates="account",
         cascade="all, delete-orphan",
     )
-    groups: Mapped[list["GroupModel"]] = relationship(  # noqa: F821
+    groups: Mapped[list[GroupModel]] = relationship(  # noqa: F821
         "GroupModel",
         back_populates="account",
         cascade="all, delete-orphan",
     )
-    invitations: Mapped[list["InvitationModel"]] = relationship(  # noqa: F821
+    invitations: Mapped[list[InvitationModel]] = relationship(  # noqa: F821
         "InvitationModel",
         back_populates="account",
         cascade="all, delete-orphan",
     )
-    refresh_tokens: Mapped[list["RefreshTokenModel"]] = relationship(  # noqa: F821
+    refresh_tokens: Mapped[list[RefreshTokenModel]] = relationship(  # noqa: F821
         "RefreshTokenModel",
         back_populates="account",
         cascade="all, delete-orphan",
     )
-    configurations: Mapped[list["ConfigurationModel"]] = relationship(  # noqa: F821
+    configurations: Mapped[list[ConfigurationModel]] = relationship(  # noqa: F821
         "ConfigurationModel",
         back_populates="account",
         cascade="all, delete-orphan",
     )
-    email_templates: Mapped[list["EmailTemplateModel"]] = relationship(  # noqa: F821
+    email_templates: Mapped[list[EmailTemplateModel]] = relationship(  # noqa: F821
         "EmailTemplateModel",
         back_populates="account",
         cascade="all, delete-orphan",
     )
-    email_logs: Mapped[list["EmailLogModel"]] = relationship(  # noqa: F821
+    email_logs: Mapped[list[EmailLogModel]] = relationship(  # noqa: F821
         "EmailLogModel",
         back_populates="account",
         cascade="all, delete-orphan",

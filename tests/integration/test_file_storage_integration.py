@@ -34,7 +34,7 @@ async def test_create_collection_with_file_field(client: AsyncClient, superadmin
     data = response.json()
     assert data["name"] == "documents"
     assert len(data["schema"]) == 2
-    
+
     # Find the file field
     file_field = next(f for f in data["schema"] if f["name"] == "attachment")
     assert file_field["type"] == "file"
@@ -68,7 +68,7 @@ async def test_upload_and_download_file(client: AsyncClient, superadmin_token: s
 
     assert upload_response.status_code == 201
     upload_data = upload_response.json()
-    
+
     assert upload_data["success"] is True
     assert upload_data["file"]["filename"] == "test.txt"
     assert upload_data["file"]["size"] == len(file_content)
@@ -166,12 +166,12 @@ async def test_create_record_with_file_field(
     assert record_response.status_code == 201
     record_data = record_response.json()
     assert record_data["title"] == "Important Document"
-    
+
     # The attachment field should contain the file metadata
     attachment = record_data["attachment"]
     if isinstance(attachment, str):
         attachment = json.loads(attachment)
-    
+
     assert attachment["filename"] == "document.pdf"
     assert attachment["size"] == len(file_content)
     assert attachment["mime_type"] == "application/pdf"

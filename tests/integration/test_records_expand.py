@@ -14,7 +14,6 @@ Tests cover:
 import pytest
 from httpx import AsyncClient
 
-
 COMPANIES_COLLECTION = "expand_companies"
 INDUSTRIES_COLLECTION = "expand_industries"
 EMPLOYEES_COLLECTION = "expand_employees"

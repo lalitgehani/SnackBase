@@ -7,7 +7,6 @@ while locked (None) rules return 403 and expression rules return 401 for anonymo
 import pytest
 from httpx import AsyncClient
 
-
 COLLECTION = "anon_test_col"
 SCHEMA = [
     {"name": "title", "type": "text", "required": True},
@@ -351,7 +350,7 @@ async def test_anonymous_cannot_see_other_accounts_records(
     )
     assert r.status_code == 201
     user_record_id = r.json()["id"]
-    user_account_id = r.json()["account_id"]
+    r.json()["account_id"]
 
     # Create a second account and use its slug in X-Account-ID
     sa_headers = {"Authorization": f"Bearer {superadmin_token}"}

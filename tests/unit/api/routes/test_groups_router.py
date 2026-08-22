@@ -1,19 +1,17 @@
 """Unit tests for GroupsRouter."""
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import HTTPException, status
 
-from snackbase.infrastructure.api.dependencies import CurrentUser, SYSTEM_ACCOUNT_ID
-from snackbase.infrastructure.auth.token_types import TokenType
+from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID, CurrentUser
 from snackbase.infrastructure.api.routes.groups_router import (
     add_user_to_group,
     create_group,
     delete_group,
     get_group,
     list_groups,
-    router,
     update_group,
 )
 from snackbase.infrastructure.api.schemas.group_schemas import (
@@ -21,6 +19,7 @@ from snackbase.infrastructure.api.schemas.group_schemas import (
     GroupUpdate,
     UserGroupUpdate,
 )
+from snackbase.infrastructure.auth.token_types import TokenType
 from snackbase.infrastructure.persistence.models import GroupModel
 from snackbase.infrastructure.persistence.repositories.group_repository import GroupRepository
 
@@ -58,8 +57,8 @@ async def test_create_group(mock_group_repo, current_user, mock_session):
     group_data = GroupCreate(name="Devs", description="Developers")
     mock_group_repo.get_by_name_and_account.return_value = None
     mock_group_repo.create.return_value = GroupModel(
-        id="g1", 
-        name="Devs", 
+        id="g1",
+        name="Devs",
         account_id="acc1",
         description="Developers"
     )
@@ -80,7 +79,7 @@ async def test_create_group_duplicate(mock_group_repo, current_user, mock_sessio
 
     with pytest.raises(HTTPException) as exc:
         await create_group(group_data, current_user, mock_group_repo, mock_session)
-    
+
     assert exc.value.status_code == status.HTTP_409_CONFLICT
 
 
@@ -112,7 +111,7 @@ async def test_get_group_not_found(mock_group_repo, current_user):
 
     with pytest.raises(HTTPException) as exc:
         await get_group("g1", current_user, mock_group_repo)
-    
+
     assert exc.value.status_code == status.HTTP_404_NOT_FOUND
 
 
@@ -123,7 +122,7 @@ async def test_get_group_wrong_account(mock_group_repo, current_user):
 
     with pytest.raises(HTTPException) as exc:
         await get_group("g1", current_user, mock_group_repo)
-    
+
     assert exc.value.status_code == status.HTTP_404_NOT_FOUND
 
 
@@ -132,7 +131,7 @@ async def test_add_user_to_group(mock_group_repo, current_user, mock_session):
     """Test adding user to group."""
     group_id = "g1"
     user_data = UserGroupUpdate(user_id="u2")
-    
+
     mock_group_repo.get_by_id.return_value = GroupModel(id=group_id, account_id="acc1")
     mock_group_repo.is_user_in_group.return_value = False
 
@@ -206,7 +205,7 @@ async def test_superadmin_can_add_user_to_group_from_any_account(
     """Test that superadmin can add user to a group from any account."""
     group_id = "g1"
     user_data = UserGroupUpdate(user_id="u2")
-    
+
     mock_group_repo.get_by_id.return_value = GroupModel(id=group_id, account_id="acc1")
     mock_group_repo.is_user_in_group.return_value = False
 

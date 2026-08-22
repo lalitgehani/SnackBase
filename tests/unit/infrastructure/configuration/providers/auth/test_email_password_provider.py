@@ -1,6 +1,5 @@
 """Unit tests for EmailPasswordProvider."""
 
-import pytest
 
 from snackbase.infrastructure.configuration.providers.auth.email_password import (
     EmailPasswordProvider,
@@ -50,7 +49,7 @@ class TestEmailPasswordProvider:
     def test_all_properties_accessible(self):
         """Test all properties can be accessed without errors."""
         provider = EmailPasswordProvider()
-        
+
         # Access all properties to ensure no errors
         _ = provider.category
         _ = provider.provider_name

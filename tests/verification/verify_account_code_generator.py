@@ -11,8 +11,8 @@ Demonstrates all acceptance criteria:
 """
 
 from snackbase.domain.services.account_code_generator import (
-    AccountIdExhaustedError,
     AccountCodeGenerator,
+    AccountIdExhaustedError,
 )
 
 

@@ -6,7 +6,7 @@ from various repositories.
 
 import os
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Literal
 
@@ -126,7 +126,7 @@ class DashboardService:
         Returns:
             DashboardStats with all metrics populated.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         days = RANGE_DAYS[range]
         range_start = now - timedelta(days=days)
         previous_start = now - timedelta(days=days * 2)

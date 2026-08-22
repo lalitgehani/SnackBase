@@ -17,7 +17,7 @@ Supported functions:
 from typing import Any
 
 from .ast import BinaryOp, FunctionCall, IsNullOp, Literal, Node, UnaryOp, Variable
-from .exceptions import RuleEvaluationError, RuleSyntaxError
+from .exceptions import RuleSyntaxError
 
 
 class ExpressionCompilationError(RuleSyntaxError):

@@ -4,7 +4,6 @@ Uses boto3 for email sending via Amazon Simple Email Service (SES).
 """
 
 import asyncio
-from typing import Optional
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
@@ -26,7 +25,7 @@ class AWSESSettings(BaseModel):
     secret_access_key: str
     from_email: str
     from_name: str = "SnackBase"
-    reply_to: Optional[str] = None
+    reply_to: str | None = None
     timeout: int = 10
 
 
@@ -68,7 +67,7 @@ class AWSESProvider(EmailProvider):
         text_body: str,
         from_email: str,
         from_name: str,
-        reply_to: Optional[str] = None,
+        reply_to: str | None = None,
     ) -> bool:
         """Send an email via AWS SES.
 
@@ -88,7 +87,7 @@ class AWSESProvider(EmailProvider):
             Exception: If SES sending fails.
         """
         source = f"{from_name or self.settings.from_name} <{from_email or self.settings.from_email}>"
-        
+
         reply_addresses = []
         reply_addr = reply_to or self.settings.reply_to
         if reply_addr:
@@ -114,7 +113,7 @@ class AWSESProvider(EmailProvider):
                 )
 
             response = await asyncio.to_thread(_send)
-            
+
             logger.info(
                 "Email sent via AWS SES",
                 message_id=response.get("MessageId"),
@@ -126,7 +125,7 @@ class AWSESProvider(EmailProvider):
         except ClientError as e:
             error_code = e.response.get("Error", {}).get("Code", "Unknown")
             error_message = e.response.get("Error", {}).get("Message", str(e))
-            
+
             # Handle SES-specific errors
             if error_code == "MessageRejected":
                 logger.error(
@@ -177,18 +176,18 @@ class AWSESProvider(EmailProvider):
                 return client.get_send_quota()
 
             response = await asyncio.to_thread(_test)
-            
+
             # Extract quota information
             max_24_hour_send = response.get("Max24HourSend", 0)
             sent_last_24_hours = response.get("SentLast24Hours", 0)
             max_send_rate = response.get("MaxSendRate", 0)
-            
+
             success_msg = (
                 f"AWS SES connection successful. "
                 f"Quota: {sent_last_24_hours:.0f}/{max_24_hour_send:.0f} emails sent in last 24h, "
                 f"max send rate: {max_send_rate:.0f} emails/second"
             )
-            
+
             logger.info(
                 "AWS SES connection test successful",
                 region=self.settings.region,
@@ -196,13 +195,13 @@ class AWSESProvider(EmailProvider):
                 sent_last_24_hours=sent_last_24_hours,
                 max_send_rate=max_send_rate,
             )
-            
+
             return True, success_msg
 
         except ClientError as e:
             error_code = e.response.get("Error", {}).get("Code", "Unknown")
             error_message = e.response.get("Error", {}).get("Message", str(e))
-            
+
             error_msg = f"AWS SES connection failed ({error_code}): {error_message}"
             logger.error(
                 "AWS SES connection test failed",

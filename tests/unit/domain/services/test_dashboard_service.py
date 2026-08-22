@@ -1,6 +1,6 @@
 """Unit tests for DashboardService."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -159,7 +159,7 @@ async def test_get_dashboard_stats_with_data(dashboard_service, mock_session):
     mock_user1.id = "user1"
     mock_user1.email = "user1@example.com"
     mock_user1.account_id = "AC0001"
-    mock_user1.created_at = datetime.now(timezone.utc)
+    mock_user1.created_at = datetime.now(UTC)
     mock_user1.account = MagicMock()
     mock_user1.account.name = "Test Account"
     mock_user1.account.account_code = "AC0001"
@@ -457,7 +457,7 @@ async def test_get_dashboard_stats_previous_period_math(dashboard_service):
 
 def test_zero_fill_series_fills_missing_days(dashboard_service):
     """Test _zero_fill_series inserts zeros and preserves known counts."""
-    end = datetime(2026, 7, 19, 12, 0, 0, tzinfo=timezone.utc)
+    end = datetime(2026, 7, 19, 12, 0, 0, tzinfo=UTC)
     buckets = [
         ("2026-07-17", 2),
         ("2026-07-19", 5),
@@ -476,7 +476,7 @@ def test_zero_fill_series_fills_missing_days(dashboard_service):
 
 def test_zero_fill_audit_series_fills_missing_days(dashboard_service):
     """Test audit series zero-fill and operation aggregation."""
-    end = datetime(2026, 7, 19, 12, 0, 0, tzinfo=timezone.utc)
+    end = datetime(2026, 7, 19, 12, 0, 0, tzinfo=UTC)
     buckets = [
         ("2026-07-17", "CREATE", 3),
         ("2026-07-17", "UPDATE", 1),
@@ -501,7 +501,7 @@ def test_zero_fill_audit_series_fills_missing_days(dashboard_service):
 @pytest.mark.asyncio
 async def test_get_dashboard_stats_audit_series_from_repo(dashboard_service):
     """Test audit_by_operation is populated from repository buckets."""
-    end_day = datetime.now(timezone.utc).date().isoformat()
+    end_day = datetime.now(UTC).date().isoformat()
     buckets = [(end_day, "CREATE", 4), (end_day, "UPDATE", 2)]
 
     with (
@@ -896,7 +896,7 @@ async def test_get_hook_executions_summary(dashboard_service):
         new_callable=AsyncMock,
         return_value={"success": 20, "failed": 3, "partial": 1},
     ):
-        start = datetime.now(timezone.utc)
+        start = datetime.now(UTC)
         end = start
         result = await dashboard_service._get_hook_executions_summary(start, end)
 
@@ -914,7 +914,7 @@ async def test_get_webhook_deliveries_summary(dashboard_service):
         new_callable=AsyncMock,
         return_value={"delivered": 15, "failed": 2, "pending": 1, "retrying": 0},
     ):
-        start = datetime.now(timezone.utc)
+        start = datetime.now(UTC)
         end = start
         result = await dashboard_service._get_webhook_deliveries_summary(start, end)
 

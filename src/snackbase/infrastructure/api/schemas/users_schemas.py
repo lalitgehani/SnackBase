@@ -91,7 +91,7 @@ class PasswordResetRequest(BaseModel):
         return v
 
     @model_validator(mode="after")
-    def validate_request(self) -> "PasswordResetRequest":
+    def validate_request(self) -> PasswordResetRequest:
         """Validate that either new_password is provided or send_reset_link is True."""
         if not self.send_reset_link and self.new_password is None:
             raise ValueError("Either new_password must be provided or send_reset_link must be True")

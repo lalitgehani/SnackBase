@@ -1,6 +1,6 @@
 """Configuration repository for database operations."""
 
-from typing import List, Optional, Sequence
+from collections.abc import Sequence
 
 from sqlalchemy import and_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,7 +32,7 @@ class ConfigurationRepository:
         await self.session.flush()
         return config
 
-    async def get_by_id(self, config_id: str) -> Optional[ConfigurationModel]:
+    async def get_by_id(self, config_id: str) -> ConfigurationModel | None:
         """Get a configuration by ID.
 
         Args:
@@ -52,7 +52,7 @@ class ConfigurationRepository:
         account_id: str,
         provider_name: str,
         is_system: bool = False,
-    ) -> Optional[ConfigurationModel]:
+    ) -> ConfigurationModel | None:
         """Get a configuration by unique keys.
 
         Args:
@@ -77,9 +77,9 @@ class ConfigurationRepository:
 
     async def list_configs(
         self,
-        category: Optional[str] = None,
-        account_id: Optional[str] = None,
-        is_system: Optional[bool] = None,
+        category: str | None = None,
+        account_id: str | None = None,
+        is_system: bool | None = None,
         enabled_only: bool = False,
     ) -> Sequence[ConfigurationModel]:
         """List configurations with optional filters.
@@ -131,7 +131,7 @@ class ConfigurationRepository:
         category: str,
         account_id: str,
         is_system: bool = False,
-    ) -> Optional[ConfigurationModel]:
+    ) -> ConfigurationModel | None:
         """Get the default configuration for a category and account scope.
 
         Args:
@@ -159,7 +159,7 @@ class ConfigurationRepository:
         category: str,
         account_id: str,
         is_system: bool,
-    ) -> Optional[ConfigurationModel]:
+    ) -> ConfigurationModel | None:
         """Set a configuration as the default for its category and account scope.
 
         Atomically clears any existing default in the same (category, account_id, is_system)

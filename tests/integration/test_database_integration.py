@@ -1,6 +1,7 @@
 
 import pytest
-from snackbase.infrastructure.persistence.database import DatabaseManager, get_db_manager
+
+from snackbase.infrastructure.persistence.database import DatabaseManager
 
 
 @pytest.mark.asyncio

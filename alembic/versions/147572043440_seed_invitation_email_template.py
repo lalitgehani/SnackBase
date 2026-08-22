@@ -5,12 +5,10 @@ Revises: 0ea276bf29bc
 Create Date: 2026-01-10 22:19:02.935942
 
 """
-import uuid
 from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = '147572043440'

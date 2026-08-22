@@ -7,7 +7,7 @@ API can validate polymorphic JSON with clear error messages.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated, Any, Literal, Union
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -47,12 +47,7 @@ class WebhookTriggerConfig(BaseModel):
 
 
 TriggerConfig = Annotated[
-    Union[
-        EventTriggerConfig,
-        ScheduleTriggerConfig,
-        ManualTriggerConfig,
-        WebhookTriggerConfig,
-    ],
+    EventTriggerConfig | ScheduleTriggerConfig | ManualTriggerConfig | WebhookTriggerConfig,
     Field(discriminator="type"),
 ]
 
@@ -157,15 +152,7 @@ class ParallelStep(StepPositionMixin):
 
 
 StepConfig = Annotated[
-    Union[
-        ActionStep,
-        ConditionStep,
-        WaitDelayStep,
-        WaitConditionStep,
-        WaitEventStep,
-        LoopStep,
-        ParallelStep,
-    ],
+    ActionStep | ConditionStep | WaitDelayStep | WaitConditionStep | WaitEventStep | LoopStep | ParallelStep,
     Field(discriminator="type"),
 ]
 

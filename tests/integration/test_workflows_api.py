@@ -23,7 +23,7 @@ Covers:
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 import pytest_asyncio
@@ -35,7 +35,6 @@ from snackbase.infrastructure.auth.jwt_service import jwt_service
 from snackbase.infrastructure.persistence.models import AccountModel, RoleModel, UserModel
 from snackbase.infrastructure.persistence.models.workflow import WorkflowModel
 from snackbase.infrastructure.persistence.models.workflow_instance import WorkflowInstanceModel
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -80,7 +79,7 @@ async def user_token(db_session: AsyncSession, account: AccountModel) -> str:
         password_hash="hashed",
         role=role,
         is_active=True,
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
     db_session.add(user)
     await db_session.commit()
@@ -104,7 +103,7 @@ async def other_user_token(db_session: AsyncSession, other_account: AccountModel
         password_hash="hashed",
         role=role,
         is_active=True,
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
     db_session.add(user)
     await db_session.commit()
@@ -1068,7 +1067,7 @@ async def test_cancel_instance(
         account_id=account.id,
         status="running",
         context={"trigger": {}, "steps": {}},
-        started_at=datetime.now(timezone.utc),
+        started_at=datetime.now(UTC),
     )
     db_session.add(inst)
     await db_session.commit()
@@ -1106,8 +1105,8 @@ async def test_cancel_completed_instance_returns_409(
         account_id=account.id,
         status="completed",
         context={"trigger": {}, "steps": {}},
-        started_at=datetime.now(timezone.utc),
-        completed_at=datetime.now(timezone.utc),
+        started_at=datetime.now(UTC),
+        completed_at=datetime.now(UTC),
     )
     db_session.add(inst)
     await db_session.commit()
@@ -1150,7 +1149,7 @@ async def test_resume_failed_instance(
         status="failed",
         error_message="transient error",
         context={"trigger": {}, "steps": {}},
-        started_at=datetime.now(timezone.utc),
+        started_at=datetime.now(UTC),
     )
     db_session.add(inst)
     await db_session.commit()
@@ -1188,7 +1187,7 @@ async def test_resume_running_instance_returns_409(
         account_id=account.id,
         status="running",
         context={"trigger": {}, "steps": {}},
-        started_at=datetime.now(timezone.utc),
+        started_at=datetime.now(UTC),
     )
     db_session.add(inst)
     await db_session.commit()
@@ -1418,7 +1417,7 @@ async def test_executor_empty_steps_completes(
         account_id=account.id,
         status="pending",
         context={"trigger": {"x": 1}, "steps": {}},
-        started_at=datetime.now(timezone.utc),
+        started_at=datetime.now(UTC),
     )
     db_session.add(inst)
     await db_session.commit()
@@ -1438,8 +1437,8 @@ async def test_executor_condition_step_branches(
 ) -> None:
     """A condition step must branch correctly based on the expression result."""
     from snackbase.infrastructure.persistence.database import get_db_manager
-    from snackbase.infrastructure.workflows.workflow_executor import run_instance
     from snackbase.infrastructure.persistence.models.workflow_step_log import WorkflowStepLogModel
+    from snackbase.infrastructure.workflows.workflow_executor import run_instance
 
     steps = [
         {
@@ -1467,7 +1466,7 @@ async def test_executor_condition_step_branches(
         account_id=account.id,
         status="pending",
         context={"trigger": {"status": "approved"}, "steps": {}},
-        started_at=datetime.now(timezone.utc),
+        started_at=datetime.now(UTC),
     )
     db_session.add(inst)
     await db_session.commit()
@@ -1520,7 +1519,7 @@ async def test_executor_wait_delay_pauses_instance(
         account_id=account.id,
         status="pending",
         context={"trigger": {}, "steps": {}},
-        started_at=datetime.now(timezone.utc),
+        started_at=datetime.now(UTC),
     )
     db_session.add(inst)
     await db_session.commit()
@@ -1575,7 +1574,7 @@ async def test_executor_step_log_written(
         account_id=account.id,
         status="pending",
         context={"trigger": {"x": 1}, "steps": {}},
-        started_at=datetime.now(timezone.utc),
+        started_at=datetime.now(UTC),
     )
     db_session.add(inst)
     await db_session.commit()
@@ -1633,7 +1632,7 @@ async def test_executor_context_accumulates_step_outputs(
         account_id=account.id,
         status="pending",
         context={"trigger": {"flag": True}, "steps": {}},
-        started_at=datetime.now(timezone.utc),
+        started_at=datetime.now(UTC),
     )
     db_session.add(inst)
     await db_session.commit()
@@ -1690,8 +1689,9 @@ async def test_template_variable_resolution() -> None:
 
 
 def test_parse_duration_seconds() -> None:
-    from snackbase.infrastructure.workflows.workflow_executor import _parse_duration
     from datetime import timedelta
+
+    from snackbase.infrastructure.workflows.workflow_executor import _parse_duration
 
     assert _parse_duration("30s") == timedelta(seconds=30)
     assert _parse_duration("5m") == timedelta(minutes=5)
@@ -1700,8 +1700,9 @@ def test_parse_duration_seconds() -> None:
 
 
 def test_parse_duration_invalid() -> None:
-    from snackbase.infrastructure.workflows.workflow_executor import _parse_duration
     import pytest
+
+    from snackbase.infrastructure.workflows.workflow_executor import _parse_duration
 
     with pytest.raises(ValueError, match="Invalid duration"):
         _parse_duration("bad-value")

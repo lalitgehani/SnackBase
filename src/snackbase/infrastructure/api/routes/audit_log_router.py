@@ -1,20 +1,19 @@
 """Audit log API routes."""
 
 from datetime import datetime
-from typing import Optional
 
-from fastapi import APIRouter, Depends, Query, status, Response
+from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from snackbase.core.config import get_settings
+from snackbase.domain.services.audit_log_service import AuditLogService
 from snackbase.infrastructure.api.dependencies import SuperadminUser
 from snackbase.infrastructure.api.schemas.audit_log_schemas import (
+    AuditLogExportFormat,
     AuditLogListResponse,
     AuditLogResponse,
-    AuditLogExportFormat,
 )
 from snackbase.infrastructure.persistence.database import get_db_session
-from snackbase.domain.services.audit_log_service import AuditLogService
-from snackbase.core.config import get_settings
 
 router = APIRouter()
 
@@ -29,14 +28,14 @@ router = APIRouter()
 )
 async def list_audit_logs(
     current_user: SuperadminUser,
-    account_id: Optional[str] = Query(None, description="Filter by account ID"),
-    table_name: Optional[str] = Query(None, description="Filter by table name"),
-    record_id: Optional[str] = Query(None, description="Filter by record ID"),
-    user_id: Optional[str] = Query(None, description="Filter by user ID"),
-    operation: Optional[str] = Query(None, description="Filter by operation (CREATE, UPDATE, DELETE)"),
-    auth_method: Optional[str] = Query(None, description="Filter by auth method (jwt, platform, api_key, ...)"),
-    from_date: Optional[datetime] = Query(None, description="Filter from this timestamp (ISO 8601)"),
-    to_date: Optional[datetime] = Query(None, description="Filter to this timestamp (ISO 8601)"),
+    account_id: str | None = Query(None, description="Filter by account ID"),
+    table_name: str | None = Query(None, description="Filter by table name"),
+    record_id: str | None = Query(None, description="Filter by record ID"),
+    user_id: str | None = Query(None, description="Filter by user ID"),
+    operation: str | None = Query(None, description="Filter by operation (CREATE, UPDATE, DELETE)"),
+    auth_method: str | None = Query(None, description="Filter by auth method (jwt, platform, api_key, ...)"),
+    from_date: datetime | None = Query(None, description="Filter from this timestamp (ISO 8601)"),
+    to_date: datetime | None = Query(None, description="Filter to this timestamp (ISO 8601)"),
     skip: int = Query(0, ge=0, description="Number of entries to skip"),
     limit: int = Query(50, ge=1, le=500, description="Maximum number of entries to return"),
     sort_by: str = Query("occurred_at", description="Field to sort by"),
@@ -89,13 +88,13 @@ async def list_audit_logs(
 async def export_audit_logs(
     current_user: SuperadminUser,
     format: AuditLogExportFormat = Query(AuditLogExportFormat.CSV, description="Export format"),
-    account_id: Optional[str] = Query(None, description="Filter by account ID"),
-    table_name: Optional[str] = Query(None, description="Filter by table name"),
-    record_id: Optional[str] = Query(None, description="Filter by record ID"),
-    user_id: Optional[str] = Query(None, description="Filter by user ID"),
-    operation: Optional[str] = Query(None, description="Filter by operation"),
-    from_date: Optional[datetime] = Query(None, description="Filter from this timestamp"),
-    to_date: Optional[datetime] = Query(None, description="Filter to this timestamp"),
+    account_id: str | None = Query(None, description="Filter by account ID"),
+    table_name: str | None = Query(None, description="Filter by table name"),
+    record_id: str | None = Query(None, description="Filter by record ID"),
+    user_id: str | None = Query(None, description="Filter by user ID"),
+    operation: str | None = Query(None, description="Filter by operation"),
+    from_date: datetime | None = Query(None, description="Filter from this timestamp"),
+    to_date: datetime | None = Query(None, description="Filter to this timestamp"),
     session: AsyncSession = Depends(get_db_session),
 ) -> Response:
     """Export audit logs in CSV or JSON format.

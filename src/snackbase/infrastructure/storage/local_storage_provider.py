@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import BinaryIO
 
 from snackbase.domain.services.file_storage_service import FileMetadata, FileStorageService
-from snackbase.infrastructure.storage.base import StoredFile, StorageProvider
+from snackbase.infrastructure.storage.base import StorageProvider, StoredFile
 
 
 class LocalStorageProvider(StorageProvider):

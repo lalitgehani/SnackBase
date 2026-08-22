@@ -1,13 +1,15 @@
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from snackbase.core.config import get_settings
 from snackbase.infrastructure.persistence.models import AccountModel
 from snackbase.infrastructure.persistence.repositories import (
     AccountRepository,
     ConfigurationRepository,
     OAuthStateRepository,
 )
-from snackbase.core.config import get_settings
+
 
 @pytest.mark.asyncio
 class TestOAuthInitiate:
@@ -15,16 +17,16 @@ class TestOAuthInitiate:
 
     async def _ensure_config_registry(self, db_session: AsyncSession):
         """Ensure config_registry is initialized and on app state."""
-        from snackbase.infrastructure.api.app import app
         from snackbase.core.configuration.config_registry import ConfigurationRegistry
-        from snackbase.infrastructure.security.encryption import EncryptionService
+        from snackbase.infrastructure.api.app import app
         from snackbase.infrastructure.configuration.providers.oauth import GoogleOAuthHandler
-        
+        from snackbase.infrastructure.security.encryption import EncryptionService
+
         # Always create a new registry
         settings = get_settings()
         encryption_service = EncryptionService(settings.encryption_key)
         app.state.config_registry = ConfigurationRegistry(encryption_service)
-        
+
         # Register Google provider definition for tests
         google_handler = GoogleOAuthHandler()
         app.state.config_registry.register_provider_definition(
@@ -39,11 +41,11 @@ class TestOAuthInitiate:
     async def test_authorize_google_success(self, client: AsyncClient, db_session: AsyncSession):
         """Test successful initiation of Google OAuth flow at system level."""
         await self._ensure_config_registry(db_session)
-        
+
         # 1. Setup google config at system level
-        config_repo = ConfigurationRepository(db_session)
+        ConfigurationRepository(db_session)
         account_repo = AccountRepository(db_session)
-        
+
         # System account should be created by conftest or migration
         system_account = await account_repo.get_by_id("00000000-0000-0000-0000-000000000000")
         if not system_account:
@@ -59,14 +61,14 @@ class TestOAuthInitiate:
         # Create system-level google config
         from snackbase.infrastructure.api.app import app
         config_registry = app.state.config_registry
-        
+
         test_config = {
             "client_id": "test-client-id",
             "client_secret": "test-client-secret",
             "scopes": ["openid", "email"],
             "redirect_uri": "http://myapp.com/callback"
         }
-        
+
         await config_registry.create_config(
             account_id="00000000-0000-0000-0000-000000000000",
             category="auth_providers",
@@ -78,7 +80,7 @@ class TestOAuthInitiate:
             repository=ConfigurationRepository(db_session)
         )
         await db_session.commit()
-        
+
         # 2. Call the API
         response = await client.post(
             "/api/v1/auth/oauth/google/authorize",
@@ -87,7 +89,7 @@ class TestOAuthInitiate:
                 "state": "test-state"
             }
         )
-        
+
         assert response.status_code == 200
         data = response.json()
         assert "authorization_url" in data
@@ -95,7 +97,7 @@ class TestOAuthInitiate:
         assert "state=test-state" in data["authorization_url"]
         assert data["state"] == "test-state"
         assert data["provider"] == "google"
-        
+
         # 3. Verify state is in database
         oauth_state_repo = OAuthStateRepository(db_session)
         state_record = await oauth_state_repo.get_by_token("test-state")
@@ -106,7 +108,7 @@ class TestOAuthInitiate:
     async def test_authorize_unconfigured_provider(self, client: AsyncClient, db_session: AsyncSession):
         """Test that unconfigured provider returns 404."""
         await self._ensure_config_registry(db_session)
-        
+
         response = await client.post(
             "/api/v1/auth/oauth/nonexistent/authorize",
             json={
@@ -119,7 +121,7 @@ class TestOAuthInitiate:
     async def test_authorize_invalid_account(self, client: AsyncClient, db_session: AsyncSession):
         """Test that invalid account returns 404."""
         await self._ensure_config_registry(db_session)
-        
+
         response = await client.post(
             "/api/v1/auth/oauth/google/authorize",
             json={
@@ -133,10 +135,10 @@ class TestOAuthInitiate:
     async def test_authorize_auto_generated_state(self, client: AsyncClient, db_session: AsyncSession):
         """Test that state is auto-generated if not provided."""
         await self._ensure_config_registry(db_session)
-        
+
         from snackbase.infrastructure.api.app import app
         config_registry = app.state.config_registry
-        
+
         # Create google config for this test as well (db resets)
         await config_registry.create_config(
             account_id="00000000-0000-0000-0000-000000000000",
@@ -156,12 +158,12 @@ class TestOAuthInitiate:
                 "redirect_uri": "http://myapp.com/callback"
             }
         )
-        
+
         assert response.status_code == 200
         data = response.json()
         assert data["state"] is not None
         assert len(data["state"]) > 10
-        
+
         # Verify state is in database
         oauth_state_repo = OAuthStateRepository(db_session)
         state_record = await oauth_state_repo.get_by_token(data["state"])

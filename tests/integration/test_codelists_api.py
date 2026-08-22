@@ -532,9 +532,6 @@ async def test_openapi_includes_codelist_paths(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_assert_in_codelist_via_service(db_session: AsyncSession):
     """Validator helper unit path driven through service on migrated DB."""
-    from snackbase.infrastructure.persistence.repositories.codelist_repository import (
-        SYSTEM_ACCOUNT_ID,
-    )
 
     svc = CodelistService(db_session)
     if await db_session.get(AccountModel, ACCOUNT_A) is None:

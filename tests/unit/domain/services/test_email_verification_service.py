@@ -1,7 +1,7 @@
 """Unit tests for EmailVerificationService."""
 
-from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, patch
+from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -124,7 +124,7 @@ async def test_verify_email_success(
         user_id=user_id,
         email="test@example.com",
         token_hash="hash",
-        expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        expires_at=datetime.now(UTC) + timedelta(hours=1),
         id="token-id",
     )
     mock_verification_repo.get_by_token.return_value = token_entity
@@ -170,7 +170,7 @@ async def test_verify_email_expired_token(
         user_id="user-123",
         email="test@example.com",
         token_hash="hash",
-        expires_at=datetime.now(timezone.utc) - timedelta(hours=1),
+        expires_at=datetime.now(UTC) - timedelta(hours=1),
         id="token-id",
     )
     mock_verification_repo.get_by_token.return_value = token_entity

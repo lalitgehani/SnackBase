@@ -41,7 +41,7 @@ class RoleModel(Base):
     )
 
     # Relationships
-    users: Mapped[list["UserModel"]] = relationship(  # noqa: F821
+    users: Mapped[list[UserModel]] = relationship(  # noqa: F821
         "UserModel",
         back_populates="role",
     )

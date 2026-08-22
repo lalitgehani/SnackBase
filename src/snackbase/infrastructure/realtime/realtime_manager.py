@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set, Union
 import asyncio
-from fastapi import WebSocket
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
+
 from snackbase.core.logging import get_logger
 
 if TYPE_CHECKING:
@@ -19,37 +20,37 @@ class Subscription:
     collection: str
     account_id: str
     user_id: str
-    operations: Set[str] = field(default_factory=lambda: {"create", "update", "delete"})
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    operations: set[str] = field(default_factory=lambda: {"create", "update", "delete"})
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 class RealtimeConnection:
     """Represents an active real-time connection (WebSocket or SSE)."""
     def __init__(
-        self, 
-        connection_id: str, 
-        user_id: str, 
+        self,
+        connection_id: str,
+        user_id: str,
         account_id: str,
         send_callback: Callable[[Any], asyncio.Task]
     ):
         self.id = connection_id
         self.user_id = user_id
         self.account_id = account_id
-        self.subscriptions: Dict[str, Subscription] = {}
-        self.last_activity = datetime.now(timezone.utc)
+        self.subscriptions: dict[str, Subscription] = {}
+        self.last_activity = datetime.now(UTC)
         self.send_callback = send_callback
 
     def add_subscription(self, subscription: Subscription) -> None:
         self.subscriptions[subscription.id] = subscription
-        self.last_activity = datetime.now(timezone.utc)
+        self.last_activity = datetime.now(UTC)
 
     def remove_subscription(self, subscription_id: str) -> None:
         if subscription_id in self.subscriptions:
             del self.subscriptions[subscription_id]
-        self.last_activity = datetime.now(timezone.utc)
+        self.last_activity = datetime.now(UTC)
 
     async def send(self, data: Any) -> None:
         await self.send_callback(data)
-        self.last_activity = datetime.now(timezone.utc)
+        self.last_activity = datetime.now(UTC)
 
 class ConnectionManager:
     """Manages active real-time connections and their subscriptions."""
@@ -64,7 +65,7 @@ class ConnectionManager:
                 account and subscription match, which is what the cross-tenant
                 unit tests exercise.
         """
-        self.active_connections: Dict[str, RealtimeConnection] = {}
+        self.active_connections: dict[str, RealtimeConnection] = {}
         self.policy = policy
         self._lock = asyncio.Lock()
 
@@ -79,7 +80,7 @@ class ConnectionManager:
                 conn = self.active_connections.pop(connection_id)
                 logger.info("Realtime connection removed", connection_id=connection_id, user_id=conn.user_id)
 
-    async def get_connection(self, connection_id: str) -> Optional[RealtimeConnection]:
+    async def get_connection(self, connection_id: str) -> RealtimeConnection | None:
         return self.active_connections.get(connection_id)
 
     async def broadcast_to_account(self, account_id: str, collection: str, operation: str, data: Any) -> None:
@@ -123,7 +124,7 @@ class ConnectionManager:
 
                 event = {
                     "type": f"{collection}.{operation}",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                     "data": payload
                 }
                 try:

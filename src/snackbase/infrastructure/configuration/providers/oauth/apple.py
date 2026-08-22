@@ -1,7 +1,7 @@
 """Apple OAuth 2.0 provider handler implementation."""
 
 import time
-from typing import Any, Dict, Optional
+from typing import Any
 from urllib.parse import urlencode
 
 import httpx
@@ -32,7 +32,7 @@ class AppleOAuthHandler(OAuthProviderHandler):
         return "/assets/providers/apple.svg"
 
     @property
-    def config_schema(self) -> Dict[str, Any]:
+    def config_schema(self) -> dict[str, Any]:
         return {
             "type": "object",
             "properties": {
@@ -75,7 +75,7 @@ class AppleOAuthHandler(OAuthProviderHandler):
 
     async def get_authorization_url(
         self,
-        config: Dict[str, Any],
+        config: dict[str, Any],
         redirect_uri: str,
         state: str,
     ) -> str:
@@ -96,7 +96,7 @@ class AppleOAuthHandler(OAuthProviderHandler):
         query_string = urlencode(params)
         return f"{base_url}?{query_string}"
 
-    def _generate_client_secret(self, config: Dict[str, Any]) -> str:
+    def _generate_client_secret(self, config: dict[str, Any]) -> str:
         """Generate a signed JWT client secret for Apple."""
         now = int(time.time())
         expiry = now + 3600  # 1 hour expiry
@@ -124,10 +124,10 @@ class AppleOAuthHandler(OAuthProviderHandler):
 
     async def exchange_code_for_tokens(
         self,
-        config: Dict[str, Any],
+        config: dict[str, Any],
         code: str,
         redirect_uri: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Exchange authorization code for access and refresh tokens."""
         token_url = "https://appleid.apple.com/auth/token"
 
@@ -154,39 +154,39 @@ class AppleOAuthHandler(OAuthProviderHandler):
 
     async def get_user_info(
         self,
-        config: Dict[str, Any],
+        config: dict[str, Any],
         access_token: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Fetch user information by decoding the id_token.
 
-        Note: access_token is not used here directly as Apple provides 
+        Note: access_token is not used here directly as Apple provides
         user info in the id_token during the initial exchange.
-        However, the interface requires access_token. We expect the 
-        caller to have already extracted the id_token if needed, or we 
+        However, the interface requires access_token. We expect the
+        caller to have already extracted the id_token if needed, or we
         decode it here if we had passed it.
-        
-        Since the base interface assumes access_token for user info, 
-        and Apple user info is mostly in id_token, we'll assume the 
-        caller might pass the id_token as 'access_token' or we expect 
+
+        Since the base interface assumes access_token for user info,
+        and Apple user info is mostly in id_token, we'll assume the
+        caller might pass the id_token as 'access_token' or we expect
         the caller to handle Apple specifically.
-        
+
         Wait, the PRD says: "get_user_info() decodes JWT from id_token".
-        This implies the handler should be able to get user info from 
+        This implies the handler should be able to get user info from
         the tokens received.
         """
-        # In the context of SnackBase, get_user_info is usually called 
-        # after exchange_code_for_tokens. The tokens dict from exchange 
+        # In the context of SnackBase, get_user_info is usually called
+        # after exchange_code_for_tokens. The tokens dict from exchange
         # contains 'id_token'.
-        
+
         # If the caller provides id_token in access_token parameter:
         id_token = access_token
-        
+
         try:
-            # We don't verify the signature here because we just got it 
-            # from Apple over TLS, but in production we should verify 
+            # We don't verify the signature here because we just got it
+            # from Apple over TLS, but in production we should verify
             # against Apple's public keys.
             decoded = jwt.decode(id_token, options={"verify_signature": False})
-            
+
             return {
                 "id": str(decoded.get("sub")),
                 "email": decoded.get("email"),
@@ -197,7 +197,7 @@ class AppleOAuthHandler(OAuthProviderHandler):
         except Exception as e:
             raise ValueError(f"Failed to decode Apple id_token: {str(e)}")
 
-    async def test_connection(self, config: Dict[str, Any]) -> tuple[bool, str]:
+    async def test_connection(self, config: dict[str, Any]) -> tuple[bool, str]:
         """Validate Apple OAuth configuration."""
         discovery_url = "https://appleid.apple.com/.well-known/openid-configuration"
 

@@ -4,10 +4,10 @@ Superadmin-only endpoints for managing users across all accounts.
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -316,7 +316,7 @@ async def update_user(
     # Demo mode protection
     from snackbase.core.config import get_settings
     from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID
-    
+
     settings = get_settings()
     if settings.is_demo and user.account_id == SYSTEM_ACCOUNT_ID:
         raise HTTPException(
@@ -389,7 +389,6 @@ async def update_user(
     )
 
 
-from fastapi import Request
 
 @router.put(
     "/{user_id}/password",
@@ -421,7 +420,7 @@ async def reset_user_password(
     # Demo mode protection
     from snackbase.core.config import get_settings
     from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID
-    
+
     settings = get_settings()
     if settings.is_demo and user.account_id == SYSTEM_ACCOUNT_ID:
         raise HTTPException(
@@ -442,7 +441,7 @@ async def reset_user_password(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to send password reset email",
             )
-        
+
         logger.info(
             "password_reset_link_sent",
             user_id=user_id,
@@ -494,7 +493,7 @@ async def verify_user_email(
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> dict[str, str]:
     """Manually mark a user's email as verified (superadmin only).
-    
+
     This bypasses the email token flow and directly updates the user's status.
     """
     # Get user
@@ -510,7 +509,7 @@ async def verify_user_email(
 
     # Update verification status
     user.email_verified = True
-    user.email_verified_at = datetime.now(timezone.utc)
+    user.email_verified_at = datetime.now(UTC)
     await user_repo.update(user)
     await session.commit()
 
@@ -605,7 +604,7 @@ async def deactivate_user(
     # Demo mode protection
     from snackbase.core.config import get_settings
     from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID
-    
+
     settings = get_settings()
     if settings.is_demo and user.account_id == SYSTEM_ACCOUNT_ID:
         raise HTTPException(

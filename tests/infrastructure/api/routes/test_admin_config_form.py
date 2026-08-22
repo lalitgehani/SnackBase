@@ -1,31 +1,38 @@
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient
-from snackbase.core.configuration.config_registry import ConfigurationRegistry, ProviderDefinition
-from snackbase.infrastructure.persistence.repositories.configuration_repository import ConfigurationRepository
-from snackbase.infrastructure.security.encryption import EncryptionService
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from snackbase.core.configuration.config_registry import ConfigurationRegistry
+from snackbase.infrastructure.persistence.repositories.configuration_repository import (
+    ConfigurationRepository,
+)
+from snackbase.infrastructure.security.encryption import EncryptionService
 
 
 @pytest_asyncio.fixture(autouse=True)
 async def setup_registry(db_session: AsyncSession):
     """Ensure registry and other state are initialized for tests."""
     from snackbase.infrastructure.api.app import app
-    from snackbase.infrastructure.persistence.repositories.configuration_repository import ConfigurationRepository
-    
+    from snackbase.infrastructure.persistence.repositories.configuration_repository import (
+        ConfigurationRepository,
+    )
+
     # Initialize or update the regsitry in app.state
     if not hasattr(app.state, "config_registry"):
         registry = ConfigurationRegistry(
             EncryptionService("test-key-must-be-32-bytes-long!!!!")
         )
         app.state.config_registry = registry
-    
+
     # Clear registry memory state for isolation
     app.state.config_registry._provider_definitions = {}
     app.state.config_registry._cache = {}
-    
+
     # Register email_password in registry (usually done in lifespan)
-    from snackbase.infrastructure.configuration.providers.auth.email_password import EmailPasswordProvider
+    from snackbase.infrastructure.configuration.providers.auth.email_password import (
+        EmailPasswordProvider,
+    )
     ep = EmailPasswordProvider()
     app.state.config_registry.register_provider_definition(
         category=ep.category,
@@ -34,7 +41,7 @@ async def setup_registry(db_session: AsyncSession):
         config_schema=ep.config_schema,
         is_builtin=True
     )
-    
+
     # Seed email_password config if not exists (usually done in lifespan)
     repo = ConfigurationRepository(db_session)
     if not await repo.get_config(ep.category, app.state.config_registry.SYSTEM_ACCOUNT_ID, ep.provider_name, True):
@@ -48,7 +55,7 @@ async def setup_registry(db_session: AsyncSession):
             is_system=True,
             repository=repo
         )
-    
+
     return app.state.config_registry
 
 @pytest.mark.asyncio
@@ -118,7 +125,7 @@ async def test_create_configuration(client: AsyncClient, superadmin_token: str, 
     result = response.json()
     assert result["status"] == "success"
     assert "id" in result
-    
+
     # VERIFY DB PERSISTENCE
     repo = ConfigurationRepository(db_session)
     config = await repo.get_by_id(result["id"])
@@ -147,7 +154,7 @@ async def test_get_and_update_configuration_values(client: AsyncClient, superadm
         provider_name="test_auth_update",
         display_name="Test Auth Update",
         config_schema={
-            "type": "object", 
+            "type": "object",
             "properties": {
                 "password": {"type": "string", "writeOnly": True},
                 "normal": {"type": "string"}
@@ -176,7 +183,7 @@ async def test_get_and_update_configuration_values(client: AsyncClient, superadm
         headers={"Authorization": f"Bearer {superadmin_token}"}
     )
     assert response.status_code == 200
-    
+
     # Verify values are correctly preserved and updated
     repo = ConfigurationRepository(db_session)
     updated_config = await repo.get_by_id(config.id)
@@ -198,5 +205,5 @@ async def test_test_connection_unsupported(client: AsyncClient, superadmin_token
     )
     assert response.status_code == 200
     result = response.json()
-    assert result["success"] == False
+    assert result["success"] is False
     assert "does not support connection testing" in result["message"]

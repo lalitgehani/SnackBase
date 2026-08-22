@@ -1,9 +1,12 @@
 
-import pytest
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
-from snackbase.infrastructure.auth.authenticator import Authenticator, AuthenticationError
-from snackbase.infrastructure.auth.token_types import TokenType, AuthenticatedUser, TokenPayload
+
+import pytest
+
+from snackbase.infrastructure.auth.authenticator import AuthenticationError, Authenticator
+from snackbase.infrastructure.auth.token_types import TokenPayload, TokenType
+
 
 @pytest.fixture
 def authenticator():
@@ -35,10 +38,10 @@ def sample_payload():
 async def test_authenticate_sb_api_key_header_success(authenticator, sample_payload):
     """Test successful SnackBase API key authentication via X-API-Key."""
     token = "sb_ak.encoded.sig"
-    
+
     with patch("snackbase.infrastructure.auth.authenticator.TokenCodec.decode", return_value=sample_payload):
         user = await authenticator.authenticate({"X-API-Key": token})
-        
+
         assert user.user_id == "usr_123"
         assert user.token_type == TokenType.API_KEY
 
@@ -46,10 +49,10 @@ async def test_authenticate_sb_api_key_header_success(authenticator, sample_payl
 async def test_authenticate_sb_api_key_bearer_success(authenticator, sample_payload):
     """Test successful SnackBase API key authentication via Authorization Bearer."""
     token = "sb_ak.encoded.sig"
-    
+
     with patch("snackbase.infrastructure.auth.authenticator.TokenCodec.decode", return_value=sample_payload):
         user = await authenticator.authenticate({"Authorization": f"Bearer {token}"})
-        
+
         assert user.user_id == "usr_123"
         assert user.token_type == TokenType.API_KEY
 
@@ -57,7 +60,7 @@ async def test_authenticate_sb_api_key_bearer_success(authenticator, sample_payl
 async def test_authenticate_legacy_api_key_success(authenticator, mock_session):
     """Test successful legacy API key authentication."""
     token = "sb_sk_ACC_RANDOM"
-    
+
     from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID
     mock_user = MagicMock()
     mock_user.id = "usr_123"
@@ -76,7 +79,7 @@ async def test_authenticate_legacy_api_key_success(authenticator, mock_session):
     mock_session.execute.return_value = mock_result
 
     user = await authenticator.authenticate({"X-API-Key": token}, session=mock_session)
-    
+
     assert user.user_id == "usr_123"
     assert user.token_type == TokenType.API_KEY
     assert user.role == "admin"
@@ -85,7 +88,7 @@ async def test_authenticate_legacy_api_key_success(authenticator, mock_session):
 async def test_authenticate_legacy_api_key_invalid(authenticator, mock_session):
     """Test that invalid legacy API keys are rejected."""
     token = "sb_sk_INVALID"
-    
+
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = None
     mock_session.execute.return_value = mock_result

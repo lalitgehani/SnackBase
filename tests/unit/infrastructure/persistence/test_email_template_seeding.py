@@ -5,12 +5,12 @@ initialization and that the seeding process is idempotent.
 """
 
 import uuid
+
 import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.infrastructure.persistence.models.email_template import EmailTemplateModel
-
 
 # System account ID constant
 SYSTEM_ACCOUNT_ID = "00000000-0000-0000-0000-000000000000"
@@ -35,7 +35,7 @@ async def seed_templates_to_session(session: AsyncSession) -> None:
             "subject": "You've been invited to join {{ account_name }} on {{ app_name }}",
         },
     ]
-    
+
     for template_data in default_templates:
         # Check if template already exists
         result = await session.execute(
@@ -46,7 +46,7 @@ async def seed_templates_to_session(session: AsyncSession) -> None:
             )
         )
         existing = result.scalar_one_or_none()
-        
+
         if existing is None:
             # Create minimal template for testing
             new_template = EmailTemplateModel(
@@ -61,7 +61,7 @@ async def seed_templates_to_session(session: AsyncSession) -> None:
                 is_builtin=True,
             )
             session.add(new_template)
-    
+
     await session.commit()
 
 

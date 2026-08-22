@@ -5,11 +5,11 @@ Supports built-in macros, database-defined macros, and positional parameters.
 """
 
 import re
-from typing import Any
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from snackbase.infrastructure.persistence.repositories.macro_repository import MacroRepository
 from snackbase.core.logging import get_logger
+from snackbase.infrastructure.persistence.repositories.macro_repository import MacroRepository
 
 logger = get_logger(__name__)
 
@@ -29,7 +29,7 @@ class MacroExpander:
         """
         self.session = session
         self.macro_repo = MacroRepository(session) if session else None
-        
+
         # Built-in macro definitions (mapping name -> substitution fragment)
         # Fragments can use $1, $2, etc. for parameters
         self.builtin_macros = {
@@ -57,19 +57,18 @@ class MacroExpander:
             logger.error("Max macro recursion depth exceeded", expression=expression)
             raise RecursionError(f"Max macro recursion depth of {self.MAX_RECURSION_DEPTH} exceeded")
 
-        if not expression or not "@" in expression:
+        if not expression or "@" not in expression:
             return expression
 
         # Find all macro occurrences
         result = expression
-        
+
         matches = list(MACRO_PATTERN.finditer(expression))
         # Process in reverse to maintain offsets
         for match in reversed(matches):
-            macro_full = match.group(0)
             macro_name = match.group(1)
             macro_args_str = match.group(2)
-            
+
             # Split arguments by comma and strip whitespace
             args = []
             if macro_args_str:
@@ -93,7 +92,7 @@ class MacroExpander:
                     for i, arg in enumerate(args):
                         placeholder = f"${i+1}"
                         replacement = replacement.replace(placeholder, arg)
-                
+
                 # Special case for @owns_record(field_name)
                 if macro_name == "owns_record" and args:
                     replacement = f"{args[0]} = @request.auth.id"
@@ -102,9 +101,9 @@ class MacroExpander:
                 expanded_replacement = await self.expand(replacement, depth + 1)
                 # Wrap in parentheses for safety
                 wrapped_replacement = f"({expanded_replacement})"
-                
+
                 # Replace in original string
                 start, end = match.span()
                 result = result[:start] + wrapped_replacement + result[end:]
-                
+
         return result

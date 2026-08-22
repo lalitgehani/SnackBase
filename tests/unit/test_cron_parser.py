@@ -13,7 +13,6 @@ import pytest
 
 from snackbase.core.cron.parser import describe_cron, get_next_run, validate_cron
 
-
 # ---------------------------------------------------------------------------
 # validate_cron — valid expressions
 # ---------------------------------------------------------------------------

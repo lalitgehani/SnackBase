@@ -5,7 +5,7 @@ Each user has a role that defines their permissions within the account.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 
 @dataclass
@@ -44,8 +44,8 @@ class User:
     external_email: str | None = None
     profile_data: dict | None = None
     email_verified: bool = False
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     last_login: datetime | None = None
 
     def __post_init__(self) -> None:
@@ -58,7 +58,7 @@ class User:
             raise ValueError("Email is required")
         if not self.password_hash:
             raise ValueError("Password hash is required")
-        
+
         valid_providers = {"password", "oauth", "saml"}
         if self.auth_provider not in valid_providers:
             raise ValueError(f"Invalid auth_provider. Must be one of {valid_providers}")

@@ -116,11 +116,11 @@ def test_template_variables_substitution(renderer) -> None:
 def test_template_conditional_rendering(renderer) -> None:
     """Test that Jinja2 conditionals work correctly."""
     template = "Hello{% if user_name %} {{ user_name }}{% endif %}!"
-    
+
     # With user_name
     result_with_name = renderer.render(template, {"user_name": "Alice"})
     assert result_with_name == "Hello Alice!"
-    
+
     # Without user_name
     result_without_name = renderer.render(template, {})
     assert result_without_name == "Hello!"

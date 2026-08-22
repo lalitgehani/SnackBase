@@ -1,10 +1,9 @@
 """Repository for accessing and managing macros."""
 
 import json
-from typing import Sequence
+from collections.abc import Sequence
 
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.infrastructure.persistence.models.macro import MacroModel

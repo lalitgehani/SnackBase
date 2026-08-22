@@ -3,8 +3,8 @@
 Provides operations for creating and querying email logs for audit purposes.
 """
 
+from collections.abc import Sequence
 from datetime import datetime
-from typing import Sequence
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession

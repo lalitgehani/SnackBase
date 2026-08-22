@@ -1,7 +1,7 @@
 """Repository for API key database operations."""
 
+from collections.abc import Sequence
 from datetime import UTC, datetime
-from typing import Sequence
 
 from sqlalchemy import and_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -60,7 +60,7 @@ class APIKeyRepository:
             select(APIKeyModel).where(
                 and_(
                     APIKeyModel.key_hash == key_hash,
-                    APIKeyModel.is_active == True,
+                    APIKeyModel.is_active.is_(True),
                 )
             )
         )
@@ -80,7 +80,7 @@ class APIKeyRepository:
             .where(
                 and_(
                     APIKeyModel.user_id == user_id,
-                    APIKeyModel.is_active == True,
+                    APIKeyModel.is_active.is_(True),
                 )
             )
             .order_by(APIKeyModel.created_at.desc())
@@ -148,7 +148,7 @@ class APIKeyRepository:
             select(func.count(APIKeyModel.id)).where(
                 and_(
                     APIKeyModel.user_id == user_id,
-                    APIKeyModel.is_active == True,
+                    APIKeyModel.is_active.is_(True),
                 )
             )
         )
@@ -160,7 +160,7 @@ class APIKeyRepository:
 
         result = await self.session.execute(
             select(func.count(APIKeyModel.id)).where(
-                APIKeyModel.is_active == True  # noqa: E712
+                APIKeyModel.is_active.is_(True)  # noqa: E712
             )
         )
         return result.scalar_one() or 0

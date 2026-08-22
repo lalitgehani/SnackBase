@@ -1,5 +1,7 @@
 """Account repository for database operations."""
 
+from datetime import datetime
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -147,7 +149,7 @@ class AccountRepository:
         result = await self.session.execute(select(func.count(AccountModel.id)))
         return result.scalar_one() or 0
 
-    async def count_created_since(self, since: "datetime") -> int:
+    async def count_created_since(self, since: datetime) -> int:
         """Count accounts created since a given datetime.
 
         Args:
@@ -163,7 +165,7 @@ class AccountRepository:
         )
         return result.scalar_one() or 0
 
-    async def count_created_between(self, start: "datetime", end: "datetime") -> int:
+    async def count_created_between(self, start: datetime, end: datetime) -> int:
         """Count accounts created in the half-open interval [start, end).
 
         Args:
@@ -184,7 +186,7 @@ class AccountRepository:
         return result.scalar_one() or 0
 
     async def count_created_by_day(
-        self, start: "datetime", end: "datetime"
+        self, start: datetime, end: datetime
     ) -> list[tuple[str, int]]:
         """Count accounts created per calendar day in [start, end).
 
@@ -196,7 +198,7 @@ class AccountRepository:
             List of (YYYY-MM-DD, count) pairs for days with activity.
             Missing days are not included; callers should zero-fill.
         """
-        from sqlalchemy import cast, Date, func, String
+        from sqlalchemy import Date, String, cast, func
 
         bind = self.session.get_bind()
         dialect_name = bind.dialect.name if bind is not None else "sqlite"

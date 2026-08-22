@@ -25,7 +25,6 @@ from snackbase.domain.services.codelist_service import (
 from snackbase.infrastructure.api.dependencies import (
     SYSTEM_ACCOUNT_ID,
     AuthenticatedUser,
-    get_current_user,
     get_db_session,
     require_superadmin,
 )

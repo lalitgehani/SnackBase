@@ -91,7 +91,7 @@ handler_registry = HandlerRegistry()
 
 
 @handler_registry.register("webhook_delivery")
-async def _handle_webhook_delivery(payload: dict, job: "JobModel") -> None:
+async def _handle_webhook_delivery(payload: dict, job: JobModel) -> None:
     """Execute a single webhook delivery attempt.
 
     Payload keys:
@@ -122,7 +122,7 @@ async def _handle_webhook_delivery(payload: dict, job: "JobModel") -> None:
 
 
 @handler_registry.register("send_email")
-async def _handle_send_email(payload: dict, job: "JobModel") -> None:
+async def _handle_send_email(payload: dict, job: JobModel) -> None:
     """Send an email via the configured email provider.
 
     Payload keys:
@@ -152,7 +152,7 @@ async def _handle_send_email(payload: dict, job: "JobModel") -> None:
 
 
 @handler_registry.register("scheduled_task")
-async def _handle_scheduled_task(payload: dict, job: "JobModel") -> None:
+async def _handle_scheduled_task(payload: dict, job: JobModel) -> None:
     """Placeholder handler for generic scheduled tasks.
 
     Payload keys:
@@ -164,7 +164,7 @@ async def _handle_scheduled_task(payload: dict, job: "JobModel") -> None:
 
 
 @handler_registry.register("workflow_resume")
-async def _handle_workflow_resume(payload: dict, job: "JobModel") -> None:
+async def _handle_workflow_resume(payload: dict, job: JobModel) -> None:
     """Resume a waiting workflow instance after a wait_delay step elapses (F8.3).
 
     Payload keys:
@@ -182,7 +182,7 @@ async def _handle_workflow_resume(payload: dict, job: "JobModel") -> None:
 
 
 @handler_registry.register("scheduled_hook")
-async def _handle_scheduled_hook(payload: dict, job: "JobModel") -> None:
+async def _handle_scheduled_hook(payload: dict, job: JobModel) -> None:
     """Execute a scheduled hook fired by the cron scheduler (F7.3).
 
     Logs hook execution.  F8.1 will extend this to dispatch actions
@@ -442,7 +442,7 @@ class JobWorker:
                 handler(payload, job_snapshot),
                 timeout=float(self._settings.job_execution_timeout),
             )
-        except (asyncio.TimeoutError, TimeoutError):
+        except TimeoutError:
             error = f"Job timed out after {self._settings.job_execution_timeout}s"
             logger.warning("Job timed out", job_id=job_id, handler=handler_name)
             await self._fail_job(job_id, error, attempt, max_retries, retry_delay)

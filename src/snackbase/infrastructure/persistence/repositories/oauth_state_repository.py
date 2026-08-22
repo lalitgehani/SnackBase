@@ -1,7 +1,6 @@
 """OAuth state repository for database operations."""
 
 from datetime import datetime
-from typing import Optional, Sequence
 
 from sqlalchemy import delete as sql_delete
 from sqlalchemy import select
@@ -34,7 +33,7 @@ class OAuthStateRepository:
         await self.session.flush()
         return state
 
-    async def get_by_id(self, state_id: str) -> Optional[OAuthStateModel]:
+    async def get_by_id(self, state_id: str) -> OAuthStateModel | None:
         """Get an OAuth state by ID.
 
         Args:
@@ -48,7 +47,7 @@ class OAuthStateRepository:
         )
         return result.scalar_one_or_none()
 
-    async def get_by_token(self, state_token: str) -> Optional[OAuthStateModel]:
+    async def get_by_token(self, state_token: str) -> OAuthStateModel | None:
         """Get an OAuth state by its secure token.
 
         Args:

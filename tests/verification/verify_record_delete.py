@@ -1,7 +1,8 @@
 import asyncio
-import httpx
 import sys
-from typing import Any
+import uuid
+
+import httpx
 
 # Configuration
 BASE_URL = "http://localhost:8000/api/v1"
@@ -82,7 +83,6 @@ async def get_record(client: httpx.AsyncClient, token: str, collection: str, rec
     )
     return response.status_code
 
-import uuid
 
 async def main():
     async with httpx.AsyncClient() as client:
@@ -90,13 +90,12 @@ async def main():
         unique_id = str(uuid.uuid4())[:8]
         email = f"user_delete_{unique_id}@example.com"
         account_name = f"Delete Test {unique_id}"
-        account_slug = f"delete-test-{unique_id}"
         password = "Password123!"
 
-        # Register (we can't easily use account_slug in register request param shown previously unless we added it back to RegisterRequest model? 
-        # The code I saw in auth_router.py supports it. My verification script passed 'account_name'. 
+        # Register (we can't easily use account_slug in register request param shown previously unless we added it back to RegisterRequest model?
+        # The code I saw in auth_router.py supports it. My verification script passed 'account_name'.
         # Register creates a slug from name if not provided. Let's just pass account_name).
-        
+
         print(f"Registering {email}...")
         response = await client.post(
             f"{BASE_URL}/auth/register",
@@ -105,28 +104,28 @@ async def main():
         if response.status_code != 201:
              print(f"Registration failed: {response.text}")
              sys.exit(1)
-        
-        
+
+
         # Promote user to superadmin by changing account_id to SY0000
         # First ensure system account exists
         print("Promoting user to superadmin (SY0000)...")
         import sqlite3
         db = sqlite3.connect("sb_data/snackbase.db")
-        
+
         # Insert system account if not exists
         try:
              db.execute("INSERT INTO accounts (id, slug, name) VALUES ('SY0000', 'system', 'System Account')")
         except sqlite3.IntegrityError:
              pass # Already exists
-             
+
         # Update user account_id
         db.execute("UPDATE users SET account_id = 'SY0000' WHERE email = ?", (email,))
         db.commit()
         db.close()
-        
+
         # Login to get NEW token with superadmin rights
         print("Logging in to get superadmin token...")
-        
+
         response = await client.post(
              f"{BASE_URL}/auth/login",
              json={"email": email, "password": password, "account": "system"}
@@ -134,33 +133,33 @@ async def main():
         if response.status_code != 200:
              print(f"Login failed: {response.text}")
              sys.exit(1)
-             
+
         user_token = response.json()["token"]
-        
+
         # Now user is superadmin
         admin_token = user_token
 
         # 2. Setup - Collections
         parent_col_name = "authors_del"
         child_col_name = "books_del"
-        
+
         parent_schema = [{"name": "name", "type": "text", "required": True}]
         child_schema = [
             {"name": "title", "type": "text", "required": True},
             {"name": "author", "type": "reference", "collection": parent_col_name, "on_delete": "restrict"}
         ]
-        
+
         await create_collection(client, admin_token, parent_col_name, parent_schema)
         await create_collection(client, admin_token, child_col_name, child_schema)
-        
+
         # 3. Create Records
         print(f"Creating record in {parent_col_name}...")
         author_id = await create_record(client, user_token, parent_col_name, {"name": "Delete Me"})
-        
+
         print(f"Creating record in {child_col_name}...")
         # Note: If books_del creation failed, this will 404.
         book_id = await create_record(client, user_token, child_col_name, {"title": "My Book", "author": author_id})
-        
+
         print("\n--- Testing Delete Scenarios ---")
 
         # Scenario A: Delete record with dependencies (Should verify FK constraint if enforced, or Cascade)
@@ -168,7 +167,7 @@ async def main():
         # Let's try to delete the Author.
         print(f"Attempting to delete Author {author_id} (has dependent Book)...")
         status_code = await delete_record(client, user_token, parent_col_name, author_id)
-        
+
         if status_code == 409:
             print("Received 409 Conflict - FK Constraint working (Restrict)")
             # Cleanup child to allow delete
@@ -176,10 +175,10 @@ async def main():
             status_code = await delete_record(client, user_token, parent_col_name, author_id)
             assert status_code == 204, f"Expected 204 after child cleanup, got {status_code}"
             print("Successfully deleted parent after child cleanup")
-            
+
         elif status_code == 204:
             print("Received 204 No Content - FK Cascade assumed/worked")
-            # Verify child is gone (if cascade) or still there? 
+            # Verify child is gone (if cascade) or still there?
             # If cascade, book should be gone.
             child_status = await get_record(client, user_token, child_col_name, book_id)
             if child_status == 404:

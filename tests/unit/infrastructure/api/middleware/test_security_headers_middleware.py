@@ -4,10 +4,10 @@ These tests verify the SecurityHeadersMiddleware behavior in isolation,
 including production mode HSTS headers and HTTPS redirect functionality.
 """
 
-import pytest
-from fastapi import FastAPI, Response
-from fastapi.testclient import TestClient
 from unittest.mock import patch
+
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 from snackbase.infrastructure.api.middleware.security_headers_middleware import (
     SecurityHeadersMiddleware,
@@ -16,16 +16,16 @@ from snackbase.infrastructure.api.middleware.security_headers_middleware import 
 
 def create_test_app(environment: str = "development", https_redirect: bool = False) -> FastAPI:
     """Create a test FastAPI app with security headers middleware.
-    
+
     Args:
         environment: Environment mode (development/production)
         https_redirect: Whether to enable HTTPS redirect
-        
+
     Returns:
         FastAPI app with middleware configured
     """
     app = FastAPI()
-    
+
     # Mock settings
     with patch("snackbase.infrastructure.api.middleware.security_headers_middleware.get_settings") as mock_settings:
         settings = mock_settings.return_value
@@ -35,13 +35,13 @@ def create_test_app(environment: str = "development", https_redirect: bool = Fal
         settings.csp_policy = "default-src 'self'; script-src 'self'"
         settings.permissions_policy = "geolocation=(), camera=()"
         settings.https_redirect_enabled = https_redirect
-        
+
         app.add_middleware(SecurityHeadersMiddleware)
-    
+
     @app.get("/test")
     async def test_endpoint():
         return {"message": "test"}
-    
+
     return app
 
 
@@ -55,17 +55,17 @@ def test_hsts_header_in_production():
         settings.csp_policy = "default-src 'self'"
         settings.permissions_policy = "geolocation=()"
         settings.https_redirect_enabled = False
-        
+
         app = FastAPI()
         app.add_middleware(SecurityHeadersMiddleware)
-        
+
         @app.get("/test")
         async def test_endpoint():
             return {"message": "test"}
-        
+
         client = TestClient(app)
         response = client.get("/test")
-        
+
         assert response.status_code == 200
         assert "Strict-Transport-Security" in response.headers
         assert response.headers["Strict-Transport-Security"] == "max-age=31536000; includeSubDomains"
@@ -81,17 +81,17 @@ def test_no_hsts_in_development():
         settings.csp_policy = "default-src 'self'"
         settings.permissions_policy = "geolocation=()"
         settings.https_redirect_enabled = False
-        
+
         app = FastAPI()
         app.add_middleware(SecurityHeadersMiddleware)
-        
+
         @app.get("/test")
         async def test_endpoint():
             return {"message": "test"}
-        
+
         client = TestClient(app)
         response = client.get("/test")
-        
+
         assert response.status_code == 200
         assert "Strict-Transport-Security" not in response.headers
 
@@ -101,17 +101,17 @@ def test_security_headers_disabled():
     with patch("snackbase.infrastructure.api.middleware.security_headers_middleware.get_settings") as mock_settings:
         settings = mock_settings.return_value
         settings.security_headers_enabled = False
-        
+
         app = FastAPI()
         app.add_middleware(SecurityHeadersMiddleware)
-        
+
         @app.get("/test")
         async def test_endpoint():
             return {"message": "test"}
-        
+
         client = TestClient(app)
         response = client.get("/test")
-        
+
         assert response.status_code == 200
         # Headers should not be added when disabled
         assert "X-Content-Type-Options" not in response.headers
@@ -128,19 +128,19 @@ def test_all_security_headers_present():
         settings.csp_policy = "default-src 'self'; script-src 'self'"
         settings.permissions_policy = "geolocation=(), camera=()"
         settings.https_redirect_enabled = False
-        
+
         app = FastAPI()
         app.add_middleware(SecurityHeadersMiddleware)
-        
+
         @app.get("/test")
         async def test_endpoint():
             return {"message": "test"}
-        
+
         client = TestClient(app)
         response = client.get("/test")
-        
+
         assert response.status_code == 200
-        
+
         # Verify all expected headers
         assert response.headers["X-Content-Type-Options"] == "nosniff"
         assert response.headers["X-Frame-Options"] == "DENY"
@@ -153,7 +153,7 @@ def test_all_security_headers_present():
 def test_custom_csp_policy():
     """Verify CSP policy can be customized via configuration."""
     custom_csp = "default-src 'none'; script-src 'self' https://cdn.example.com"
-    
+
     with patch("snackbase.infrastructure.api.middleware.security_headers_middleware.get_settings") as mock_settings:
         settings = mock_settings.return_value
         settings.security_headers_enabled = True
@@ -162,16 +162,16 @@ def test_custom_csp_policy():
         settings.csp_policy = custom_csp
         settings.permissions_policy = "geolocation=()"
         settings.https_redirect_enabled = False
-        
+
         app = FastAPI()
         app.add_middleware(SecurityHeadersMiddleware)
-        
+
         @app.get("/test")
         async def test_endpoint():
             return {"message": "test"}
-        
+
         client = TestClient(app)
         response = client.get("/test")
-        
+
         assert response.status_code == 200
         assert response.headers["Content-Security-Policy"] == custom_csp

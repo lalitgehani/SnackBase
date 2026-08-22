@@ -1,6 +1,7 @@
 """Unit tests for Azure AD SAML provider."""
 
 import base64
+import urllib.parse
 import zlib
 from unittest.mock import MagicMock, patch
 
@@ -83,7 +84,7 @@ async def test_parse_saml_response_success(provider, valid_config, assertion_id,
     """Test parsing a valid SAML response from Azure AD."""
     # Mock XMLVerifier to avoid actual signature verification logic
     # and return a constructed XML element representing a valid assertion
-    
+
     mock_signed_xml = etree.fromstring(f"""
     <saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="{assertion_id}">
         {conditions}
@@ -179,7 +180,7 @@ async def test_parse_saml_response_upn_fallback(provider, valid_config, assertio
             valid_config,
             saml_response="ZHVtbXk="
         )
-        
+
         # NameID used for ID
         assert user_info["id"] == "oid-12345"
         # UPN used for email
@@ -190,10 +191,8 @@ async def test_parse_saml_response_upn_fallback(provider, valid_config, assertio
 async def test_get_metadata(provider, valid_config):
     """Test metadata generation."""
     metadata = await provider.get_metadata(valid_config)
-    
+
     assert '<md:EntityDescriptor' in metadata
     assert f'entityID="{valid_config["sp_entity_id"]}"' in metadata
     assert f'Location="{valid_config["assertion_consumer_url"]}"' in metadata
     assert 'Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"' in metadata
-
-import urllib.parse

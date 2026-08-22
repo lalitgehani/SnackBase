@@ -5,7 +5,7 @@ Each entry is immutable and part of a blockchain-style integrity chain.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -68,7 +68,7 @@ class AuditLog:
     request_id: str | None = None
 
     # Timing and integrity
-    occurred_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    occurred_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     checksum: str | None = None
     previous_hash: str | None = None
 

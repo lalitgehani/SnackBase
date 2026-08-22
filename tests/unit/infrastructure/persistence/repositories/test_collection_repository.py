@@ -48,7 +48,7 @@ async def test_get_by_name(repository, mock_session):
         name=collection_name,
         schema='[{"name": "field1", "type": "text"}]',
     )
-    
+
     # Mock the execute result
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = expected_collection
@@ -64,7 +64,7 @@ async def test_get_by_name(repository, mock_session):
 async def test_get_by_name_not_found(repository, mock_session):
     """Test getting a non-existent collection by name."""
     collection_name = "non_existent"
-    
+
     # Mock the execute result
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = None
@@ -80,7 +80,7 @@ async def test_get_by_name_not_found(repository, mock_session):
 async def test_name_exists_true(repository, mock_session):
     """Test checking if a name exists (true case)."""
     collection_name = "existing_collection"
-    
+
     # Mock the execute result
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = "some-id"
@@ -96,7 +96,7 @@ async def test_name_exists_true(repository, mock_session):
 async def test_name_exists_false(repository, mock_session):
     """Test checking if a name exists (false case)."""
     collection_name = "new_collection"
-    
+
     # Mock the execute result
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = None
@@ -117,7 +117,7 @@ async def test_get_by_id(repository, mock_session):
         name="test_collection",
         schema='[{"name": "field1", "type": "text"}]',
     )
-    
+
     # Mock the execute result
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = expected_collection

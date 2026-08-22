@@ -1,8 +1,8 @@
 import asyncio
-import httpx
-import json
 import logging
 import sys
+
+import httpx
 
 # Configure logging
 logging.basicConfig(
@@ -25,7 +25,7 @@ async def main():
         password = "Password123!"
         account_name = f"Updater Account {run_id}"
         account_slug = f"updater-account-{run_id}"
-        
+
         # Register
         logger.info(f"Registering user {email}...")
         resp = await client.post(f"{BASE_URL}/auth/register", json={
@@ -53,7 +53,7 @@ async def main():
         if resp.status_code != 200:
             logger.error(f"Login failed: {resp.status_code} - {resp.text}")
             return
-            
+
         # token is in "token" field, not "access_token"
         token = resp.json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
@@ -62,7 +62,7 @@ async def main():
         # 2. Setup Superadmin for Collection Creation
         admin_email = f"admin_{run_id}@example.com"
         admin_pass = "AdminPass123!"
-        
+
         # Register Admin
         await client.post(f"{BASE_URL}/auth/register", json={
             "email": admin_email,
@@ -70,7 +70,7 @@ async def main():
             "full_name": "Super Admin",
             "account_name": f"Super Admin Account {run_id}"
         })
-        
+
         # Promote Admin to Superadmin
         import sqlite3
         con = sqlite3.connect("sb_data/snackbase.db")
@@ -91,16 +91,16 @@ async def main():
         # If I change user's account_id to SY0000, they are no longer in "Super Admin Account".
         # They are in "SY0000" account.
         # So I need to login with account="SY0000"? Or whatever the system account slug is.
-        # System account probably doesn't exist in `accounts` table by default? 
+        # System account probably doesn't exist in `accounts` table by default?
         # Or maybe I should just create the system account in `accounts` table first?
-        
+
         # Let's try to ensure SY0000 exists in accounts.
         con = sqlite3.connect("sb_data/snackbase.db")
         cur = con.cursor()
         cur.execute("INSERT OR IGNORE INTO accounts (id, slug, name, created_at, updated_at) VALUES ('SY0000', 'system', 'System Account', datetime('now'), datetime('now'))")
         con.commit()
         con.close()
-        
+
         # Login as Superadmin with system account
         resp = await client.post(f"{BASE_URL}/auth/login", json={
             "email": admin_email,
@@ -110,10 +110,10 @@ async def main():
         if resp.status_code != 200:
              logger.error(f"Superadmin login failed: {resp.status_code} - {resp.text}")
              return
-             
+
         admin_token = resp.json()["token"]
         admin_headers = {"Authorization": f"Bearer {admin_token}"}
-        
+
         # 3. Create Collection (as Superadmin)
         import uuid
         collection_name = f"products_update_{uuid.uuid4().hex[:8]}"
@@ -123,10 +123,10 @@ async def main():
             {"name": "is_active", "type": "boolean", "default": True},
             {"name": "tags", "type": "json"}
         ]
-        
+
         logger.info(f"Creating collection {collection_name}...")
         resp = await client.post(
-            f"{BASE_URL}/collections", 
+            f"{BASE_URL}/collections",
             headers=admin_headers,
             json={
                 "name": collection_name,
@@ -138,7 +138,7 @@ async def main():
         else:
             logger.error(f"Collection creation failed: {resp.status_code} - {resp.text}")
             return
-            
+
         # 4. Create Record (as Normal User)
         # Use headers from the first user (updater_...)
         logger.info("Creating initial record...")
@@ -164,21 +164,21 @@ async def main():
         if resp.status_code != 201:
             logger.error(f"Record creation failed: {resp.status_code} - {resp.text}")
             return
-            
+
         record = resp.json()
         record_id = record["id"]
         logger.info(f"Record created: {record_id}")
-        
+
         # 5. Test PATCH (Partial Update)
         logger.info("Testing PATCH (Partial Update)...")
         patch_data = {"price": 150} # Change price only
-        
+
         resp = await client.patch(
             f"{BASE_URL}/{collection_name}/{record_id}",
             headers=headers,
             json=patch_data
         )
-        
+
         if resp.status_code == 200:
             updated_record = resp.json()
             assert updated_record["price"] == 150
@@ -208,13 +208,13 @@ async def main():
             "tags": ["updated"]
         }
         # Note: We must provide all required fields
-        
+
         resp = await client.put(
             f"{BASE_URL}/{collection_name}/{record_id}",
             headers=headers,
             json=put_data
         )
-        
+
         if resp.status_code == 200:
             updated_record = resp.json()
             assert updated_record["name"] == "Updated Product Full"
@@ -225,7 +225,7 @@ async def main():
         else:
             logger.error(f"PUT failed: {resp.status_code} - {resp.text}")
             return
-            
+
         # 7. Test Validation Error (Invalid Type)
         logger.info("Testing Validation Error...")
         resp = await client.patch(

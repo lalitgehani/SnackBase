@@ -1,7 +1,7 @@
 """Unit tests for Collection Export/Import functionality."""
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -169,7 +169,7 @@ class TestImportCollections:
         """Test importing a new collection with migrations."""
         export_data = {
             "version": "1.0",
-            "exported_at": datetime.now(timezone.utc).isoformat(),
+            "exported_at": datetime.now(UTC).isoformat(),
             "exported_by": "admin@example.com",
             "collections": [
                 {
@@ -207,7 +207,7 @@ class TestImportCollections:
         """Test that error strategy fails when collection exists."""
         export_data = {
             "version": "1.0",
-            "exported_at": datetime.now(timezone.utc).isoformat(),
+            "exported_at": datetime.now(UTC).isoformat(),
             "exported_by": "admin@example.com",
             "collections": [
                 {
@@ -238,7 +238,7 @@ class TestImportCollections:
         """Test that skip strategy skips existing collections."""
         export_data = {
             "version": "1.0",
-            "exported_at": datetime.now(timezone.utc).isoformat(),
+            "exported_at": datetime.now(UTC).isoformat(),
             "exported_by": "admin@example.com",
             "collections": [
                 {
@@ -269,7 +269,7 @@ class TestImportCollections:
         """Test that update strategy updates existing collections."""
         export_data = {
             "version": "1.0",
-            "exported_at": datetime.now(timezone.utc).isoformat(),
+            "exported_at": datetime.now(UTC).isoformat(),
             "exported_by": "admin@example.com",
             "collections": [
                 {
@@ -306,7 +306,7 @@ class TestImportCollections:
         """Test that invalid version raises error."""
         export_data = {
             "version": "2.0",
-            "exported_at": datetime.now(timezone.utc).isoformat(),
+            "exported_at": datetime.now(UTC).isoformat(),
             "exported_by": "admin@example.com",
             "collections": [],
         }

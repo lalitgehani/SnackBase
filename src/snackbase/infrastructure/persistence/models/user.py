@@ -154,34 +154,34 @@ class UserModel(Base):
     )
 
     # Relationships
-    account: Mapped["AccountModel"] = relationship(  # noqa: F821
+    account: Mapped[AccountModel] = relationship(  # noqa: F821
         "AccountModel",
         back_populates="users",
     )
-    role: Mapped["RoleModel"] = relationship(  # noqa: F821
+    role: Mapped[RoleModel] = relationship(  # noqa: F821
         "RoleModel",
         back_populates="users",
     )
-    groups: Mapped[list["GroupModel"]] = relationship(  # noqa: F821
+    groups: Mapped[list[GroupModel]] = relationship(  # noqa: F821
         "GroupModel",
         secondary="users_groups",
         back_populates="users",
     )
-    invitations_sent: Mapped[list["InvitationModel"]] = relationship(  # noqa: F821
+    invitations_sent: Mapped[list[InvitationModel]] = relationship(  # noqa: F821
         "InvitationModel",
         back_populates="inviter",
     )
-    refresh_tokens: Mapped[list["RefreshTokenModel"]] = relationship(  # noqa: F821
+    refresh_tokens: Mapped[list[RefreshTokenModel]] = relationship(  # noqa: F821
         "RefreshTokenModel",
         back_populates="user",
         cascade="all, delete-orphan",
     )
-    email_verification_tokens: Mapped[list["EmailVerificationTokenModel"]] = relationship(  # noqa: F821
+    email_verification_tokens: Mapped[list[EmailVerificationTokenModel]] = relationship(  # noqa: F821
         "EmailVerificationTokenModel",
         back_populates="user",
         cascade="all, delete-orphan",
     )
-    password_reset_tokens: Mapped[list["PasswordResetTokenModel"]] = relationship(  # noqa: F821
+    password_reset_tokens: Mapped[list[PasswordResetTokenModel]] = relationship(  # noqa: F821
         "PasswordResetTokenModel",
         back_populates="user",
         cascade="all, delete-orphan",

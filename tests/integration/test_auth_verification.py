@@ -1,18 +1,19 @@
 """Integration tests for email verification API."""
 
+from unittest.mock import AsyncMock
+
 import pytest
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
-from unittest.mock import AsyncMock, patch
 
 from snackbase.infrastructure.api.app import app
 from snackbase.infrastructure.api.dependencies import get_db_session, get_email_service
+from snackbase.infrastructure.auth import jwt_service
 from snackbase.infrastructure.persistence.models import (
-    UserModel,
     EmailVerificationTokenModel,
     RoleModel,
+    UserModel,
 )
-from snackbase.infrastructure.auth import jwt_service
 
 
 @pytest.mark.asyncio

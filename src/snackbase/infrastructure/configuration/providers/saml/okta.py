@@ -6,9 +6,7 @@ import secrets
 import urllib.parse
 import zlib
 from typing import Any
-from xml.etree import ElementTree
 
-from lxml import etree
 from signxml import XMLVerifier
 
 from snackbase.infrastructure.configuration.providers.saml.saml_handler import (
@@ -84,7 +82,7 @@ class OktaSAMLProvider(SAMLProviderHandler):
         # Validate config
         self._validate_config(config)
 
-        issue_instant = datetime.datetime.now(datetime.timezone.utc).strftime(
+        issue_instant = datetime.datetime.now(datetime.UTC).strftime(
             "%Y-%m-%dT%H:%M:%SZ"
         )
         request_id = f"id_{secrets.token_hex(16)}"
@@ -115,7 +113,7 @@ class OktaSAMLProvider(SAMLProviderHandler):
             params["RelayState"] = relay_state
 
         query_string = urllib.parse.urlencode(params)
-        
+
         # Determine separator
         separator = "&" if "?" in config["idp_sso_url"] else "?"
         return f"{config['idp_sso_url']}{separator}{query_string}"
@@ -131,7 +129,7 @@ class OktaSAMLProvider(SAMLProviderHandler):
         try:
             # Decode Base64
             xml_str = base64.b64decode(saml_response)
-            
+
             # Format certificate
             cert = config["idp_x509_cert"]
             if not cert.startswith("-----BEGIN CERTIFICATE"):
@@ -162,21 +160,21 @@ class OktaSAMLProvider(SAMLProviderHandler):
             if name_id_node is None:
                  # Fallback to subject node text if NameID not found cleanly (unlikely in valid SAML)
                 name_id_node = verified_data.find(".//saml:Subject/saml:NameID", ns)
-            
+
             name_id = name_id_node.text if name_id_node is not None else None
-            
+
             if not name_id:
                 raise ValueError("Could not extract NameID from SAML Assertion")
 
             # Extract Attributes
             attributes = {}
             attribute_nodes = verified_data.findall(".//saml:AttributeStatement/saml:Attribute", ns)
-            
+
             for attr in attribute_nodes:
                 name = attr.get("Name")
-                # Handle friendly name if name is missing or as alternative key? 
+                # Handle friendly name if name is missing or as alternative key?
                 # Standards say "Name" is required.
-                
+
                 # Get the value(s)
                 values = [val.text for val in attr.findall("saml:AttributeValue", ns) if val.text]
                 if values:
@@ -201,12 +199,12 @@ class OktaSAMLProvider(SAMLProviderHandler):
             name_parts = []
             first_name = attributes.get("firstName") or attributes.get("givenName")
             last_name = attributes.get("lastName") or attributes.get("sn") or attributes.get("surname")
-            
+
             if first_name:
                 name_parts.append(first_name)
             if last_name:
                 name_parts.append(last_name)
-            
+
             if name_parts:
                 user_info["name"] = " ".join(name_parts)
             else:
@@ -220,10 +218,10 @@ class OktaSAMLProvider(SAMLProviderHandler):
     async def get_metadata(self, config: dict[str, Any]) -> str:
         """Generate SP Metadata XML."""
         self._validate_config(config)
-        
+
         sp_entity_id = config["sp_entity_id"]
         acs_url = config["assertion_consumer_url"]
-        
+
         # Minimal SP Metadata
         metadata = (
             f'<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" '

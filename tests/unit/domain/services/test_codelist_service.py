@@ -6,10 +6,7 @@ effective-resolution matrix, and idempotent regions/eu-01 seed.
 
 from __future__ import annotations
 
-import uuid
-
 import pytest
-from sqlalchemy.exc import IntegrityError
 
 from snackbase.domain.entities.codelist import (
     Codelist,
@@ -23,7 +20,6 @@ from snackbase.domain.services.codelist_service import (
     CodelistNotFoundError,
     CodelistService,
     CodelistValidationError,
-    CodelistValueNotFoundError,
 )
 from snackbase.infrastructure.persistence.models.account import AccountModel
 from snackbase.infrastructure.persistence.repositories.codelist_repository import (
@@ -197,7 +193,7 @@ async def test_account_a_cannot_load_account_b_private_list(
 
 @pytest.mark.asyncio
 async def test_builtin_prevents_hard_delete(service: CodelistService, db_session):
-    cl = await service.create_codelist(
+    await service.create_codelist(
         code="builtin_x",
         name="Builtin",
         account_id=SYSTEM_ACCOUNT_ID,
@@ -337,7 +333,7 @@ async def test_labels_en_ja_and_fallback(service: CodelistService, db_session):
     )
 
     # No labels at all → code
-    value2 = await service.add_value(
+    await service.add_value(
         "langs", code="opt2", account_id=SYSTEM_ACCOUNT_ID, as_system=True
     )
     await db_session.commit()

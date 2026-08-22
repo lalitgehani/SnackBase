@@ -1,19 +1,18 @@
 """Integration tests for dashboard endpoint."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 
 from snackbase.infrastructure.persistence.models import (
     AccountModel,
     CollectionModel,
     RefreshTokenModel,
-    RefreshTokenModel,
+    RoleModel,
     UserModel,
 )
-from sqlalchemy import select
-from snackbase.infrastructure.persistence.models import RoleModel
 
 
 @pytest.mark.asyncio
@@ -28,10 +27,10 @@ async def test_dashboard_stats_endpoint_success(
         account_code="TS0001",
         name="Test Account",
         slug="test-account",
-        created_at=datetime.now(timezone.utc) - timedelta(days=3),
+        created_at=datetime.now(UTC) - timedelta(days=3),
     )
     db_session.add(account)
-    
+
     role = (await db_session.execute(select(RoleModel).where(RoleModel.name == "user"))).scalar_one()
 
     # Users
@@ -41,7 +40,7 @@ async def test_dashboard_stats_endpoint_success(
         account_id="TS0001",
         password_hash="hash1",
         role=role,
-        created_at=datetime.now(timezone.utc) - timedelta(days=5),
+        created_at=datetime.now(UTC) - timedelta(days=5),
     )
     user2 = UserModel(
         id="user2",
@@ -49,7 +48,7 @@ async def test_dashboard_stats_endpoint_success(
         account_id="TS0001",
         password_hash="hash2",
         role=role,
-        created_at=datetime.now(timezone.utc) - timedelta(days=1),
+        created_at=datetime.now(UTC) - timedelta(days=1),
     )
     db_session.add_all([user1, user2])
 
@@ -67,7 +66,7 @@ async def test_dashboard_stats_endpoint_success(
         user_id="user1",
         account_id="TS0001",
         token_hash="hash123",
-        expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+        expires_at=datetime.now(UTC) + timedelta(days=7),
         is_revoked=False,
     )
     db_session.add(refresh_token)
@@ -236,7 +235,7 @@ async def test_dashboard_stats_recent_registrations_order(
     account = AccountModel(id="TS0002", account_code="TS0002", name="Test2", slug="test2")
     db_session.add(account)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     role = (await db_session.execute(select(RoleModel).where(RoleModel.name == "user"))).scalar_one()
     users = []
     for i in range(5):
@@ -269,17 +268,17 @@ async def test_dashboard_stats_recent_registrations_order(
             # Parse datetimes, handling both Z suffix and +00:00 format
             current_str = registrations[i]["created_at"]
             next_str = registrations[i + 1]["created_at"]
-            
+
             # Normalize Z to +00:00 for fromisoformat compatibility
             current_time = datetime.fromisoformat(current_str.replace("Z", "+00:00"))
             next_time = datetime.fromisoformat(next_str.replace("Z", "+00:00"))
-            
+
             # Ensure both are timezone-aware (add UTC if naive)
             if current_time.tzinfo is None:
-                current_time = current_time.replace(tzinfo=timezone.utc)
+                current_time = current_time.replace(tzinfo=UTC)
             if next_time.tzinfo is None:
-                next_time = next_time.replace(tzinfo=timezone.utc)
-            
+                next_time = next_time.replace(tzinfo=UTC)
+
             assert current_time >= next_time, "Registrations should be in DESC order"
 
 
@@ -299,7 +298,7 @@ async def test_dashboard_stats_active_sessions_count(
     )
     db_session.add_all([account, user])
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # Active token
     active_token = RefreshTokenModel(
@@ -395,7 +394,7 @@ async def test_dashboard_stats_time_series_sum_matches_period_counts(
     client: AsyncClient, superadmin_token: str, db_session
 ):
     """Test series totals align with new_*_7d for seeded same-window data."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     account = AccountModel(
         id="TS0099",
         account_code="TS0099",
@@ -448,7 +447,7 @@ async def test_dashboard_stats_audit_by_operation_series(
         AuditLogRepository,
     )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     repo = AuditLogRepository(db_session)
 
     for i, operation in enumerate(["CREATE", "CREATE", "UPDATE", "DELETE"]):

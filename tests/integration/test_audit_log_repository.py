@@ -1,17 +1,17 @@
 """Integration tests for audit log repository operations (F3.6)."""
 
+from datetime import UTC, datetime
+
 import pytest
-from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
-
-
-# Enable audit hooks for all tests in this module
-pytestmark = pytest.mark.enable_audit_hooks
 
 from snackbase.infrastructure.persistence.models.audit_log import AuditLogModel
 from snackbase.infrastructure.persistence.repositories.audit_log_repository import (
     AuditLogRepository,
 )
+
+# Enable audit hooks for all tests in this module
+pytestmark = pytest.mark.enable_audit_hooks
 
 
 @pytest.mark.asyncio
@@ -33,7 +33,7 @@ async def test_create_audit_log_entry(db_session: AsyncSession):
         ip_address="192.168.1.1",
         user_agent="Mozilla/5.0",
         request_id="req-789",
-        occurred_at=datetime.now(timezone.utc),
+        occurred_at=datetime.now(UTC),
     )
 
     created_entry = await repo.create(audit_entry)
@@ -63,7 +63,7 @@ async def test_create_batch_audit_log_entries(db_session: AsyncSession):
             user_id="user-456",
             user_email="admin@example.com",
             user_name="Admin User",
-            occurred_at=datetime.now(timezone.utc),
+            occurred_at=datetime.now(UTC),
         )
         for column in ["name", "email", "phone"]
     ]
@@ -94,7 +94,7 @@ async def test_checksum_calculation(db_session: AsyncSession):
         user_id="user-456",
         user_email="admin@example.com",
         user_name="Admin User",
-        occurred_at=datetime.now(timezone.utc),
+        occurred_at=datetime.now(UTC),
     )
 
     created_entry = await repo.create(audit_entry)
@@ -123,7 +123,7 @@ async def test_previous_hash_chain(db_session: AsyncSession):
         user_id="user-456",
         user_email="admin@example.com",
         user_name="Admin User",
-        occurred_at=datetime.now(timezone.utc),
+        occurred_at=datetime.now(UTC),
     )
     created_entry1 = await repo.create(entry1)
     await db_session.commit()
@@ -140,7 +140,7 @@ async def test_previous_hash_chain(db_session: AsyncSession):
         user_id="user-456",
         user_email="admin@example.com",
         user_name="Admin User",
-        occurred_at=datetime.now(timezone.utc),
+        occurred_at=datetime.now(UTC),
     )
     created_entry2 = await repo.create(entry2)
     await db_session.commit()
@@ -169,7 +169,7 @@ async def test_sequence_number_generation(db_session: AsyncSession):
             user_id="user-456",
             user_email="admin@example.com",
             user_name="Admin User",
-            occurred_at=datetime.now(timezone.utc),
+            occurred_at=datetime.now(UTC),
         )
         created_entry = await repo.create(entry)
         await db_session.flush()
@@ -206,7 +206,7 @@ async def test_count_all(db_session: AsyncSession):
             user_id="user-456",
             user_email="admin@example.com",
             user_name="Admin User",
-            occurred_at=datetime.now(timezone.utc),
+            occurred_at=datetime.now(UTC),
         )
         await repo.create(entry)
 
@@ -222,7 +222,7 @@ async def test_electronic_signature_fields(db_session: AsyncSession):
     """Test that electronic signature fields are stored correctly."""
     repo = AuditLogRepository(db_session)
 
-    es_timestamp = datetime.now(timezone.utc)
+    es_timestamp = datetime.now(UTC)
     audit_entry = AuditLogModel(
         account_id="test-account-id",
         operation="UPDATE",
@@ -237,7 +237,7 @@ async def test_electronic_signature_fields(db_session: AsyncSession):
         es_username="approver@example.com",
         es_reason="Approved after review",
         es_timestamp=es_timestamp,
-        occurred_at=datetime.now(timezone.utc),
+        occurred_at=datetime.now(UTC),
     )
 
     created_entry = await repo.create(audit_entry)
@@ -273,7 +273,7 @@ async def test_metadata_field(db_session: AsyncSession):
         user_email="admin@example.com",
         user_name="Admin User",
         extra_metadata=extra_metadata,
-        occurred_at=datetime.now(timezone.utc),
+        occurred_at=datetime.now(UTC),
     )
 
     created_entry = await repo.create(audit_entry)

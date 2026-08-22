@@ -11,12 +11,12 @@ Tests all invitation endpoints using in-process ASGI client:
 import asyncio
 import sys
 import uuid
+
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
-from httpx import AsyncClient, ASGITransport
 
 from snackbase.infrastructure.api.app import create_app
-from snackbase.infrastructure.persistence.database import get_db_session
 
 # Configuration
 API_PREFIX = "/api/v1"
@@ -95,12 +95,12 @@ async def test_create_invitation(client: AsyncClient):
     print_test("Test 1: Create Invitation")
 
     unique_id = str(uuid.uuid4())[:8]
-    
+
     # Register Admin
     print_info("Registering admin user...")
     admin_email = f"admin-{unique_id}@test.com"
     admin_password = "SecureP@ss123!"
-    
+
     admin_response = await register_user(
         client,
         admin_email,
@@ -108,15 +108,15 @@ async def test_create_invitation(client: AsyncClient):
         f"Test Account {unique_id}",
     )
     admin_account_slug = admin_response["account"]["slug"]
-    
+
     # Verify Email
     print_info("Verifying admin email...")
     await verify_user_email(admin_email)
-    
+
     # Login
     print_info("Logging in...")
     admin_token = await login_user(client, admin_email, admin_password, admin_account_slug)
-    
+
     # Get Account ID
     account_id = None
     response = await client.get(
@@ -133,7 +133,7 @@ async def test_create_invitation(client: AsyncClient):
     # Create Invitation
     invite_email = f"new-user-{unique_id}@test.com"
     print_info(f"Creating invitation for {invite_email}...")
-    
+
     response = await client.post(
         f"{API_PREFIX}/invitations",
         headers={"Authorization": f"Bearer {admin_token}"},
@@ -145,12 +145,12 @@ async def test_create_invitation(client: AsyncClient):
         print_success("Invitation created successfully")
         print_info(f"ID: {invitation['id']}")
         print_info(f"Email Sent: {invitation.get('email_sent')}")
-        
+
         if invitation.get('email_sent') is True:
             print_success("Email sent flag is True")
         else:
             print_error("Email sent flag is False")
-            
+
         return admin_token, invitation, invite_email, admin_email
     else:
         print_error(f"Failed to create invitation: {response.status_code}")
@@ -201,7 +201,7 @@ async def test_list_invitations(client: AsyncClient, admin_token: str):
 
 async def test_accept_invitation(client: AsyncClient, invite_email: str):
     print_test("Test 5: Accept Invitation")
-    
+
     # Get token from DB
     engine = create_async_engine(DATABASE_URL)
     async with engine.begin() as conn:
@@ -212,7 +212,7 @@ async def test_accept_invitation(client: AsyncClient, invite_email: str):
         row = result.fetchone()
         token = row[0] if row else None
     await engine.dispose()
-    
+
     if not token:
         print_error("Invitation token not found in DB")
         return None
@@ -238,7 +238,7 @@ async def test_accept_invitation(client: AsyncClient, invite_email: str):
             row = result.fetchone()
             is_verified = row[0] if row else None
         await engine.dispose()
-        
+
         if is_verified:
             print_success(f"User is verified (email_verified={is_verified})")
         else:
@@ -252,7 +252,7 @@ async def test_accept_invitation(client: AsyncClient, invite_email: str):
 
 async def test_cancel_invitation(client: AsyncClient, admin_token: str):
     print_test("Test 8: Cancel Invitation")
-    
+
     # Create temp invitation
     resp = await client.post(
         f"{API_PREFIX}/invitations",
@@ -262,16 +262,16 @@ async def test_cancel_invitation(client: AsyncClient, admin_token: str):
     if resp.status_code != 201:
         print_error("Failed to create temp invitation")
         return
-        
+
     inv_id = resp.json()["id"]
     print_success(f"Created temp invitation {inv_id}")
-    
+
     # Cancel
     resp = await client.delete(
         f"{API_PREFIX}/invitations/{inv_id}",
         headers={"Authorization": f"Bearer {admin_token}"},
     )
-    
+
     if resp.status_code == 204:
         print_success("Invitation cancelled successfully")
     else:
@@ -284,27 +284,27 @@ async def main():
     print(f"{Colors.BOLD}{'='*80}{Colors.RESET}\n")
 
     app = create_app()
-    
+
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         try:
             # Run tests
             admin_token, invitation, invite_email, admin_email = await test_create_invitation(client)
             if not admin_token:
                 sys.exit(1)
-                
+
             await test_duplicate_invitation(client, admin_token, invite_email)
             await test_invalid_email(client, admin_token)
             await test_list_invitations(client, admin_token)
-            
-            new_token = await test_accept_invitation(client, invite_email)
-            
-            # Additional tests like expired token, etc. omitted for brevity if needed, 
+
+            await test_accept_invitation(client, invite_email)
+
+            # Additional tests like expired token, etc. omitted for brevity if needed,
             # but can be added.
-            
+
             await test_cancel_invitation(client, admin_token)
-            
+
             # Verify Email Logs
-            # We need to get account_id from somewhere. 
+            # We need to get account_id from somewhere.
             # In test_create_invitation, we got it but didn't return it.
             # Let's simple query by email in check_email_logs or fetch account_id again.
             # Easier to fetch account_id from admin_email
@@ -315,9 +315,9 @@ async def main():
                  if row:
                      await check_email_logs(row[0])
             await engine.dispose()
-            
+
             print(f"\n{Colors.GREEN}{Colors.BOLD}All tests completed!{Colors.RESET}\n")
-            
+
         except Exception as e:
             print_error(f"Test suite failed: {e}")
             import traceback

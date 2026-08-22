@@ -12,7 +12,6 @@ from typing import Any
 
 from snackbase.domain.services.collection_validator import FieldType
 
-
 # Email validation pattern (simplified but effective)
 EMAIL_PATTERN = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
 
@@ -330,9 +329,6 @@ class RecordValidator:
 
         # Check for unknown fields in data
         # Computed fields in the request body are silently ignored (not an error)
-        computed_field_names = {
-            f["name"] for f in schema if f.get("type", "").lower() == FieldType.COMPUTED.value
-        }
         for field_name in data:
             if field_name not in schema_fields:
                 errors.append(

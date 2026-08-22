@@ -1,6 +1,5 @@
 """Unit tests for password hashing utilities."""
 
-import pytest
 
 from snackbase.infrastructure.auth.password_hasher import (
     DUMMY_PASSWORD_HASH,
@@ -18,7 +17,7 @@ class TestHashPassword:
         """Test that hash_password returns a valid Argon2 hash."""
         password = "SecureP@ss123!"
         hashed = hash_password(password)
-        
+
         assert hashed.startswith("$argon2id$")
         assert len(hashed) > 50  # Argon2 hashes are long
 
@@ -27,14 +26,14 @@ class TestHashPassword:
         password = "SecureP@ss123!"
         hash1 = hash_password(password)
         hash2 = hash_password(password)
-        
+
         assert hash1 != hash2  # Different due to random salt
 
     def test_hash_password_with_special_characters(self):
         """Test hashing passwords with special characters."""
         password = "P@ssw0rd!#$%^&*()"
         hashed = hash_password(password)
-        
+
         assert hashed.startswith("$argon2id$")
         assert verify_password(password, hashed)
 
@@ -46,21 +45,21 @@ class TestVerifyPassword:
         """Test that correct password verification returns True."""
         password = "SecureP@ss123!"
         hashed = hash_password(password)
-        
+
         assert verify_password(password, hashed) is True
 
     def test_verify_password_incorrect(self):
         """Test that incorrect password verification returns False."""
         password = "SecureP@ss123!"
         hashed = hash_password(password)
-        
+
         assert verify_password("WrongPassword", hashed) is False
 
     def test_verify_password_case_sensitive(self):
         """Test that password verification is case-sensitive."""
         password = "SecureP@ss123!"
         hashed = hash_password(password)
-        
+
         assert verify_password("securep@ss123!", hashed) is False
 
 
@@ -70,13 +69,13 @@ class TestGenerateRandomPassword:
     def test_generate_random_password_length(self):
         """Test that generated password is at least 32 characters."""
         password = generate_random_password()
-        
+
         assert len(password) >= 32
 
     def test_generate_random_password_uniqueness(self):
         """Test that generated passwords are unique."""
         passwords = [generate_random_password() for _ in range(10)]
-        
+
         # All passwords should be unique
         assert len(set(passwords)) == 10
 
@@ -84,7 +83,7 @@ class TestGenerateRandomPassword:
         """Test that generated password can be hashed successfully."""
         password = generate_random_password()
         hashed = hash_password(password)
-        
+
         assert hashed.startswith("$argon2id$")
         assert verify_password(password, hashed) is True
 
@@ -92,7 +91,7 @@ class TestGenerateRandomPassword:
         """Test that the hash of a random password is a valid Argon2 hash."""
         password = generate_random_password()
         hashed = hash_password(password)
-        
+
         # Verify it's a proper Argon2id hash
         assert hashed.startswith("$argon2id$")
         assert len(hashed) > 50
@@ -100,7 +99,7 @@ class TestGenerateRandomPassword:
     def test_generate_random_password_url_safe(self):
         """Test that generated password is URL-safe (no special chars that need encoding)."""
         password = generate_random_password()
-        
+
         # URL-safe base64 uses only: A-Z, a-z, 0-9, -, _
         import string
         allowed_chars = string.ascii_letters + string.digits + "-_"
@@ -114,7 +113,7 @@ class TestNeedsRehash:
         """Test that a freshly created hash doesn't need rehashing."""
         password = "SecureP@ss123!"
         hashed = hash_password(password)
-        
+
         # A fresh hash should not need rehashing
         assert needs_rehash(hashed) is False
 
@@ -135,7 +134,7 @@ class TestDummyPasswordHash:
             "dummy_password_for_timing_safety",
             "",
         ]
-        
+
         for password in test_passwords:
             # Only the exact dummy password should match
             if password == "dummy_password_for_timing_safety":

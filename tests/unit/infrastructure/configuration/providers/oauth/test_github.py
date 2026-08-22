@@ -1,8 +1,10 @@
 """Unit tests for GitHubOAuthHandler."""
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
+
 import httpx
+import pytest
+
 from snackbase.infrastructure.configuration.providers.oauth.github import GitHubOAuthHandler
 
 
@@ -44,9 +46,9 @@ class TestGitHubOAuthHandler:
         """Test authorization URL generation."""
         state = "test_state"
         redirect_uri = "https://app.com/callback"
-        
+
         url = await handler.get_authorization_url(config, redirect_uri, state)
-        
+
         assert "github.com/login/oauth/authorize" in url
         assert "client_id=test_client_id" in url
         assert "redirect_uri=https%3A%2F%2Fapp.com%2Fcallback" in url
@@ -65,13 +67,13 @@ class TestGitHubOAuthHandler:
             "scope": "user:email",
         }
         mock_post.return_value = mock_response
-        
+
         tokens = await handler.exchange_code_for_tokens(
             config, "auth_code", "https://example.com/callback"
         )
-        
+
         assert tokens["access_token"] == "test_access_token"
-        
+
         # Verify call parameters
         args, kwargs = mock_post.call_args
         assert args[0] == "https://github.com/login/oauth/access_token"
@@ -86,7 +88,7 @@ class TestGitHubOAuthHandler:
         mock_response.status_code = 200  # GitHub returns 200 even for some errors
         mock_response.json.return_value = {"error": "bad_verification_code", "error_description": "The code passed is incorrect or expired."}
         mock_post.return_value = mock_response
-        
+
         with pytest.raises(ValueError, match="Failed to exchange GitHub OAuth code: The code passed is incorrect or expired."):
             await handler.exchange_code_for_tokens(
                 config, "invalid_code", "https://example.com/callback"
@@ -105,7 +107,7 @@ class TestGitHubOAuthHandler:
             "name": "GitHub User",
             "avatar_url": "https://github.com/pic.jpg",
         }
-        
+
         # 2. Mock emails response
         emails_response = MagicMock(spec=httpx.Response)
         emails_response.status_code = 200
@@ -113,16 +115,16 @@ class TestGitHubOAuthHandler:
             {"email": "other@github.com", "primary": False, "verified": True},
             {"email": "user@github.com", "primary": True, "verified": True},
         ]
-        
+
         mock_get.side_effect = [user_response, emails_response]
-        
+
         user_info = await handler.get_user_info(config, "test_token")
-        
+
         assert user_info["id"] == "12345"
         assert user_info["email"] == "user@github.com"
         assert user_info["name"] == "GitHub User"
         assert user_info["picture"] == "https://github.com/pic.jpg"
-        
+
         # Verify call parameters
         assert mock_get.call_count == 2
         calls = mock_get.call_args_list
@@ -137,11 +139,11 @@ class TestGitHubOAuthHandler:
         mock_response = MagicMock(spec=httpx.Response)
         mock_response.status_code = 200
         mock_get.return_value = mock_response
-        
+
         result, message = await handler.test_connection(config)
         assert result is True
         assert "API reached" in message
-        
+
         # Verify it called the API root
         args, _ = mock_get.call_args
         assert args[0] == "https://api.github.com"

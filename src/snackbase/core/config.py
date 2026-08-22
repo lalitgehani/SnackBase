@@ -572,12 +572,6 @@ class Settings(BaseSettings):
                 "platform_jwks_url must use https:// when SNACKBASE_ENVIRONMENT=production"
             )
 
-        if not self.single_tenant_mode:
-            raise ValueError(
-                "Platform authentication requires single-tenant mode "
-                "(SNACKBASE_SINGLE_TENANT_MODE=true and SNACKBASE_SINGLE_TENANT_ACCOUNT set)"
-            )
-
         return self
 
     @property

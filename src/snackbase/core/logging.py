@@ -181,7 +181,7 @@ class LoggingContext:
         self.context = kwargs
         self.token: structlog.contextvars._ContextToken | None = None
 
-    def __enter__(self) -> "LoggingContext":
+    def __enter__(self) -> LoggingContext:
         """Enter the context and add context variables."""
         self.token = structlog.contextvars.bind_contextvars(**self.context)
         return self

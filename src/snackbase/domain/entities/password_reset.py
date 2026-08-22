@@ -3,11 +3,11 @@
 Stores information about password reset tokens sent to users.
 """
 
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-import uuid
-import secrets
 import hashlib
+import secrets
+import uuid
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 
 
 @dataclass
@@ -29,11 +29,11 @@ class PasswordResetToken:
     token_hash: str
     expires_at: datetime
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     used_at: datetime | None = None
 
     @classmethod
-    def generate(cls, user_id: str, email: str, expires_in_seconds: int = 3600) -> tuple["PasswordResetToken", str]:
+    def generate(cls, user_id: str, email: str, expires_in_seconds: int = 3600) -> tuple[PasswordResetToken, str]:
         """Generate a new password reset token and its entity.
 
         Args:
@@ -46,8 +46,8 @@ class PasswordResetToken:
         """
         raw_token = secrets.token_urlsafe(32)
         token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
-        
-        expires_at = datetime.now(timezone.utc).replace(microsecond=0)
+
+        expires_at = datetime.now(UTC).replace(microsecond=0)
         expires_at += timedelta(seconds=expires_in_seconds)
 
         entity = cls(
@@ -60,5 +60,5 @@ class PasswordResetToken:
 
     def is_valid(self) -> bool:
         """Check if the token is valid (not expired and not used)."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         return self.used_at is None and self.expires_at > now

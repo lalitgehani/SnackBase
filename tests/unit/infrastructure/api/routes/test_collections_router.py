@@ -1,12 +1,11 @@
 """Unit tests for CollectionsRouter."""
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import status
 from fastapi.responses import JSONResponse
 
-from snackbase.domain.services import CollectionValidationError
 from snackbase.infrastructure.api.routes.collections_router import create_collection
 from snackbase.infrastructure.api.schemas import CreateCollectionRequest, FieldDefinition
 from snackbase.infrastructure.persistence.models import CollectionModel
@@ -53,16 +52,16 @@ async def test_create_collection_success(
     """Test successful collection creation."""
     # Setup mocks
     mock_service = mock_service_cls.return_value
-    
+
     collection = CollectionModel(
         id="col-123",
         name="TestCollection",
         schema='[{"name": "title", "type": "text", "required": true}, {"name": "count", "type": "number", "default": 0}]',
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
     mock_service.create_collection = AsyncMock(return_value=collection)
-    
+
     # Execute
     response = await create_collection(valid_request, mock_user, mock_session)
 
@@ -84,10 +83,10 @@ async def test_create_collection_validation_error(
     # Setup mock to return errors
     mock_service = mock_service_cls.return_value
     mock_service.create_collection = AsyncMock(side_effect=ValueError("Validation failed: name: Invalid name"))
-    
+
     # Execute
     response = await create_collection(valid_request, mock_user, mock_session)
-    
+
     # Verify
     assert isinstance(response, JSONResponse)
     assert response.status_code == status.HTTP_400_BAD_REQUEST
@@ -108,10 +107,10 @@ async def test_create_collection_name_conflict(
     # Setup
     mock_service = mock_service_cls.return_value
     mock_service.create_collection = AsyncMock(side_effect=ValueError("Collection 'TestCollection' already exists"))
-    
+
     # Execute
     response = await create_collection(valid_request, mock_user, mock_session)
-    
+
     # Verify
     assert isinstance(response, JSONResponse)
     assert response.status_code == status.HTTP_409_CONFLICT
@@ -130,7 +129,7 @@ async def test_create_collection_table_creation_error(
     # Setup
     mock_service = mock_service_cls.return_value
     mock_service.create_collection = AsyncMock(side_effect=Exception("DB error"))
-    
+
     # Execute
     with pytest.raises(Exception, match="DB error"):
         await create_collection(valid_request, mock_user, mock_session)
@@ -153,35 +152,35 @@ async def test_create_collection_with_pii_fields(
             FieldDefinition(name="name", type="text", required=True),
         ],
     )
-    
+
     # Setup mocks
     mock_service = mock_service_cls.return_value
-    
+
     collection = CollectionModel(
         id="col-456",
         name="Customers",
         schema='[{"name": "email", "type": "email", "pii": true, "mask_type": "email"}, {"name": "ssn", "type": "text", "pii": true, "mask_type": "ssn"}, {"name": "name", "type": "text", "required": true, "pii": false, "mask_type": null}]',
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
     mock_service.create_collection = AsyncMock(return_value=collection)
-    
+
     # Execute
     response = await create_collection(request, mock_user, mock_session)
 
     # Verify
     assert response.name == "Customers"
     assert len(response.fields) == 3
-    
+
     # Check PII metadata is preserved
     email_field = next(f for f in response.fields if f.name == "email")
     assert email_field.pii is True
     assert email_field.mask_type == "email"
-    
+
     ssn_field = next(f for f in response.fields if f.name == "ssn")
     assert ssn_field.pii is True
     assert ssn_field.mask_type == "ssn"
-    
+
     name_field = next(f for f in response.fields if f.name == "name")
     assert name_field.pii is False
     assert name_field.mask_type is None

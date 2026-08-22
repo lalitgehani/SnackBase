@@ -4,12 +4,12 @@ Defines the fields and types used in SnackBase tokens (JWT, API Keys, etc.).
 """
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class TokenType(str, Enum):
+class TokenType(StrEnum):
     """Supported token types in SnackBase."""
 
     JWT = "jwt"

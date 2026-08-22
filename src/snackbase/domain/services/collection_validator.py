@@ -6,11 +6,11 @@ Supports field types: text, number, boolean, datetime, email, url, json, referen
 
 import re
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 
-class FieldType(str, Enum):
+class FieldType(StrEnum):
     """Supported field types for collection schemas."""
 
     TEXT = "text"
@@ -26,7 +26,7 @@ class FieldType(str, Enum):
     COMPUTED = "computed"
 
 
-class OnDeleteAction(str, Enum):
+class OnDeleteAction(StrEnum):
     """Valid on_delete actions for reference fields."""
 
     CASCADE = "cascade"
@@ -34,7 +34,7 @@ class OnDeleteAction(str, Enum):
     RESTRICT = "restrict"
 
 
-class MaskType(str, Enum):
+class MaskType(StrEnum):
     """Valid mask types for PII fields."""
 
     EMAIL = "email"

@@ -1,7 +1,7 @@
 """Pydantic schemas for collection endpoints."""
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -403,7 +403,7 @@ class CollectionExportData(BaseModel):
     collections: list[CollectionExportItem]
 
 
-class ImportStrategy(str, Enum):
+class ImportStrategy(StrEnum):
     """Strategy for handling collection name conflicts during import."""
 
     ERROR = "error"

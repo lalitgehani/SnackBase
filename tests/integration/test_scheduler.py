@@ -22,7 +22,6 @@ from snackbase.infrastructure.persistence.models.job import JobModel
 from snackbase.infrastructure.persistence.repositories.hook_repository import HookRepository
 from snackbase.infrastructure.persistence.repositories.job_repository import JobRepository
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

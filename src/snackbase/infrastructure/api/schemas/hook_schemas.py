@@ -9,10 +9,9 @@ Supports all three trigger types introduced in F8.1:
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated, Any, Literal, Union
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field
-
 
 # ---------------------------------------------------------------------------
 # Trigger type schemas (discriminated union on "type")
@@ -51,7 +50,7 @@ class ManualTriggerConfig(BaseModel):
 
 
 TriggerConfig = Annotated[
-    Union[ScheduleTriggerConfig, EventTriggerConfig, ManualTriggerConfig],
+    ScheduleTriggerConfig | EventTriggerConfig | ManualTriggerConfig,
     Field(discriminator="type"),
 ]
 

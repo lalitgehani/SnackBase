@@ -6,7 +6,6 @@ and comprehensive logging for audit purposes.
 
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -53,12 +52,12 @@ class ProviderCache:
         """
         self.ttl_seconds = ttl_seconds
         self._cache: dict[
-            str, tuple[tuple[EmailProvider, str, str, Optional[str]], datetime]
+            str, tuple[tuple[EmailProvider, str, str, str | None], datetime]
         ] = {}
 
     def get(
         self, key: str
-    ) -> Optional[tuple[EmailProvider, str, str, Optional[str]]]:
+    ) -> tuple[EmailProvider, str, str, str | None] | None:
         """Get a provider from cache if not expired.
 
         Args:
@@ -79,7 +78,7 @@ class ProviderCache:
         return provider_tuple
 
     def set(
-        self, key: str, provider_tuple: tuple[EmailProvider, str, str, Optional[str]]
+        self, key: str, provider_tuple: tuple[EmailProvider, str, str, str | None]
     ) -> None:
         """Store a provider tuple in cache.
 
@@ -89,7 +88,7 @@ class ProviderCache:
         """
         self._cache[key] = (provider_tuple, datetime.now(UTC))
 
-    def invalidate(self, key: Optional[str] = None) -> None:
+    def invalidate(self, key: str | None = None) -> None:
         """Invalidate cache entries.
 
         Args:
@@ -159,7 +158,7 @@ class EmailService:
         self,
         session: AsyncSession,
         account_id: str,
-    ) -> tuple[EmailProvider, str, str, Optional[str]]:
+    ) -> tuple[EmailProvider, str, str, str | None]:
         """Select the appropriate email provider for the account.
 
         Selection logic:
@@ -244,7 +243,7 @@ class EmailService:
         session: AsyncSession,
         account_id: str,
         provider_name: str,
-    ) -> tuple[EmailProvider, str, str, Optional[str]]:
+    ) -> tuple[EmailProvider, str, str, str | None]:
         """Get a specific email provider.
 
         Args:
@@ -295,7 +294,7 @@ class EmailService:
         self,
         session: AsyncSession,
         account_id: str,
-    ) -> tuple[EmailProvider, str, str, Optional[str]]:
+    ) -> tuple[EmailProvider, str, str, str | None]:
         """Get email provider with caching.
 
         Args:
@@ -321,7 +320,7 @@ class EmailService:
 
         return result
 
-    def invalidate_provider_cache(self, account_id: Optional[str] = None) -> None:
+    def invalidate_provider_cache(self, account_id: str | None = None) -> None:
         """Invalidate provider cache.
 
         Args:

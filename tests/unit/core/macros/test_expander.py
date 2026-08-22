@@ -1,6 +1,9 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
 from snackbase.core.macros.expander import MacroExpander
+
 
 @pytest.mark.asyncio
 async def test_expand_no_macros():
@@ -44,13 +47,13 @@ async def test_expand_combined_macros():
 async def test_expand_db_macro():
     mock_session = AsyncMock()
     expander = MacroExpander(mock_session)
-    
+
     mock_macro = MagicMock()
     mock_macro.name = "my_custom_macro"
     mock_macro.sql_query = "category = 'special'"
-    
+
     expander.macro_repo.get_by_name = AsyncMock(return_value=mock_macro)
-    
+
     expr = "@my_custom_macro"
     result = await expander.expand(expr)
     assert result == "(category = 'special')"
@@ -60,13 +63,13 @@ async def test_expand_db_macro():
 async def test_expand_parameterized_db_macro():
     mock_session = AsyncMock()
     expander = MacroExpander(mock_session)
-    
+
     mock_macro = MagicMock()
     mock_macro.name = "has_status"
     mock_macro.sql_query = "status = $1"
-    
+
     expander.macro_repo.get_by_name = AsyncMock(return_value=mock_macro)
-    
+
     expr = "@has_status('active')"
     result = await expander.expand(expr)
     assert result == "(status = 'active')"
@@ -75,7 +78,7 @@ async def test_expand_parameterized_db_macro():
 async def test_expand_nested_macros():
     mock_session = AsyncMock()
     expander = MacroExpander(mock_session)
-    
+
     def side_effect(name):
         if name == "inner":
             m = MagicMock()
@@ -86,9 +89,9 @@ async def test_expand_nested_macros():
             m.sql_query = "@inner && b = 2"
             return m
         return None
-        
+
     expander.macro_repo.get_by_name = AsyncMock(side_effect=side_effect)
-    
+
     expr = "@outer"
     result = await expander.expand(expr)
     assert result == "((a = 1) && b = 2)"
@@ -97,10 +100,10 @@ async def test_expand_nested_macros():
 async def test_expand_recursion_error():
     mock_session = AsyncMock()
     expander = MacroExpander(mock_session)
-    
+
     mock_macro = MagicMock()
     mock_macro.sql_query = "@loop"
     expander.macro_repo.get_by_name = AsyncMock(return_value=mock_macro)
-    
+
     with pytest.raises(RecursionError):
         await expander.expand("@loop")

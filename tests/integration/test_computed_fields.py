@@ -13,7 +13,6 @@ Tests cover:
 import pytest
 from httpx import AsyncClient
 
-
 COLLECTION = "computed_test_col"
 
 SCHEMA = [

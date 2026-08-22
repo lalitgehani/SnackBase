@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.infrastructure.api.dependencies import SYSTEM_ACCOUNT_ID
-from snackbase.infrastructure.persistence.models import AccountModel, UserModel
+from snackbase.infrastructure.persistence.models import UserModel
 
 
 @pytest.mark.asyncio
@@ -30,8 +30,8 @@ async def test_account_crud_lifecycle(client: AsyncClient, superadmin_token: str
 
     # 3. Update Account
     response = await client.put(
-        f"/api/v1/accounts/{account_id}", 
-        json={"name": "Updated Name"}, 
+        f"/api/v1/accounts/{account_id}",
+        json={"name": "Updated Name"},
         headers=headers
     )
     assert response.status_code == 200
@@ -131,7 +131,7 @@ async def test_account_sort_functionality(client: AsyncClient, superadmin_token:
     names = [i["name"] for i in items if "Account" in i["name"]]
     # Should be sorted (A then Z) - might include other accounts from other tests if session shared
     # But names list should be sorted relative to each other if we filter
-    
+
     # Check if 'A Account' comes before 'Z Account' index-wise
     a_idx = next(i for i, n in enumerate(names) if n == "A Account")
     z_idx = next(i for i, n in enumerate(names) if n == "Z Account")
@@ -157,8 +157,8 @@ async def test_account_deletion_cascade(
 
     # Create account
     resp = await client.post(
-        "/api/v1/accounts", 
-        json={"name": "Cascade Test"}, 
+        "/api/v1/accounts",
+        json={"name": "Cascade Test"},
         headers=headers
     )
     account_id = resp.json()["id"]

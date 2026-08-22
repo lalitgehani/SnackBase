@@ -14,7 +14,7 @@ Covers:
 - actions field stored and returned
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 import pytest_asyncio
@@ -24,9 +24,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.infrastructure.auth.jwt_service import jwt_service
 from snackbase.infrastructure.persistence.models import AccountModel, RoleModel, UserModel
-from snackbase.infrastructure.persistence.models.hook import HookModel
-from snackbase.infrastructure.persistence.models.hook_execution import HookExecutionModel
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -71,7 +68,7 @@ async def user_token(db_session: AsyncSession, account: AccountModel) -> str:
         password_hash="hashed",
         role=role,
         is_active=True,
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
     db_session.add(user)
     await db_session.commit()
@@ -95,7 +92,7 @@ async def other_user_token(db_session: AsyncSession, other_account: AccountModel
         password_hash="hashed",
         role=role,
         is_active=True,
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
     db_session.add(user)
     await db_session.commit()

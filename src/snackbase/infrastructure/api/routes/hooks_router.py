@@ -30,13 +30,13 @@ from snackbase.core.cron.parser import describe_cron, get_next_run, validate_cro
 from snackbase.core.logging import get_logger
 from snackbase.infrastructure.api.dependencies import AuthenticatedUser, get_db_session
 from snackbase.infrastructure.api.schemas.hook_schemas import (
+    VALID_EVENT_NAMES,
     HookCreateRequest,
     HookExecutionListResponse,
     HookExecutionResponse,
     HookListResponse,
     HookResponse,
     HookUpdateRequest,
-    VALID_EVENT_NAMES,
 )
 from snackbase.infrastructure.persistence.models.hook import HookModel
 from snackbase.infrastructure.persistence.repositories.hook_repository import HookRepository

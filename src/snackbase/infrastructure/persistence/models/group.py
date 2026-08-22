@@ -63,11 +63,11 @@ class GroupModel(Base):
     )
 
     # Relationships
-    account: Mapped["AccountModel"] = relationship(  # noqa: F821
+    account: Mapped[AccountModel] = relationship(  # noqa: F821
         "AccountModel",
         back_populates="groups",
     )
-    users: Mapped[list["UserModel"]] = relationship(  # noqa: F821
+    users: Mapped[list[UserModel]] = relationship(  # noqa: F821
         "UserModel",
         secondary="users_groups",
         back_populates="groups",

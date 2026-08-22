@@ -1,6 +1,12 @@
 """Rule Expression Parser API."""
 
-from .aggregation_parser import AggFunction, AggregationParseError, parse_agg_functions, parse_having, validate_group_by
+from .aggregation_parser import (
+    AggFunction,
+    AggregationParseError,
+    parse_agg_functions,
+    parse_having,
+    validate_group_by,
+)
 from .ast import InOp, IsNullOp, Node
 from .exceptions import RuleError, RuleEvaluationError, RuleSyntaxError
 from .expression_compiler import ExpressionCompilationError, compile_expression_to_sql

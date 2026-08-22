@@ -1,24 +1,23 @@
 """Unit tests for repository count methods."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
+from sqlalchemy import select
 
 from snackbase.infrastructure.persistence.models import (
     AccountModel,
     CollectionModel,
     RefreshTokenModel,
+    RoleModel,
     UserModel,
 )
 from snackbase.infrastructure.persistence.repositories import (
     AccountRepository,
     CollectionRepository,
     RefreshTokenRepository,
-    RefreshTokenRepository,
     UserRepository,
 )
-from sqlalchemy import select
-from snackbase.infrastructure.persistence.models import RoleModel
 
 
 @pytest.mark.asyncio
@@ -45,7 +44,7 @@ async def test_account_repository_count_created_since(db_session):
     """Test AccountRepository.count_created_since filters by date."""
     repo = AccountRepository(db_session)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     five_days_ago = now - timedelta(days=5)
     three_days_ago = now - timedelta(days=3)
 
@@ -122,7 +121,7 @@ async def test_user_repository_count_created_since(db_session):
     db_session.add(account)
     await db_session.commit()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     role = (await db_session.execute(select(RoleModel).where(RoleModel.name == "user"))).scalar_one()
     old_user = UserModel(
         id="user_old",
@@ -160,7 +159,7 @@ async def test_user_repository_get_recent_registrations(db_session):
     await db_session.commit()
 
     # Add users with different timestamps
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     role = (await db_session.execute(select(RoleModel).where(RoleModel.name == "user"))).scalar_one()
     users = []
     for i in range(5):
@@ -233,7 +232,7 @@ async def test_refresh_token_repository_count_active_sessions(db_session):
     db_session.add_all([account, user])
     await db_session.commit()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # Add various tokens
     active_token = RefreshTokenModel(
@@ -290,7 +289,7 @@ async def test_refresh_token_repository_count_active_sessions_empty(db_session):
     await db_session.commit()
 
     # Add only revoked/expired tokens
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     revoked = RefreshTokenModel(
         id="rev1",
         user_id="user_no_tokens",

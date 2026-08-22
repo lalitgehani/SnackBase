@@ -7,7 +7,6 @@ tokens using a token bucket (sliding window) algorithm.
 import time
 from dataclasses import dataclass
 from threading import Lock
-from typing import Dict
 
 
 @dataclass
@@ -27,7 +26,7 @@ class RateLimitStorage:
         Args:
             cleanup_interval: Interval in seconds to clean up stale entries.
         """
-        self._storage: Dict[str, TokenBucket] = {}
+        self._storage: dict[str, TokenBucket] = {}
         self._lock = Lock()
         self._last_cleanup = time.time()
         self._cleanup_interval = cleanup_interval
@@ -62,7 +61,7 @@ class RateLimitStorage:
                 # We start with capacity - 1 because we consume one right away
                 bucket = TokenBucket(tokens=capacity - 1.0, last_updated=now)
                 self._storage[key] = bucket
-                
+
                 # Reset time is when we'll have exactly 1 token again
                 reset_time = 1.0 / rate_per_second
                 return True, int(bucket.tokens), reset_time
@@ -132,7 +131,7 @@ class RateLimitStorage:
         # Simple policy: remove if not updated in the last hour
         stale_threshold = 3600
         to_delete = [
-            k for k, v in self._storage.items() 
+            k for k, v in self._storage.items()
             if now - v.last_updated > stale_threshold
         ]
         for k in to_delete:

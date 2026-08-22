@@ -1,23 +1,29 @@
 
 """Integration tests for invitation system email functionality."""
 
-import pytest
 import uuid
-from httpx import AsyncClient, ASGITransport
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
+
+import pytest
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 
 from snackbase.infrastructure.api.app import app
-from snackbase.infrastructure.api.dependencies import get_db_session, get_email_service, get_current_user, CurrentUser
+from snackbase.infrastructure.api.dependencies import (
+    CurrentUser,
+    get_current_user,
+    get_db_session,
+    get_email_service,
+)
+from snackbase.infrastructure.auth import hash_password
 from snackbase.infrastructure.auth.token_types import TokenType
 from snackbase.infrastructure.persistence.models import (
     AccountModel,
-    UserModel,
-    RoleModel,
     InvitationModel,
+    RoleModel,
+    UserModel,
 )
-from sqlalchemy import select
-from snackbase.infrastructure.auth import hash_password
+
 
 @pytest.fixture
 async def mock_email_service():
@@ -75,44 +81,44 @@ async def test_invitation_email_flow(db_session, mock_email_service):
     app.dependency_overrides[get_current_user] = override_get_current_user
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        
+
         # 3. Create Invitation
         invite_email = f"invitee-{uuid.uuid4().hex[:8]}@example.com"
         response = await ac.post(
             "/api/v1/invitations",
             json={"email": invite_email}
         )
-        
+
         # 4. Verify Response
         assert response.status_code == 201, response.text
         data = response.json()
         assert data["email"] == invite_email
         assert data["email_sent"] is True
         assert data["email_sent_at"] is not None
-        
+
         # 5. Verify Email Service Call
         assert mock_email_service.send_template_email.called
         call_args = mock_email_service.send_template_email.call_args
         kwargs = call_args.kwargs
-        
+
         assert kwargs["to"] == invite_email
         assert kwargs["template_type"] == "invitation"
         assert kwargs["account_id"] == account_id
-        
+
         variables = kwargs["variables"]
         assert variables["email"] == invite_email
         assert variables["account_name"] == account.name
         assert "invitation_url" in variables
         assert "token" in variables
-        
+
         # 6. Verify Log in DB (via email_sent flag update)
         # Note: We mocked the service, so actual email log isn't in DB,
         # but the invitation update happens in the router after successful send.
-        
+
         stmt = select(InvitationModel).where(InvitationModel.id == data["id"])
         result = await db_session.execute(stmt)
         invitation = result.scalar_one()
-        
+
         assert invitation.email_sent is True
         assert invitation.email_sent_at is not None
 
@@ -164,26 +170,26 @@ async def test_invitation_email_failure_handling(db_session):
     )
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        
+
         # 3. Create Invitation
         invite_email = f"fail-invite-{uuid.uuid4().hex[:8]}@example.com"
         response = await ac.post(
             "/api/v1/invitations",
             json={"email": invite_email}
         )
-        
+
         # 4. Verify Success Response (but email_sent=False)
         assert response.status_code == 201, response.text
         data = response.json()
         assert data["email"] == invite_email
         assert data["email_sent"] is False # Should be False
         # assert data["email_sent_at"] is None # Might be None or not present? Model defaults to None. Schema defaults to None.
-        
+
         # 5. Verify DB State
         stmt = select(InvitationModel).where(InvitationModel.id == data["id"])
         result = await db_session.execute(stmt)
         invitation = result.scalar_one()
-        
+
         assert invitation.email_sent is False
         assert invitation.email_sent_at is None
 

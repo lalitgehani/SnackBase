@@ -1,17 +1,17 @@
 """Integration tests for audit log integrity chain verification (F3.6)."""
 
+from datetime import UTC, datetime
+
 import pytest
-from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
-
-
-# Enable audit hooks for all tests in this module
-pytestmark = pytest.mark.enable_audit_hooks
 
 from snackbase.infrastructure.persistence.models.audit_log import AuditLogModel
 from snackbase.infrastructure.persistence.repositories.audit_log_repository import (
     AuditLogRepository,
 )
+
+# Enable audit hooks for all tests in this module
+pytestmark = pytest.mark.enable_audit_hooks
 
 
 @pytest.mark.asyncio
@@ -41,7 +41,7 @@ async def test_verify_integrity_chain_single_entry(db_session: AsyncSession):
         user_id="user-456",
         user_email="admin@example.com",
         user_name="Admin User",
-        occurred_at=datetime.now(timezone.utc),
+        occurred_at=datetime.now(UTC),
     )
     await repo.create(entry)
     await db_session.commit()
@@ -72,7 +72,7 @@ async def test_verify_integrity_chain_multiple_entries(db_session: AsyncSession)
             user_id="user-456",
             user_email="admin@example.com",
             user_name="Admin User",
-            occurred_at=datetime.now(timezone.utc),
+            occurred_at=datetime.now(UTC),
         )
         await repo.create(entry)
         await db_session.flush()
@@ -101,7 +101,7 @@ async def test_first_entry_has_null_previous_hash(db_session: AsyncSession):
         user_id="user-456",
         user_email="admin@example.com",
         user_name="Admin User",
-        occurred_at=datetime.now(timezone.utc),
+        occurred_at=datetime.now(UTC),
     )
     created_entry = await repo.create(entry)
     await db_session.commit()
@@ -126,7 +126,7 @@ async def test_subsequent_entries_link_to_previous(db_session: AsyncSession):
         user_id="user-456",
         user_email="admin@example.com",
         user_name="Admin User",
-        occurred_at=datetime.now(timezone.utc),
+        occurred_at=datetime.now(UTC),
     )
     created_entry1 = await repo.create(entry1)
     await db_session.commit()
@@ -143,7 +143,7 @@ async def test_subsequent_entries_link_to_previous(db_session: AsyncSession):
         user_id="user-456",
         user_email="admin@example.com",
         user_name="Admin User",
-        occurred_at=datetime.now(timezone.utc),
+        occurred_at=datetime.now(UTC),
     )
     created_entry2 = await repo.create(entry2)
     await db_session.commit()
@@ -160,7 +160,7 @@ async def test_subsequent_entries_link_to_previous(db_session: AsyncSession):
         user_id="user-456",
         user_email="admin@example.com",
         user_name="Admin User",
-        occurred_at=datetime.now(timezone.utc),
+        occurred_at=datetime.now(UTC),
     )
     created_entry3 = await repo.create(entry3)
     await db_session.commit()
@@ -188,7 +188,7 @@ async def test_batch_create_maintains_chain(db_session: AsyncSession):
         user_id="user-456",
         user_email="admin@example.com",
         user_name="Admin User",
-        occurred_at=datetime.now(timezone.utc),
+        occurred_at=datetime.now(UTC),
     )
     created_entry1 = await repo.create(entry1)
     await db_session.commit()
@@ -206,7 +206,7 @@ async def test_batch_create_maintains_chain(db_session: AsyncSession):
             user_id="user-456",
             user_email="admin@example.com",
             user_name="Admin User",
-            occurred_at=datetime.now(timezone.utc),
+            occurred_at=datetime.now(UTC),
         )
         for column in ["email", "phone", "address"]
     ]
@@ -236,7 +236,7 @@ async def test_checksum_uniqueness(db_session: AsyncSession):
         user_id="user-456",
         user_email="admin@example.com",
         user_name="Admin User",
-        occurred_at=datetime.now(timezone.utc),
+        occurred_at=datetime.now(UTC),
     )
     created_entry1 = await repo.create(entry1)
     await db_session.commit()
@@ -252,7 +252,7 @@ async def test_checksum_uniqueness(db_session: AsyncSession):
         user_id="user-456",
         user_email="admin@example.com",
         user_name="Admin User",
-        occurred_at=datetime.now(timezone.utc),
+        occurred_at=datetime.now(UTC),
     )
     created_entry2 = await repo.create(entry2)
     await db_session.commit()

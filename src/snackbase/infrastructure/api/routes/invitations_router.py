@@ -4,7 +4,7 @@ Provides endpoints for creating, accepting, listing, and cancelling user invitat
 """
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, status
 from fastapi.responses import JSONResponse
@@ -14,10 +14,9 @@ from snackbase.core.config import get_settings
 from snackbase.core.logging import get_logger
 from snackbase.domain.services import default_password_validator
 from snackbase.infrastructure.api.dependencies import (
-    AuthenticatedUser,
-    get_db_session,
-    get_email_service,
     SYSTEM_ACCOUNT_ID,
+    AuthenticatedUser,
+    get_email_service,
 )
 from snackbase.infrastructure.api.schemas import (
     AccountResponse,
@@ -33,7 +32,6 @@ from snackbase.infrastructure.api.schemas import (
 from snackbase.infrastructure.auth import hash_password, jwt_service
 from snackbase.infrastructure.persistence.database import get_db_session
 from snackbase.infrastructure.persistence.models import (
-    AccountModel,
     InvitationModel,
     RefreshTokenModel,
     UserModel,
@@ -67,8 +65,8 @@ def get_invitation_status(invitation: InvitationModel) -> InvitationStatus:
     # Convert expires_at to timezone-aware if it's naive
     expires_at = invitation.expires_at
     if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
-    if expires_at <= datetime.now(timezone.utc):
+        expires_at = expires_at.replace(tzinfo=UTC)
+    if expires_at <= datetime.now(UTC):
         return InvitationStatus.EXPIRED
     else:
         return InvitationStatus.PENDING
@@ -110,7 +108,7 @@ async def create_invitation(
 
     # Determine target account ID
     target_account_id = current_user.account_id
-    
+
     if request.account_id:
         # Only superadmins can invite users to other accounts
         if current_user.account_id == SYSTEM_ACCOUNT_ID:
@@ -167,9 +165,8 @@ async def create_invitation(
     invitation_token = token_service.generate_token(32)  # 64 hex characters
 
     # 5. Create invitation record
-    settings = get_settings()
     invitation_id = str(uuid.uuid4())
-    expires_at = datetime.now(timezone.utc) + timedelta(hours=48)
+    expires_at = datetime.now(UTC) + timedelta(hours=48)
 
     invitation = InvitationModel(
         id=invitation_id,
@@ -203,9 +200,9 @@ async def create_invitation(
     try:
         # TODO: Get app_url from settings service when available
         # For now, construct from request or use default
-        app_url = "http://localhost:8000"  
+        app_url = "http://localhost:8000"
         invitation_url = f"{app_url}/accept-invitation?token={invitation_token}"
-        
+
         email_sent = await email_service.send_template_email(
             session=session,
             to=request.email,
@@ -220,13 +217,13 @@ async def create_invitation(
             },
             account_id=current_user.account_id,
         )
-        
+
         if email_sent:
             invitation.email_sent = True
-            invitation.email_sent_at = datetime.now(timezone.utc)
+            invitation.email_sent_at = datetime.now(UTC)
             await session.commit()
             await session.refresh(invitation)
-            
+
     except Exception as e:
         logger.error(
             "Failed to send invitation email",
@@ -278,10 +275,10 @@ async def resend_invitation(
     invitation_repo = InvitationRepository(session)
     account_repo = AccountRepository(session)
     user_repo = UserRepository(session)
-    
+
     # 1. Get invitation
     invitation = await invitation_repo.get_by_id(invitation_id)
-    
+
     # Check access: Allow if user belongs to account OR is superadmin
     is_superadmin = current_user.account_id == SYSTEM_ACCOUNT_ID
     if invitation is None or (invitation.account_id != current_user.account_id and not is_superadmin):
@@ -289,25 +286,25 @@ async def resend_invitation(
             status_code=status.HTTP_404_NOT_FOUND,
             content={"error": "Not found", "message": "Invitation not found"},
         )
-        
+
     # 2. Check status
     invitation_status = get_invitation_status(invitation)
     if invitation_status != InvitationStatus.PENDING:
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
             content={
-                "error": "Validation error", 
+                "error": "Validation error",
                 "message": f"Cannot resend invitation with status: {invitation_status}"
             },
         )
-        
+
     # 3. Send email
     account = await account_repo.get_by_id(invitation.account_id)
     account_name = account.name if account else "Unknown Account"
-    
+
     inviter = await user_repo.get_by_id(invitation.invited_by)
     inviter_name = inviter.email if inviter else "Team Member"
-    
+
     # Rotate the token: the row holds only a hash, so a fresh secret is issued
     # and any link already in flight stops working.
     invitation_token = token_service.generate_token(32)
@@ -321,7 +318,7 @@ async def resend_invitation(
         # Ensure expires_at is timezone-aware for strftime
         expires_at = invitation.expires_at
         if expires_at.tzinfo is None:
-            expires_at = expires_at.replace(tzinfo=timezone.utc)
+            expires_at = expires_at.replace(tzinfo=UTC)
 
         email_sent = await email_service.send_template_email(
             session=session,
@@ -337,10 +334,10 @@ async def resend_invitation(
             },
             account_id=current_user.account_id,
         )
-        
+
         if email_sent:
             invitation.email_sent = True
-            invitation.email_sent_at = datetime.now(timezone.utc)
+            invitation.email_sent_at = datetime.now(UTC)
             await session.commit()
 
         return JSONResponse(
@@ -350,7 +347,7 @@ async def resend_invitation(
                 "token": invitation_token,
             },
         )
-        
+
     except Exception as e:
         logger.error(
             "Failed to resend invitation email",
@@ -406,11 +403,11 @@ async def get_invitation(
     # 2. Validate token not expired
     expires_at = invitation.expires_at
     if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
-    
+        expires_at = expires_at.replace(tzinfo=UTC)
+
     # Check expiry
     # We return 400 for specific errors to help the UI show better messages
-    if expires_at <= datetime.now(timezone.utc):
+    if expires_at <= datetime.now(UTC):
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
             content={
@@ -499,8 +496,8 @@ async def accept_invitation(
     # Convert expires_at to timezone-aware if it's naive
     expires_at = invitation.expires_at
     if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
-    if expires_at <= datetime.now(timezone.utc):
+        expires_at = expires_at.replace(tzinfo=UTC)
+    if expires_at <= datetime.now(UTC):
         logger.info(
             "Invitation acceptance failed: token expired",
             invitation_id=invitation.id,
@@ -579,8 +576,8 @@ async def accept_invitation(
         user_id=user.id,
         email=user.email,
         token_hash=f"invitation_accepted_{user.id}", # Unique placeholder hash
-        expires_at=datetime.now(timezone.utc),
-        used_at=datetime.now(timezone.utc), # Mark as used immediately
+        expires_at=datetime.now(UTC),
+        used_at=datetime.now(UTC), # Mark as used immediately
     )
     session.add(verification)
 
@@ -623,7 +620,7 @@ async def accept_invitation(
         token_hash=refresh_token_repo.hash_token(refresh_token),
         user_id=user.id,
         account_id=invitation.account_id,
-        expires_at=datetime.now(timezone.utc)
+        expires_at=datetime.now(UTC)
         + timedelta(days=settings.refresh_token_expire_days),
     )
     await refresh_token_repo.create(refresh_token_model)
@@ -679,10 +676,10 @@ async def list_invitations(
         List of invitations.
     """
     invitation_repo = InvitationRepository(session)
-    
+
     # Determine target account ID
     target_account_id = current_user.account_id
-    
+
     # Check if superadmin
     if current_user.account_id == SYSTEM_ACCOUNT_ID:
         # Superadmin can filter by account_id or list all (None)
@@ -715,7 +712,7 @@ async def list_invitations(
         account_code = "UNKNOWN"
         if hasattr(inv, "account") and inv.account:
             account_code = inv.account.account_code
-            
+
         invitation_responses.append(
             InvitationResponse(
                 id=inv.id,

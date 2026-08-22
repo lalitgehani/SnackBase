@@ -6,23 +6,21 @@ It bridges the gap between the ORM and the HookRegistry using the global context
 """
 
 import asyncio
-from typing import Any, Set
+from typing import Any
 
 from sqlalchemy import event
-from sqlalchemy.orm import Session
 
 from snackbase.core.context import get_current_context
 from snackbase.core.hooks.hook_events import HookEvent
 from snackbase.core.hooks.hook_registry import HookRegistry
 from snackbase.core.logging import get_logger
-from snackbase.infrastructure.persistence.audit_helper import AuditHelper
 from snackbase.infrastructure.persistence.models import AccountModel
 
 logger = get_logger(__name__)
 
 # Track background tasks to prevent them from being garbage collected
 # and to allow for proper cleanup if needed.
-_background_tasks: Set[asyncio.Task] = set()
+_background_tasks: set[asyncio.Task] = set()
 
 # Track registered listeners for cleanup (Issue #7)
 _registered_listeners: list[tuple[Any, str, Any]] = []
@@ -30,37 +28,37 @@ _registered_listeners: list[tuple[Any, str, Any]] = []
 
 class ModelSnapshot:
     """A detached snapshot of a model's state for async processing.
-    
+
     This class mimics enough of the SQLAlchemy model interface to be used
     by the AuditLogService without triggering lazy loads or requiring an active session.
     """
     def __init__(self, model: Any):
         self.__tablename__ = getattr(model, "__tablename__", None)
         self.__is_snapshot__ = True
-        
+
         # Capture class name for logging/debugging
         self.__class_name__ = model.__class__.__name__
-        
+
         # Inspect model to get primary key and columns
         from sqlalchemy import inspect
-        
+
         try:
             mapper = inspect(model.__class__)
         except Exception:
             # If inspection fails, just return empty snapshot
             self.primary_key_name = None
             return
-        
+
         # Get primary key name
         pk_columns = [col.name for col in mapper.primary_key]
         self.primary_key_name = pk_columns[0] if pk_columns else None
-        
+
         # Access the instance state directly to avoid triggering lazy loads
         # This is the safest way to get values in a synchronous event listener
         # when using an async driver.
         instance_state = inspect(model)
         instance_dict = instance_state.dict
-        
+
         # Capture all column values safely
         for column in mapper.columns:
             # Check if value is in instance dict (meaning it's loaded)
@@ -97,7 +95,7 @@ def register_sqlalchemy_listeners(engine: Any, hook_registry: HookRegistry) -> N
         hook_registry: The hook registry to trigger events on.
     """
     from sqlalchemy.orm import Mapper
-    
+
     # Define listeners
     listeners = [
         (Mapper, "after_insert", _make_listener(hook_registry, "insert")),
@@ -109,7 +107,7 @@ def register_sqlalchemy_listeners(engine: Any, hook_registry: HookRegistry) -> N
     for target, name, callback in listeners:
         event.listen(target, name, callback)
         _registered_listeners.append((target, name, callback))
-    
+
     logger.info("Registered global SQLAlchemy audit listeners")
 
 
@@ -131,12 +129,12 @@ def unregister_sqlalchemy_listeners() -> None:
 
 def _make_listener(hook_registry: HookRegistry, op_type: str):
     """Factory to create a listener function for a specific operation type.
-    
+
     Args:
         hook_registry: The registry to trigger hooks on.
         op_type: 'insert', 'update', or 'delete'.
     """
-    
+
     def listener(mapper, connection, target):
         """The actual event listener callback."""
         # 1. Get current context
@@ -165,12 +163,12 @@ def _make_listener(hook_registry: HookRegistry, op_type: str):
 
         # 2. Determine operation and table name
         table_name = target.__tablename__
-        
+
         # Skip excluded tables
         from snackbase.domain.services.audit_log_service import AuditLogService
         if table_name in AuditLogService.EXCLUDED_TABLES:
             return
-            
+
         # 3. Safe Data Extraction & Snapshot
         # Using the ModelSnapshot ensures we don't trigger lazy loads in async driver
         snapshot = ModelSnapshot(target)
@@ -178,14 +176,16 @@ def _make_listener(hook_registry: HookRegistry, op_type: str):
         # 4. Synchronous Audit Logging using existing connection
         try:
             from sqlalchemy.exc import MissingGreenlet
-            
+
             from snackbase.domain.services.audit_log_service import AuditLogService
-            from snackbase.infrastructure.persistence.repositories.sync_audit_log_repository import SyncAuditLogRepository
-            
+            from snackbase.infrastructure.persistence.repositories.sync_audit_log_repository import (
+                SyncAuditLogRepository,
+            )
+
             # Helper to check for sensitive data masking
             def mask_sensitive_helper(col_name, val):
                 # We use a temporary instance of AuditLogService (without session for masking only)
-                # or just use the static/class method if it were one. 
+                # or just use the static/class method if it were one.
                 # For now, we can just instantiate it or use the logic directly.
                 # Since mask_sensitive_only doesn't use self.session, we can call it.
                 service = AuditLogService(None)
@@ -197,7 +197,7 @@ def _make_listener(hook_registry: HookRegistry, op_type: str):
                 if snapshot.primary_key_name
                 else None
             )
-                
+
             if not record_id:
                 logger.warning(f"Cannot audit {op_type.upper()} for {table_name}: no record ID found")
             else:
@@ -210,7 +210,7 @@ def _make_listener(hook_registry: HookRegistry, op_type: str):
                 if account_id:
                     sync_repo = SyncAuditLogRepository(connection)
                     audit_entries = []
-                    
+
                     # Extract auth method (string value, never raw token material)
                     auth_method = "unknown"
                     if context.user and hasattr(context.user, "token_type"):
@@ -231,7 +231,7 @@ def _make_listener(hook_registry: HookRegistry, op_type: str):
                         for column in mapper.columns:
                             new_val = getattr(snapshot, column.name, None)
                             masked_val = mask_sensitive_helper(column.name, new_val)
-                            
+
                             audit_entries.append({
                                 "account_id": str(account_id),
                                 "operation": "CREATE",
@@ -248,17 +248,17 @@ def _make_listener(hook_registry: HookRegistry, op_type: str):
                                 "request_id": context.request_id,
                                 "extra_metadata": extra_metadata,
                             })
-                            
+
                     elif op_type == "update":
                         # Audit changed columns using snapshot history
                         for col_name, history in snapshot.__history__.items():
                             new_val = history["added"][0] if history["added"] else None
                             old_val = history["deleted"][0] if history["deleted"] else None
-                                
+
                             if new_val != old_val:
                                 masked_new = mask_sensitive_helper(col_name, new_val)
                                 masked_old = mask_sensitive_helper(col_name, old_val)
-                                
+
                                 audit_entries.append({
                                     "account_id": str(account_id),
                                     "operation": "UPDATE",
@@ -275,13 +275,13 @@ def _make_listener(hook_registry: HookRegistry, op_type: str):
                                     "request_id": context.request_id,
                                     "extra_metadata": extra_metadata,
                                 })
-                                    
+
                     elif op_type == "delete":
                         # Audit all columns as deleted from snapshot
                         for column in mapper.columns:
                             old_val = getattr(snapshot, column.name, None)
                             masked_val = mask_sensitive_helper(column.name, old_val)
-                            
+
                             audit_entries.append({
                                 "account_id": str(account_id),
                                 "operation": "DELETE",
@@ -302,7 +302,7 @@ def _make_listener(hook_registry: HookRegistry, op_type: str):
                     # Perform sync insert
                     if audit_entries:
                         sync_repo.create_batch(audit_entries)
-                        
+
         except MissingGreenlet as e:
             # This should now be rare given the ModelSnapshot refactor
             logger.warning(
@@ -313,7 +313,7 @@ def _make_listener(hook_registry: HookRegistry, op_type: str):
             )
         except Exception as e:
             logger.error(
-                f"Synchronous audit capture failed for {op_type.upper()} {table_name}", 
+                f"Synchronous audit capture failed for {op_type.upper()} {table_name}",
                 error=str(e),
                 exc_info=True
             )
@@ -331,7 +331,8 @@ def _make_listener(hook_registry: HookRegistry, op_type: str):
             event_name = HookEvent.ON_MODEL_AFTER_DELETE
 
         try:
-            loop = asyncio.get_running_loop()
+            # Presence of a running loop is what matters; the loop object is unused.
+            asyncio.get_running_loop()
         except RuntimeError:
             return
 
@@ -339,11 +340,11 @@ def _make_listener(hook_registry: HookRegistry, op_type: str):
             try:
                 data = {
                     "model": snapshot,
-                    "session": None, 
+                    "session": None,
                 }
                 # Add old_values for update if needed (captured previously if implemented)
                 # For now simplified as focus is fixing the crash.
-                
+
                 await hook_registry.trigger(event_name, data, context)
             except Exception as e:
                 logger.error(

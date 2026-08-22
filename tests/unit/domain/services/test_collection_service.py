@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from snackbase.domain.services import CollectionService, CollectionValidationError
+from snackbase.domain.services import CollectionService
 from snackbase.infrastructure.persistence.models import CollectionModel
 
 
@@ -75,7 +75,7 @@ class TestValidateSchemaUpdate:
         """Test that deleting fields is not allowed."""
         new_schema = [sample_schema[0]]  # Remove second field
         errors = collection_service.validate_schema_update(sample_schema, new_schema)
-        
+
         assert len(errors) == 1
         assert errors[0].field == "count"
         assert "deletion" in errors[0].message.lower()
@@ -88,7 +88,7 @@ class TestValidateSchemaUpdate:
             sample_schema[1],
         ]
         errors = collection_service.validate_schema_update(sample_schema, new_schema)
-        
+
         assert len(errors) == 1
         assert errors[0].field == "title"
         assert "type change" in errors[0].message.lower()
@@ -101,7 +101,7 @@ class TestValidateSchemaUpdate:
             # count field deleted
         ]
         errors = collection_service.validate_schema_update(sample_schema, new_schema)
-        
+
         assert len(errors) == 2
 
 
@@ -116,10 +116,10 @@ class TestUpdateCollectionSchema:
         # Mock repository
         collection_service.repository.get_by_id = AsyncMock(return_value=sample_collection)
         collection_service.repository.update = AsyncMock(return_value=sample_collection)
-        
+
         # Update with same schema
         result = await collection_service.update_collection_schema("col-123", sample_schema)
-        
+
         assert result == sample_collection
         collection_service.repository.get_by_id.assert_called_once_with("col-123")
         collection_service.repository.update.assert_called_once()
@@ -129,20 +129,20 @@ class TestUpdateCollectionSchema:
     ):
         """Test successful update with new fields."""
         from unittest.mock import patch
-        
+
         # Mock repository
         collection_service.repository.get_by_id = AsyncMock(return_value=sample_collection)
         collection_service.repository.update = AsyncMock(return_value=sample_collection)
-        
+
         # New schema with additional field
         new_schema = sample_schema + [{"name": "description", "type": "text"}]
-        
+
         # Mock TableBuilder
         with patch("snackbase.domain.services.collection_service.TableBuilder") as mock_tb:
             mock_tb.add_columns = AsyncMock()
-            
-            result = await collection_service.update_collection_schema("col-123", new_schema)
-            
+
+            await collection_service.update_collection_schema("col-123", new_schema)
+
             # Verify MigrationService was called
             collection_service.migration_service.generate_update_collection_migration.assert_called_once()
             collection_service.migration_service.apply_migrations.assert_called_once()
@@ -150,7 +150,7 @@ class TestUpdateCollectionSchema:
     async def test_update_collection_not_found(self, collection_service, sample_schema):
         """Test update when collection doesn't exist."""
         collection_service.repository.get_by_id = AsyncMock(return_value=None)
-        
+
         with pytest.raises(ValueError, match="not found"):
             await collection_service.update_collection_schema("col-999", sample_schema)
 
@@ -159,10 +159,10 @@ class TestUpdateCollectionSchema:
     ):
         """Test update with validation errors."""
         collection_service.repository.get_by_id = AsyncMock(return_value=sample_collection)
-        
+
         # Try to change field type
         invalid_schema = [{"name": "title", "type": "number"}]
-        
+
         with pytest.raises(ValueError, match="validation failed"):
             await collection_service.update_collection_schema("col-123", invalid_schema)
 
@@ -174,23 +174,23 @@ class TestDeleteCollection:
     async def test_prepare_deletion_success(self, collection_service, sample_collection):
         """Test successful collection deletion preparation."""
         from unittest.mock import patch
-        
+
         # Mock repository
         collection_service.repository.get_by_id = AsyncMock(return_value=sample_collection)
         collection_service.repository.get_record_count = AsyncMock(return_value=42)
-        
+
         # Mock TableBuilder
         with patch("snackbase.domain.services.collection_service.TableBuilder") as mock_tb:
             mock_tb.generate_table_name.return_value = "col_testcollection"
-            
+
             result = await collection_service.prepare_collection_deletion("col-123")
-            
+
             # Verify result
             assert result["collection_id"] == "col-123"
             assert result["collection_name"] == "TestCollection"
             assert result["records_deleted"] == 42
             assert "migration_revision" in result
-            
+
             # Verify migration was generated but not applied
             collection_service.migration_service.generate_delete_collection_migration.assert_called_once()
             collection_service.migration_service.apply_migrations.assert_not_called()
@@ -198,7 +198,7 @@ class TestDeleteCollection:
     async def test_prepare_deletion_collection_not_found(self, collection_service):
         """Test prepare deletion when collection doesn't exist."""
         collection_service.repository.get_by_id = AsyncMock(return_value=None)
-        
+
         with pytest.raises(ValueError, match="not found"):
             await collection_service.prepare_collection_deletion("col-999")
 
@@ -207,16 +207,16 @@ class TestDeleteCollection:
         # Mock repository
         collection_service.repository.get_by_id = AsyncMock(return_value=sample_collection)
         collection_service.repository.delete = AsyncMock()
-        
+
         await collection_service.finalize_collection_deletion("col-123")
-        
+
         # Verify deletion was called
         collection_service.repository.delete.assert_called_once_with(sample_collection)
 
     async def test_finalize_deletion_collection_not_found(self, collection_service):
         """Test finalize deletion when collection doesn't exist."""
         collection_service.repository.get_by_id = AsyncMock(return_value=None)
-        
+
         with pytest.raises(ValueError, match="not found"):
             await collection_service.finalize_collection_deletion("col-999")
 
@@ -229,15 +229,15 @@ class TestGetRecordCount:
     async def test_get_record_count_success(self, collection_service, sample_collection):
         """Test successful record count retrieval."""
         from unittest.mock import patch
-        
+
         collection_service.repository.get_by_id = AsyncMock(return_value=sample_collection)
         collection_service.repository.get_record_count = AsyncMock(return_value=100)
-        
+
         with patch("snackbase.domain.services.collection_service.TableBuilder") as mock_tb:
             mock_tb.generate_table_name.return_value = "col_testcollection"
-            
+
             count = await collection_service.get_record_count("col-123")
-            
+
             assert count == 100
             collection_service.repository.get_record_count.assert_called_once_with(
                 "col_testcollection"
@@ -246,6 +246,6 @@ class TestGetRecordCount:
     async def test_get_record_count_not_found(self, collection_service):
         """Test record count when collection doesn't exist."""
         collection_service.repository.get_by_id = AsyncMock(return_value=None)
-        
+
         with pytest.raises(ValueError, match="not found"):
             await collection_service.get_record_count("col-999")

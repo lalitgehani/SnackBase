@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from snackbase.infrastructure.persistence.models import GroupModel, UserModel, UsersGroupsModel
-from snackbase.infrastructure.persistence.models.users_groups import UsersGroupsModel
 
 
 class GroupRepository:
@@ -32,7 +31,7 @@ class GroupRepository:
         """
         self.session.add(group)
         await self.session.flush()
-        
+
         # Reload to get fresh DB state and required relationships
         result = await self.session.execute(
             select(GroupModel)
@@ -150,9 +149,9 @@ class GroupRepository:
         # Ensure attached to session
         if group not in self.session:
             self.session.add(group)
-        
+
         await self.session.flush()
-        
+
         # Reload to get fresh DB state (including updated_at) and required relationships
         result = await self.session.execute(
             select(GroupModel)
@@ -197,25 +196,25 @@ class GroupRepository:
         """
         await self.session.execute(
             delete(UsersGroupsModel).where(
-                (UsersGroupsModel.group_id == group_id) & 
+                (UsersGroupsModel.group_id == group_id) &
                 (UsersGroupsModel.user_id == user_id)
             )
         )
         await self.session.flush()
-            
+
     async def is_user_in_group(self, group_id: str, user_id: str) -> bool:
         """Check if a user is in a group.
-        
+
         Args:
             group_id: Group ID.
             user_id: User ID.
-            
+
         Returns:
             True if user is in group, False otherwise.
         """
         result = await self.session.execute(
             select(UsersGroupsModel).where(
-                (UsersGroupsModel.group_id == group_id) & 
+                (UsersGroupsModel.group_id == group_id) &
                 (UsersGroupsModel.user_id == user_id)
             )
         )

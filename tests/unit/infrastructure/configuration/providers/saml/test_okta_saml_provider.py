@@ -59,7 +59,7 @@ class TestOktaSAMLProvider:
         # urllib.parse.urlencode encodes value, so we need to decode.
         import urllib.parse
         encoded_req = urllib.parse.unquote(encoded_req)
-        
+
         # Base64 decode and Inflate
         compressed = base64.b64decode(encoded_req)
         # We need to handle raw deflate (no header) - which zlib.decompress usually needs wbits=-15
@@ -77,7 +77,7 @@ class TestOktaSAMLProvider:
         """Test generation of SAML AuthnRequest URL with RelayState."""
         relay_state = "abc-123"
         url = await provider.get_authorization_url(valid_config, "http://cb", relay_state)
-        
+
         assert f"RelayState={relay_state}" in url
 
     @pytest.mark.asyncio
@@ -102,19 +102,19 @@ class TestOktaSAMLProvider:
         subject = etree.SubElement(assertion, f"{{{ns_saml}}}Subject")
         name_id = etree.SubElement(subject, f"{{{ns_saml}}}NameID")
         name_id.text = "user@example.com"
-        
+
         attr_stmt = etree.SubElement(assertion, f"{{{ns_saml}}}AttributeStatement")
-        
+
         # FirstName
         attr_fn = etree.SubElement(attr_stmt, f"{{{ns_saml}}}Attribute", Name="firstName")
         val_fn = etree.SubElement(attr_fn, f"{{{ns_saml}}}AttributeValue")
         val_fn.text = "John"
-        
+
         # LastName
         attr_ln = etree.SubElement(attr_stmt, f"{{{ns_saml}}}Attribute", Name="lastName")
         val_ln = etree.SubElement(attr_ln, f"{{{ns_saml}}}AttributeValue")
         val_ln.text = "Doe"
-        
+
         mock_verifier.verify.return_value.signed_xml = assertion
 
         # Call method
@@ -133,7 +133,7 @@ class TestOktaSAMLProvider:
         """Test parsing with invalid signature raises error."""
         mock_verifier = MagicMock()
         mock_verifier_cls.return_value = mock_verifier
-        
+
         # Simulate verification failure
         from signxml import InvalidSignature
         mock_verifier.verify.side_effect = InvalidSignature("Signature invalid")
@@ -145,7 +145,7 @@ class TestOktaSAMLProvider:
     async def test_get_metadata(self, provider, valid_config):
         """Test SP metadata generation."""
         metadata = await provider.get_metadata(valid_config)
-        
+
         assert '<md:EntityDescriptor' in metadata
         assert f'entityID="{valid_config["sp_entity_id"]}"' in metadata
         assert f'Location="{valid_config["assertion_consumer_url"]}"' in metadata

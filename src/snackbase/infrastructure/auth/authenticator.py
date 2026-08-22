@@ -27,12 +27,19 @@ from snackbase.infrastructure.auth.platform_jwks import get_platform_jwks_client
 from snackbase.infrastructure.auth.token_codec import AuthenticationError, TokenCodec
 from snackbase.infrastructure.auth.token_types import AuthenticatedUser, TokenType
 from snackbase.infrastructure.persistence.models import APIKeyModel, RoleModel, UserModel
-from snackbase.infrastructure.persistence.repositories import AccountRepository
 
 logger = get_logger(__name__)
 
 # System account ID for superadmins (matches dependencies.py)
 SYSTEM_ACCOUNT_ID = "00000000-0000-0000-0000-000000000000"
+
+# The only snackbase_role a platform (trusted-issuer) principal may carry. Platform
+# principals are instance operators; see _try_authenticate_platform_jwt.
+PLATFORM_OPERATOR_ROLE = "admin"
+
+# auth_provider stamped on JIT-provisioned platform users. Also the predicate that keeps
+# a platform `sub` from ever resolving to a locally-created user.
+PLATFORM_AUTH_PROVIDER = "platform"
 
 
 class Authenticator:
@@ -234,6 +241,18 @@ class Authenticator:
         if not sub or not email or not role_name:
             raise AuthenticationError("Token missing required claims")
 
+        # A platform principal is the operator of this instance and is resolved into the
+        # system account, where `require_superadmin` admits on account alone. Anything that
+        # is not an instance admin therefore has no place to land: reject it here, before
+        # any user row is created, rather than granting it superadmin by omission.
+        if role_name != PLATFORM_OPERATOR_ROLE:
+            logger.warning(
+                "Platform token rejected: not an instance operator",
+                sub=str(sub),
+                role=str(role_name),
+            )
+            raise AuthenticationError("Platform access requires an instance administrator")
+
         user = await self._resolve_platform_user(
             session=session,
             user_id=str(sub),
@@ -261,9 +280,32 @@ class Authenticator:
         role_name: str,
     ) -> UserModel:
         """Look up or just-in-time provision a platform-mapped user."""
-        result = await session.execute(select(UserModel).where(UserModel.id == user_id))
+        # The `sub` claim is an id minted by a different system, so it is only ever matched
+        # against rows this path created. Without the provider predicate a `sub` that
+        # collides with a local user's id would authenticate the caller as that user.
+        from snackbase.domain.services.superadmin_service import SuperadminService
+
+        result = await session.execute(
+            select(UserModel).where(
+                UserModel.id == user_id,
+                UserModel.auth_provider == PLATFORM_AUTH_PROVIDER,
+            )
+        )
         existing = result.scalar_one_or_none()
         if existing is not None:
+            if existing.account_id != SYSTEM_ACCOUNT_ID:
+                # Provisioned by an earlier build that placed platform principals in the
+                # instance's tenant account. Reconcile in place, otherwise the operator
+                # would silently lose Studio access after this upgrade.
+                await SuperadminService.ensure_system_account_exists(session)
+                logger.info(
+                    "Migrating platform user to the system account",
+                    user_id=existing.id,
+                    from_account_id=existing.account_id,
+                )
+                existing.account_id = SYSTEM_ACCOUNT_ID
+                await session.commit()
+                await session.refresh(existing)
             return existing
 
         role_result = await session.execute(
@@ -273,19 +315,19 @@ class Authenticator:
         if role is None:
             raise AuthenticationError(f"Unknown role: {role_name}")
 
-        settings = get_settings()
-        account = await AccountRepository(session).get_by_slug(settings.single_tenant_account or "")
-        if account is None:
-            raise AuthenticationError("Single-tenant account not configured")
+        # Platform principals operate the instance itself, so they belong to the system
+        # account (SY0000) exactly as a self-hosted superadmin does. This is independent of
+        # the instance's own tenancy, which is why multi-tenant instances work identically.
+        await SuperadminService.ensure_system_account_exists(session)
 
         user = UserModel(
             id=user_id,
-            account_id=account.id,
+            account_id=SYSTEM_ACCOUNT_ID,
             email=email,
             password_hash=hash_password(generate_random_password()),
             role_id=role.id,
             is_active=True,
-            auth_provider="platform",
+            auth_provider=PLATFORM_AUTH_PROVIDER,
             external_id=user_id,
         )
         session.add(user)

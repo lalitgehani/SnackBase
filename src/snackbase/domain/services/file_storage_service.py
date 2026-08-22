@@ -212,7 +212,7 @@ class FileMetadata:
         return json.dumps(self.to_dict())
 
     @classmethod
-    def from_dict(cls, data: dict[str, str | int]) -> "FileMetadata":
+    def from_dict(cls, data: dict[str, str | int]) -> FileMetadata:
         """Create from dictionary."""
         return cls(
             filename=str(data["filename"]),
@@ -222,7 +222,7 @@ class FileMetadata:
         )
 
     @classmethod
-    def from_json(cls, json_str: str) -> "FileMetadata":
+    def from_json(cls, json_str: str) -> FileMetadata:
         """Create from JSON string."""
         return cls.from_dict(json.loads(json_str))
 

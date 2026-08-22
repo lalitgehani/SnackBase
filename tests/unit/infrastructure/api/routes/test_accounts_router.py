@@ -1,6 +1,6 @@
 """Unit tests for Accounts Router."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -59,8 +59,8 @@ def create_superadmin_override():
 async def test_list_accounts_success(async_client, mock_account_service):
     """GET /accounts returns list."""
     app.dependency_overrides[require_superadmin] = create_superadmin_override()
-    
-    now = datetime.now(timezone.utc)
+
+    now = datetime.now(UTC)
     mock_items = [
         (AccountModel(id="AA0001", account_code="AA0001", name="Acc 1", slug="acc-1", created_at=now), 5),
         (AccountModel(id="BB0002", account_code="BB0002", name="Acc 2", slug="acc-2", created_at=now), 10)
@@ -71,7 +71,7 @@ async def test_list_accounts_success(async_client, mock_account_service):
         "/api/v1/accounts",
         headers={"Authorization": "Bearer dummy"}
     )
-    
+
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
     assert data["total"] == 2
@@ -83,14 +83,14 @@ async def test_list_accounts_success(async_client, mock_account_service):
 async def test_list_accounts_with_search(async_client, mock_account_service):
     """Search filtering works."""
     app.dependency_overrides[require_superadmin] = create_superadmin_override()
-    
+
     mock_account_service.list_accounts = AsyncMock(return_value=([], 0))
 
     await async_client.get(
         "/api/v1/accounts?search=query",
         headers={"Authorization": "Bearer dummy"}
     )
-    
+
     mock_account_service.list_accounts.assert_called_with(
         page=1, page_size=25, sort_by="created_at", sort_order="desc", search="query"
     )
@@ -100,14 +100,14 @@ async def test_list_accounts_with_search(async_client, mock_account_service):
 async def test_list_accounts_with_sort(async_client, mock_account_service):
     """Sorting works."""
     app.dependency_overrides[require_superadmin] = create_superadmin_override()
-    
+
     mock_account_service.list_accounts = AsyncMock(return_value=([], 0))
 
     await async_client.get(
         "/api/v1/accounts?sort_by=name&sort_order=asc",
         headers={"Authorization": "Bearer dummy"}
     )
-    
+
     mock_account_service.list_accounts.assert_called_with(
         page=1, page_size=25, sort_by="name", sort_order="asc", search=None
     )
@@ -117,8 +117,8 @@ async def test_list_accounts_with_sort(async_client, mock_account_service):
 async def test_get_account_success(async_client, mock_account_service):
     """GET /accounts/{id} returns details."""
     app.dependency_overrides[require_superadmin] = create_superadmin_override()
-    
-    now = datetime.now(timezone.utc)
+
+    now = datetime.now(UTC)
     account = AccountModel(
         id="AA0001", account_code="AA0001", name="Test", slug="test", created_at=now, updated_at=now
     )
@@ -128,7 +128,7 @@ async def test_get_account_success(async_client, mock_account_service):
         "/api/v1/accounts/AA0001",
         headers={"Authorization": "Bearer dummy"}
     )
-    
+
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
     assert data["id"] == "AA0001"
@@ -139,7 +139,7 @@ async def test_get_account_success(async_client, mock_account_service):
 async def test_get_account_not_found(async_client, mock_account_service):
     """404 for missing account."""
     app.dependency_overrides[require_superadmin] = create_superadmin_override()
-    
+
     mock_account_service.get_account_with_details = AsyncMock(
         side_effect=ValueError("Account not found")
     )
@@ -148,7 +148,7 @@ async def test_get_account_not_found(async_client, mock_account_service):
         "/api/v1/accounts/NONEXISTENT",
         headers={"Authorization": "Bearer dummy"}
     )
-    
+
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
@@ -156,8 +156,8 @@ async def test_get_account_not_found(async_client, mock_account_service):
 async def test_create_account_success(async_client, mock_account_service):
     """POST /accounts creates account."""
     app.dependency_overrides[require_superadmin] = create_superadmin_override()
-    
-    now = datetime.now(timezone.utc)
+
+    now = datetime.now(UTC)
     created = AccountModel(id="NEW001", account_code="NE0001", name="New", slug="new", created_at=now, updated_at=now)
     mock_account_service.create_account = AsyncMock(return_value=created)
 
@@ -167,11 +167,11 @@ async def test_create_account_success(async_client, mock_account_service):
         json=payload,
         headers={"Authorization": "Bearer dummy"}
     )
-    
+
     assert response.status_code == status.HTTP_201_CREATED
     data = response.json()
     assert data["id"] == "NEW001"
-    
+
     mock_account_service.create_account.assert_called_with(name="New", slug="new")
 
 
@@ -179,18 +179,18 @@ async def test_create_account_success(async_client, mock_account_service):
 async def test_create_account_validation_error(async_client, mock_account_service):
     """Validation errors."""
     app.dependency_overrides[require_superadmin] = create_superadmin_override()
-    
+
     # Service error:
     mock_account_service.create_account = AsyncMock(
         side_effect=ValueError("Invalid slug")
     )
-    
+
     response = await async_client.post(
         "/api/v1/accounts",
         json={"name": "A", "slug": "good-slug"},
         headers={"Authorization": "Bearer dummy"}
     )
-    
+
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     assert response.json()["detail"] == "Invalid slug"
 
@@ -199,10 +199,10 @@ async def test_create_account_validation_error(async_client, mock_account_servic
 async def test_update_account_success(async_client, mock_account_service):
     """PUT /accounts/{id} updates."""
     app.dependency_overrides[require_superadmin] = create_superadmin_override()
-    
-    now = datetime.now(timezone.utc)
+
+    now = datetime.now(UTC)
     updated = AccountModel(id="AA0001", account_code="AA0001", name="Updated", slug="slug", created_at=now, updated_at=now)
-    
+
     mock_account_service.update_account = AsyncMock(return_value=updated)
     mock_account_service.get_account_with_details = AsyncMock(return_value=(updated, 5))
 
@@ -211,7 +211,7 @@ async def test_update_account_success(async_client, mock_account_service):
         json={"name": "Updated"},
         headers={"Authorization": "Bearer dummy"}
     )
-    
+
     assert response.status_code == status.HTTP_200_OK
     assert response.json()["name"] == "Updated"
 
@@ -220,14 +220,14 @@ async def test_update_account_success(async_client, mock_account_service):
 async def test_delete_account_success(async_client, mock_account_service):
     """DELETE /accounts/{id} deletes."""
     app.dependency_overrides[require_superadmin] = create_superadmin_override()
-    
+
     mock_account_service.delete_account = AsyncMock(return_value=None)
 
     response = await async_client.delete(
         "/api/v1/accounts/AA0001",
         headers={"Authorization": "Bearer dummy"}
     )
-    
+
     assert response.status_code == status.HTTP_204_NO_CONTENT
     mock_account_service.delete_account.assert_called_with("AA0001")
 
@@ -236,7 +236,7 @@ async def test_delete_account_success(async_client, mock_account_service):
 async def test_delete_system_account_prevented(async_client, mock_account_service):
     """Cannot delete SY0000."""
     app.dependency_overrides[require_superadmin] = create_superadmin_override()
-    
+
     mock_account_service.delete_account = AsyncMock(
         side_effect=ValueError("Cannot delete system account")
     )
@@ -245,7 +245,7 @@ async def test_delete_system_account_prevented(async_client, mock_account_servic
         "/api/v1/accounts/SY0000",
         headers={"Authorization": "Bearer dummy"}
     )
-    
+
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     assert "system account" in response.json()["detail"].lower()
 
@@ -254,10 +254,10 @@ async def test_delete_system_account_prevented(async_client, mock_account_servic
 async def test_requires_superadmin(async_client, mock_account_service):
     """All endpoints require superadmin."""
     from fastapi import HTTPException
-    
+
     async def mock_forbidden():
         raise HTTPException(status_code=403, detail="Forbidden")
-        
+
     app.dependency_overrides[require_superadmin] = mock_forbidden
 
     response = await async_client.get(

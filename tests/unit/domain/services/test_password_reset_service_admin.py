@@ -1,12 +1,12 @@
 """Unit tests for superadmin-initiated password reset in PasswordResetService."""
 
-from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
+
 import pytest
 
-from snackbase.domain.entities.password_reset import PasswordResetToken
 from snackbase.domain.services.password_reset_service import PasswordResetService
 from snackbase.infrastructure.persistence.models import UserModel
+
 
 @pytest.fixture
 def mock_session():

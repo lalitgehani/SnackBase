@@ -1,9 +1,12 @@
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import MagicMock, AsyncMock
 from fastapi import Request, Response
+
+from snackbase.core.context import get_current_context
 from snackbase.infrastructure.api.middleware.context_middleware import ContextMiddleware
 from snackbase.infrastructure.auth.token_types import AuthenticatedUser, TokenType
-from snackbase.core.context import get_current_context
+
 
 @pytest.mark.asyncio
 async def test_context_middleware_anonymous():
@@ -15,7 +18,7 @@ async def test_context_middleware_anonymous():
     request.client.host = "127.0.0.1"
     request.headers = {"user-agent": "test-agent"}
     request.state = MagicMock(spec=[]) # Ensure no attributes exist by default
-    
+
     # We need to verify context inside call_next since it's cleared in finally block
     async def side_effect(req):
         context = get_current_context()
@@ -27,10 +30,10 @@ async def test_context_middleware_anonymous():
         return Response()
 
     call_next = AsyncMock(side_effect=side_effect)
-    
+
     middleware = ContextMiddleware(app)
     await middleware.dispatch(request, call_next)
-    
+
     # Verify it's cleared
     assert get_current_context() is None
 
@@ -43,7 +46,7 @@ async def test_context_middleware_authenticated():
     request.client = MagicMock()
     request.client.host = "127.0.0.1"
     request.headers = {"user-agent": "test-agent"}
-    
+
     auth_user = AuthenticatedUser(
         user_id="usr_123",
         account_id="acc_456",
@@ -53,7 +56,7 @@ async def test_context_middleware_authenticated():
     )
     request.state = MagicMock()
     request.state.authenticated_user = auth_user
-    
+
     async def side_effect(req):
         context = get_current_context()
         assert context is not None
@@ -63,9 +66,9 @@ async def test_context_middleware_authenticated():
         return Response()
 
     call_next = AsyncMock(side_effect=side_effect)
-    
+
     middleware = ContextMiddleware(app)
     await middleware.dispatch(request, call_next)
-    
+
     # Verify it's cleared
     assert get_current_context() is None

@@ -18,16 +18,16 @@ from pathlib import Path
 
 def confirm_cleanup(skip_confirm: bool = False) -> bool:
     """Ask user to confirm the cleanup operation.
-    
+
     Args:
         skip_confirm: If True, skip the confirmation prompt and return True.
-    
+
     Returns:
         True if user confirms or skip_confirm is True, False otherwise.
     """
     if skip_confirm:
         return True
-    
+
     print("⚠️  WARNING: This will delete ALL development data!")
     print("\nThe following will be removed:")
     print("  - All uploaded files (sb_data/files/)")
@@ -37,7 +37,7 @@ def confirm_cleanup(skip_confirm: bool = False) -> bool:
     print("  - Security test reports (tests/security-reports/)")
     print("\nThis action cannot be undone!")
 
-    
+
     response = input("\nAre you sure you want to continue? (yes/no): ").strip().lower()
     return response in ['yes', 'y']
 
@@ -84,12 +84,12 @@ Examples:
         action='store_true',
         help='Skip confirmation prompt and proceed with cleanup'
     )
-    
+
     args = parser.parse_args()
-    
+
     # Get project root (script is in project root)
     project_root = Path(__file__).parent
-    
+
     # Define paths to clean
     files_dir = project_root / "sb_data" / "files"
     migrations_dir = project_root / "sb_data" / "migrations"
@@ -98,39 +98,39 @@ Examples:
     db_wal_file = project_root / "sb_data" / "snackbase.db-wal"
     db_shm_file = project_root / "sb_data" / "snackbase.db-shm"
     security_reports_dir = project_root / "tests" / "security-reports"
-    
+
     print("=" * 60)
     print("SnackBase Development Cleanup Script")
     print("=" * 60)
     print()
-    
+
     # Confirm with user (skip if -y flag is provided)
     if not confirm_cleanup(skip_confirm=args.yes):
         print("\n❌ Cleanup cancelled.")
         sys.exit(0)
-    
+
     print("\n" + "=" * 60)
     print("Starting cleanup...")
     print("=" * 60)
     print()
-    
+
     # Clean uploaded files
     cleanup_directory(files_dir, "Uploaded files directory")
-    
+
     # Clean dynamic migrations
     cleanup_directory(migrations_dir, "Dynamic migrations directory")
-    
+
     # Clean function envs (per-version venvs)
     cleanup_directory(function_envs_dir, "Function envs directory")
-    
+
     # Clean database files (main DB + WAL + SHM)
     cleanup_file(db_file, "Database file")
     cleanup_file(db_wal_file, "Database WAL file")
     cleanup_file(db_shm_file, "Database SHM file")
-    
+
     # Clean security reports
     cleanup_directory(security_reports_dir, "Security test reports directory")
-    
+
     print()
     print("=" * 60)
     print("✨ Cleanup complete!")

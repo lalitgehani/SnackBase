@@ -12,7 +12,6 @@ Tests cover:
 import pytest
 
 from snackbase.core.hooks import (
-    HookCategory,
     HookDecorator,
     HookEvent,
     HookRegistry,
@@ -23,7 +22,6 @@ from snackbase.core.hooks import (
 from snackbase.domain.entities.hook_context import (
     AbortHookException,
     HookContext,
-    HookResult,
 )
 
 

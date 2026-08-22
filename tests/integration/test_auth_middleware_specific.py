@@ -1,6 +1,7 @@
 import pytest
 from httpx import AsyncClient
 
+
 @pytest.mark.asyncio
 async def test_middleware_skips_health_endpoints(client: AsyncClient):
     """Verify that health endpoints are skipped by the authentication middleware."""
@@ -8,11 +9,11 @@ async def test_middleware_skips_health_endpoints(client: AsyncClient):
     response = await client.get("/health")
     assert response.status_code == 200
     assert response.json()["status"] == "healthy"
-    
+
     response = await client.get("/ready")
     assert response.status_code == 200
     assert response.json()["status"] == "ready"
-    
+
     response = await client.get("/live")
     assert response.status_code == 200
     assert response.json()["status"] == "alive"
@@ -24,7 +25,7 @@ async def test_middleware_handles_unauthenticated_request(client: AsyncClient):
     # The middleware should let it pass, and the dependency should eventually return 401
     response = await client.get("/api/v1/users")
     assert response.status_code == 401
-    
+
 @pytest.mark.asyncio
 async def test_middleware_handles_invalid_token(client: AsyncClient):
     """Verify that invalid tokens are handled gracefully by the middleware."""

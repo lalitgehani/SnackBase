@@ -1,15 +1,16 @@
 import asyncio
 import json
+from datetime import datetime
+
 import httpx
 import websockets
-from datetime import datetime
 
 API_URL = "http://localhost:8000/api/v1"
 WS_URL = "ws://localhost:8000/api/v1/realtime/ws"
 
 async def verify_realtime():
     print("🚀 Starting Real-Time Verification...")
-    
+
     # 1. Login to get token
     async with httpx.AsyncClient() as client:
         # Assuming we have a test user or superadmin
@@ -24,12 +25,12 @@ async def verify_realtime():
         if response.status_code != 200:
             print(f"❌ Login failed: {response.text}")
             return
-        
+
         resp_json = response.json()
         if "token" not in resp_json:
             print(f"❌ Login response missing 'token': {resp_json}")
             return
-            
+
         token = resp_json["token"]
         print("✅ Login successful")
 
@@ -37,14 +38,14 @@ async def verify_realtime():
         print(f"Connecting to WebSocket at {WS_URL}...")
         async with websockets.connect(f"{WS_URL}?token={token}") as ws:
             print("✅ WebSocket connected")
-            
+
             # 3. Subscribe to a test collection (e.g., 'tasks')
             # First, make sure the collection exists or create it
             # For this test, let's assume 'tasks' collection exists or create a throwaway one
             collection_name = f"test_col_{int(datetime.now().timestamp())}"
             print(f"Creating test collection '{collection_name}'...")
             col_resp = await client.post(
-                f"{API_URL}/collections", 
+                f"{API_URL}/collections",
                 json={
                     "name": collection_name,
                     "schema": [{"name": "title", "type": "text"}]
@@ -55,16 +56,16 @@ async def verify_realtime():
                 print(f"❌ Collection creation failed: {col_resp.status_code} {col_resp.text}")
                 return
             print("✅ Collection created")
-            
+
             print(f"Subscribing to {collection_name}...")
             await ws.send(json.dumps({
                 "action": "subscribe",
                 "collection": collection_name
             }))
-            
+
             sub_resp = await ws.recv()
             print(f"Subscription response: {sub_resp}")
-            
+
             # 4. Perform a CREATE operation via REST
             print("Creating a record via REST...")
             create_resp = await client.post(
@@ -73,7 +74,7 @@ async def verify_realtime():
                 headers={"Authorization": f"Bearer {token}"}
             )
             print(f"Record created: {create_resp.status_code}")
-            
+
             # 5. Wait for WebSocket event
             print("Waiting for WebSocket event...")
             try:
@@ -87,7 +88,7 @@ async def verify_realtime():
                         break
                 else:
                     print("❌ Failed: WebSocket event not received within timeout")
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 print("❌ Failed: Timeout waiting for WebSocket event")
 
             # 6. Verify SSE
@@ -97,8 +98,8 @@ async def verify_realtime():
             async def listen_sse():
                 # Note: SSE endpoint is /api/v1/realtime/subscribe?token=...&collection=...
                 async with client.stream(
-                    "GET", 
-                    f"{API_URL}/realtime/subscribe", 
+                    "GET",
+                    f"{API_URL}/realtime/subscribe",
                     params={"token": token, "collection": collection_name},
                     timeout=None
                 ) as response:
@@ -113,7 +114,7 @@ async def verify_realtime():
 
             sse_task = asyncio.create_task(listen_sse())
             await asyncio.sleep(1) # Give SSE time to connect
-            
+
             # Trigger UPDATE via REST
             record_id = create_resp.json()["id"]
             print(f"Updating record {record_id} via REST...")
@@ -122,10 +123,10 @@ async def verify_realtime():
                 json={"title": "Updated Title"},
                 headers={"Authorization": f"Bearer {token}"}
             )
-            
+
             try:
                 await asyncio.wait_for(sse_task, timeout=5.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 print("❌ Failed: Timeout waiting for SSE event")
                 sse_task.cancel()
 

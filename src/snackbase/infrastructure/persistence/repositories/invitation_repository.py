@@ -1,9 +1,9 @@
 """Invitation repository for database operations."""
 
 import hashlib
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from sqlalchemy import and_, delete, or_, select
+from sqlalchemy import and_, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -97,7 +97,7 @@ class InvitationRepository:
         if account_id:
             query = query.where(InvitationModel.account_id == account_id)
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         if status == "pending":
             query = query.where(
@@ -149,7 +149,7 @@ class InvitationRepository:
         """
         invitation = await self.get_by_id(invitation_id)
         if invitation:
-            invitation.accepted_at = datetime.now(timezone.utc)
+            invitation.accepted_at = datetime.now(UTC)
             await self.session.flush()
 
     async def cancel_invitation(self, invitation_id: str) -> bool:
@@ -179,7 +179,7 @@ class InvitationRepository:
         Returns:
             True if a pending invitation exists, False otherwise.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         result = await self.session.execute(
             select(InvitationModel.id)
@@ -199,7 +199,7 @@ class InvitationRepository:
         """Count pending invitations (not accepted, not expired) across all accounts."""
         from sqlalchemy import func
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         result = await self.session.execute(
             select(func.count(InvitationModel.id)).where(
                 and_(

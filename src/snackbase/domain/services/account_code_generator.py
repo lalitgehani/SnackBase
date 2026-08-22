@@ -5,7 +5,7 @@ Provides validation and collision prevention.
 """
 
 import re
-from typing import Iterable
+from collections.abc import Iterable
 
 
 class AccountCodeExhaustedError(Exception):

@@ -129,7 +129,7 @@ class ConfigurationModel(Base):
     )
 
     # Relationships
-    account: Mapped["AccountModel"] = relationship(  # noqa: F821
+    account: Mapped[AccountModel] = relationship(  # noqa: F821
         "AccountModel",
         back_populates="configurations",
     )

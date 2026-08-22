@@ -1,20 +1,22 @@
-import pytest
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock, patch
+
+import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
-from unittest.mock import patch, AsyncMock
 
+from snackbase.core.config import get_settings
 from snackbase.infrastructure.persistence.models import AccountModel, UserModel
 from snackbase.infrastructure.persistence.models.configuration import OAuthStateModel
 from snackbase.infrastructure.persistence.repositories import (
     AccountRepository,
     ConfigurationRepository,
     OAuthStateRepository,
-    UserRepository,
     RoleRepository,
+    UserRepository,
 )
-from snackbase.core.config import get_settings
+
 
 @pytest.mark.asyncio
 class TestOAuthCallback:
@@ -22,15 +24,15 @@ class TestOAuthCallback:
 
     async def _setup_infra(self, db_session: AsyncSession):
         """Setup necessary infrastructure for OAuth tests."""
-        from snackbase.infrastructure.api.app import app
         from snackbase.core.configuration.config_registry import ConfigurationRegistry
-        from snackbase.infrastructure.security.encryption import EncryptionService
+        from snackbase.infrastructure.api.app import app
         from snackbase.infrastructure.configuration.providers.oauth import GoogleOAuthHandler
-        
+        from snackbase.infrastructure.security.encryption import EncryptionService
+
         settings = get_settings()
         encryption_service = EncryptionService(settings.encryption_key)
         app.state.config_registry = ConfigurationRegistry(encryption_service)
-        
+
         # Register Google provider definition
         google_handler = GoogleOAuthHandler()
         app.state.config_registry.register_provider_definition(
@@ -62,7 +64,7 @@ class TestOAuthCallback:
             "scopes": ["openid", "email"],
             "redirect_uri": "http://localhost:8000/callback"
         }
-        
+
         await app.state.config_registry.create_config(
             account_id="00000000-0000-0000-0000-000000000000",
             category="auth_providers",
@@ -78,7 +80,7 @@ class TestOAuthCallback:
     async def test_callback_new_user_self_provisioning_success(self, client: AsyncClient, db_session: AsyncSession):
         """Test successful callback for a new user with self-provisioning (new account)."""
         await self._setup_infra(db_session)
-        
+
         # 1. Create a valid state in the database
         state_token = "valid-state-token"
         oauth_state_repo = OAuthStateRepository(db_session)
@@ -87,7 +89,7 @@ class TestOAuthCallback:
             provider_name="google",
             state_token=state_token,
             redirect_uri="http://myapp.com/callback",
-            expires_at=datetime.now(timezone.utc) + timedelta(minutes=10),
+            expires_at=datetime.now(UTC) + timedelta(minutes=10),
             metadata_={"account_id": "00000000-0000-0000-0000-000000000000"}
         )
         await oauth_state_repo.create(state_model)
@@ -118,7 +120,7 @@ class TestOAuthCallback:
         assert data["user"]["email"] == "newuser@example.com"
         assert data["is_new_user"] is True
         assert data["is_new_account"] is True
-        
+
         # Verify user and account in DB
         user_repo = UserRepository(db_session)
         user = await user_repo.get_by_external_id("google", "google-user-123")
@@ -127,7 +129,7 @@ class TestOAuthCallback:
         assert user.auth_provider == "oauth"
         assert user.auth_provider_name == "google"
         assert user.external_id == "google-user-123"
-        
+
         # Verify state is deleted
         state = await oauth_state_repo.get_by_token(state_token)
         assert state is None
@@ -135,15 +137,15 @@ class TestOAuthCallback:
     async def test_callback_existing_user_success(self, client: AsyncClient, db_session: AsyncSession):
         """Test successful callback for an existing OAuth user."""
         await self._setup_infra(db_session)
-        
+
         # Create an existing account and user
         account_repo = AccountRepository(db_session)
         role_repo = RoleRepository(db_session)
         user_repo = UserRepository(db_session)
-        
+
         account = AccountModel(id=str(uuid.uuid4()), account_code="AC1234", name="Exist Account", slug="exist")
         await account_repo.create(account)
-        
+
         admin_role = await role_repo.get_by_name("admin")
         user = UserModel(
             id=str(uuid.uuid4()),
@@ -158,7 +160,7 @@ class TestOAuthCallback:
         )
         await user_repo.create(user)
         await db_session.commit()
-        
+
         # Create state
         state_token = "state-existing"
         oauth_state_repo = OAuthStateRepository(db_session)
@@ -167,12 +169,12 @@ class TestOAuthCallback:
             provider_name="google",
             state_token=state_token,
             redirect_uri="http://myapp.com/callback",
-            expires_at=datetime.now(timezone.utc) + timedelta(minutes=10),
+            expires_at=datetime.now(UTC) + timedelta(minutes=10),
             metadata_={"account_id": account.id}
         )
         await oauth_state_repo.create(state_model)
         await db_session.commit()
-        
+
         # Mock handler
         mock_handler = AsyncMock()
         mock_handler.exchange_code_for_tokens.return_value = {"access_token": "mock-token"}
@@ -181,7 +183,7 @@ class TestOAuthCallback:
             "email": "existing@example.com",
             "name": "Existing User"
         }
-        
+
         with patch("snackbase.infrastructure.api.routes.oauth_router.OAUTH_HANDLERS", {"google": mock_handler}):
             response = await client.post(
                 "/api/v1/auth/oauth/google/callback",
@@ -191,7 +193,7 @@ class TestOAuthCallback:
                     "redirect_uri": "http://myapp.com/callback"
                 }
             )
-            
+
         assert response.status_code == 200
         data = response.json()
         assert data["user"]["email"] == "existing@example.com"
@@ -201,7 +203,7 @@ class TestOAuthCallback:
     async def test_callback_invalid_state(self, client: AsyncClient, db_session: AsyncSession):
         """Test callback with invalid state token."""
         await self._setup_infra(db_session)
-        
+
         response = await client.post(
             "/api/v1/auth/oauth/google/callback",
             json={
@@ -216,7 +218,7 @@ class TestOAuthCallback:
     async def test_callback_expired_state(self, client: AsyncClient, db_session: AsyncSession):
         """Test callback with expired state token."""
         await self._setup_infra(db_session)
-        
+
         # Create expired state
         state_token = "expired-state"
         oauth_state_repo = OAuthStateRepository(db_session)
@@ -225,12 +227,12 @@ class TestOAuthCallback:
             provider_name="google",
             state_token=state_token,
             redirect_uri="http://myapp.com/callback",
-            expires_at=datetime.now(timezone.utc) - timedelta(minutes=1),
+            expires_at=datetime.now(UTC) - timedelta(minutes=1),
             metadata_={"account_id": "00000000-0000-0000-0000-000000000000"}
         )
         await oauth_state_repo.create(state_model)
         await db_session.commit()
-        
+
         response = await client.post(
             "/api/v1/auth/oauth/google/callback",
             json={
@@ -241,7 +243,7 @@ class TestOAuthCallback:
         )
         assert response.status_code == 400
         assert "State token expired" in response.json()["detail"]
-        
+
         # Verify state is deleted
         state = await oauth_state_repo.get_by_token(state_token)
         assert state is None
@@ -249,13 +251,13 @@ class TestOAuthCallback:
     async def test_callback_join_existing_account_success(self, client: AsyncClient, db_session: AsyncSession):
         """Test successful callback where user joins an existing specific account."""
         await self._setup_infra(db_session)
-        
+
         # Create an existing account
         account_repo = AccountRepository(db_session)
         account = AccountModel(id=str(uuid.uuid4()), account_code="AC5678", name="Target Account", slug="target")
         await account_repo.create(account)
         await db_session.commit()
-        
+
         # Create state targeting this account
         state_token = "state-join"
         oauth_state_repo = OAuthStateRepository(db_session)
@@ -264,12 +266,12 @@ class TestOAuthCallback:
             provider_name="google",
             state_token=state_token,
             redirect_uri="http://myapp.com/callback",
-            expires_at=datetime.now(timezone.utc) + timedelta(minutes=10),
+            expires_at=datetime.now(UTC) + timedelta(minutes=10),
             metadata_={"account_id": account.id}
         )
         await oauth_state_repo.create(state_model)
         await db_session.commit()
-        
+
         # Mock handler
         mock_handler = AsyncMock()
         mock_handler.exchange_code_for_tokens.return_value = {"access_token": "mock-token"}
@@ -278,7 +280,7 @@ class TestOAuthCallback:
             "email": "join@example.com",
             "name": "Join User"
         }
-        
+
         with patch("snackbase.infrastructure.api.routes.oauth_router.OAUTH_HANDLERS", {"google": mock_handler}):
             response = await client.post(
                 "/api/v1/auth/oauth/google/callback",
@@ -288,7 +290,7 @@ class TestOAuthCallback:
                     "redirect_uri": "http://myapp.com/callback"
                 }
             )
-            
+
         assert response.status_code == 200
         data = response.json()
         assert data["user"]["email"] == "join@example.com"
@@ -299,15 +301,15 @@ class TestOAuthCallback:
     async def test_callback_inactive_user_error(self, client: AsyncClient, db_session: AsyncSession):
         """Test callback fails for an inactive user."""
         await self._setup_infra(db_session)
-        
+
         # Create an inactive user
         account_repo = AccountRepository(db_session)
         role_repo = RoleRepository(db_session)
         user_repo = UserRepository(db_session)
-        
+
         account = AccountModel(id=str(uuid.uuid4()), account_code="AC1111", name="Inactive Acc", slug="inactive")
         await account_repo.create(account)
-        
+
         admin_role = await role_repo.get_by_name("admin")
         user = UserModel(
             id=str(uuid.uuid4()),
@@ -322,7 +324,7 @@ class TestOAuthCallback:
         )
         await user_repo.create(user)
         await db_session.commit()
-        
+
         # Create state
         state_token = "state-inactive"
         oauth_state_repo = OAuthStateRepository(db_session)
@@ -331,12 +333,12 @@ class TestOAuthCallback:
             provider_name="google",
             state_token=state_token,
             redirect_uri="http://myapp.com/callback",
-            expires_at=datetime.now(timezone.utc) + timedelta(minutes=10),
+            expires_at=datetime.now(UTC) + timedelta(minutes=10),
             metadata_={"account_id": account.id}
         )
         await oauth_state_repo.create(state_model)
         await db_session.commit()
-        
+
         # Mock handler
         mock_handler = AsyncMock()
         mock_handler.exchange_code_for_tokens.return_value = {"access_token": "mock-token"}
@@ -345,7 +347,7 @@ class TestOAuthCallback:
             "email": "inactive@example.com",
             "name": "Inactive User"
         }
-        
+
         with patch("snackbase.infrastructure.api.routes.oauth_router.OAUTH_HANDLERS", {"google": mock_handler}):
             response = await client.post(
                 "/api/v1/auth/oauth/google/callback",
@@ -355,6 +357,6 @@ class TestOAuthCallback:
                     "redirect_uri": "http://myapp.com/callback"
                 }
             )
-            
+
         assert response.status_code == 401
         assert "User account is inactive" in response.json()["detail"]

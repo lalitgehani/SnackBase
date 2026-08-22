@@ -112,19 +112,19 @@ async def test_create_oauth_user_with_random_password(
     # Retrieve user from database
     user = await db_session.get(UserModel, user_id)
     assert user is not None
-    
+
     # Verify password_hash is not NULL
     assert user.password_hash is not None
-    
+
     # Verify password_hash is a valid Argon2 hash
     assert user.password_hash.startswith("$argon2id$")
     assert len(user.password_hash) > 50
-    
+
     # Verify user cannot authenticate with a guessed password
     from snackbase.infrastructure.auth import verify_password
     assert verify_password("password123", user.password_hash) is False
     assert verify_password("random_password", user.password_hash) is False
-    
+
     # Verify auth provider is set correctly
     assert user.auth_provider == "oauth"
     assert user.auth_provider_name == "github"
@@ -228,7 +228,7 @@ async def test_list_users_with_filters(client: AsyncClient, superadmin_token: st
         assert user["account_id"] == account_id
 
     # Filter by search
-    response = await client.get(f"/api/v1/users?search=filter1", headers=headers)
+    response = await client.get("/api/v1/users?search=filter1", headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert any(user["email"] == "filter1@example.com" for user in data["items"])

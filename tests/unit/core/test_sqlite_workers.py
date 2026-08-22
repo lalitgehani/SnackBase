@@ -1,7 +1,9 @@
 
 import pytest
 from pydantic import ValidationError
+
 from snackbase.core.config import Settings
+
 
 def test_valid_sqlite_workers():
     """Verify Settings accepts workers=1 with SQLite."""

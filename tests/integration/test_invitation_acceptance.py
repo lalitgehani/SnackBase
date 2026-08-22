@@ -1,22 +1,24 @@
 
 """Integration tests for invitation acceptance flow."""
 
-import pytest
 import uuid
-from datetime import datetime, timedelta, timezone
-from httpx import AsyncClient, ASGITransport
+from datetime import UTC, datetime, timedelta
+
+import pytest
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 
 from snackbase.infrastructure.api.app import app
-from snackbase.infrastructure.api.dependencies import get_db_session, get_current_user, CurrentUser
+from snackbase.infrastructure.api.dependencies import get_db_session
+from snackbase.infrastructure.auth import hash_password
 from snackbase.infrastructure.persistence.models import (
     AccountModel,
-    UserModel,
-    RoleModel,
     InvitationModel,
+    RoleModel,
+    UserModel,
 )
-from sqlalchemy import select
-from snackbase.infrastructure.auth import hash_password
 from snackbase.infrastructure.persistence.repositories import InvitationRepository
+
 
 @pytest.mark.asyncio
 async def test_get_invitation_details(db_session):
@@ -43,14 +45,14 @@ async def test_get_invitation_details(db_session):
         is_active=True,
     )
     db_session.add(admin_user)
-    
+
     # 2. Create an invitation manually
     invitation_token = "valid-token-" + uuid.uuid4().hex
     invitation_id = str(uuid.uuid4())
     invite_email = f"invitee-accept-{uuid.uuid4().hex[:8]}@example.com"
-    
-    expires_at = datetime.now(timezone.utc) + timedelta(hours=48)
-    
+
+    expires_at = datetime.now(UTC) + timedelta(hours=48)
+
     invitation = InvitationModel(
         id=invitation_id,
         account_id=account_id,
@@ -59,7 +61,7 @@ async def test_get_invitation_details(db_session):
         invited_by=admin_user.id,
         expires_at=expires_at,
         email_sent=True,
-        email_sent_at=datetime.now(timezone.utc)
+        email_sent_at=datetime.now(UTC)
     )
     db_session.add(invitation)
     await db_session.commit()
@@ -68,17 +70,17 @@ async def test_get_invitation_details(db_session):
     app.dependency_overrides[get_db_session] = lambda: db_session
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        
+
         # 3. Test Valid Token
         response = await ac.get(f"/api/v1/invitations/{invitation_token}")
-        
+
         assert response.status_code == 200, response.text
         data = response.json()
         assert data["email"] == invite_email
         assert data["account_name"] == account.name
         assert data["is_valid"] is True
         #invited_by_name might be email if name not set
-        assert data["invited_by_name"] == admin_user.email 
+        assert data["invited_by_name"] == admin_user.email
 
         # 4. Test Invalid Token
         response = await ac.get("/api/v1/invitations/invalid-token-123")
@@ -112,11 +114,11 @@ async def test_get_invitation_expired(db_session):
         is_active=True,
     )
     db_session.add(admin_user)
-    
+
     # 2. Create EXPIRED invitation
     invitation_token = "expired-token-" + uuid.uuid4().hex
-    expires_at = datetime.now(timezone.utc) - timedelta(hours=1) # Expired 1 hour ago
-    
+    expires_at = datetime.now(UTC) - timedelta(hours=1) # Expired 1 hour ago
+
     invitation = InvitationModel(
         id=str(uuid.uuid4()),
         account_id=account_id,
@@ -163,11 +165,11 @@ async def test_get_invitation_already_accepted(db_session):
         is_active=True,
     )
     db_session.add(admin_user)
-    
+
     # 2. Create ACCEPTED invitation
     invitation_token = "accepted-token-" + uuid.uuid4().hex
-    expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
-    
+    expires_at = datetime.now(UTC) + timedelta(hours=24)
+
     invitation = InvitationModel(
         id=str(uuid.uuid4()),
         account_id=account_id,
@@ -175,7 +177,7 @@ async def test_get_invitation_already_accepted(db_session):
         token=InvitationRepository.hash_token(invitation_token),
         invited_by=admin_user.id,
         expires_at=expires_at,
-        accepted_at=datetime.now(timezone.utc) # Accepted just now
+        accepted_at=datetime.now(UTC) # Accepted just now
     )
     db_session.add(invitation)
     await db_session.commit()

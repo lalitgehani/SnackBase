@@ -71,7 +71,7 @@ class EmailVerificationTokenModel(Base):
     )
 
     # Relationships
-    user: Mapped["UserModel"] = relationship(  # noqa: F821
+    user: Mapped[UserModel] = relationship(  # noqa: F821
         "UserModel",
         back_populates="email_verification_tokens",
     )

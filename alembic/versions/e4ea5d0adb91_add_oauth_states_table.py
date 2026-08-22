@@ -12,7 +12,6 @@ from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.types import JSON
 
-
 # revision identifiers, used by Alembic.
 revision: str = 'e4ea5d0adb91'
 down_revision: str | Sequence[str] | None = 'c69bf537b237'

@@ -1,8 +1,11 @@
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from snackbase.infrastructure.auth.authenticator import Authenticator, AuthenticationError
-from snackbase.infrastructure.auth.token_types import TokenType, AuthenticatedUser
+
+import pytest
+
+from snackbase.infrastructure.auth.authenticator import AuthenticationError, Authenticator
+from snackbase.infrastructure.auth.token_types import AuthenticatedUser, TokenType
+
 
 @pytest.fixture
 def authenticator():
@@ -24,14 +27,14 @@ async def test_authenticate_jwt_success(authenticator, mock_session):
         "email": "test@example.com",
         "role": "admin"
     }
-    
+
     with patch("snackbase.infrastructure.auth.authenticator.jwt_service.validate_access_token", return_value=payload):
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = True
         mock_session.execute.return_value = mock_result
 
         user = await authenticator.authenticate({"Authorization": f"Bearer {token}"}, session=mock_session)
-        
+
         assert isinstance(user, AuthenticatedUser)
         assert user.user_id == "usr_123"
         assert user.token_type == TokenType.JWT
@@ -49,7 +52,7 @@ async def test_authenticate_jwt_user_verification_fails(authenticator, mock_sess
         "email": "test@example.com",
         "role": "admin"
     }
-    
+
     with patch("snackbase.infrastructure.auth.authenticator.jwt_service.validate_access_token", return_value=payload):
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = None

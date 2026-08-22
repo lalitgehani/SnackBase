@@ -11,9 +11,12 @@ from snackbase.infrastructure.persistence.repositories.configuration_repository 
     ConfigurationRepository,
 )
 from snackbase.infrastructure.security.encryption import EncryptionService
-from snackbase.infrastructure.storage.base import StoredFile, StorageProvider
+from snackbase.infrastructure.storage.base import StorageProvider, StoredFile
 from snackbase.infrastructure.storage.local_storage_provider import LocalStorageProvider
-from snackbase.infrastructure.storage.s3_storage_provider import S3StorageProvider, S3StorageSettings
+from snackbase.infrastructure.storage.s3_storage_provider import (
+    S3StorageProvider,
+    S3StorageSettings,
+)
 
 logger = get_logger(__name__)
 

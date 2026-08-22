@@ -1,6 +1,6 @@
 """Unit tests for Macro API Router."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -13,6 +13,8 @@ from snackbase.infrastructure.api.app import app
 from snackbase.infrastructure.api.dependencies import get_current_user, require_superadmin
 from snackbase.infrastructure.api.routes.macros_router import get_db_session
 from snackbase.infrastructure.persistence.models.macro import MacroModel
+
+
 @pytest.fixture
 def mock_repo():
     """Mock MacroRepository."""
@@ -47,17 +49,17 @@ async def test_create_macro_superadmin(async_client, mock_repo):
         user = AsyncMock()
         user.user_id = "admin"
         return user
-    
+
     app.dependency_overrides[require_superadmin] = admin_override
-    
+
     mock_repo.create.return_value = MacroModel(
         id=1,
         name="test_macro",
         sql_query="SELECT 1",
         parameters='["p1"]',
         created_by="admin",
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
 
     payload = {
@@ -86,9 +88,9 @@ async def test_create_macro_invalid_query(async_client):
         user = AsyncMock()
         user.user_id = "admin"
         return user
-    
+
     app.dependency_overrides[require_superadmin] = admin_override
-    
+
     payload = {
         "name": "test_macro",
         "sql_query": "DELETE FROM users",
@@ -110,12 +112,12 @@ async def test_list_macros(async_client, mock_repo):
         user = AsyncMock()
         user.user_id = "user"
         return user
-    
+
     app.dependency_overrides[get_current_user] = user_override
 
     mock_repo.list_all.return_value = [
-        MacroModel(id=1, name="m1", sql_query="SELECT 1", parameters="[]", created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc)),
-        MacroModel(id=2, name="m2", sql_query="SELECT 2", parameters="[]", created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc)),
+        MacroModel(id=1, name="m1", sql_query="SELECT 1", parameters="[]", created_at=datetime.now(UTC), updated_at=datetime.now(UTC)),
+        MacroModel(id=2, name="m2", sql_query="SELECT 2", parameters="[]", created_at=datetime.now(UTC), updated_at=datetime.now(UTC)),
     ]
 
     response = await async_client.get("/api/v1/macros", headers={"Authorization": "Bearer dummy"})
@@ -131,11 +133,11 @@ async def test_get_macro(async_client, mock_repo):
     async def user_override():
         user = AsyncMock()
         return user
-    
+
     app.dependency_overrides[get_current_user] = user_override
 
     mock_repo.get_by_id.return_value = MacroModel(
-        id=1, name="m1", sql_query="SELECT 1", parameters="[]", created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc)
+        id=1, name="m1", sql_query="SELECT 1", parameters="[]", created_at=datetime.now(UTC), updated_at=datetime.now(UTC)
     )
 
     # Debug: verify mock setup
@@ -157,7 +159,7 @@ async def test_get_macro_not_found(async_client, mock_repo):
     async def user_override():
         user = AsyncMock()
         return user
-    
+
     app.dependency_overrides[get_current_user] = user_override
 
     mock_repo.get_by_id.return_value = None
@@ -174,11 +176,11 @@ async def test_update_macro_superadmin(async_client, mock_repo):
         user = AsyncMock()
         user.user_id = "admin"
         return user
-    
+
     app.dependency_overrides[require_superadmin] = admin_override
-    
+
     mock_repo.update.return_value = MacroModel(
-        id=1, name="updated", sql_query="SELECT 2", parameters="[]", created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc)
+        id=1, name="updated", sql_query="SELECT 2", parameters="[]", created_at=datetime.now(UTC), updated_at=datetime.now(UTC)
     )
 
     payload = {"name": "updated", "sql_query": "SELECT 2"}
@@ -197,27 +199,26 @@ async def test_update_macro_superadmin(async_client, mock_repo):
 @pytest.mark.asyncio
 async def test_delete_macro_superadmin(async_client, mock_repo):
     """Test deleting a macro as superadmin."""
-    from snackbase.infrastructure.persistence.repositories.collection_rule_repository import CollectionRuleRepository
-    
+
     async def admin_override():
         user = AsyncMock()
         user.user_id = "admin"
         return user
-    
+
     app.dependency_overrides[require_superadmin] = admin_override
-    
+
     # Mock macro
     mock_macro = MacroModel(
         id=1,
         name="test_macro",
         sql_query="SELECT 1",
         parameters="[]",
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
     mock_repo.get_by_id.return_value = mock_macro
     mock_repo.delete.return_value = True
-    
+
     # Mock CollectionRuleRepository to prevent it from running real logic
     with patch(
         "snackbase.infrastructure.api.routes.macros_router.CollectionRuleRepository"
@@ -225,9 +226,9 @@ async def test_delete_macro_superadmin(async_client, mock_repo):
         mock_rule_repo = AsyncMock()
         mock_rule_repo_class.return_value = mock_rule_repo
         mock_rule_repo.find_rules_using_macro.return_value = []
-        
+
         response = await async_client.delete("/api/v1/macros/1", headers={"Authorization": "Bearer dummy"})
-        
+
         assert response.status_code == status.HTTP_204_NO_CONTENT
 
 
@@ -238,9 +239,9 @@ async def test_delete_macro_not_found(async_client, mock_repo):
         user = AsyncMock()
         user.user_id = "admin"
         return user
-    
+
     app.dependency_overrides[require_superadmin] = admin_override
-    
+
     mock_repo.get_by_id.return_value = None
 
     response = await async_client.delete("/api/v1/macros/999", headers={"Authorization": "Bearer dummy"})
@@ -268,8 +269,8 @@ async def test_test_macro_success(async_client, mock_repo, db_session: AsyncSess
         name="test_macro",
         sql_query="SELECT :value",
         parameters='["value"]',
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
     mock_repo.get_by_id.return_value = mock_macro
 
@@ -296,29 +297,29 @@ async def test_test_macro_invalid_param_count(async_client, mock_repo):
         user = AsyncMock()
         user.user_id = "admin"
         return user
-    
+
     app.dependency_overrides[require_superadmin] = admin_override
-    
+
     # Mock macro with one parameter
     mock_macro = MacroModel(
         id=1,
         name="test_macro",
         sql_query="SELECT :value",
         parameters='["value"]',
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
     mock_repo.get_by_id.return_value = mock_macro
-    
+
     # Send wrong number of parameters
     payload = {"parameters": ["val1", "val2"]}
-    
+
     response = await async_client.post(
         "/api/v1/macros/1/test",
         json=payload,
         headers={"Authorization": "Bearer dummy"},
     )
-    
+
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
@@ -329,19 +330,19 @@ async def test_test_macro_not_found(async_client, mock_repo):
         user = AsyncMock()
         user.user_id = "admin"
         return user
-    
+
     app.dependency_overrides[require_superadmin] = admin_override
-    
+
     mock_repo.get_by_id.return_value = None
-    
+
     payload = {"parameters": []}
-    
+
     response = await async_client.post(
         "/api/v1/macros/999/test",
         json=payload,
         headers={"Authorization": "Bearer dummy"},
     )
-    
+
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
@@ -349,44 +350,44 @@ async def test_test_macro_not_found(async_client, mock_repo):
 async def test_delete_macro_in_use(async_client, mock_repo):
     """Test deleting a macro that is used in collection rules."""
     from snackbase.infrastructure.persistence.models.collection_rule import CollectionRuleModel
-    
+
     async def admin_override():
         user = AsyncMock()
         user.user_id = "admin"
         return user
-    
+
     app.dependency_overrides[require_superadmin] = admin_override
-    
+
     # Mock macro
     mock_macro = MacroModel(
         id=1,
         name="test_macro",
         sql_query="SELECT 1",
         parameters="[]",
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
     mock_repo.get_by_id.return_value = mock_macro
-    
+
     # Mock collection rule repository to return rules using the macro
     with patch(
         "snackbase.infrastructure.api.routes.macros_router.CollectionRuleRepository"
     ) as mock_rule_repo_class:
         mock_rule_repo = AsyncMock()
         mock_rule_repo_class.return_value = mock_rule_repo
-        
+
         mock_rule = CollectionRuleModel(
             id="rule-1",
             collection_id="coll-1",
             view_rule="@test_macro()",
         )
         mock_rule_repo.find_rules_using_macro.return_value = [mock_rule]
-        
+
         response = await async_client.delete(
             "/api/v1/macros/1",
             headers={"Authorization": "Bearer dummy"},
         )
-        
+
         assert response.status_code == status.HTTP_409_CONFLICT
         assert "used in" in response.json()["detail"].lower()
 
@@ -398,21 +399,21 @@ async def test_delete_macro_unused(async_client, mock_repo):
         user = AsyncMock()
         user.user_id = "admin"
         return user
-    
+
     app.dependency_overrides[require_superadmin] = admin_override
-    
+
     # Mock macro
     mock_macro = MacroModel(
         id=1,
         name="test_macro",
         sql_query="SELECT 1",
         parameters="[]",
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
     mock_repo.get_by_id.return_value = mock_macro
     mock_repo.delete.return_value = True
-    
+
     # Mock collection rule repository to return no rules using the macro
     with patch(
         "snackbase.infrastructure.api.routes.macros_router.CollectionRuleRepository"
@@ -420,10 +421,10 @@ async def test_delete_macro_unused(async_client, mock_repo):
         mock_rule_repo = AsyncMock()
         mock_rule_repo_class.return_value = mock_rule_repo
         mock_rule_repo.find_rules_using_macro.return_value = []
-        
+
         response = await async_client.delete(
             "/api/v1/macros/1",
             headers={"Authorization": "Bearer dummy"},
         )
-        
+
         assert response.status_code == status.HTTP_204_NO_CONTENT

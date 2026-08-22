@@ -8,10 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.core.logging import get_logger
 from snackbase.infrastructure.api.dependencies import (
+    SYSTEM_ACCOUNT_ID,
     AuthenticatedUser,
     get_db_session,
-    require_superadmin,
-    SYSTEM_ACCOUNT_ID,
 )
 from snackbase.infrastructure.api.schemas.group_schemas import (
     GroupCreate,
@@ -56,7 +55,7 @@ async def create_group(
     """
     # Determine account_id: use provided account_id if superadmin, otherwise use current user's account
     target_account_id = group_data.account_id if group_data.account_id else current_user.account_id
-    
+
     # Check uniqueness
     existing = await group_repo.get_by_name_and_account(
         group_data.name, target_account_id
@@ -110,20 +109,20 @@ async def get_group(
 ) -> GroupModel:
     """Get a specific group by ID."""
     group = await group_repo.get_by_id(group_id)
-    
+
     if not group:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Group not found",
         )
-        
+
     # Ensure account isolation (skip for superadmins)
     if current_user.account_id != SYSTEM_ACCOUNT_ID and group.account_id != current_user.account_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Group not found",
         )
-        
+
     return group
 
 
@@ -141,20 +140,20 @@ async def update_group(
 ) -> GroupModel:
     """Update a group."""
     group = await group_repo.get_by_id(group_id)
-    
+
     if not group:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Group not found",
         )
-        
+
     # Ensure account isolation (skip for superadmins)
     if current_user.account_id != SYSTEM_ACCOUNT_ID and group.account_id != current_user.account_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Group not found",
         )
-        
+
     # Check name uniqueness if changing name
     if group_data.name and group_data.name != group.name:
         existing = await group_repo.get_by_name_and_account(
@@ -165,12 +164,12 @@ async def update_group(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Group with this name already exists in the account",
             )
-            
+
     if group_data.name:
         group.name = group_data.name
     if group_data.description is not None:
         group.description = group_data.description
-        
+
     result = await group_repo.update(group)
     await session.commit()
     return result
@@ -189,20 +188,20 @@ async def delete_group(
 ) -> None:
     """Delete a group."""
     group = await group_repo.get_by_id(group_id)
-    
+
     if not group:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Group not found",
         )
-        
+
     # Ensure account isolation (skip for superadmins)
     if current_user.account_id != SYSTEM_ACCOUNT_ID and group.account_id != current_user.account_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Group not found",
         )
-        
+
     await group_repo.delete(group)
     await session.commit()
 
@@ -221,32 +220,32 @@ async def add_user_to_group(
 ) -> dict[str, str]:
     """Add a user to a group."""
     group = await group_repo.get_by_id(group_id)
-    
+
     if not group:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Group not found",
         )
-        
+
     # Ensure account isolation (skip for superadmins)
     if current_user.account_id != SYSTEM_ACCOUNT_ID and group.account_id != current_user.account_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Group not found",
         )
-        
+
     # Verify user exists in account (TODO: better validation needed)
-    
+
     # Check if already in group
     if await group_repo.is_user_in_group(group_id, user_data.user_id):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="User already in group",
         )
-        
+
     await group_repo.add_user(group_id, user_data.user_id)
     await session.commit()
-    
+
     return {"message": "User added to group"}
 
 
@@ -264,19 +263,19 @@ async def remove_user_from_group(
 ) -> None:
     """Remove a user from a group."""
     group = await group_repo.get_by_id(group_id)
-    
+
     if not group:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Group not found",
         )
-        
+
     # Ensure account isolation (skip for superadmins)
     if current_user.account_id != SYSTEM_ACCOUNT_ID and group.account_id != current_user.account_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Group not found",
         )
-        
+
     await group_repo.remove_user(group_id, user_id)
     await session.commit()

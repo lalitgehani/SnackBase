@@ -2,20 +2,18 @@ import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from fastapi import status
+from fastapi import Request, status
 from fastapi.responses import JSONResponse
-from fastapi import Request
 
+from snackbase.infrastructure.api.middleware import RuleFilter
 from snackbase.infrastructure.api.routes.records_router import (
     create_record,
-    list_records,
-    get_record,
-    update_record_full,
-    update_record_partial,
     delete_record,
+    get_record,
+    list_records,
+    update_record_partial,
 )
 from snackbase.infrastructure.api.schemas import CursorListResponse, RecordValidationErrorDetail
-from snackbase.infrastructure.api.middleware import RuleFilter
 
 
 @pytest.fixture
@@ -88,7 +86,7 @@ async def test_create_record_success(
 
     mock_rec_repo = mock_rec_repo_cls.return_value
     mock_rec_repo.check_reference_exists = AsyncMock(return_value=True)
-    
+
     # Mock insert result
     data = {"title": "New Post"}
     expected_record = {
@@ -104,7 +102,7 @@ async def test_create_record_success(
 
     # Mock validator
     mock_validator.validate_and_apply_defaults.return_value = (data, [])
-    
+
     # Mock permission check - allow all fields
     mock_check_permission.return_value = RuleFilter(sql="1=1", params={}, allowed_fields="*")
 
@@ -114,7 +112,7 @@ async def test_create_record_success(
     # Assert
     assert response.id == "rec-new"
     assert response.title == "New Post"
-    
+
     mock_col_repo.get_by_name.assert_called_once_with("posts")
     mock_rec_repo.insert_record.assert_called_once()
     mock_session.commit.assert_called_once()
@@ -133,7 +131,7 @@ async def test_create_record_collection_not_found(
 ):
     mock_col_repo = mock_col_repo_cls.return_value
     mock_col_repo.get_by_name = AsyncMock(return_value=None)
-    
+
     # Mock permission check
     mock_check_permission.return_value = RuleFilter(sql="1=1", params={}, allowed_fields="*")
 
@@ -165,7 +163,7 @@ async def test_create_record_validation_error(
     error = RecordValidationErrorDetail(field="title", message="Required", code="missing")
     # Return tuple (processed_data, errors)
     mock_validator.validate_and_apply_defaults.return_value = ({}, [error])
-    
+
     # Mock permission check
     mock_check_permission.return_value = RuleFilter(sql="1=1", params={}, allowed_fields="*")
 
@@ -198,33 +196,33 @@ async def test_list_records_success(
     mock_rec_repo = mock_rec_repo_cls.return_value
     records = [
         {
-            "id": "1", 
-            "title": "A", 
+            "id": "1",
+            "title": "A",
             "created_at": "2023",
-            "account_id": "acc-1", 
-            "created_by": "user-1", 
-            "updated_at": "2023", 
+            "account_id": "acc-1",
+            "created_by": "user-1",
+            "updated_at": "2023",
             "updated_by": "user-1"
         },
         {
-            "id": "2", 
-            "title": "B", 
+            "id": "2",
+            "title": "B",
             "created_at": "2023",
-            "account_id": "acc-1", 
-            "created_by": "user-1", 
-            "updated_at": "2023", 
+            "account_id": "acc-1",
+            "created_by": "user-1",
+            "updated_at": "2023",
             "updated_by": "user-1"
         },
     ]
     mock_rec_repo.find_all = AsyncMock(return_value=(records, 2))
-    
+
     # Mock permission check
     mock_check_permission.return_value = RuleFilter(sql="1=1", params={}, allowed_fields="*")
 
     # Set up request query params
     mock_request.query_params = {}
 
-    response = await list_records(
+    await list_records(
         collection="posts",
         request=mock_request,
         current_user=mock_user,
@@ -263,31 +261,31 @@ async def test_list_records_cursor_success(
     mock_rec_repo = mock_rec_repo_cls.return_value
     records = [
         {
-            "id": "1", 
-            "title": "A", 
+            "id": "1",
+            "title": "A",
             "created_at": "2023-01-01T00:00:00",
-            "account_id": "acc-1", 
-            "created_by": "user-1", 
-            "updated_at": "2023-01-01T00:00:00", 
+            "account_id": "acc-1",
+            "created_by": "user-1",
+            "updated_at": "2023-01-01T00:00:00",
             "updated_by": "user-1"
         },
         {
-            "id": "2", 
-            "title": "B", 
+            "id": "2",
+            "title": "B",
             "created_at": "2023-01-02T00:00:00",
-            "account_id": "acc-1", 
-            "created_by": "user-1", 
-            "updated_at": "2023-01-02T00:00:00", 
+            "account_id": "acc-1",
+            "created_by": "user-1",
+            "updated_at": "2023-01-02T00:00:00",
             "updated_by": "user-1"
         },
     ]
     next_cursor = "eyJzb3J0X3ZhbHVlIjoiMjAyMy0wMS0wMlQwMDowMDowMCIsImlkIjoiMiJ9"
     prev_cursor = "eyJzb3J0X3ZhbHVlIjoiMjAyMy0wMS0wMVQwMDowMDowMCIsImlkIjoiMSJ9"
     mock_rec_repo.find_all_cursor = AsyncMock(return_value=(records, next_cursor, prev_cursor, False, None))
-    
+
     # Mock decode_cursor
     mock_decode_cursor.return_value = ("2023-01-01T00:00:00", "cursor_id")
-    
+
     # Mock permission check
     mock_check_permission.return_value = RuleFilter(sql="1=1", params={}, allowed_fields="*")
 
@@ -342,20 +340,20 @@ async def test_list_records_cursor_with_count(
     mock_rec_repo = mock_rec_repo_cls.return_value
     records = [
         {
-            "id": "1", 
-            "title": "A", 
+            "id": "1",
+            "title": "A",
             "created_at": "2023-01-01T00:00:00",
-            "account_id": "acc-1", 
-            "created_by": "user-1", 
-            "updated_at": "2023-01-01T00:00:00", 
+            "account_id": "acc-1",
+            "created_by": "user-1",
+            "updated_at": "2023-01-01T00:00:00",
             "updated_by": "user-1"
         },
     ]
     mock_rec_repo.find_all_cursor = AsyncMock(return_value=(records, None, None, False, 150))
-    
+
     # Mock decode_cursor
     mock_decode_cursor.return_value = ("2023-01-01T00:00:00", "cursor_id")
-    
+
     # Mock permission check
     mock_check_permission.return_value = RuleFilter(sql="1=1", params={}, allowed_fields="*")
 
@@ -395,7 +393,7 @@ async def test_list_records_collection_not_found(
 ):
     mock_col_repo = mock_col_repo_cls.return_value
     mock_col_repo.get_by_name = AsyncMock(return_value=None)
-    
+
     # Mock permission check
     mock_check_permission.return_value = RuleFilter(sql="1=1", params={}, allowed_fields="*")
 
@@ -438,16 +436,16 @@ async def test_get_record_success(
 
     mock_rec_repo = mock_rec_repo_cls.return_value
     record = {
-        "id": "rec-1", 
-        "title": "My Post", 
+        "id": "rec-1",
+        "title": "My Post",
         "created_at": "2023",
-        "account_id": "acc-1", 
-        "created_by": "user-1", 
-        "updated_at": "2023", 
+        "account_id": "acc-1",
+        "created_by": "user-1",
+        "updated_at": "2023",
         "updated_by": "user-1"
     }
     mock_rec_repo.get_by_id = AsyncMock(return_value=record)
-    
+
     # Mock permission check
     mock_check_permission.return_value = RuleFilter(sql="1=1", params={}, allowed_fields="*")
 
@@ -475,7 +473,7 @@ async def test_get_record_not_found(
 
     mock_rec_repo = mock_rec_repo_cls.return_value
     mock_rec_repo.get_by_id = AsyncMock(return_value=None)
-    
+
     # Mock permission check
     mock_check_permission.return_value = RuleFilter(sql="1=1", params={}, allowed_fields="*")
 
@@ -504,7 +502,7 @@ async def test_update_record_success(
     mock_col_repo.get_by_name = AsyncMock(return_value=sample_collection)
 
     mock_rec_repo = mock_rec_repo_cls.return_value
-    
+
     # Mock existing record for permission check
     existing_record = {
         "id": "rec-1",
@@ -515,7 +513,7 @@ async def test_update_record_success(
         "created_by": "user-1",
         "updated_by": "user-1"
     }
-    
+
     updated_record = {
         "id": "rec-1",
         "title": "Updated",
@@ -529,7 +527,7 @@ async def test_update_record_success(
     mock_rec_repo.update_record = AsyncMock(return_value=updated_record)
 
     mock_validator.validate_and_apply_defaults.return_value = ({"title": "Updated"}, [])
-    
+
     # Mock permission check
     mock_check_permission.return_value = RuleFilter(sql="1=1", params={}, allowed_fields="*")
 
@@ -557,7 +555,7 @@ async def test_delete_record_success(
     mock_col_repo.get_by_name = AsyncMock(return_value=sample_collection)
 
     mock_rec_repo = mock_rec_repo_cls.return_value
-    
+
     # Mock existing record for permission check
     existing_record = {
         "id": "rec-1",
@@ -570,7 +568,7 @@ async def test_delete_record_success(
     }
     mock_rec_repo.get_by_id = AsyncMock(return_value=existing_record)
     mock_rec_repo.delete_record = AsyncMock(return_value=True)
-    
+
     # Mock permission check
     mock_check_permission.return_value = RuleFilter(sql="1=1", params={}, allowed_fields="*")
 

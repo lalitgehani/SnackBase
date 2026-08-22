@@ -101,7 +101,7 @@ class GenericSAMLProvider(SAMLProviderHandler):
         # regardless of the config, as it's the standard for authn requests.
         # If POST support is needed for requests, it would require a different return type.
 
-        issue_instant = datetime.datetime.now(datetime.timezone.utc).strftime(
+        issue_instant = datetime.datetime.now(datetime.UTC).strftime(
             "%Y-%m-%dT%H:%M:%SZ"
         )
         request_id = f"id_{secrets.token_hex(16)}"
@@ -135,7 +135,7 @@ class GenericSAMLProvider(SAMLProviderHandler):
             params["RelayState"] = relay_state
 
         query_string = urllib.parse.urlencode(params)
-        
+
         # Determine separator
         separator = "&" if "?" in config["idp_sso_url"] else "?"
         return f"{config['idp_sso_url']}{separator}{query_string}"
@@ -151,7 +151,7 @@ class GenericSAMLProvider(SAMLProviderHandler):
         try:
             # Decode Base64
             xml_str = base64.b64decode(saml_response)
-            
+
             # Format certificate
             cert = config["idp_x509_cert"]
             if not cert.startswith("-----BEGIN CERTIFICATE"):
@@ -179,21 +179,21 @@ class GenericSAMLProvider(SAMLProviderHandler):
             if name_id_node is None:
                 # Fallback to Subject/NameID
                 name_id_node = verified_data.find(".//saml:Subject/saml:NameID", ns)
-            
+
             name_id = name_id_node.text if name_id_node is not None else None
-            
+
             if not name_id:
                 raise ValueError("Could not extract NameID from SAML Assertion")
 
             # Extract Attributes
             attributes = {}
             attribute_nodes = verified_data.findall(".//saml:AttributeStatement/saml:Attribute", ns)
-            
+
             for attr in attribute_nodes:
                 name = attr.get("Name")
                 if not name:
                     continue
-                    
+
                 # Get the value(s)
                 values = [val.text for val in attr.findall("saml:AttributeValue", ns) if val.text]
                 if values:
@@ -221,7 +221,7 @@ class GenericSAMLProvider(SAMLProviderHandler):
 
             # Try to resolve name
             name_parts = []
-            
+
             # First name
             first_name_keys = ["firstName", "givenName", "gn", "User.FirstName", "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname"]
             for key in first_name_keys:
@@ -232,7 +232,7 @@ class GenericSAMLProvider(SAMLProviderHandler):
                     if val:
                         name_parts.append(str(val))
                         break
-            
+
             # Last name
             last_name_keys = ["lastName", "sn", "surname", "User.LastName", "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname"]
             for key in last_name_keys:
@@ -243,7 +243,7 @@ class GenericSAMLProvider(SAMLProviderHandler):
                     if val:
                         name_parts.append(str(val))
                         break
-            
+
             if name_parts:
                 user_info["name"] = " ".join(name_parts)
             else:
@@ -266,13 +266,13 @@ class GenericSAMLProvider(SAMLProviderHandler):
     async def get_metadata(self, config: dict[str, Any]) -> str:
         """Generate SP Metadata XML."""
         self._validate_config(config)
-        
+
         sp_entity_id = config["sp_entity_id"]
         acs_url = config["assertion_consumer_url"]
         name_id_format = config.get(
             "name_id_format", "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress"
         )
-        
+
         metadata = (
             f'<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" '
             f'entityID="{sp_entity_id}">'

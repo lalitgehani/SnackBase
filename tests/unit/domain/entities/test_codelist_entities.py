@@ -5,8 +5,6 @@ import pytest
 from snackbase.domain.entities.codelist import (
     Codelist,
     CodelistAccountOverride,
-    CodelistValue,
-    CodelistValueLabel,
     EffectiveCodelistValue,
 )
 

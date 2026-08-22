@@ -5,9 +5,9 @@ filtering. Each collection has one rule set with 5 operations: list, view,
 create, update, delete.
 """
 
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
 import json
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 
 
 @dataclass
@@ -47,8 +47,8 @@ class CollectionRule:
     view_fields: str = "*"
     create_fields: str = "*"
     update_fields: str = "*"
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self) -> None:
         """Validate collection rule after initialization."""

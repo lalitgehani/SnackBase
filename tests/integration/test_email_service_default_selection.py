@@ -1,9 +1,12 @@
 """Integration test for email provider selection logic."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
-from snackbase.infrastructure.services.email_service import EmailService
+
+import pytest
+
 from snackbase.infrastructure.persistence.models.configuration import ConfigurationModel
+from snackbase.infrastructure.services.email_service import EmailService
+
 
 @pytest.mark.asyncio
 async def test_select_provider_prefers_default():
@@ -14,7 +17,7 @@ async def test_select_provider_prefers_default():
     config_repo = MagicMock()
     encryption_service = MagicMock()
     encryption_service.decrypt_dict = MagicMock(side_effect=lambda x: x)  # Pass-through
-    
+
     # Create email service
     email_service = EmailService(
         template_repository=template_repo,
@@ -22,7 +25,7 @@ async def test_select_provider_prefers_default():
         config_repository=config_repo,
         encryption_service=encryption_service,
     )
-    
+
     # Create two enabled providers, one is default
     provider1 = ConfigurationModel(
         id="p1",
@@ -46,20 +49,20 @@ async def test_select_provider_prefers_default():
         is_default=True,
         priority=1 # Higher priority value (lower logical priority) but marked default
     )
-    
+
     # Mock list_configs to return both
     config_repo.list_configs = AsyncMock(return_value=[provider1, provider2])
-    
+
     # Mock provider creation
     mock_provider = MagicMock()
     mock_provider.__class__.__name__ = "AWSESProvider"
     email_service._create_provider = MagicMock(return_value=mock_provider)
-    
+
     # Call _get_provider (internal method that does selection)
     # We use a dummy session as it's not used in selection logic
     mock_session = MagicMock()
     provider, from_email, _, _ = await email_service._get_provider(mock_session, "acc1")
-    
+
     # Verify provider 2 (the default one) was selected
     assert from_email == "p2@test.com"
     email_service._create_provider.assert_called_with("aws_ses", provider2.config)
@@ -72,14 +75,14 @@ async def test_select_provider_falls_back_to_priority():
     config_repo = MagicMock()
     encryption_service = MagicMock()
     encryption_service.decrypt_dict = MagicMock(side_effect=lambda x: x)
-    
+
     email_service = EmailService(
         template_repository=template_repo,
         log_repository=log_repo,
         config_repository=config_repo,
         encryption_service=encryption_service,
     )
-    
+
     # Two enabled providers, none is default
     provider1 = ConfigurationModel(
         id="p1",
@@ -103,19 +106,19 @@ async def test_select_provider_falls_back_to_priority():
         is_default=False,
         priority=5 # Higher priority (lower value)
     )
-    
+
     # Mock list_configs to return both, sorted by selection logic (which is done in SQL Usually)
     # Actually email_service.py:192 just takes account_configs[0] if no default
     config_repo.list_configs = AsyncMock(return_value=[provider2, provider1])
-    
+
     # Mock provider creation
     mock_provider = MagicMock()
     mock_provider.__class__.__name__ = "AWSESProvider"
     email_service._create_provider = MagicMock(return_value=mock_provider)
-    
+
     mock_session = MagicMock()
     provider, from_email, _, _ = await email_service._get_provider(mock_session, "acc1")
-    
+
     # Verify provider 2 (the first in the list) was selected
     assert from_email == "p2@test.com"
     email_service._create_provider.assert_called_with("aws_ses", provider2.config)

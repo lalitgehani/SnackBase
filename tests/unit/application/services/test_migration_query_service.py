@@ -1,7 +1,9 @@
 """Unit tests for MigrationQueryService."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
 from snackbase.application.services.migration_query_service import MigrationQueryService
 
 
@@ -9,7 +11,7 @@ from snackbase.application.services.migration_query_service import MigrationQuer
 def mock_script_directory():
     """Mock ScriptDirectory for testing."""
     mock_dir = MagicMock()
-    
+
     # Create mock revisions
     mock_rev1 = MagicMock()
     mock_rev1.revision = "abc123"
@@ -108,16 +110,16 @@ async def test_get_all_revisions_with_current(migration_service, mock_script_dir
 async def test_get_current_revision_no_engine(migration_service):
     """Test get_current_revision returns None when no engine provided."""
     migration_service.engine = None
-    
+
     current = await migration_service.get_current_revision()
-    
+
     assert current is None
 
 
 @pytest.mark.asyncio
 async def test_get_current_revision_with_engine(migration_service, mock_script_directory):
     """Test get_current_revision returns current revision from database."""
-    from unittest.mock import AsyncMock, MagicMock
+    from unittest.mock import MagicMock
 
     mock_connection = MagicMock()
 
@@ -156,28 +158,28 @@ async def test_get_current_revision_not_initialized(migration_service):
     """Test get_current_revision when database is not initialized."""
     # Create a mock engine with a proper async context manager for connect()
     from unittest.mock import MagicMock
-    
+
     # Create the connection mock
     mock_connection = MagicMock()
-    
+
     # Create an async context manager that returns the connection
     class AsyncContextManager:
         async def __aenter__(self):
             return mock_connection
-        
+
         async def __aexit__(self, *args):
             return None
-    
+
     # Create the engine mock
     mock_engine = MagicMock()
     mock_engine.connect = MagicMock(return_value=AsyncContextManager())
-    
+
     # Mock run_sync to return None (no current revision)
     async def mock_run_sync(func):
         # Simulate calling the function with a sync connection
         mock_sync_conn = MagicMock()
         return func(mock_sync_conn)
-    
+
     # Mock MigrationContext to return empty list (no revisions applied)
     with patch("snackbase.application.services.migration_query_service.MigrationContext") as mock_mc:
         mock_context = MagicMock()
@@ -213,9 +215,9 @@ async def test_get_migration_history(migration_service):
 async def test_get_migration_history_empty(migration_service):
     """Test get_migration_history when no migrations are applied."""
     migration_service.engine = None
-    
+
     history = await migration_service.get_migration_history()
-    
+
     # No engine means no applied migrations
     assert len(history) == 0
 
@@ -224,9 +226,9 @@ def test_is_revision_applied(migration_service):
     """Test _is_revision_applied correctly identifies applied revisions."""
     # Test revision that is current
     assert migration_service._is_revision_applied("def456", "def456") is True
-    
+
     # Test revision in the upgrade path
     assert migration_service._is_revision_applied("abc123", "def456") is True
-    
+
     # Test revision not in the upgrade path
     assert migration_service._is_revision_applied("ghi789", "def456") is False

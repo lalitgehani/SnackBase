@@ -3,7 +3,6 @@
 Tests thread-safety and concurrent account creation scenarios.
 """
 
-import asyncio
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession

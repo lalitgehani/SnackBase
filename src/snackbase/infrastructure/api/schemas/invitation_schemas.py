@@ -1,12 +1,12 @@
 """Pydantic schemas for invitation API endpoints."""
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
-class InvitationStatus(str, Enum):
+class InvitationStatus(StrEnum):
     """Invitation status enum."""
 
     PENDING = "pending"

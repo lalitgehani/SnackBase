@@ -5,10 +5,9 @@ Uses aiosmtplib for asynchronous email sending via SMTP.
 
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import Optional
 
 import aiosmtplib
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 from snackbase.core.logging import get_logger
 from snackbase.infrastructure.services.email.email_provider import EmailProvider
@@ -29,7 +28,7 @@ class SMTPSettings(BaseModel):
     use_ssl: bool = False
     from_email: str
     from_name: str = "SnackBase"
-    reply_to: Optional[str] = None
+    reply_to: str | None = None
     timeout: int = 10
 
 
@@ -55,7 +54,7 @@ class SMTPProvider(EmailProvider):
         text_body: str,
         from_email: str,
         from_name: str,
-        reply_to: Optional[str] = None,
+        reply_to: str | None = None,
     ) -> bool:
         """Send an email via SMTP.
 
@@ -78,7 +77,7 @@ class SMTPProvider(EmailProvider):
         message["Subject"] = subject
         message["From"] = f"{from_name or self.settings.from_name} <{from_email or self.settings.from_email}>"
         message["To"] = to
-        
+
         reply_addr = reply_to or self.settings.reply_to
         if reply_addr:
             message["Reply-To"] = reply_addr
@@ -96,10 +95,10 @@ class SMTPProvider(EmailProvider):
             ) as smtp:
                 if self.settings.use_tls and not self.settings.use_ssl:
                     await smtp.starttls()
-                
+
                 await smtp.login(self.settings.username, self.settings.password)
                 await smtp.send_message(message)
-                
+
             return True
         except Exception as e:
             logger.error("Failed to send email via SMTP", host=self.settings.host, error=str(e))
@@ -120,9 +119,9 @@ class SMTPProvider(EmailProvider):
             ) as smtp:
                 if self.settings.use_tls and not self.settings.use_ssl:
                     await smtp.starttls()
-                
+
                 await smtp.login(self.settings.username, self.settings.password)
-                
+
             return True, None
         except Exception as e:
             error_msg = f"SMTP connection failed: {str(e)}"

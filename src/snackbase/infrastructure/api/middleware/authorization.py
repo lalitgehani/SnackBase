@@ -30,10 +30,10 @@ SYSTEM_FIELDS = {"id", "account_id", "created_at", "updated_at", "created_by", "
 
 def extract_operation_from_method(method: str) -> str:
     """Extract CRUD operation from HTTP method.
-    
+
     Args:
         method: HTTP method (GET, POST, PUT, PATCH, DELETE).
-        
+
     Returns:
         Operation type (create, read, update, delete).
     """
@@ -52,14 +52,14 @@ def extract_operation_from_method(method: str) -> str:
 
 def extract_collection_from_path(path: str) -> str | None:
     """Extract collection name from URL path.
-    
+
     Matches patterns like:
     - /api/v1/records/{collection}
     - /api/v1/records/{collection}/{record_id}
-    
+
     Args:
         path: URL path.
-        
+
     Returns:
         Collection name if found, None otherwise.
     """
@@ -93,16 +93,16 @@ def validate_request_fields(
     operation: str,
 ) -> None:
     """Validate that request body only contains allowed fields.
-    
+
     Checks that:
     1. All fields in the request are in the allowed fields list
     2. No system fields are present in the request (they cannot be written)
-    
+
     Args:
         data: Request data dictionary.
         allowed_fields: List of allowed field names or "*" for all fields.
         operation: Operation type (create, update) for error messages.
-        
+
     Raises:
         HTTPException: 422 if validation fails with details about unauthorized fields.
     """
@@ -171,13 +171,13 @@ def apply_field_filter(
     is_request: bool = False,
 ) -> dict[str, Any]:
     """Apply field-level filtering to data.
-    
+
     Args:
         data: Data dictionary to filter.
         allowed_fields: List of allowed field names or "*" for all fields.
         is_request: If True, filtering for request body (excludes system fields).
                    If False, filtering for response (includes system fields).
-        
+
     Returns:
         Filtered data dictionary.
     """
@@ -220,7 +220,7 @@ async def check_collection_permission(
         RuleFilter object containing SQL fragment and allowed fields.
 
     Raises:
-        HTTPException: 403 if permission denied or 404 if view/update/delete 
+        HTTPException: 403 if permission denied or 404 if view/update/delete
                       is on a record that doesn't pass the filter.
     """
     user = auth_context.user

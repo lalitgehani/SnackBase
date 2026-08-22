@@ -24,7 +24,7 @@ class RecordResponse(BaseModel):
     model_config = {"extra": "allow"}
 
     @classmethod
-    def from_record(cls, record: dict[str, Any]) -> "RecordResponse":
+    def from_record(cls, record: dict[str, Any]) -> RecordResponse:
         """Create a RecordResponse from a record dict.
 
         Args:

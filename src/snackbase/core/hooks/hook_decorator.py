@@ -7,7 +7,8 @@ IMPORTANT: This is a STABLE API. The decorator methods are part of
            the public API contract and cannot be changed.
 """
 
-from typing import Any, Callable, Optional, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 from snackbase.core.hooks.hook_events import HookEvent
 from snackbase.core.hooks.hook_registry import HookRegistry
@@ -125,7 +126,7 @@ class HookDecorator:
 
     def on_record_before_create(
         self,
-        collection: Optional[str] = None,
+        collection: str | None = None,
         priority: int = 0,
         stop_on_error: bool = False,
     ) -> Callable[[F], F]:
@@ -157,7 +158,7 @@ class HookDecorator:
 
     def on_record_after_create(
         self,
-        collection: Optional[str] = None,
+        collection: str | None = None,
         priority: int = 0,
         stop_on_error: bool = False,
     ) -> Callable[[F], F]:
@@ -188,7 +189,7 @@ class HookDecorator:
 
     def on_record_before_update(
         self,
-        collection: Optional[str] = None,
+        collection: str | None = None,
         priority: int = 0,
         stop_on_error: bool = False,
     ) -> Callable[[F], F]:
@@ -211,7 +212,7 @@ class HookDecorator:
 
     def on_record_after_update(
         self,
-        collection: Optional[str] = None,
+        collection: str | None = None,
         priority: int = 0,
         stop_on_error: bool = False,
     ) -> Callable[[F], F]:
@@ -234,7 +235,7 @@ class HookDecorator:
 
     def on_record_before_delete(
         self,
-        collection: Optional[str] = None,
+        collection: str | None = None,
         priority: int = 0,
         stop_on_error: bool = False,
     ) -> Callable[[F], F]:
@@ -257,7 +258,7 @@ class HookDecorator:
 
     def on_record_after_delete(
         self,
-        collection: Optional[str] = None,
+        collection: str | None = None,
         priority: int = 0,
         stop_on_error: bool = False,
     ) -> Callable[[F], F]:
@@ -280,7 +281,7 @@ class HookDecorator:
 
     def on_record_before_query(
         self,
-        collection: Optional[str] = None,
+        collection: str | None = None,
         priority: int = 0,
         stop_on_error: bool = False,
     ) -> Callable[[F], F]:
@@ -303,7 +304,7 @@ class HookDecorator:
 
     def on_record_after_query(
         self,
-        collection: Optional[str] = None,
+        collection: str | None = None,
         priority: int = 0,
         stop_on_error: bool = False,
     ) -> Callable[[F], F]:
@@ -573,7 +574,7 @@ class HookDecorator:
         self,
         event: str,
         callback: Callable,
-        filters: Optional[dict[str, Any]] = None,
+        filters: dict[str, Any] | None = None,
         priority: int = 0,
         stop_on_error: bool = False,
     ) -> str:
@@ -617,7 +618,7 @@ class HookDecorator:
     def _create_decorator(
         self,
         event: str,
-        collection: Optional[str],
+        collection: str | None,
         priority: int,
         stop_on_error: bool,
     ) -> Callable[[F], F]:

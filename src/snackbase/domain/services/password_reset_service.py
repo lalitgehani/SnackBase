@@ -3,8 +3,10 @@
 Handles token generation, sending reset emails, and resetting passwords.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
+
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from snackbase.core.logging import get_logger
 from snackbase.domain.entities.password_reset import PasswordResetToken
 from snackbase.infrastructure.auth.password_hasher import hash_password
@@ -12,10 +14,10 @@ from snackbase.infrastructure.persistence.models.user import UserModel
 from snackbase.infrastructure.persistence.repositories.password_reset_repository import (
     PasswordResetRepository,
 )
-from snackbase.infrastructure.persistence.repositories.user_repository import UserRepository
 from snackbase.infrastructure.persistence.repositories.refresh_token_repository import (
     RefreshTokenRepository,
 )
+from snackbase.infrastructure.persistence.repositories.user_repository import UserRepository
 from snackbase.infrastructure.services.email_service import EmailService
 
 logger = get_logger(__name__)
@@ -69,7 +71,7 @@ class PasswordResetService:
         # Get app_url for reset link
         system_vars = await self.email_service._get_system_variables(self.session, account_id)
         app_url = system_vars.get("app_url", "")
-        
+
         # Build reset URL
         # Format: {app_url}/reset-password?token={token}
         reset_url = f"{app_url.rstrip('/')}/reset-password?token={raw_token}"

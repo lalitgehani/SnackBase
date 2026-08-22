@@ -1,7 +1,6 @@
 """Unit tests for AccountService."""
 
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -30,7 +29,7 @@ async def test_create_account_with_slug(account_service):
     # Setup mocks
     account_service.account_repo.get_all_ids.return_value = []
     account_service.account_repo.slug_exists.return_value = False
-    
+
     # Return what was passed (simplified)
     async def side_effect(account):
         return account
@@ -48,7 +47,7 @@ async def test_create_account_with_slug(account_service):
     # Account code should be XX#### format
     assert len(result.account_code) == 6
     assert result.account_code == "AA0001"  # First code generated
-    
+
     account_service.account_repo.create.assert_called_once()
     account_service.account_repo.slug_exists.assert_called_with("custom-slug")
 
@@ -58,7 +57,7 @@ async def test_create_account_auto_slug(account_service):
     """Create with auto-generated slug."""
     account_service.account_repo.get_all_ids.return_value = []
     account_service.account_repo.slug_exists.return_value = False  # Always available
-    
+
     async def side_effect(account):
         return account
     account_service.account_repo.create.side_effect = side_effect
@@ -97,7 +96,7 @@ async def test_update_account_success(account_service):
         slug="acc-1"
     )
     account_service.account_repo.get_by_id.return_value = existing
-    
+
     async def update_side_effect(account):
         return account
     account_service.account_repo.update.side_effect = update_side_effect
@@ -141,7 +140,7 @@ async def test_delete_system_account_prevented(account_service):
     """Prevent system account deletion (nil UUID)."""
     with pytest.raises(ValueError, match="Cannot delete system account"):
         await account_service.delete_account("00000000-0000-0000-0000-000000000000")
-    
+
     # Ensure delete was not called
     account_service.account_repo.delete.assert_not_called()
 
@@ -175,5 +174,5 @@ async def test_list_accounts_paginated(account_service):
     assert results[0][0].id == "12345678-1234-1234-1234-123456789012"
     assert results[0][0].account_code == "AA0001"
     assert results[0][1] == 5
-    
+
     account_service.account_repo.get_all_paginated.assert_called_once()

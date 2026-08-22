@@ -1,9 +1,14 @@
-import pytest
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
-from datetime import datetime, timezone
-from snackbase.infrastructure.persistence.repositories.oauth_state_repository import OAuthStateRepository
-from snackbase.infrastructure.persistence.models.configuration import OAuthStateModel
+
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from snackbase.infrastructure.persistence.models.configuration import OAuthStateModel
+from snackbase.infrastructure.persistence.repositories.oauth_state_repository import (
+    OAuthStateRepository,
+)
+
 
 @pytest.fixture
 def mock_session():
@@ -20,11 +25,11 @@ async def test_create_state(repository, mock_session):
         provider_name="google",
         state_token="secure_token",
         redirect_uri="http://localhost/callback",
-        expires_at=datetime.now(timezone.utc)
+        expires_at=datetime.now(UTC)
     )
-    
+
     result = await repository.create(state)
-    
+
     assert result == state
     mock_session.add.assert_called_with(state)
     mock_session.flush.assert_called()
@@ -35,9 +40,9 @@ async def test_get_by_id(repository, mock_session):
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = mock_model
     mock_session.execute.return_value = mock_result
-    
+
     result = await repository.get_by_id("STATE1")
-    
+
     assert result == mock_model
     mock_session.execute.assert_called()
 
@@ -47,9 +52,9 @@ async def test_get_by_token(repository, mock_session):
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = mock_model
     mock_session.execute.return_value = mock_result
-    
+
     result = await repository.get_by_token("secure_token")
-    
+
     assert result == mock_model
     mock_session.execute.assert_called()
 
@@ -59,9 +64,9 @@ async def test_delete_state(repository, mock_session):
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = mock_model
     mock_session.execute.return_value = mock_result
-    
+
     result = await repository.delete("STATE1")
-    
+
     assert result is True
     mock_session.delete.assert_called_with(mock_model)
     mock_session.flush.assert_called()
@@ -71,10 +76,10 @@ async def test_delete_expired(repository, mock_session):
     mock_result = MagicMock()
     mock_result.rowcount = 5
     mock_session.execute.return_value = mock_result
-    
-    now = datetime.now(timezone.utc)
+
+    now = datetime.now(UTC)
     count = await repository.delete_expired(now)
-    
+
     assert count == 5
     mock_session.execute.assert_called()
     mock_session.flush.assert_called()

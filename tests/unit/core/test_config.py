@@ -2,9 +2,6 @@
 import os
 from unittest.mock import patch
 
-import pytest
-from pydantic import ValidationError
-
 from snackbase.core.config import Settings, get_settings
 
 
@@ -12,9 +9,9 @@ def test_settings_defaults():
     """Test that settings load with correct defaults."""
     # Reset cache before test
     get_settings.cache_clear()
-    
+
     settings = Settings()
-    
+
     assert settings.app_name == "SnackBase"
     assert settings.environment == "development"
     assert settings.debug is False
@@ -28,7 +25,7 @@ def test_settings_defaults():
 def test_settings_env_override():
     """Test that environment variables override defaults."""
     get_settings.cache_clear()
-    
+
     with patch.dict(os.environ, {
         "SNACKBASE_APP_NAME": "TestApp",
         "SNACKBASE_ENVIRONMENT": "production",
@@ -40,7 +37,7 @@ def test_settings_env_override():
         "SNACKBASE_TOKEN_SECRET": "production-test-token-secret-32by",
     }):
         settings = Settings()
-        
+
         assert settings.app_name == "TestApp"
         assert settings.environment == "production"
         assert settings.debug is True
@@ -52,7 +49,7 @@ def test_settings_env_override():
 def test_cors_origins_parsing():
     """Test CORS origins parsing from string."""
     get_settings.cache_clear()
-    
+
     # Test valid JSON string list (standard pydantic-settings behavior)
     with patch.dict(os.environ, {
         "SNACKBASE_CORS_ORIGINS": '["http://example.com", "http://test.com"]'
@@ -103,7 +100,7 @@ def test_secret_key_validation():
     # Default insecure key is allowed but logged (implied)
     settings = Settings()
     assert settings.secret_key == "change-me-in-production-use-openssl-rand-hex-32"
-    
+
     # Custom key works
     with patch.dict(os.environ, {"SNACKBASE_SECRET_KEY": "secure-key"}):
         settings = Settings()
@@ -115,7 +112,7 @@ def test_database_url_sync():
     # SQLite
     settings = Settings(database_url="sqlite+aiosqlite:///./test.db")
     assert settings.database_url_sync == "sqlite:///./test.db"
-    
+
     # PostgreSQL
     settings = Settings(database_url="postgresql+asyncpg://user:pass@localhost/db")
     assert settings.database_url_sync == "postgresql://user:pass@localhost/db"

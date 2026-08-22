@@ -89,7 +89,7 @@ export function EnvironmentColdStartGate({ ref, children }: EnvironmentColdStart
   } = useQuery({
     queryKey: ['platform-status', ref],
     queryFn: () => fetchPlatformStatus(ref, getAccessToken),
-    enabled: Boolean(environment && environment.tenancy_mode !== 'multi'),
+    enabled: Boolean(environment),
     refetchInterval: (query) => {
       const state = query.state.data?.state;
       if (state === 'ready') return false;
@@ -143,29 +143,6 @@ export function EnvironmentColdStartGate({ ref, children }: EnvironmentColdStart
             <Link to="/organizations">Back to organizations</Link>
           </Button>
         }
-      />
-    );
-  }
-
-  if (environment.tenancy_mode === 'multi') {
-    return (
-      <GateShell
-        title="Integrated Studio unavailable"
-        message="Multi-tenant environments use a dedicated instance URL. The integrated Studio is available for single-tenant projects."
-        action={
-          environment.instance_url ? (
-            <Button asChild>
-              <a href={environment.instance_url} target="_blank" rel="noreferrer">
-                Open instance URL
-              </a>
-            </Button>
-          ) : (
-            <Button asChild variant="outline">
-              <Link to="/organizations">Back to organizations</Link>
-            </Button>
-          )
-        }
-        testId="multi-tenant-explanation"
       />
     );
   }

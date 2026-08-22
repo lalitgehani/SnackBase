@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict
 
 from snackbase.core.config import get_settings
 from snackbase.domain.services.file_storage_service import FileMetadata, unique_filename_for
-from snackbase.infrastructure.storage.base import StoredFile, StorageProvider
+from snackbase.infrastructure.storage.base import StorageProvider, StoredFile
 
 S3_PREFIX = "s3/"
 

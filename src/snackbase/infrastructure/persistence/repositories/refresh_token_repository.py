@@ -4,7 +4,7 @@ Provides database operations for storing and managing refresh tokens.
 """
 
 import hashlib
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -115,7 +115,7 @@ class RefreshTokenRepository:
             return False
         if token_model.is_revoked:
             return False
-        if token_model.expires_at < datetime.now(timezone.utc):
+        if token_model.expires_at < datetime.now(UTC):
             return False
         return True
 
@@ -127,7 +127,7 @@ class RefreshTokenRepository:
         """
         from sqlalchemy import func
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         result = await self._session.execute(
             select(func.count(RefreshTokenModel.id)).where(
                 RefreshTokenModel.is_revoked == False,  # noqa: E712

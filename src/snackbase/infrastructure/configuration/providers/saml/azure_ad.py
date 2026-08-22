@@ -84,7 +84,7 @@ class AzureADSAMLProvider(SAMLProviderHandler):
         """Generate SAML authorization URL (AuthnRequest)."""
         self._validate_config(config)
 
-        issue_instant = datetime.datetime.now(datetime.timezone.utc).strftime(
+        issue_instant = datetime.datetime.now(datetime.UTC).strftime(
             "%Y-%m-%dT%H:%M:%SZ"
         )
         request_id = f"id_{secrets.token_hex(16)}"
@@ -116,7 +116,7 @@ class AzureADSAMLProvider(SAMLProviderHandler):
             params["RelayState"] = relay_state
 
         query_string = urllib.parse.urlencode(params)
-        
+
         separator = "&" if "?" in config["idp_sso_url"] else "?"
         return f"{config['idp_sso_url']}{separator}{query_string}"
 
@@ -130,7 +130,7 @@ class AzureADSAMLProvider(SAMLProviderHandler):
 
         try:
             xml_str = base64.b64decode(saml_response)
-            
+
             cert = config["idp_x509_cert"]
             if not cert.startswith("-----BEGIN CERTIFICATE"):
                 cert = f"-----BEGIN CERTIFICATE-----\n{cert}\n-----END CERTIFICATE-----"
@@ -154,16 +154,16 @@ class AzureADSAMLProvider(SAMLProviderHandler):
             name_id_node = verified_data.find(".//saml:NameID", ns)
             if name_id_node is None:
                 name_id_node = verified_data.find(".//saml:Subject/saml:NameID", ns)
-            
+
             name_id = name_id_node.text if name_id_node is not None else None
-            
+
             if not name_id:
                 raise ValueError("Could not extract NameID from SAML Assertion")
 
             # Extract Attributes
             attributes = {}
             attribute_nodes = verified_data.findall(".//saml:AttributeStatement/saml:Attribute", ns)
-            
+
             for attr in attribute_nodes:
                 name = attr.get("Name")
                 values = [val.text for val in attr.findall("saml:AttributeValue", ns) if val.text]
@@ -184,7 +184,7 @@ class AzureADSAMLProvider(SAMLProviderHandler):
                 or attributes.get("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name")
                 or (name_id if "@" in name_id else None)
             )
-            
+
             # Map specific name parts
             first_name = attributes.get("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname")
             last_name = attributes.get("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname")
@@ -212,10 +212,10 @@ class AzureADSAMLProvider(SAMLProviderHandler):
     async def get_metadata(self, config: dict[str, Any]) -> str:
         """Generate SP Metadata XML."""
         self._validate_config(config)
-        
+
         sp_entity_id = config["sp_entity_id"]
         acs_url = config["assertion_consumer_url"]
-        
+
         # Azure AD likes specific metadata format sometimes, but standard usually works
         metadata = (
             f'<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" '

@@ -2,10 +2,8 @@ import base64
 import json
 import time
 import uuid
-from datetime import datetime, timedelta, timezone
 
 import pytest
-from sqlalchemy import text
 
 from snackbase.infrastructure.auth.authenticator import Authenticator
 from snackbase.infrastructure.auth.token_codec import AuthenticationError, TokenCodec
@@ -66,7 +64,7 @@ def test_token_tampering_fails(token_payload, secret):
     payload_json = base64.urlsafe_b64decode(payload_segment + "==").decode("utf-8")
     payload_data = json.loads(payload_json)
     payload_data["role"] = "superadmin"  # Elevate privilege
-    
+
     modified_payload_json = json.dumps(payload_data)
     modified_payload_segment = base64.urlsafe_b64encode(
         modified_payload_json.encode("utf-8")
@@ -108,7 +106,7 @@ async def test_wrong_secret_fails(token_payload, another_secret):
     """Verifies that Authenticator initialized with wrong secret rejects valid tokens."""
     # Authenticator with WRONG secret
     auth = Authenticator(secret="wrong-secret")
-    
+
     # Token signed with CORRECT (another) secret
     token = TokenCodec.encode(token_payload, secret=another_secret)
 
@@ -121,7 +119,7 @@ async def test_blacklisted_token_rejected(authenticator, secret, db_session, tok
     """Verifies that a blacklisted token is rejected."""
     # 1. Create a valid token
     token = TokenCodec.encode(token_payload, secret=secret)
-    
+
     # 2. Add token to blacklist
     blacklist_entry = TokenBlacklistModel(
         id=token_payload.token_id,
@@ -131,7 +129,7 @@ async def test_blacklisted_token_rejected(authenticator, secret, db_session, tok
     )
     db_session.add(blacklist_entry)
     await db_session.commit()
-    
+
     # 3. Authenticate and expect revocation error
     with pytest.raises(AuthenticationError, match="Token has been revoked"):
         await authenticator.authenticate({"X-API-Key": token}, session=db_session)

@@ -1,6 +1,5 @@
 """Pydantic schemas for migration query API responses."""
 
-from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 

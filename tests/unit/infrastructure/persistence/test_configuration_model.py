@@ -1,13 +1,11 @@
 """Unit tests for ConfigurationModel."""
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.infrastructure.persistence.models import (
-    AccountModel,
     ConfigurationModel,
     OAuthStateModel,
 )
@@ -143,7 +141,7 @@ async def test_oauth_state_model_instantiation():
     """Test that OAuthStateModel can be instantiated with all fields."""
     state_id = str(uuid.uuid4())
     token = "secure_token_abc123"
-    expires = datetime.now(timezone.utc) + timedelta(minutes=10)
+    expires = datetime.now(UTC) + timedelta(minutes=10)
 
     state = OAuthStateModel(
         id=state_id,
@@ -168,7 +166,7 @@ async def test_oauth_state_model_instantiation():
 async def test_oauth_state_model_expiration():
     """Test the is_expired property of OAuthStateModel."""
     # Not expired
-    future = datetime.now(timezone.utc) + timedelta(minutes=5)
+    future = datetime.now(UTC) + timedelta(minutes=5)
     state = OAuthStateModel(
         id=str(uuid.uuid4()),
         provider_name="google",
@@ -179,7 +177,7 @@ async def test_oauth_state_model_expiration():
     assert state.is_expired is False
 
     # Expired
-    past = datetime.now(timezone.utc) - timedelta(minutes=1)
+    past = datetime.now(UTC) - timedelta(minutes=1)
     state_expired = OAuthStateModel(
         id=str(uuid.uuid4()),
         provider_name="google",
@@ -200,7 +198,7 @@ async def test_oauth_state_model_repr():
         provider_name="apple",
         state_token=token,
         redirect_uri="uri",
-        expires_at=datetime.now(timezone.utc),
+        expires_at=datetime.now(UTC),
     )
 
     repr_str = repr(state)

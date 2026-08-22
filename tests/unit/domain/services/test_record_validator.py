@@ -1,10 +1,8 @@
 
-import pytest
-from datetime import datetime, timezone
-from snackbase.domain.services.record_validator import (
-    RecordValidator,
-    RecordValidationError
-)
+from datetime import UTC, datetime
+
+from snackbase.domain.services.record_validator import RecordValidator
+
 
 class TestRecordValidator:
 
@@ -26,7 +24,7 @@ class TestRecordValidator:
         assert RecordValidator.validate_boolean("true", "f").code == "invalid_type"
 
     def test_validate_datetime(self):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         assert RecordValidator.validate_datetime(now, "f") is None
         assert RecordValidator.validate_datetime("2024-01-01T12:00:00Z", "f") is None
         assert RecordValidator.validate_datetime("not-a-date", "f").code == "invalid_datetime_format"
@@ -71,7 +69,7 @@ class TestRecordValidator:
             {"name": "birth_date", "type": "date"}
         ]
         data = {"title": "Hello", "birth_date": "1990-01-01"}
-        
+
         processed, errors = RecordValidator.validate_and_apply_defaults(data, schema)
         assert len(errors) == 0
         assert processed["title"] == "Hello"

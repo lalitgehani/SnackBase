@@ -326,12 +326,6 @@ async def run_instance(
     from snackbase.infrastructure.persistence.models.workflow import WorkflowModel
     from snackbase.infrastructure.persistence.models.workflow_instance import WorkflowInstanceModel
     from snackbase.infrastructure.persistence.models.workflow_step_log import WorkflowStepLogModel
-    from snackbase.infrastructure.persistence.repositories.workflow_instance_repository import (
-        WorkflowInstanceRepository,
-    )
-    from snackbase.infrastructure.persistence.repositories.workflow_step_log_repository import (
-        WorkflowStepLogRepository,
-    )
 
     # Load instance
     async with session_factory() as session:

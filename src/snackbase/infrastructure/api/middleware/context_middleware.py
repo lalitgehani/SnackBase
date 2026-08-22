@@ -37,7 +37,7 @@ class ContextMiddleware(BaseHTTPMiddleware):
             ip_address=request.client.host if request.client else None,
             user_agent=request.headers.get("user-agent"),
         )
-        
+
         # Try to enrich with user info from AuthenticationMiddleware
         if hasattr(request.state, "authenticated_user"):
             auth_user = request.state.authenticated_user

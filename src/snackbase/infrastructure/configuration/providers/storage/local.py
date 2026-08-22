@@ -1,6 +1,6 @@
 """Local storage provider configuration."""
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 class LocalStorageConfiguration:
@@ -19,11 +19,11 @@ class LocalStorageConfiguration:
         return "Local Filesystem"
 
     @property
-    def logo_url(self) -> Optional[str]:
+    def logo_url(self) -> str | None:
         return "/assets/providers/system.svg"
 
     @property
-    def config_schema(self) -> Dict[str, Any]:
+    def config_schema(self) -> dict[str, Any]:
         # Local filesystem provider uses app-level storage path settings.
         return {}
 

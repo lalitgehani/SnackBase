@@ -1,11 +1,10 @@
 """Unit tests for AccountRepository."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
-from sqlalchemy import select
 
-from snackbase.infrastructure.persistence.models import AccountModel, UserModel, RoleModel
+from snackbase.infrastructure.persistence.models import AccountModel, RoleModel, UserModel
 from snackbase.infrastructure.persistence.repositories import AccountRepository
 
 
@@ -18,7 +17,7 @@ async def test_create_account(db_session):
         account_code="AA0001",
         name="Test Account",
         slug="test-account",
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
 
     created = await repo.create(account)
@@ -36,7 +35,7 @@ async def test_create_account(db_session):
 async def test_get_all_paginated_default(db_session):
     """Verify pagination works."""
     repo = AccountRepository(db_session)
-    
+
     # Create 30 accounts
     for i in range(30):
         account = AccountModel(
@@ -44,7 +43,7 @@ async def test_get_all_paginated_default(db_session):
             account_code=f"AA{i:04d}",
             name=f"Account {i}",
             slug=f"account-{i}",
-            created_at=datetime.now(timezone.utc) + timedelta(minutes=i),
+            created_at=datetime.now(UTC) + timedelta(minutes=i),
         )
         db_session.add(account)
     await db_session.commit()
@@ -54,11 +53,11 @@ async def test_get_all_paginated_default(db_session):
     assert len(accounts) == 10
     assert total == 30
     assert accounts[0].account_code == "AA0029"  # Newest first
-    
+
     # Page 2
     accounts_p2, total_p2 = await repo.get_all_paginated(page=2, page_size=10)
     assert len(accounts_p2) == 10
-    
+
     # Page 4 (empty)
     accounts_p4, total_p4 = await repo.get_all_paginated(page=4, page_size=10)
     assert len(accounts_p4) == 0
@@ -68,7 +67,7 @@ async def test_get_all_paginated_default(db_session):
 async def test_get_all_paginated_with_search(db_session):
     """Verify search by name, slug, ID."""
     repo = AccountRepository(db_session)
-    
+
     accounts = [
         AccountModel(id="00000000-0000-0000-0000-000000000001", account_code="AA0001", name="Alpha Corp", slug="alpha-corp"),
         AccountModel(id="00000000-0000-0000-0000-000000000002", account_code="BB0002", name="Beta Inc", slug="beta-inc"),
@@ -98,7 +97,7 @@ async def test_get_all_paginated_with_search(db_session):
 async def test_get_by_code(db_session):
     """Test getting an account by account code."""
     repo = AccountRepository(db_session)
-    
+
     # Create test accounts
     accounts = [
         AccountModel(id="00000000-0000-0000-0000-000000000001", account_code="AA0001", name="Alpha Corp", slug="alpha-corp"),
@@ -125,7 +124,7 @@ async def test_get_by_code(db_session):
 async def test_get_by_code_not_found(db_session):
     """Test getting an account by non-existent account code."""
     repo = AccountRepository(db_session)
-    
+
     result = await repo.get_by_code("ZZ9999")
     assert result is None
 
@@ -134,9 +133,9 @@ async def test_get_by_code_not_found(db_session):
 async def test_get_all_paginated_with_sort(db_session):
     """Verify sorting by each column."""
     repo = AccountRepository(db_session)
-    
+
     # Add accounts with different attributes
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     accounts = [
         AccountModel(id="00000000-0000-0000-0000-000000000001", account_code="AA0001", name="C Name", slug="c-slug", created_at=now),
         AccountModel(id="00000000-0000-0000-0000-000000000002", account_code="BB0002", name="A Name", slug="a-slug", created_at=now + timedelta(hours=1)),
@@ -164,9 +163,9 @@ async def test_update_account(db_session):
 
     account.name = "New Name"
     updated = await repo.update(account)
-    
+
     assert updated.name == "New Name"
-    
+
     # Verify in DB
     refreshed = await repo.get_by_id("00000000-0000-0000-0000-000000000001")
     assert refreshed.name == "New Name"
@@ -180,7 +179,7 @@ async def test_delete_account(db_session):
     await repo.create(account)
 
     await repo.delete(account)
-    
+
     found = await repo.get_by_id("00000000-0000-0000-0000-000000000001")
     assert found is None
 
@@ -191,7 +190,7 @@ async def test_get_user_count(db_session):
     repo = AccountRepository(db_session)
     account = AccountModel(id="00000000-0000-0000-0000-000000000001", account_code="AA0001", name="Account 1", slug="acc-1")
     await repo.create(account)
-    
+
     # Add role required for user
     role = RoleModel(name="user", description="User")
     db_session.add(role)
@@ -211,7 +210,7 @@ async def test_get_user_count(db_session):
 
     count = await repo.get_user_count("00000000-0000-0000-0000-000000000001")
     assert count == 5
-    
+
     count_empty = await repo.get_user_count("NONEXISTENT")
     assert count_empty == 0
 
@@ -220,18 +219,18 @@ async def test_get_user_count(db_session):
 async def test_get_with_stats(db_session):
     """Verify account with stats (count methods)."""
     repo = AccountRepository(db_session)
-    
+
     # Add accounts
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     old = now - timedelta(days=2)
     new = now
-    
+
     db_session.add(AccountModel(id="00000000-0000-0000-0000-000000000001", account_code="AA0001", name="Old", slug="old", created_at=old))
     db_session.add(AccountModel(id="00000000-0000-0000-0000-000000000002", account_code="BB0002", name="New", slug="new", created_at=new))
     await db_session.commit()
 
     assert await repo.count_all() == 2
-    
+
     # Count created since yesterday
     since_yesterday = await repo.count_created_since(now - timedelta(days=1))
     assert since_yesterday == 1  # Only "New" account

@@ -6,11 +6,11 @@ Tests the resend invitation endpoint:
 """
 
 import asyncio
-import sys
 import uuid
+
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
-from httpx import AsyncClient, ASGITransport
 
 from snackbase.infrastructure.api.app import create_app
 
@@ -69,7 +69,7 @@ async def register_user(client: AsyncClient, email: str, password: str, account_
         },
     )
     if response.status_code == 409: # Already exists
-         return {} 
+         return {}
     response.raise_for_status()
     return response.json()
 
@@ -93,37 +93,37 @@ async def test_resend_invitation(client: AsyncClient):
     print_test("Test: Resend Invitation")
 
     unique_id = str(uuid.uuid4())[:8]
-    
+
     # 1. Register Admin
     print_info("Registering admin user...")
     admin_email = f"admin-resend-{unique_id}@test.com"
     admin_password = "SecureP@ss123!"
-    
+
     admin_response = await register_user(
         client,
         admin_email,
         admin_password,
         f"Test Account {unique_id}",
     )
-    
+
     # Check if admin created (might fail if email conflict, but we used unique id)
     if not admin_response: # Fallback login if exists? Unlikely with uuid
         print_error("Failed to register admin")
         return
 
     admin_account_slug = admin_response["account"]["slug"]
-    
+
     # Verify Email
     await verify_user_email(admin_email)
-    
+
     # Login
     print_info("Logging in...")
     admin_token = await login_user(client, admin_email, admin_password, admin_account_slug)
-    
+
     # 2. Create Invitation
     invite_email = f"invite-resend-{unique_id}@test.com"
     print_info(f"Creating invitation for {invite_email}...")
-    
+
     response = await client.post(
         f"{API_PREFIX}/invitations",
         headers={"Authorization": f"Bearer {admin_token}"},
@@ -137,7 +137,7 @@ async def test_resend_invitation(client: AsyncClient):
     invitation = response.json()
     invitation_id = invitation["id"]
     print_success(f"Invitation created: {invitation_id}")
-    
+
     # Check if token is present (New Schema check)
     if "token" in invitation:
         print_success(f"Token present in response: {invitation['token'][:8]}...")
@@ -150,13 +150,13 @@ async def test_resend_invitation(client: AsyncClient):
         f"{API_PREFIX}/invitations/{invitation_id}/resend",
         headers={"Authorization": f"Bearer {admin_token}"},
     )
-    
+
     if response.status_code == 200:
         print_success("Resend successful")
         print_info(f"Response: {response.json()}")
     else:
         print_error(f"Resend failed: {response.status_code}: {response.text}")
-        
+
     # 4. List invitations to check token visibility there too
     print_info("Listing invitations to check token...")
     response = await client.get(
@@ -169,7 +169,7 @@ async def test_resend_invitation(client: AsyncClient):
              print_success("Token present in list response")
         else:
              print_error("Token NOT present in list response")
-    
+
 
 async def main():
     print(f"\n{Colors.BOLD}{'='*80}{Colors.RESET}")
@@ -177,12 +177,12 @@ async def main():
     print(f"{Colors.BOLD}{'='*80}{Colors.RESET}\n")
 
     app = create_app()
-    
+
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         try:
             await test_resend_invitation(client)
             print(f"\n{Colors.GREEN}{Colors.BOLD}All tests completed!{Colors.RESET}\n")
-            
+
         except Exception as e:
             print_error(f"Test suite failed: {e}")
             import traceback

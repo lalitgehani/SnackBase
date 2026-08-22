@@ -26,15 +26,16 @@ from __future__ import annotations
 import asyncio
 import secrets
 from datetime import UTC, datetime
-from typing import Annotated, Any, Set
+from typing import Annotated, Any
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.core.cron.parser import validate_cron
 from snackbase.core.logging import get_logger
 from snackbase.infrastructure.api.dependencies import AuthenticatedUser, get_db_session
 from snackbase.infrastructure.api.schemas.workflow_schemas import (
+    VALID_WORKFLOW_EVENTS,
     TriggerWorkflowResponse,
     WorkflowCreateRequest,
     WorkflowInstanceDetailResponse,
@@ -44,7 +45,6 @@ from snackbase.infrastructure.api.schemas.workflow_schemas import (
     WorkflowResponse,
     WorkflowStepLogResponse,
     WorkflowUpdateRequest,
-    VALID_WORKFLOW_EVENTS,
 )
 from snackbase.infrastructure.persistence.models.workflow import WorkflowModel
 from snackbase.infrastructure.persistence.models.workflow_instance import WorkflowInstanceModel
@@ -63,7 +63,7 @@ logger = get_logger(__name__)
 _DEFAULT_MAX_WORKFLOWS = 50
 
 # Keep references to prevent background tasks from being GC'd
-_background_tasks: Set[asyncio.Task] = set()
+_background_tasks: set[asyncio.Task] = set()
 
 # ---------------------------------------------------------------------------
 # Routers — two separate routers so they can be mounted at different prefixes

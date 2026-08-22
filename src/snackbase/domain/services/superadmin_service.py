@@ -5,6 +5,7 @@ that have full access to all accounts and system operations.
 """
 
 import uuid
+from datetime import UTC
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -90,9 +91,8 @@ class SuperadminService:
         Raises:
             SuperadminCreationError: If creation fails due to validation or database errors.
         """
-        from snackbase.infrastructure.persistence.models import AccountModel, UserModel
+        from snackbase.infrastructure.persistence.models import UserModel
         from snackbase.infrastructure.persistence.repositories import (
-            AccountRepository,
             RoleRepository,
             UserRepository,
         )
@@ -108,7 +108,6 @@ class SuperadminService:
         # Ensure system account exists
         account_id, _ = await SuperadminService.create_system_account(session)
 
-        account_repo = AccountRepository(session)
         user_repo = UserRepository(session)
         role_repo = RoleRepository(session)
 
@@ -127,7 +126,7 @@ class SuperadminService:
         # Hash password
         password_hash = hash_password(password)
 
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         # Create superadmin user
         user = UserModel(
@@ -138,7 +137,7 @@ class SuperadminService:
             role_id=admin_role.id,
             is_active=True,
             email_verified=True,
-            email_verified_at=datetime.now(timezone.utc),
+            email_verified_at=datetime.now(UTC),
         )
 
         try:
@@ -183,6 +182,7 @@ class SuperadminService:
             True if at least one superadmin exists, False otherwise.
         """
         from sqlalchemy import select
+
         from snackbase.infrastructure.persistence.models import UserModel
 
         result = await session.execute(

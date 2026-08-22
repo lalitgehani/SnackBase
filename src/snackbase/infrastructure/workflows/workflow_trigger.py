@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
-from typing import Any, Optional, Set
+from typing import Any
 
 from snackbase.core.hooks.hook_events import HookEvent
 from snackbase.core.hooks.hook_registry import HookRegistry
@@ -29,7 +29,7 @@ from snackbase.domain.entities.hook_context import HookContext
 
 logger = get_logger(__name__)
 
-_background_tasks: Set[asyncio.Task] = set()
+_background_tasks: set[asyncio.Task] = set()
 
 _EVENT_MAP: dict[str, str] = {
     HookEvent.ON_RECORD_AFTER_CREATE: "records.create",
@@ -68,12 +68,12 @@ def register_workflow_event_triggers(
     for internal_event, api_event in _EVENT_MAP.items():
         async def _dispatcher(
             _event: str,
-            data: Optional[dict[str, Any]],
-            context: Optional[HookContext],
+            data: dict[str, Any] | None,
+            context: HookContext | None,
             _api_event: str = api_event,
             _internal_event: str = internal_event,
             _session_factory: Any = session_factory,
-        ) -> Optional[dict[str, Any]]:
+        ) -> dict[str, Any] | None:
             task = asyncio.create_task(
                 _dispatch_workflow_triggers(
                     internal_event=_internal_event,
@@ -103,8 +103,8 @@ def register_workflow_event_triggers(
 async def _dispatch_workflow_triggers(
     internal_event: str,
     api_event: str,
-    data: Optional[dict[str, Any]],
-    context: Optional[HookContext],
+    data: dict[str, Any] | None,
+    context: HookContext | None,
     session_factory: Any,
 ) -> None:
     """Query matching workflows and create+run an instance for each."""

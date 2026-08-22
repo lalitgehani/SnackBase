@@ -1,11 +1,16 @@
+import uuid
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
-from snackbase.infrastructure.persistence.models.configuration import ConfigurationModel
+
 from snackbase.infrastructure.persistence.models.account import AccountModel
-from snackbase.infrastructure.persistence.repositories.configuration_repository import ConfigurationRepository
+from snackbase.infrastructure.persistence.models.configuration import ConfigurationModel
+from snackbase.infrastructure.persistence.repositories.configuration_repository import (
+    ConfigurationRepository,
+)
 from snackbase.infrastructure.security.encryption import EncryptionService
-import uuid
+
 
 @pytest.mark.asyncio
 async def test_get_configuration_stats(
@@ -15,13 +20,13 @@ async def test_get_configuration_stats(
 ):
     """Test getting configuration statistics."""
     # Setup test data
-    repo = ConfigurationRepository(db_session)
+    ConfigurationRepository(db_session)
     enc_service = EncryptionService("test-key-must-be-32-bytes-long!!!!")
-    
+
     # Clean up existing configs to have deterministic stats
     # (In a real test env, we should rely on isolation, but for now we trust session rollback or cleanup)
     # Actually, we can just assert that the numbers are at least what we create.
-    
+
     # Create accounts
     system_account = AccountModel(
         id="00000000-0000-0000-0000-000000000000",
@@ -50,7 +55,7 @@ async def test_get_configuration_stats(
         enabled=True,
         is_system=True
     )
-    
+
     # Create account config (Email)
     config2 = ConfigurationModel(
         id=str(uuid.uuid4()),
@@ -62,18 +67,18 @@ async def test_get_configuration_stats(
         enabled=True,
         is_system=False
     )
-    
+
     db_session.add(config1)
     db_session.add(config2)
     await db_session.commit()
-    
+
     response = await client.get(
         "/api/v1/admin/configuration/stats",
         headers={"Authorization": f"Bearer {superadmin_token}"}
     )
     assert response.status_code == 200
     data = response.json()
-    
+
     assert "system_configs" in data
     assert "account_configs" in data
     assert data["system_configs"]["by_category"]["auth_providers"] >= 1
@@ -88,7 +93,7 @@ async def test_get_recent_configurations(
     """Test getting recent configurations."""
     # Setup test data
     enc_service = EncryptionService("test-key-must-be-32-bytes-long!!!!")
-    
+
     # Ensure system account exists
     system_account = AccountModel(
         id="00000000-0000-0000-0000-000000000000",
@@ -111,17 +116,17 @@ async def test_get_recent_configurations(
         enabled=True,
         is_system=True
     )
-    
+
     db_session.add(config)
     await db_session.commit()
-    
+
     response = await client.get(
         "/api/v1/admin/configuration/recent?limit=5",
         headers={"Authorization": f"Bearer {superadmin_token}"}
     )
     assert response.status_code == 200
     data = response.json()
-    
+
     assert isinstance(data, list)
     assert len(data) > 0
     # Find our config
@@ -138,7 +143,7 @@ async def test_get_system_configurations(
     """Test getting system configurations."""
     # Setup test data
     enc_service = EncryptionService("test-key-must-be-32-bytes-long!!!!")
-    
+
     # Ensure system account exists
     system_account = AccountModel(
         id="00000000-0000-0000-0000-000000000000",
@@ -167,7 +172,7 @@ async def test_get_system_configurations(
         enabled=True,
         is_system=True
     )
-    
+
     # Create account config (should not be returned)
     acc_config = ConfigurationModel(
         id=str(uuid.uuid4()),
@@ -179,11 +184,11 @@ async def test_get_system_configurations(
         enabled=True,
         is_system=False
     )
-    
+
     db_session.add(sys_config)
     db_session.add(acc_config)
     await db_session.commit()
-    
+
     # Test listing all
     response = await client.get(
         "/api/v1/admin/configuration/system",
@@ -192,12 +197,12 @@ async def test_get_system_configurations(
     assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)
-    
+
     # Check if system config is present and account config is not (by iterating)
     sys_ids = [c["id"] for c in data]
     assert sys_config.id in sys_ids
     assert acc_config.id not in sys_ids
-    
+
     # Test filtering
     response = await client.get(
         "/api/v1/admin/configuration/system?category=auth_providers",
@@ -217,7 +222,7 @@ async def test_get_account_configurations(
     """Test getting account configurations."""
     # Setup test data
     enc_service = EncryptionService("test-key-must-be-32-bytes-long!!!!")
-    
+
     # Create account
     account = AccountModel(
         id="acc_specific",
@@ -239,10 +244,10 @@ async def test_get_account_configurations(
         enabled=True,
         is_system=False
     )
-    
+
     db_session.add(config)
     await db_session.commit()
-    
+
     response = await client.get(
         f"/api/v1/admin/configuration/account?account_id={account.id}",
         headers={"Authorization": f"Bearer {superadmin_token}"}
@@ -262,7 +267,7 @@ async def test_update_configuration_status(
     """Test enabling/disabling configuration."""
     # Setup test data
     enc_service = EncryptionService("test-key-must-be-32-bytes-long!!!!")
-    
+
     config = ConfigurationModel(
         id=str(uuid.uuid4()),
         account_id="00000000-0000-0000-0000-000000000000",
@@ -273,10 +278,10 @@ async def test_update_configuration_status(
         enabled=True,
         is_system=True
     )
-    
+
     db_session.add(config)
     await db_session.commit()
-    
+
     # Disable
     response = await client.patch(
         f"/api/v1/admin/configuration/{config.id}",
@@ -285,11 +290,11 @@ async def test_update_configuration_status(
     )
     assert response.status_code == 200
     assert response.json()["enabled"] is False
-    
+
     # Verify in DB
     await db_session.refresh(config)
     assert config.enabled is False
-    
+
     # Enable
     response = await client.patch(
         f"/api/v1/admin/configuration/{config.id}",
@@ -308,7 +313,7 @@ async def test_delete_configuration(
     """Test deleting configuration."""
     # Setup test data
     enc_service = EncryptionService("test-key-must-be-32-bytes-long!!!!")
-    
+
     # Custom config (can delete)
     custom_config = ConfigurationModel(
         id=str(uuid.uuid4()),
@@ -321,7 +326,7 @@ async def test_delete_configuration(
         is_system=True,
         is_builtin=False
     )
-    
+
     # Built-in config (cannot delete)
     builtin_config = ConfigurationModel(
         id=str(uuid.uuid4()),
@@ -334,25 +339,25 @@ async def test_delete_configuration(
         is_system=True,
         is_builtin=True
     )
-    
+
     db_session.add(custom_config)
     db_session.add(builtin_config)
     await db_session.commit()
-    
+
     # Delete built-in (should fail)
     response = await client.delete(
         f"/api/v1/admin/configuration/{builtin_config.id}",
         headers={"Authorization": f"Bearer {superadmin_token}"}
     )
     assert response.status_code == 400
-    
+
     # Delete custom (should succeed)
     response = await client.delete(
         f"/api/v1/admin/configuration/{custom_config.id}",
         headers={"Authorization": f"Bearer {superadmin_token}"}
     )
     assert response.status_code == 200
-    
+
     # Verify deletion
     repo = ConfigurationRepository(db_session)
     assert await repo.get_by_id(custom_config.id) is None
@@ -366,7 +371,7 @@ async def test_set_configuration_default_endpoint(
 ):
     """Test setting a configuration as default via endpoint."""
     enc_service = EncryptionService("test-key-must-be-32-bytes-long!!!!")
-    
+
     config = ConfigurationModel(
         id=str(uuid.uuid4()),
         account_id="00000000-0000-0000-0000-000000000000",
@@ -379,14 +384,14 @@ async def test_set_configuration_default_endpoint(
     )
     db_session.add(config)
     await db_session.commit()
-    
+
     response = await client.post(
         f"/api/v1/admin/configuration/{config.id}/set-default",
         headers={"Authorization": f"Bearer {superadmin_token}"}
     )
     assert response.status_code == 200
     assert response.json()["is_default"] is True
-    
+
     await db_session.refresh(config)
     assert config.is_default is True
 
@@ -398,7 +403,7 @@ async def test_unset_configuration_default_endpoint(
 ):
     """Test unsetting a configuration as default via endpoint."""
     enc_service = EncryptionService("test-key-must-be-32-bytes-long!!!!")
-    
+
     config = ConfigurationModel(
         id=str(uuid.uuid4()),
         account_id="00000000-0000-0000-0000-000000000000",
@@ -412,14 +417,14 @@ async def test_unset_configuration_default_endpoint(
     )
     db_session.add(config)
     await db_session.commit()
-    
+
     response = await client.delete(
         f"/api/v1/admin/configuration/{config.id}/set-default",
         headers={"Authorization": f"Bearer {superadmin_token}"}
     )
     assert response.status_code == 200
     assert response.json()["is_default"] is False
-    
+
     await db_session.refresh(config)
     assert config.is_default is False
 
@@ -431,7 +436,7 @@ async def test_disable_clears_default(
 ):
     """Test that disabling a configuration clears its default status."""
     enc_service = EncryptionService("test-key-must-be-32-bytes-long!!!!")
-    
+
     config = ConfigurationModel(
         id=str(uuid.uuid4()),
         account_id="00000000-0000-0000-0000-000000000000",
@@ -445,7 +450,7 @@ async def test_disable_clears_default(
     )
     db_session.add(config)
     await db_session.commit()
-    
+
     response = await client.patch(
         f"/api/v1/admin/configuration/{config.id}",
         json={"enabled": False},
@@ -454,7 +459,7 @@ async def test_disable_clears_default(
     assert response.status_code == 200
     assert response.json()["enabled"] is False
     assert response.json()["is_default"] is False
-    
+
     await db_session.refresh(config)
     assert config.enabled is False
     assert config.is_default is False

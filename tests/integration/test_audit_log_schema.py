@@ -4,7 +4,6 @@ import pytest
 from sqlalchemy import inspect
 from sqlalchemy.ext.asyncio import AsyncSession
 
-
 # Enable audit hooks for all tests in this module
 pytestmark = pytest.mark.enable_audit_hooks
 
@@ -107,7 +106,7 @@ async def test_audit_log_indexes(db_session: AsyncSession):
         indexes = await conn.run_sync(get_indexes)
 
     # Convert to a more searchable format
-    index_names = {idx["name"] for idx in indexes}
+    {idx["name"] for idx in indexes}
     index_columns = {idx["name"]: idx["column_names"] for idx in indexes}
 
     # Check for required indexes

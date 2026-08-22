@@ -7,7 +7,6 @@ system account (SY0000).
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.domain.services.superadmin_service import (
@@ -125,7 +124,7 @@ class TestCreateSuperadmin:
         assert account_id == SYSTEM_ACCOUNT_ID
         assert user_id is not None
         mock_user_repo.create.assert_called_once()
-        
+
         # Verify user attributes
         created_user = mock_user_repo.create.call_args[0][0]
         assert created_user.email_verified is True

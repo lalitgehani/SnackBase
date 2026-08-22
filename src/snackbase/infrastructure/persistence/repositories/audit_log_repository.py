@@ -4,11 +4,9 @@ This repository provides methods to create audit log entries with automatic
 integrity chain management (checksums and previous_hash linking).
 """
 
-import hashlib
-import json
-from datetime import datetime, timezone
+from datetime import datetime
 
-from sqlalchemy import select, func, and_
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.infrastructure.persistence.models.audit_log import AuditLogModel
@@ -213,7 +211,7 @@ class AuditLogRepository:
         count_query = select(func.count(AuditLogModel.id))
         if filters:
             count_query = count_query.where(and_(*filters))
-        
+
         total_result = await self.session.execute(count_query)
         total = total_result.scalar_one() or 0
 
@@ -291,7 +289,7 @@ class AuditLogRepository:
             activity. Missing days/operations are not included; callers should
             zero-fill. Operation values are uppercase (CREATE, UPDATE, DELETE).
         """
-        from sqlalchemy import cast, Date, String
+        from sqlalchemy import Date, String, cast
 
         bind = self.session.get_bind()
         dialect_name = bind.dialect.name if bind is not None else "sqlite"

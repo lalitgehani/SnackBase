@@ -1,7 +1,6 @@
 """Unit tests for Generic SAML provider."""
 
 import base64
-import zlib
 from unittest.mock import Mock, patch
 
 import pytest
@@ -11,7 +10,6 @@ from signxml import XMLVerifier
 from snackbase.infrastructure.configuration.providers.saml.generic import (
     GenericSAMLProvider,
 )
-
 
 SAML_NS = "urn:oasis:names:tc:SAML:2.0:assertion"
 
@@ -97,7 +95,7 @@ async def test_get_authorization_url(provider, valid_config):
     assert url.startswith("http://idp.example.com/sso?")
     assert "SAMLRequest=" in url
     assert "RelayState=state123" in url
-    
+
     # Check separator logic
     config_with_query = valid_config.copy()
     config_with_query["idp_sso_url"] = "http://idp.example.com/sso?id=1"
@@ -155,7 +153,7 @@ async def test_parse_saml_response_fallback_attributes(
 async def test_get_metadata(provider, valid_config):
     """Test SP metadata generation."""
     metadata = await provider.get_metadata(valid_config)
-    
+
     assert 'entityID="http://sp.example.com"' in metadata
     assert 'Location="http://sp.example.com/acs"' in metadata
     assert '<md:NameIDFormat>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress</md:NameIDFormat>' in metadata

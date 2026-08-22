@@ -6,7 +6,7 @@ creation, updates, deletion, and listing with business rules.
 
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -71,7 +71,7 @@ class AccountService:
                 counter += 1
 
         # Create account
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         account = AccountModel(
             id=account_id,
             account_code=account_code,
@@ -101,7 +101,7 @@ class AccountService:
             raise ValueError(f"Account '{account_id}' not found")
 
         account.name = name
-        account.updated_at = datetime.now(timezone.utc)
+        account.updated_at = datetime.now(UTC)
 
         return await self.account_repo.update(account)
 

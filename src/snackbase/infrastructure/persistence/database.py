@@ -5,11 +5,11 @@ for SQLAlchemy with async support. It supports both SQLite (aiosqlite) and
 PostgreSQL (asyncpg) drivers.
 """
 
+import sqlite3
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import date, datetime
 from pathlib import Path
-import sqlite3
 
 from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import (
@@ -172,7 +172,7 @@ class DatabaseManager:
             logger.info("Database engine disposed")
 
     @asynccontextmanager
-    async def session(self) -> AsyncGenerator[AsyncSession, None]:
+    async def session(self) -> AsyncGenerator[AsyncSession]:
         """Provide a transactional scope for database operations.
 
         This context manager creates a new session and ensures it's
@@ -227,7 +227,7 @@ def get_db_manager() -> DatabaseManager:
     return _db_manager
 
 
-async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
+async def get_db_session() -> AsyncGenerator[AsyncSession]:
     """Dependency for FastAPI to get database session.
 
     This function is designed to be used as a FastAPI dependency.
@@ -508,7 +508,7 @@ async def _seed_default_configurations(db: DatabaseManager) -> None:
                 ConfigurationModel.category == ep_provider.category,
                 ConfigurationModel.account_id == SYSTEM_ACCOUNT_ID,
                 ConfigurationModel.provider_name == ep_provider.provider_name,
-                ConfigurationModel.is_system == True,
+                ConfigurationModel.is_system.is_(True),
             )
         )
         existing = result.scalar_one_or_none()
@@ -536,7 +536,7 @@ async def _seed_default_configurations(db: DatabaseManager) -> None:
                 ConfigurationModel.category == system_config_provider.category,
                 ConfigurationModel.account_id == SYSTEM_ACCOUNT_ID,
                 ConfigurationModel.provider_name == system_config_provider.provider_name,
-                ConfigurationModel.is_system == True,
+                ConfigurationModel.is_system.is_(True),
             )
         )
         existing_system = result.scalar_one_or_none()
@@ -575,7 +575,7 @@ async def _seed_default_configurations(db: DatabaseManager) -> None:
                 ConfigurationModel.category == local_storage_provider.category,
                 ConfigurationModel.account_id == SYSTEM_ACCOUNT_ID,
                 ConfigurationModel.provider_name == local_storage_provider.provider_name,
-                ConfigurationModel.is_system == True,
+                ConfigurationModel.is_system.is_(True),
             )
         )
         existing_local_storage = result.scalar_one_or_none()
@@ -584,8 +584,8 @@ async def _seed_default_configurations(db: DatabaseManager) -> None:
             select(ConfigurationModel).where(
                 ConfigurationModel.category == local_storage_provider.category,
                 ConfigurationModel.account_id == SYSTEM_ACCOUNT_ID,
-                ConfigurationModel.is_system == True,
-                ConfigurationModel.is_default == True,
+                ConfigurationModel.is_system.is_(True),
+                ConfigurationModel.is_default.is_(True),
             )
         )
         existing_default_storage = result.scalar_one_or_none()

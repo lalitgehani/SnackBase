@@ -230,9 +230,9 @@ def test_resend_init_strips_api_key() -> None:
         api_key="  re_test_key_with_spaces  ",
         from_email="noreply@example.com",
     )
-    
+
     # Provider init should strip it
     ResendProvider(settings)
-    
+
     # Check that resend.api_key was set correctly
     assert resend.api_key == "re_test_key_with_spaces"

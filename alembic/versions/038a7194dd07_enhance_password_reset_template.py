@@ -7,15 +7,15 @@ Create Date: 2026-01-10 18:05:52.469527
 """
 from collections.abc import Sequence
 
+import sqlalchemy as sa
+from alembic import op
+
 # revision identifiers, used by Alembic.
 revision: str = '038a7194dd07'
 down_revision: str | Sequence[str] | None = 'bb38e4d658cd'
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-
-import sqlalchemy as sa
-from alembic import op
 
 SYSTEM_ACCOUNT_ID = "00000000-0000-0000-0000-000000000000"
 

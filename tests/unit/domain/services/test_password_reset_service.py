@@ -1,6 +1,6 @@
 """Unit tests for PasswordResetService."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -132,15 +132,15 @@ async def test_reset_password_success(
         user_id=user_id,
         email="test@example.com",
         token_hash="hash",
-        expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        expires_at=datetime.now(UTC) + timedelta(hours=1),
         id="token-id",
     )
     mock_reset_repo.get_by_token.return_value = token_entity
 
     # Mock user
     user_model = UserModel(
-        id=user_id, 
-        email="test@example.com", 
+        id=user_id,
+        email="test@example.com",
         account_id=account_id,
         password_hash="old-hash"
     )
@@ -188,7 +188,7 @@ async def test_reset_password_expired_token(
         user_id="user-123",
         email="test@example.com",
         token_hash="hash",
-        expires_at=datetime.now(timezone.utc) - timedelta(hours=1),
+        expires_at=datetime.now(UTC) - timedelta(hours=1),
         id="token-id",
     )
     mock_reset_repo.get_by_token.return_value = token_entity
@@ -211,9 +211,9 @@ async def test_reset_password_used_token(
         user_id="user-123",
         email="test@example.com",
         token_hash="hash",
-        expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        expires_at=datetime.now(UTC) + timedelta(hours=1),
         id="token-id",
-        used_at=datetime.now(timezone.utc) - timedelta(minutes=10),
+        used_at=datetime.now(UTC) - timedelta(minutes=10),
     )
     mock_reset_repo.get_by_token.return_value = token_entity
 
@@ -229,7 +229,7 @@ async def test_reset_password_used_token(
 async def test_verify_reset_token_valid(reset_service, mock_reset_repo):
     """Test token verification with valid token."""
     # Setup
-    expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+    expires_at = datetime.now(UTC) + timedelta(hours=1)
     token_entity = PasswordResetToken(
         user_id="user-123",
         email="test@example.com",
@@ -269,7 +269,7 @@ async def test_verify_reset_token_expired(reset_service, mock_reset_repo):
         user_id="user-123",
         email="test@example.com",
         token_hash="hash",
-        expires_at=datetime.now(timezone.utc) - timedelta(hours=1),
+        expires_at=datetime.now(UTC) - timedelta(hours=1),
         id="token-id",
     )
     mock_reset_repo.get_by_token.return_value = token_entity

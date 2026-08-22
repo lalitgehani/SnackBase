@@ -1,7 +1,6 @@
 """API router for managing SQL macros."""
 
 import time
-from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
@@ -9,7 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.core.logging import get_logger
 from snackbase.infrastructure.api.dependencies import (
-    AuthenticatedUser,
     SuperadminUser,
     get_current_user,
     require_superadmin,
@@ -22,11 +20,11 @@ from snackbase.infrastructure.api.schemas.macro import (
     MacroUpdate,
 )
 from snackbase.infrastructure.persistence.database import get_db_session
-from snackbase.infrastructure.persistence.repositories.macro_repository import (
-    MacroRepository,
-)
 from snackbase.infrastructure.persistence.repositories.collection_rule_repository import (
     CollectionRuleRepository,
+)
+from snackbase.infrastructure.persistence.repositories.macro_repository import (
+    MacroRepository,
 )
 
 router = APIRouter()
@@ -76,7 +74,7 @@ async def create_macro(
 
 @router.get(
     "",
-    response_model=List[MacroResponse],
+    response_model=list[MacroResponse],
     dependencies=[Depends(get_current_user)],
 )
 async def list_macros(
@@ -145,7 +143,7 @@ async def update_macro(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Macro not found",
             )
-        
+
         logger.info(
             "Macro updated",
             macro_id=macro_id,
@@ -180,18 +178,19 @@ async def test_macro(
     Executes the macro in a transaction that is rolled back after execution.
     Requires superadmin privileges.
     """
-    from sqlalchemy import text
     import json
+
+    from sqlalchemy import text
 
     repository = MacroRepository(db)
     macro = await repository.get_by_id(macro_id)
-    
+
     if not macro:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Macro not found",
         )
-    
+
     # Parse macro parameters
     try:
         param_names = json.loads(macro.parameters) if macro.parameters else []
@@ -200,41 +199,41 @@ async def test_macro(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Invalid macro parameters definition",
         )
-    
+
     # Validate parameter count
     if len(test_request.parameters) != len(param_names):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"Expected {len(param_names)} parameters, got {len(test_request.parameters)}",
         )
-    
+
     # Build bind parameters
     bind_params = {}
     for i, param_name in enumerate(param_names):
         bind_params[param_name] = test_request.parameters[i]
-    
+
     # Execute in transaction with rollback
     try:
         # Start a savepoint for rollback
         async with db.begin_nested():
             start_time = time.time()
-            
+
             stmt = text(macro.sql_query)
             stmt = stmt.bindparams(**bind_params)
-            
+
             # Execute with timeout
             stmt = stmt.execution_options(timeout=5)
             result = await db.execute(stmt)
-            
+
             # Get result
             result_value = result.scalar()
-            
+
             # Calculate execution time in milliseconds
             execution_time = (time.time() - start_time) * 1000
-            
+
             # Rollback the nested transaction
             raise Exception("Rollback test transaction")
-            
+
     except Exception as e:
         # Expected rollback or actual error
         if "Rollback test transaction" not in str(e):
@@ -247,14 +246,14 @@ async def test_macro(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"Macro execution failed: {str(e)}",
             )
-    
+
     logger.info(
         "Macro tested",
         macro_id=macro_id,
         execution_time=execution_time,
         user_id=current_user.user_id,
     )
-    
+
     return MacroTestResponse(
         result=str(result_value) if result_value is not None else None,
         execution_time=execution_time,
@@ -279,7 +278,7 @@ async def delete_macro(
     """
     macro_repo = MacroRepository(db)
     rule_repo = CollectionRuleRepository(db)
-    
+
     # Check if macro exists
     macro = await macro_repo.get_by_id(macro_id)
     if not macro:
@@ -287,7 +286,7 @@ async def delete_macro(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Macro not found",
         )
-    
+
     # Check if macro is used in any collection rules
     rules_using_macro = await rule_repo.find_rules_using_macro(macro.name)
     if rules_using_macro:
@@ -301,7 +300,7 @@ async def delete_macro(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Cannot delete macro '{macro.name}': it is used in {len(rules_using_macro)} collection rule(s)",
         )
-    
+
     # Delete the macro
     deleted = await macro_repo.delete(macro_id)
     if not deleted:
@@ -309,7 +308,7 @@ async def delete_macro(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Macro not found",
         )
-    
+
     logger.info(
         "Macro deleted",
         macro_id=macro_id,

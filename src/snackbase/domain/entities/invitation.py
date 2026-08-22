@@ -5,7 +5,7 @@ The invitation includes a secure token that expires after a set period.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 
 @dataclass
@@ -37,7 +37,7 @@ class Invitation:
     accepted_at: datetime | None = None
     email_sent: bool = False
     email_sent_at: datetime | None = None
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self) -> None:
         """Validate invitation data after initialization."""
@@ -55,7 +55,7 @@ class Invitation:
     @property
     def is_expired(self) -> bool:
         """Check if the invitation has expired."""
-        return datetime.now(timezone.utc) > self.expires_at
+        return datetime.now(UTC) > self.expires_at
 
     @property
     def is_accepted(self) -> bool:

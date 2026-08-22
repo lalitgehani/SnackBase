@@ -1,13 +1,14 @@
 """Unit tests for the PasswordResetRepository."""
 
-from datetime import datetime, timedelta, timezone
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.domain.entities.password_reset import PasswordResetToken
 from snackbase.infrastructure.persistence.models.password_reset import PasswordResetTokenModel
-from snackbase.infrastructure.persistence.repositories.password_reset_repository import PasswordResetRepository
+from snackbase.infrastructure.persistence.repositories.password_reset_repository import (
+    PasswordResetRepository,
+)
 
 
 @pytest.fixture
@@ -80,11 +81,11 @@ async def test_repository_delete_for_user_email(repository, db_session):
     """Test deleting tokens for a user/email (invalidation)."""
     user_id = "user-123"
     email = "user@example.com"
-    
+
     # Create first token
     entity1, _ = PasswordResetToken.generate(user_id, email)
     await repository.create(entity1)
-    
+
     # Create second token (should delete the first)
     entity2, _ = PasswordResetToken.generate(user_id, email)
     await repository.create(entity2)
@@ -104,11 +105,11 @@ async def test_repository_delete_for_user_email(repository, db_session):
 async def test_repository_delete_expired(repository, db_session):
     """Test deleting expired tokens."""
     user_id = "user-123"
-    
+
     # Valid token
     entity1, _ = PasswordResetToken.generate(user_id, "user1@example.com", expires_in_seconds=3600)
     await repository.create(entity1)
-    
+
     # Expired token (we manually set expires_at)
     entity2, _ = PasswordResetToken.generate(user_id, "user2@example.com", expires_in_seconds=-3600)
     await repository.create(entity2)

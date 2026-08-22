@@ -85,12 +85,12 @@ class CodelistModel(Base):
         onupdate=func.now(),
     )
 
-    values: Mapped[list["CodelistValueModel"]] = relationship(
+    values: Mapped[list[CodelistValueModel]] = relationship(
         "CodelistValueModel",
         back_populates="codelist",
         cascade="all, delete-orphan",
     )
-    overrides: Mapped[list["CodelistAccountOverrideModel"]] = relationship(
+    overrides: Mapped[list[CodelistAccountOverrideModel]] = relationship(
         "CodelistAccountOverrideModel",
         back_populates="codelist",
         cascade="all, delete-orphan",
@@ -152,13 +152,13 @@ class CodelistValueModel(Base):
         onupdate=func.now(),
     )
 
-    codelist: Mapped["CodelistModel"] = relationship("CodelistModel", back_populates="values")
-    labels: Mapped[list["CodelistValueLabelModel"]] = relationship(
+    codelist: Mapped[CodelistModel] = relationship("CodelistModel", back_populates="values")
+    labels: Mapped[list[CodelistValueLabelModel]] = relationship(
         "CodelistValueLabelModel",
         back_populates="value",
         cascade="all, delete-orphan",
     )
-    overrides: Mapped[list["CodelistAccountOverrideModel"]] = relationship(
+    overrides: Mapped[list[CodelistAccountOverrideModel]] = relationship(
         "CodelistAccountOverrideModel",
         back_populates="value",
         cascade="all, delete-orphan",
@@ -208,7 +208,7 @@ class CodelistValueLabelModel(Base):
         onupdate=func.now(),
     )
 
-    value: Mapped["CodelistValueModel"] = relationship(
+    value: Mapped[CodelistValueModel] = relationship(
         "CodelistValueModel", back_populates="labels"
     )
 
@@ -270,10 +270,10 @@ class CodelistAccountOverrideModel(Base):
         onupdate=func.now(),
     )
 
-    codelist: Mapped["CodelistModel"] = relationship(
+    codelist: Mapped[CodelistModel] = relationship(
         "CodelistModel", back_populates="overrides"
     )
-    value: Mapped["CodelistValueModel"] = relationship(
+    value: Mapped[CodelistValueModel] = relationship(
         "CodelistValueModel", back_populates="overrides"
     )
 

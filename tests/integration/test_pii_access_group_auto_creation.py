@@ -1,11 +1,10 @@
 """Integration tests for automatic pii_access group creation on registration."""
 
-import uuid
 import pytest
 from sqlalchemy import select
 
-from snackbase.infrastructure.persistence.models import GroupModel, UsersGroupsModel
 from snackbase.domain.services.pii_masking_service import PIIMaskingService
+from snackbase.infrastructure.persistence.models import GroupModel, UsersGroupsModel
 
 
 class TestPIIAccessGroupAutoCreation:
@@ -25,7 +24,7 @@ class TestPIIAccessGroupAutoCreation:
 
         data = response.json()
         account_id = data["account"]["id"]
-        user_id = data["user"]["id"]
+        data["user"]["id"]
 
         # Verify pii_access group exists for the account
         result = await db_session.execute(

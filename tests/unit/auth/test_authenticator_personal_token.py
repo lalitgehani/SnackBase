@@ -1,8 +1,11 @@
-import pytest
 import time
 from unittest.mock import patch
+
+import pytest
+
 from snackbase.infrastructure.auth.authenticator import Authenticator
-from snackbase.infrastructure.auth.token_types import TokenType, TokenPayload
+from snackbase.infrastructure.auth.token_types import TokenPayload, TokenType
+
 
 @pytest.fixture
 def authenticator():
@@ -27,10 +30,10 @@ def sample_payload():
 async def test_authenticate_personal_token_success(authenticator, sample_payload):
     """Test successful Personal Access Token authentication."""
     token = "sb_pt.encoded.sig"
-    
+
     with patch("snackbase.infrastructure.auth.authenticator.TokenCodec.decode", return_value=sample_payload):
         user = await authenticator.authenticate({"Authorization": f"Bearer {token}"})
-        
+
         assert user.user_id == "usr_123"
         assert user.token_type == TokenType.PERSONAL_TOKEN
         assert user.email == "test@example.com"

@@ -6,10 +6,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.infrastructure.persistence.models import UserModel
 
+
 @pytest.mark.asyncio
 async def test_login_flow(client: AsyncClient, db_session: AsyncSession):
     """Test full login flow: Register -> Login -> Verify."""
-    
+
     # 1. Register a user
     register_payload = {
         "email": "login_test@example.com",
@@ -17,7 +18,7 @@ async def test_login_flow(client: AsyncClient, db_session: AsyncSession):
         "account_name": "Login Test Corp",
         "account_slug": "login-test-corp"
     }
-    
+
     res = await client.post("/api/v1/auth/register", json=register_payload)
     assert res.status_code == 201
     account_id = res.json()["account"]["id"]
@@ -28,7 +29,7 @@ async def test_login_flow(client: AsyncClient, db_session: AsyncSession):
         "password": "Password123!",
         "account": "login-test-corp"
     }
-    
+
     login_res = await client.post("/api/v1/auth/login", json=login_payload)
     assert login_res.status_code == 401
     assert "Email not verified" in login_res.json()["message"]
@@ -36,12 +37,14 @@ async def test_login_flow(client: AsyncClient, db_session: AsyncSession):
     # 3. Verify email
     # Get token row from DB and update it with a known hash
     import hashlib
-    from sqlalchemy import select, update
+
+    from sqlalchemy import update
+
     from snackbase.infrastructure.persistence.models import EmailVerificationTokenModel
-    
+
     known_token = "test_verification_token_123"
     known_hash = hashlib.sha256(known_token.encode()).hexdigest()
-    
+
     # Update the existing token with our known hash
     await db_session.execute(
         update(EmailVerificationTokenModel)
@@ -49,23 +52,23 @@ async def test_login_flow(client: AsyncClient, db_session: AsyncSession):
         .values(token_hash=known_hash)
     )
     await db_session.commit()
-    
+
     # Call verify endpoint with known token
     verify_res = await client.post("/api/v1/auth/verify-email", json={"token": known_token})
     assert verify_res.status_code == 200
-    
+
     # 4. Login with valid credentials (now verified)
     login_res = await client.post("/api/v1/auth/login", json=login_payload)
     assert login_res.status_code == 200
     data = login_res.json()
-    
+
     # Verify response structure
     assert "token" in data
     assert "refresh_token" in data
     assert data["user"]["email"] == "login_test@example.com"
     assert data["account"]["slug"] == "login-test-corp"
     assert data["account"]["id"] == account_id
-    
+
     # 3. Verify last_login updated
     # We need a fresh session to see updates
     result = await db_session.execute(
@@ -78,20 +81,20 @@ async def test_login_flow(client: AsyncClient, db_session: AsyncSession):
 @pytest.mark.asyncio
 async def test_login_wrong_password(client: AsyncClient):
     """Test login with incorrect password."""
-    
+
     # Register first
     await client.post("/api/v1/auth/register", json={
         "email": "wrong_pass@example.com",
         "password": "Password123!",
         "account_name": "Wrong Pass Corp"
     })
-    
+
     payload = {
         "email": "wrong_pass@example.com",
         "password": "WrongPassword!",
         "account": "wrong-pass-corp"
     }
-    
+
     res = await client.post("/api/v1/auth/login", json=payload)
     assert res.status_code == 401
     assert res.json()["message"] == "Invalid credentials"
@@ -100,7 +103,7 @@ async def test_login_wrong_password(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_login_wrong_email(client: AsyncClient):
     """Test login with non-existent email."""
-    
+
     # Register account but try different email
     await client.post("/api/v1/auth/register", json={
         "email": "real_email@example.com",
@@ -108,13 +111,13 @@ async def test_login_wrong_email(client: AsyncClient):
         "account_name": "Wrong Email Corp",
         "account_slug": "wrong-email-corp"
     })
-    
+
     payload = {
         "email": "fake_email@example.com",
         "password": "Password123!",
         "account": "wrong-email-corp"
     }
-    
+
     res = await client.post("/api/v1/auth/login", json=payload)
     assert res.status_code == 401
     assert res.json()["message"] == "Invalid credentials"
@@ -123,7 +126,7 @@ async def test_login_wrong_email(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_login_wrong_account(client: AsyncClient):
     """Test login with incorrect account."""
-    
+
     # Register with one account
     await client.post("/api/v1/auth/register", json={
         "email": "multi_account@example.com",
@@ -131,14 +134,14 @@ async def test_login_wrong_account(client: AsyncClient):
         "account_name": "Account A",
         "account_slug": "account-a"
     })
-    
+
     # Try to login to different account (that might not even exist)
     payload = {
         "email": "multi_account@example.com",
         "password": "Password123!",
         "account": "account-b-nonexistent"
     }
-    
+
     res = await client.post("/api/v1/auth/login", json=payload)
     assert res.status_code == 401
     assert res.json()["message"] == "Invalid credentials"
@@ -148,10 +151,11 @@ async def test_login_wrong_account(client: AsyncClient):
 async def test_oauth_user_cannot_login_with_password(client: AsyncClient, db_session: AsyncSession):
     """Test that OAuth users receive 400 error when attempting password login."""
     import uuid
+
     from snackbase.infrastructure.auth import hash_password
-    from snackbase.infrastructure.persistence.models import AccountModel, RoleModel
+    from snackbase.infrastructure.persistence.models import AccountModel
     from snackbase.infrastructure.persistence.repositories import AccountRepository, RoleRepository
-    
+
     # Create account
     account_repo = AccountRepository(db_session)
     account = AccountModel(
@@ -161,11 +165,11 @@ async def test_oauth_user_cannot_login_with_password(client: AsyncClient, db_ses
         name="OAuth Test Account",
     )
     await account_repo.create(account)
-    
+
     # Get admin role
     role_repo = RoleRepository(db_session)
     admin_role = await role_repo.get_by_name("admin")
-    
+
     # Create OAuth user
     user = UserModel(
         id=str(uuid.uuid4()),
@@ -180,14 +184,14 @@ async def test_oauth_user_cannot_login_with_password(client: AsyncClient, db_ses
     )
     db_session.add(user)
     await db_session.commit()
-    
+
     # Attempt login with password
     payload = {
         "email": "oauth@example.com",
         "password": "AnyPassword123!",
         "account": "oauth-test"
     }
-    
+
     res = await client.post("/api/v1/auth/login", json=payload)
 
     # The refusal is the generic 401 an unknown address gets: naming the
@@ -203,10 +207,11 @@ async def test_oauth_user_cannot_login_with_password(client: AsyncClient, db_ses
 async def test_saml_user_cannot_login_with_password(client: AsyncClient, db_session: AsyncSession):
     """Test that SAML users receive 400 error when attempting password login."""
     import uuid
+
     from snackbase.infrastructure.auth import hash_password
-    from snackbase.infrastructure.persistence.models import AccountModel, RoleModel
+    from snackbase.infrastructure.persistence.models import AccountModel
     from snackbase.infrastructure.persistence.repositories import AccountRepository, RoleRepository
-    
+
     # Create account
     account_repo = AccountRepository(db_session)
     account = AccountModel(
@@ -216,11 +221,11 @@ async def test_saml_user_cannot_login_with_password(client: AsyncClient, db_sess
         name="SAML Test Account",
     )
     await account_repo.create(account)
-    
+
     # Get admin role
     role_repo = RoleRepository(db_session)
     admin_role = await role_repo.get_by_name("admin")
-    
+
     # Create SAML user
     user = UserModel(
         id=str(uuid.uuid4()),
@@ -235,14 +240,14 @@ async def test_saml_user_cannot_login_with_password(client: AsyncClient, db_sess
     )
     db_session.add(user)
     await db_session.commit()
-    
+
     # Attempt login with password
     payload = {
         "email": "saml@example.com",
         "password": "AnyPassword123!",
         "account": "saml-test"
     }
-    
+
     res = await client.post("/api/v1/auth/login", json=payload)
 
     # Same generic 401 as an unknown address — see the OAuth case above.

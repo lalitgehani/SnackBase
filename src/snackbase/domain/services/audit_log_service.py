@@ -7,14 +7,13 @@ CREATE, UPDATE, DELETE operations with column-level granularity.
 import csv
 import io
 import json
-from datetime import datetime, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.inspection import inspect
 
 from snackbase.core.logging import get_logger
-from snackbase.domain.entities.audit_log import AuditLog
 from snackbase.domain.services.pii_masking_service import PIIMaskingService
 from snackbase.infrastructure.persistence.models.audit_log import AuditLogModel
 from snackbase.infrastructure.persistence.repositories.audit_log_repository import (
@@ -70,10 +69,10 @@ class AuditLogService:
         user_email: str,
         user_name: str,
         account_id: str,
-        ip_address: Optional[str] = None,
-        user_agent: Optional[str] = None,
-        request_id: Optional[str] = None,
-        extra_metadata: Optional[dict[str, Any]] = None,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
+        request_id: str | None = None,
+        extra_metadata: dict[str, Any] | None = None,
     ) -> None:
         """Capture audit log entries for a CREATE operation.
 
@@ -93,7 +92,7 @@ class AuditLogService:
         """
         try:
             table_name = model.__tablename__
-            
+
             # Skip excluded tables
             if self._should_skip_table(table_name):
                 return
@@ -108,11 +107,11 @@ class AuditLogService:
 
             # Extract all columns and their values
             columns = self._extract_columns(model)
-            
+
             # Create audit entries
             audit_entries = []
-            occurred_at = datetime.now(timezone.utc)
-            
+            occurred_at = datetime.now(UTC)
+
             for column_name, new_value in columns.items():
                 # Only mask sensitive fields (security requirement), store everything else as-is
                 masked_value = self.mask_sensitive_only(column_name, new_value)
@@ -135,7 +134,7 @@ class AuditLogService:
                     extra_metadata=extra_metadata,
                 )
                 audit_entries.append(audit_entry)
-            
+
             # Batch create audit entries
             if audit_entries:
                 await self.repository.create_batch(audit_entries)
@@ -159,10 +158,10 @@ class AuditLogService:
         user_email: str,
         user_name: str,
         account_id: str,
-        ip_address: Optional[str] = None,
-        user_agent: Optional[str] = None,
-        request_id: Optional[str] = None,
-        extra_metadata: Optional[dict[str, Any]] = None,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
+        request_id: str | None = None,
+        extra_metadata: dict[str, Any] | None = None,
     ) -> None:
         """Capture audit log entries for an UPDATE operation.
 
@@ -183,7 +182,7 @@ class AuditLogService:
         """
         try:
             table_name = model.__tablename__
-            
+
             # Skip excluded tables
             if self._should_skip_table(table_name):
                 return
@@ -198,22 +197,22 @@ class AuditLogService:
 
             # Extract current columns
             new_columns = self._extract_columns(model)
-            
+
             # Create audit entries only for changed columns
             audit_entries = []
-            occurred_at = datetime.now(timezone.utc)
-            
+            occurred_at = datetime.now(UTC)
+
             for column_name, new_value in new_columns.items():
                 old_value = old_values.get(column_name)
-                
-                # Convert old_value to string (old_values comes from external dict 
+
+                # Convert old_value to string (old_values comes from external dict
                 # and may contain raw Python types like bool, datetime, etc.)
                 if old_value is not None:
                     if isinstance(old_value, datetime):
                         old_value = old_value.isoformat()
                     else:
                         old_value = str(old_value)
-                
+
                 # Only create audit entry if value changed
                 if old_value != new_value:
                     # Only mask sensitive fields (security requirement), store everything else as-is
@@ -238,7 +237,7 @@ class AuditLogService:
                         extra_metadata=extra_metadata,
                     )
                     audit_entries.append(audit_entry)
-            
+
             # Batch create audit entries
             if audit_entries:
                 await self.repository.create_batch(audit_entries)
@@ -261,10 +260,10 @@ class AuditLogService:
         user_email: str,
         user_name: str,
         account_id: str,
-        ip_address: Optional[str] = None,
-        user_agent: Optional[str] = None,
-        request_id: Optional[str] = None,
-        extra_metadata: Optional[dict[str, Any]] = None,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
+        request_id: str | None = None,
+        extra_metadata: dict[str, Any] | None = None,
     ) -> None:
         """Capture audit log entries for a DELETE operation.
 
@@ -285,7 +284,7 @@ class AuditLogService:
 
         try:
             table_name = model.__tablename__
-            
+
             # Skip excluded tables
             if self._should_skip_table(table_name):
                 return
@@ -300,11 +299,11 @@ class AuditLogService:
 
             # Extract all columns and their values
             columns = self._extract_columns(model)
-            
+
             # Create audit entries
             audit_entries = []
-            occurred_at = datetime.now(timezone.utc)
-            
+            occurred_at = datetime.now(UTC)
+
             for column_name, old_value in columns.items():
                 # Only mask sensitive fields (security requirement), store everything else as-is
                 masked_value = self.mask_sensitive_only(column_name, old_value)
@@ -327,7 +326,7 @@ class AuditLogService:
                     extra_metadata=extra_metadata,
                 )
                 audit_entries.append(audit_entry)
-            
+
             # Batch create audit entries
             if audit_entries:
                 await self.repository.create_batch(audit_entries)
@@ -354,7 +353,7 @@ class AuditLogService:
         """
         return table_name in self.EXCLUDED_TABLES
 
-    def _get_record_id(self, model: Any) -> Optional[str]:
+    def _get_record_id(self, model: Any) -> str | None:
         """Extract the record ID from a SQLAlchemy model or snapshot.
 
         Args:
@@ -372,14 +371,14 @@ class AuditLogService:
         # Try to get the primary key from real model
         mapper = inspect(model.__class__)
         pk_columns = [col.name for col in mapper.primary_key]
-        
+
         if not pk_columns:
             return None
-        
+
         # Use the first primary key column
         pk_name = pk_columns[0]
         pk_value = getattr(model, pk_name, None)
-        
+
         return str(pk_value) if pk_value is not None else None
 
     def _extract_columns(self, model: Any) -> dict[str, Any]:
@@ -400,7 +399,7 @@ class AuditLogService:
             for col_name, value in model.__dict__.items():
                 if col_name.startswith("__") or col_name == "primary_key_name":
                     continue
-                
+
                 if value is not None:
                     if isinstance(value, datetime):
                         columns[col_name] = value.isoformat()
@@ -412,16 +411,16 @@ class AuditLogService:
 
         mapper = inspect(model.__class__)
         columns = {}
-        
+
         # Get the instance state to access dict directly without triggering lazy loads
         instance_state = inspect(model)
         instance_dict = instance_state.dict
-        
+
         for column in mapper.columns:
             column_name = column.name
             # Access from instance dict directly to avoid lazy loading
             value = instance_dict.get(column_name)
-            
+
             # Convert value to string for storage
             if value is not None:
                 if isinstance(value, datetime):
@@ -431,12 +430,12 @@ class AuditLogService:
                     columns[column_name] = str(value)
             else:
                 columns[column_name] = None
-        
+
         return columns
 
     def mask_sensitive_only(
-        self, column_name: str, value: Optional[str]
-    ) -> Optional[str]:
+        self, column_name: str, value: str | None
+    ) -> str | None:
         """Mask only sensitive fields (passwords, tokens, secrets) when writing to database.
 
         These fields are always masked for security. All other PII is stored
@@ -593,7 +592,7 @@ class AuditLogService:
             sort_order=sort_order,
         )
 
-    async def get_log_by_id(self, log_id: int) -> Optional[AuditLogModel]:
+    async def get_log_by_id(self, log_id: int) -> AuditLogModel | None:
         """Get a single audit log entry by ID.
 
         Args:

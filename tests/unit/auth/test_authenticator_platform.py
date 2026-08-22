@@ -174,27 +174,22 @@ async def test_platform_disabled_rejects_structurally_valid_token(
 
 
 @pytest.mark.asyncio
-async def test_unknown_role_rejected_without_user_creation(
-    authenticator, db_session, monkeypatch
+@pytest.mark.parametrize("role", ["user", "member", "nonexistent-role", "ADMIN", "admin "])
+async def test_non_operator_role_rejected_without_user_creation(
+    authenticator, db_session, monkeypatch, role
 ):
+    """Only the exact role `admin` denotes an instance operator. Everything else fails
+    closed at the authentication boundary, before any user row is written. Case and
+    whitespace variants are rejected too rather than being normalised into an operator."""
     from sqlalchemy import func, select
 
-    from snackbase.infrastructure.persistence.models import AccountModel, UserModel
-
-    account = AccountModel(
-        id="acct-platform",
-        account_code="PA0001",
-        name="Platform App",
-        slug="platform-app",
-    )
-    db_session.add(account)
-    await db_session.commit()
+    from snackbase.infrastructure.persistence.models import UserModel
 
     private_key, public_key = generate_rsa_keypair()
-    token = mint_platform_token(private_key, role="nonexistent-role", sub="new-user")
+    token = mint_platform_token(private_key, role=role, sub="new-user")
 
     with _enable_platform(monkeypatch, private_key, public_key):
-        with pytest.raises(AuthenticationError, match="Unknown role"):
+        with pytest.raises(AuthenticationError):
             await authenticator.authenticate(
                 {"Authorization": f"Bearer {token}"},
                 session=db_session,
@@ -206,12 +201,13 @@ async def test_unknown_role_rejected_without_user_creation(
     assert count == 0
 
 
-def test_startup_validation_rejects_platform_without_single_tenant():
-    with pytest.raises(Exception) as exc_info:
-        Settings(
-            platform_issuer="https://platform.example.com",
-            platform_jwks_url="https://platform.example.com/jwks",
-            platform_audience="snackbase-instance",
-            single_tenant_mode=False,
-        )
-    assert "single-tenant" in str(exc_info.value).lower()
+def test_startup_validation_allows_platform_without_single_tenant():
+    """Platform auth no longer requires single-tenant mode: principals resolve into the
+    system account, so a multi-tenant instance can serve the integrated Studio."""
+    settings = Settings(
+        platform_issuer="https://platform.example.com",
+        platform_jwks_url="https://platform.example.com/jwks",
+        platform_audience="snackbase-instance",
+        single_tenant_mode=False,
+    )
+    assert settings.platform_auth_enabled is True

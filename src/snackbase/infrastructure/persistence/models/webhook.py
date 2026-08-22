@@ -107,7 +107,7 @@ class WebhookModel(Base):
     )
 
     # Relationships
-    deliveries: Mapped[list["WebhookDeliveryModel"]] = relationship(
+    deliveries: Mapped[list[WebhookDeliveryModel]] = relationship(
         "WebhookDeliveryModel",
         back_populates="webhook",
         cascade="all, delete-orphan",
@@ -205,7 +205,7 @@ class WebhookDeliveryModel(Base):
     )
 
     # Relationships
-    webhook: Mapped["WebhookModel"] = relationship("WebhookModel", back_populates="deliveries")
+    webhook: Mapped[WebhookModel] = relationship("WebhookModel", back_populates="deliveries")
 
     def __repr__(self) -> str:
         return f"<WebhookDelivery(id={self.id}, webhook_id={self.webhook_id}, status={self.status})>"

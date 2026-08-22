@@ -11,8 +11,8 @@ from snackbase.core.rules.ast import (
     Variable,
 )
 from snackbase.core.rules.expression_compiler import (
-    ExpressionCompiler,
     ExpressionCompilationError,
+    ExpressionCompiler,
     compile_expression_to_sql,
 )
 

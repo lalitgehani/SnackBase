@@ -1,6 +1,5 @@
 """Unit tests for SAMLProviderHandler abstract base class."""
 
-import inspect
 from typing import Any
 
 import pytest

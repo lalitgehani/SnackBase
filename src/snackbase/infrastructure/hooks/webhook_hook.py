@@ -5,7 +5,7 @@ Webhook delivery is asynchronous and does NOT block the record operation.
 """
 
 import asyncio
-from typing import Any, Optional, Set
+from typing import Any
 
 from snackbase.core.hooks.hook_events import HookEvent
 from snackbase.core.hooks.hook_registry import HookRegistry
@@ -16,7 +16,7 @@ logger = get_logger(__name__)
 
 # Track background tasks to prevent them from being garbage collected
 # before they complete (mirrors the pattern in event_listeners.py).
-_background_tasks: Set[asyncio.Task] = set()
+_background_tasks: set[asyncio.Task] = set()
 
 # Map hook event names to webhook event names
 _EVENT_MAP = {
@@ -57,12 +57,12 @@ def register_webhook_hooks(registry: HookRegistry, session_factory: Any) -> list
 
         async def _webhook_hook(
             _event: str,
-            data: Optional[dict[str, Any]],
-            context: Optional[HookContext],
+            data: dict[str, Any] | None,
+            context: HookContext | None,
             # Capture loop variables via default args
             _webhook_event: str = webhook_event,
             _session_factory: Any = session_factory,
-        ) -> Optional[dict[str, Any]]:
+        ) -> dict[str, Any] | None:
             return await _dispatch_webhooks(
                 event=_event,
                 webhook_event=_webhook_event,
@@ -87,10 +87,10 @@ def register_webhook_hooks(registry: HookRegistry, session_factory: Any) -> list
 async def _dispatch_webhooks(
     event: str,
     webhook_event: str,
-    data: Optional[dict[str, Any]],
-    context: Optional[HookContext],
+    data: dict[str, Any] | None,
+    context: HookContext | None,
     session_factory: Any,
-) -> Optional[dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Internal: look up matching webhooks and fire them.
 
     Args:

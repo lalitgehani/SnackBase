@@ -121,7 +121,7 @@ class ResendProvider(EmailProvider):
                     to=to,
                 )
                 # Re-raise with a cleaner message or let it bubble up?
-                # For send_email, re-raising the original exception is safer for now 
+                # For send_email, re-raising the original exception is safer for now
                 # but logged correctly.
                 # Actually, let's wrap it in an Exception with clear message so the caller knows.
                 raise Exception(

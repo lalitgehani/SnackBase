@@ -4,13 +4,15 @@ Provides database operations for creating, retrieving, and managing verification
 """
 
 import hashlib
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.domain.entities.email_verification import EmailVerificationToken
-from snackbase.infrastructure.persistence.models.email_verification import EmailVerificationTokenModel
+from snackbase.infrastructure.persistence.models.email_verification import (
+    EmailVerificationTokenModel,
+)
 
 
 class EmailVerificationRepository:
@@ -52,15 +54,15 @@ class EmailVerificationRepository:
         """Convert infrastructure model to domain entity."""
         expires_at = model.expires_at
         if expires_at and expires_at.tzinfo is None:
-            expires_at = expires_at.replace(tzinfo=timezone.utc)
+            expires_at = expires_at.replace(tzinfo=UTC)
 
         created_at = model.created_at
         if created_at and created_at.tzinfo is None:
-            created_at = created_at.replace(tzinfo=timezone.utc)
+            created_at = created_at.replace(tzinfo=UTC)
 
         used_at = model.used_at
         if used_at and used_at.tzinfo is None:
-            used_at = used_at.replace(tzinfo=timezone.utc)
+            used_at = used_at.replace(tzinfo=UTC)
 
         return EmailVerificationToken(
             id=model.id,
@@ -118,7 +120,7 @@ class EmailVerificationRepository:
         stmt = (
             update(EmailVerificationTokenModel)
             .where(EmailVerificationTokenModel.id == token_id)
-            .values(used_at=datetime.now(timezone.utc))
+            .values(used_at=datetime.now(UTC))
         )
         result = await self._session.execute(stmt)
         return result.rowcount > 0
@@ -129,7 +131,7 @@ class EmailVerificationRepository:
         Returns:
             Number of tokens deleted.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         stmt = delete(EmailVerificationTokenModel).where(
             EmailVerificationTokenModel.expires_at < now
         )
@@ -146,7 +148,7 @@ class EmailVerificationRepository:
         Returns:
             The EmailVerificationToken entity if found, None otherwise.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         stmt = select(EmailVerificationTokenModel).where(
             EmailVerificationTokenModel.user_id == user_id,
             EmailVerificationTokenModel.email == email,

@@ -1,7 +1,7 @@
 """Repositories for webhook database operations."""
 
+from collections.abc import Sequence
 from datetime import UTC, datetime
-from typing import Sequence
 
 from sqlalchemy import and_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession

@@ -2,7 +2,15 @@
 
 Services contain business logic that doesn't naturally fit within a single entity.
 They have no dependencies on infrastructure or external frameworks.
+
+Import order in this module is load-bearing and must not be alphabetised.
+``collection_validator`` (``FieldType``, ``OnDeleteAction``, ``CollectionValidator``) has to
+bind before the services listed after it, because those pull in infrastructure that imports
+these names back out of this package while it is still initialising. Sorting these lines
+raises ``ImportError: cannot import name 'FieldType' from partially initialized module``.
 """
+
+# ruff: noqa: I001
 
 from snackbase.domain.services.account_code_generator import (
     AccountCodeExhaustedError,
