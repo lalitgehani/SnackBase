@@ -14,6 +14,9 @@ import ProtectedRoute from '@/components/platform/ProtectedRoute';
 import { ProjectStudioRoot, PlatformAdminRedirect } from '@/routes/ProjectStudioRoot';
 import { StudioChildRoutes } from '@/routes/studioRoutes';
 import { Toaster } from '@/components/ui/toaster';
+import { getPlatformSentinel } from '@/lib/platform-only';
+
+void getPlatformSentinel;
 
 export default function PlatformRoutes() {
   return (
