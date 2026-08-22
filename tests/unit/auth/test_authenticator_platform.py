@@ -98,7 +98,7 @@ async def test_hs256_algorithm_confusion_rejected(authenticator, mock_session, m
             "iat": now,
             "exp": now + 120,
         },
-        "not-the-jwks-public-key",
+        "not-the-jwks-public-key-32bytes-min!!",
         algorithm="HS256",
         headers={"kid": "test-key"},
     )

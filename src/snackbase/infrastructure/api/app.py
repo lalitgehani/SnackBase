@@ -338,7 +338,6 @@ def register_routes(app: FastAPI) -> None:
         audit_log_router,
         auth_router,
         codelists_router,
-        collection_rules_router,
         collections_router,
         custom_endpoint_dispatcher_router,
         dashboard_router,
@@ -381,12 +380,7 @@ def register_routes(app: FastAPI) -> None:
     # Register SAML routes
     app.include_router(saml_router, prefix=f"{settings.api_prefix}/auth/saml", tags=["auth"])
 
-    # Register collections routes
-    # Include collection rules as sub-router
-    collections_router.include_router(
-        collection_rules_router,
-        tags=["collections", "rules"],
-    )
+    # Register collections routes (includes collection rules sub-router)
     app.include_router(
         collections_router, prefix=f"{settings.api_prefix}/collections", tags=["collections"]
     )

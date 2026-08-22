@@ -34,12 +34,16 @@ from snackbase.infrastructure.persistence.repositories import CollectionReposito
 from snackbase.infrastructure.persistence.repositories.collection_rule_repository import (
     CollectionRuleRepository,
 )
+from snackbase.infrastructure.api.routes.collection_rules_router import (
+    router as collection_rules_router,
+)
 from snackbase.infrastructure.persistence.table_builder import TableBuilder
 from snackbase.infrastructure.security.encryption import EncryptionService
 
 logger = get_logger(__name__)
 
 router = APIRouter()
+router.include_router(collection_rules_router, tags=["collections", "rules"])
 
 
 @router.get(
