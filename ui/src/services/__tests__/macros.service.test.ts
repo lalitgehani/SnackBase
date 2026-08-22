@@ -46,7 +46,7 @@ describe('Macros Service', () => {
       let requestReceived = false
 
       server.use(
-        http.get('/api/v1/macros', () => {
+        http.get('*/api/v1/macros', () => {
           requestReceived = true
           return HttpResponse.json(mockMacroList)
         })
@@ -58,7 +58,7 @@ describe('Macros Service', () => {
 
     it('returns array of macros on success', async () => {
       server.use(
-        http.get('/api/v1/macros', () => HttpResponse.json(mockMacroList))
+        http.get('*/api/v1/macros', () => HttpResponse.json(mockMacroList))
       )
 
       const result = await listMacros()
@@ -69,7 +69,7 @@ describe('Macros Service', () => {
       let capturedUrl: string | null = null
 
       server.use(
-        http.get('/api/v1/macros', ({ request }) => {
+        http.get('*/api/v1/macros', ({ request }) => {
           capturedUrl = request.url
           return HttpResponse.json(mockMacroList)
         })
@@ -85,7 +85,7 @@ describe('Macros Service', () => {
       let capturedUrl: string | null = null
 
       server.use(
-        http.get('/api/v1/macros', ({ request }) => {
+        http.get('*/api/v1/macros', ({ request }) => {
           capturedUrl = request.url
           return HttpResponse.json(mockMacroList)
         })
@@ -99,7 +99,7 @@ describe('Macros Service', () => {
 
     it('returns empty array when no macros exist', async () => {
       server.use(
-        http.get('/api/v1/macros', () => HttpResponse.json([]))
+        http.get('*/api/v1/macros', () => HttpResponse.json([]))
       )
 
       const result = await listMacros()
@@ -108,7 +108,7 @@ describe('Macros Service', () => {
 
     it('propagates API errors', async () => {
       server.use(
-        http.get('/api/v1/macros', () =>
+        http.get('*/api/v1/macros', () =>
           HttpResponse.json({ detail: 'Forbidden' }, { status: 403 })
         )
       )
@@ -126,7 +126,7 @@ describe('Macros Service', () => {
       let requestReceived = false
 
       server.use(
-        http.get('/api/v1/macros/1', () => {
+        http.get('*/api/v1/macros/1', () => {
           requestReceived = true
           return HttpResponse.json(mockMacro)
         })
@@ -138,7 +138,7 @@ describe('Macros Service', () => {
 
     it('returns macro detail on success', async () => {
       server.use(
-        http.get('/api/v1/macros/1', () => HttpResponse.json(mockMacro))
+        http.get('*/api/v1/macros/1', () => HttpResponse.json(mockMacro))
       )
 
       const result = await getMacro(1)
@@ -147,7 +147,7 @@ describe('Macros Service', () => {
 
     it('propagates 404 when macro not found', async () => {
       server.use(
-        http.get('/api/v1/macros/999', () =>
+        http.get('*/api/v1/macros/999', () =>
           HttpResponse.json({ detail: 'Macro not found' }, { status: 404 })
         )
       )
@@ -172,7 +172,7 @@ describe('Macros Service', () => {
       let capturedBody: MacroCreate | null = null
 
       server.use(
-        http.post('/api/v1/macros', async ({ request }) => {
+        http.post('*/api/v1/macros', async ({ request }) => {
           capturedBody = (await request.json()) as MacroCreate
           return HttpResponse.json(mockMacro, { status: 201 })
         })
@@ -185,7 +185,7 @@ describe('Macros Service', () => {
 
     it('returns created macro on success', async () => {
       server.use(
-        http.post('/api/v1/macros', () =>
+        http.post('*/api/v1/macros', () =>
           HttpResponse.json(mockMacro, { status: 201 })
         )
       )
@@ -196,7 +196,7 @@ describe('Macros Service', () => {
 
     it('propagates API errors on duplicate name', async () => {
       server.use(
-        http.post('/api/v1/macros', () =>
+        http.post('*/api/v1/macros', () =>
           HttpResponse.json({ detail: 'Macro name already exists' }, { status: 409 })
         )
       )
@@ -206,7 +206,7 @@ describe('Macros Service', () => {
 
     it('propagates validation errors for invalid SQL', async () => {
       server.use(
-        http.post('/api/v1/macros', () =>
+        http.post('*/api/v1/macros', () =>
           HttpResponse.json({ detail: 'Invalid SQL query' }, { status: 422 })
         )
       )
@@ -233,7 +233,7 @@ describe('Macros Service', () => {
       let capturedBody: MacroUpdate | null = null
 
       server.use(
-        http.put('/api/v1/macros/1', async ({ request }) => {
+        http.put('*/api/v1/macros/1', async ({ request }) => {
           capturedBody = (await request.json()) as MacroUpdate
           return HttpResponse.json({ ...mockMacro, ...updatePayload })
         })
@@ -248,7 +248,7 @@ describe('Macros Service', () => {
       const updatedMacro = { ...mockMacro, description: 'Updated description' }
 
       server.use(
-        http.put('/api/v1/macros/1', () => HttpResponse.json(updatedMacro))
+        http.put('*/api/v1/macros/1', () => HttpResponse.json(updatedMacro))
       )
 
       const result = await updateMacro(1, updatePayload)
@@ -257,7 +257,7 @@ describe('Macros Service', () => {
 
     it('propagates 404 when macro not found', async () => {
       server.use(
-        http.put('/api/v1/macros/999', () =>
+        http.put('*/api/v1/macros/999', () =>
           HttpResponse.json({ detail: 'Macro not found' }, { status: 404 })
         )
       )
@@ -275,7 +275,7 @@ describe('Macros Service', () => {
       let requestReceived = false
 
       server.use(
-        http.delete('/api/v1/macros/1', () => {
+        http.delete('*/api/v1/macros/1', () => {
           requestReceived = true
           return new HttpResponse(null, { status: 204 })
         })
@@ -287,7 +287,7 @@ describe('Macros Service', () => {
 
     it('resolves without a return value on success', async () => {
       server.use(
-        http.delete('/api/v1/macros/1', () =>
+        http.delete('*/api/v1/macros/1', () =>
           new HttpResponse(null, { status: 204 })
         )
       )
@@ -298,7 +298,7 @@ describe('Macros Service', () => {
 
     it('propagates 404 when macro not found', async () => {
       server.use(
-        http.delete('/api/v1/macros/999', () =>
+        http.delete('*/api/v1/macros/999', () =>
           HttpResponse.json({ detail: 'Macro not found' }, { status: 404 })
         )
       )
@@ -322,7 +322,7 @@ describe('Macros Service', () => {
       let capturedBody: Record<string, unknown> | null = null
 
       server.use(
-        http.post('/api/v1/macros/1/test', async ({ request }) => {
+        http.post('*/api/v1/macros/1/test', async ({ request }) => {
           capturedBody = (await request.json()) as Record<string, unknown>
           return HttpResponse.json(mockTestResponse)
         })
@@ -335,7 +335,7 @@ describe('Macros Service', () => {
 
     it('returns test result on success', async () => {
       server.use(
-        http.post('/api/v1/macros/1/test', () => HttpResponse.json(mockTestResponse))
+        http.post('*/api/v1/macros/1/test', () => HttpResponse.json(mockTestResponse))
       )
 
       const result = await testMacro(1, { parameters: ['AB1234'] })
@@ -346,7 +346,7 @@ describe('Macros Service', () => {
       const emptyResult = { result: null, execution_time: 5.0, rows_affected: 0 }
 
       server.use(
-        http.post('/api/v1/macros/1/test', () => HttpResponse.json(emptyResult))
+        http.post('*/api/v1/macros/1/test', () => HttpResponse.json(emptyResult))
       )
 
       const result = await testMacro(1, { parameters: [] })
@@ -356,7 +356,7 @@ describe('Macros Service', () => {
 
     it('propagates errors when macro execution fails', async () => {
       server.use(
-        http.post('/api/v1/macros/1/test', () =>
+        http.post('*/api/v1/macros/1/test', () =>
           HttpResponse.json({ detail: 'SQL execution error' }, { status: 500 })
         )
       )
@@ -366,7 +366,7 @@ describe('Macros Service', () => {
 
     it('propagates 404 when macro not found', async () => {
       server.use(
-        http.post('/api/v1/macros/999/test', () =>
+        http.post('*/api/v1/macros/999/test', () =>
           HttpResponse.json({ detail: 'Macro not found' }, { status: 404 })
         )
       )

@@ -2,167 +2,81 @@
  * Codelists API service
  */
 
-import { apiClient } from '@/lib/api';
+import type { SnackBaseClient } from '@snackbase/sdk';
+import { createServiceHook } from '@/lib/snackbase/createServiceHook';
+import { bindService } from '@/lib/snackbase/bindService';
 import type {
-  Codelist,
   CodelistCreate,
-  CodelistOverride,
   CodelistUpdate,
   CodelistValue,
   CodelistValueCreate,
   CodelistValueUpdate,
-  EffectiveCodelistValue,
   OverridePayload,
 } from '@/types/codelist';
 
-export const listCodelists = async (params?: {
-  scope?: string;
-  active?: boolean;
-}): Promise<Codelist[]> => {
-  const response = await apiClient.get<Codelist[]>('/codelists', { params });
-  return response.data;
-};
+export type {
+  Codelist,
+  CodelistOverride,
+  EffectiveCodelistValue,
+} from '@/types/codelist';
 
-export const getCodelist = async (code: string): Promise<Codelist> => {
-  const response = await apiClient.get<Codelist>(`/codelists/${code}`);
-  return response.data;
-};
+export function createCodelistsService(client: SnackBaseClient) {
+  return {
+    listCodelists: (params?: { scope?: string; active?: boolean }) => client.codelists.list(params),
+    getCodelist: (code: string) => client.codelists.get(code),
+    getEffectiveValues: (
+      code: string,
+      params?: { lang?: string; active?: boolean; account_id?: string },
+    ) => client.codelists.getValues(code, params),
+    createCodelist: (data: CodelistCreate) => client.codelists.create(data),
+    updateCodelist: (code: string, data: CodelistUpdate) => client.codelists.update(code, data),
+    deleteCodelist: (code: string, hard = false) => client.codelists.delete(code, hard),
+    listManageValues: (code: string, includeInactive = true) =>
+      client.codelists.listManageValues(code, includeInactive) as Promise<CodelistValue[]>,
+    createValue: (code: string, data: CodelistValueCreate) =>
+      client.codelists.createValue(code, data) as Promise<CodelistValue>,
+    updateValue: (code: string, valueCode: string, data: CodelistValueUpdate) =>
+      client.codelists.updateValue(code, valueCode, data) as Promise<CodelistValue>,
+    upsertLabels: (
+      code: string,
+      valueCode: string,
+      labels: Array<{
+        language: string;
+        label: string;
+        description?: string | null;
+        is_preferred?: boolean;
+      }>,
+    ) => client.codelists.upsertLabels(code, valueCode, labels),
+    setOverride: (code: string, valueCode: string, data: OverridePayload, accountId?: string) =>
+      client.codelists.setOverride(code, valueCode, data, accountId),
+    clearOverride: async (code: string, valueCode: string, accountId?: string) => {
+      await client.codelists.clearOverride(code, valueCode, accountId);
+    },
+    listOverrides: (code: string, accountId?: string) =>
+      client.codelists.listOverrides(code, accountId),
+    exportCodelist: (code: string) => client.codelists.export(code),
+    importCodelist: (packageData: Record<string, unknown>) => client.codelists.import(packageData),
+  };
+}
 
-export const getEffectiveValues = async (
-  code: string,
-  params?: { lang?: string; active?: boolean; account_id?: string },
-): Promise<EffectiveCodelistValue[]> => {
-  const response = await apiClient.get<EffectiveCodelistValue[]>(
-    `/codelists/${code}/values`,
-    { params },
-  );
-  return response.data;
-};
+export const useCodelistsService = createServiceHook(createCodelistsService);
 
-export const createCodelist = async (data: CodelistCreate): Promise<Codelist> => {
-  const response = await apiClient.post<Codelist>('/codelists', data);
-  return response.data;
-};
-
-export const updateCodelist = async (
-  code: string,
-  data: CodelistUpdate,
-): Promise<Codelist> => {
-  const response = await apiClient.patch<Codelist>(`/codelists/${code}`, data);
-  return response.data;
-};
-
-export const deleteCodelist = async (
-  code: string,
-  hard = false,
-): Promise<Codelist> => {
-  const response = await apiClient.delete<Codelist>(`/codelists/${code}`, {
-    params: { hard },
-  });
-  return response.data;
-};
-
-export const listManageValues = async (
-  code: string,
-  includeInactive = true,
-): Promise<CodelistValue[]> => {
-  const response = await apiClient.get<CodelistValue[]>(
-    `/codelists/${code}/manage/values`,
-    { params: { include_inactive: includeInactive } },
-  );
-  return response.data;
-};
-
-export const createValue = async (
-  code: string,
-  data: CodelistValueCreate,
-): Promise<CodelistValue> => {
-  const response = await apiClient.post<CodelistValue>(
-    `/codelists/${code}/manage/values`,
-    data,
-  );
-  return response.data;
-};
-
-export const updateValue = async (
-  code: string,
-  valueCode: string,
-  data: CodelistValueUpdate,
-): Promise<CodelistValue> => {
-  const response = await apiClient.patch<CodelistValue>(
-    `/codelists/${code}/manage/values/${valueCode}`,
-    data,
-  );
-  return response.data;
-};
-
-export const upsertLabels = async (
-  code: string,
-  valueCode: string,
-  labels: Array<{
-    language: string;
-    label: string;
-    description?: string | null;
-    is_preferred?: boolean;
-  }>,
-) => {
-  const response = await apiClient.post(
-    `/codelists/${code}/manage/values/${valueCode}/labels`,
-    labels,
-  );
-  return response.data;
-};
-
-export const setOverride = async (
-  code: string,
-  valueCode: string,
-  data: OverridePayload,
-  accountId?: string,
-): Promise<CodelistOverride> => {
-  const response = await apiClient.put<CodelistOverride>(
-    `/codelists/${code}/values/${valueCode}/override`,
-    data,
-    { params: accountId ? { account_id: accountId } : undefined },
-  );
-  return response.data;
-};
-
-export const clearOverride = async (
-  code: string,
-  valueCode: string,
-  accountId?: string,
-): Promise<void> => {
-  await apiClient.delete(`/codelists/${code}/values/${valueCode}/override`, {
-    params: accountId ? { account_id: accountId } : undefined,
-  });
-};
-
-export const listOverrides = async (
-  code: string,
-  accountId?: string,
-): Promise<CodelistOverride[]> => {
-  const response = await apiClient.get<CodelistOverride[]>(
-    `/codelists/${code}/overrides`,
-    { params: accountId ? { account_id: accountId } : undefined },
-  );
-  return response.data;
-};
-
-export const exportCodelist = async (code: string): Promise<Record<string, unknown>> => {
-  const response = await apiClient.get<Record<string, unknown>>(
-    `/codelists/${code}/export`,
-  );
-  return response.data;
-};
-
-export const importCodelist = async (
-  packageData: Record<string, unknown>,
-): Promise<Codelist> => {
-  const response = await apiClient.post<Codelist>('/codelists/import', {
-    package: packageData,
-  });
-  return response.data;
-};
+const codelistsService = bindService(createCodelistsService);
+export const listCodelists = codelistsService.listCodelists;
+export const getCodelist = codelistsService.getCodelist;
+export const getEffectiveValues = codelistsService.getEffectiveValues;
+export const createCodelist = codelistsService.createCodelist;
+export const updateCodelist = codelistsService.updateCodelist;
+export const deleteCodelist = codelistsService.deleteCodelist;
+export const listManageValues = codelistsService.listManageValues;
+export const createValue = codelistsService.createValue;
+export const updateValue = codelistsService.updateValue;
+export const upsertLabels = codelistsService.upsertLabels;
+export const setOverride = codelistsService.setOverride;
+export const clearOverride = codelistsService.clearOverride;
+export const listOverrides = codelistsService.listOverrides;
+export const exportCodelist = codelistsService.exportCodelist;
+export const importCodelist = codelistsService.importCodelist;
 
 /** Validate codelist code pattern (PRD: ^[a-z][a-z0-9_]*$) */
 export function isValidCodelistCode(code: string): boolean {

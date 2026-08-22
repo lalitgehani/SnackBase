@@ -1,4 +1,7 @@
-import { apiClient as api } from '@/lib/api';
+import type { SnackBaseClient } from '@snackbase/sdk';
+import { createServiceHook } from '@/lib/snackbase/createServiceHook';
+import { bindService } from '@/lib/snackbase/bindService';
+import type { AuthResponse } from '@/types/auth.types';
 
 export interface Invitation {
   id: string;
@@ -31,37 +34,6 @@ export interface InvitationCreateRequest {
   account_id?: string;
 }
 
-export const getInvitations = async (status?: string, account_id?: string): Promise<InvitationListResponse> => {
-  const params: Record<string, string> = {};
-  if (status) {
-    params.status_filter = status;
-  }
-  if (account_id) {
-    params.account_id = account_id;
-  }
-  
-  const response = await api.get<InvitationListResponse>('/invitations', { params });
-  return response.data;
-};
-
-export const createInvitation = async (data: InvitationCreateRequest): Promise<Invitation> => {
-  const response = await api.post<Invitation>('/invitations', data);
-  return response.data;
-};
-
-export const cancelInvitation = async (invitationId: string): Promise<void> => {
-  await api.delete(`/invitations/${invitationId}`);
-};
-
-export const resendInvitation = async (
-  invitationId: string
-): Promise<{ message: string; token: string }> => {
-  const response = await api.post<{ message: string; token: string }>(
-    `/invitations/${invitationId}/resend`
-  );
-  return response.data;
-};
-
 export interface InvitationPublicResponse {
   email: string;
   account_name: string;
@@ -74,14 +46,32 @@ export interface InvitationAcceptRequest {
   password?: string;
 }
 
-import type { AuthResponse } from '@/types/auth.types';
+export function createInvitationsService(client: SnackBaseClient) {
+  return {
+    getInvitations: (status?: string, account_id?: string): Promise<InvitationListResponse> => {
+      const params: Record<string, string> = {};
+      if (status) params.status_filter = status;
+      if (account_id) params.account_id = account_id;
+      return client.invitations.list(params);
+    },
+    createInvitation: (data: InvitationCreateRequest) => client.invitations.create(data),
+    cancelInvitation: async (invitationId: string) => {
+      await client.invitations.cancel(invitationId);
+    },
+    resendInvitation: (invitationId: string) => client.invitations.resend(invitationId),
+    getInvitation: (token: string): Promise<InvitationPublicResponse> =>
+      client.invitations.getPublic(token),
+    acceptInvitation: (token: string, data: InvitationAcceptRequest): Promise<AuthResponse> =>
+      client.invitations.accept(token, data.password) as Promise<AuthResponse>,
+  };
+}
 
-export const getInvitation = async (token: string): Promise<InvitationPublicResponse> => {
-  const response = await api.get<InvitationPublicResponse>(`/invitations/${token}`);
-  return response.data;
-};
+export const useInvitationsService = createServiceHook(createInvitationsService);
 
-export const acceptInvitation = async (token: string, data: InvitationAcceptRequest): Promise<AuthResponse> => {
-  const response = await api.post<AuthResponse>(`/invitations/${token}/accept`, data);
-  return response.data;
-};
+const invitationsService = bindService(createInvitationsService);
+export const getInvitations = invitationsService.getInvitations;
+export const createInvitation = invitationsService.createInvitation;
+export const cancelInvitation = invitationsService.cancelInvitation;
+export const resendInvitation = invitationsService.resendInvitation;
+export const getInvitation = invitationsService.getInvitation;
+export const acceptInvitation = invitationsService.acceptInvitation;

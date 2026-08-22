@@ -16,6 +16,7 @@ class TokenType(str, Enum):
     API_KEY = "api_key"
     PERSONAL_TOKEN = "personal_token"
     OAUTH = "oauth"
+    PLATFORM = "platform"
 
 
 class TokenPayload(BaseModel):

@@ -41,7 +41,7 @@ describe('Codelists Service', () => {
   describe('listCodelists()', () => {
     it('sends GET to /codelists and returns data', async () => {
       server.use(
-        http.get('/api/v1/codelists', () => HttpResponse.json(mockList)),
+        http.get('*/api/v1/codelists', () => HttpResponse.json(mockList)),
       )
       const result = await listCodelists()
       expect(result).toEqual(mockList)
@@ -53,7 +53,7 @@ describe('Codelists Service', () => {
     it('requests values with lang query', async () => {
       let captured = ''
       server.use(
-        http.get('/api/v1/codelists/regions/values', ({ request }) => {
+        http.get('*/api/v1/codelists/regions/values', ({ request }) => {
           captured = request.url
           return HttpResponse.json(mockValues)
         }),
@@ -68,7 +68,7 @@ describe('Codelists Service', () => {
   describe('createCodelist()', () => {
     it('POSTs create body', async () => {
       server.use(
-        http.post('/api/v1/codelists', async ({ request }) => {
+        http.post('*/api/v1/codelists', async ({ request }) => {
           const body = (await request.json()) as { code: string }
           return HttpResponse.json({
             ...mockList[0],
@@ -89,7 +89,7 @@ describe('Codelists Service', () => {
   describe('setOverride()', () => {
     it('PUTs override payload', async () => {
       server.use(
-        http.put('/api/v1/codelists/regions/values/eu-01/override', async ({ request }) => {
+        http.put('*/api/v1/codelists/regions/values/eu-01/override', async ({ request }) => {
           const body = (await request.json()) as { visibility: string }
           return HttpResponse.json({
             id: 'ov1',
@@ -124,7 +124,7 @@ describe('Codelists Service', () => {
         values: [],
       }
       server.use(
-        http.get('/api/v1/codelists/regions/export', () => HttpResponse.json(pkg)),
+        http.get('*/api/v1/codelists/regions/export', () => HttpResponse.json(pkg)),
       )
       const result = await exportCodelist('regions')
       expect(result.format).toBe('snackbase.codelist')
@@ -133,7 +133,7 @@ describe('Codelists Service', () => {
 
     it('POSTs import package body', async () => {
       server.use(
-        http.post('/api/v1/codelists/import', async ({ request }) => {
+        http.post('*/api/v1/codelists/import', async ({ request }) => {
           const body = (await request.json()) as { package: { codelist: { code: string } } }
           return HttpResponse.json({
             id: '9',

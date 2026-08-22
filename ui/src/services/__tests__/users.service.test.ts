@@ -55,7 +55,7 @@ describe('Users Service', () => {
       let requestReceived = false
 
       server.use(
-        http.get('/api/v1/users', () => {
+        http.get('*/api/v1/users', () => {
           requestReceived = true
           return HttpResponse.json(mockUserListResponse)
         })
@@ -67,7 +67,7 @@ describe('Users Service', () => {
 
     it('returns user list response on success', async () => {
       server.use(
-        http.get('/api/v1/users', () => HttpResponse.json(mockUserListResponse))
+        http.get('*/api/v1/users', () => HttpResponse.json(mockUserListResponse))
       )
 
       const result = await getUsers()
@@ -78,7 +78,7 @@ describe('Users Service', () => {
       let capturedUrl: string | null = null
 
       server.use(
-        http.get('/api/v1/users', ({ request }) => {
+        http.get('*/api/v1/users', ({ request }) => {
           capturedUrl = request.url
           return HttpResponse.json(mockUserListResponse)
         })
@@ -93,7 +93,7 @@ describe('Users Service', () => {
       let capturedUrl: string | null = null
 
       server.use(
-        http.get('/api/v1/users', ({ request }) => {
+        http.get('*/api/v1/users', ({ request }) => {
           capturedUrl = request.url
           return HttpResponse.json(mockUserListResponse)
         })
@@ -108,7 +108,7 @@ describe('Users Service', () => {
       let capturedUrl: string | null = null
 
       server.use(
-        http.get('/api/v1/users', ({ request }) => {
+        http.get('*/api/v1/users', ({ request }) => {
           capturedUrl = request.url
           return HttpResponse.json(mockUserListResponse)
         })
@@ -123,7 +123,7 @@ describe('Users Service', () => {
       let capturedUrl: string | null = null
 
       server.use(
-        http.get('/api/v1/users', ({ request }) => {
+        http.get('*/api/v1/users', ({ request }) => {
           capturedUrl = request.url
           return HttpResponse.json(mockUserListResponse)
         })
@@ -137,7 +137,7 @@ describe('Users Service', () => {
 
     it('propagates API errors', async () => {
       server.use(
-        http.get('/api/v1/users', () =>
+        http.get('*/api/v1/users', () =>
           HttpResponse.json({ detail: 'Forbidden' }, { status: 403 })
         )
       )
@@ -151,7 +151,7 @@ describe('Users Service', () => {
       let requestReceived = false
 
       server.use(
-        http.get('/api/v1/users/user-1', () => {
+        http.get('*/api/v1/users/user-1', () => {
           requestReceived = true
           return HttpResponse.json(mockUser)
         })
@@ -163,7 +163,7 @@ describe('Users Service', () => {
 
     it('returns user on success', async () => {
       server.use(
-        http.get('/api/v1/users/user-1', () => HttpResponse.json(mockUser))
+        http.get('*/api/v1/users/user-1', () => HttpResponse.json(mockUser))
       )
 
       const result = await getUser('user-1')
@@ -172,7 +172,7 @@ describe('Users Service', () => {
 
     it('propagates 404 when user not found', async () => {
       server.use(
-        http.get('/api/v1/users/nonexistent', () =>
+        http.get('*/api/v1/users/nonexistent', () =>
           HttpResponse.json({ detail: 'User not found' }, { status: 404 })
         )
       )
@@ -186,7 +186,7 @@ describe('Users Service', () => {
       let capturedBody: Record<string, unknown> | null = null
 
       server.use(
-        http.post('/api/v1/users', async ({ request }) => {
+        http.post('*/api/v1/users', async ({ request }) => {
           capturedBody = (await request.json()) as Record<string, unknown>
           return HttpResponse.json(mockUser, { status: 201 })
         })
@@ -211,7 +211,7 @@ describe('Users Service', () => {
       let capturedBody: Record<string, unknown> | null = null
 
       server.use(
-        http.post('/api/v1/users', async ({ request }) => {
+        http.post('*/api/v1/users', async ({ request }) => {
           capturedBody = (await request.json()) as Record<string, unknown>
           return HttpResponse.json(mockUser, { status: 201 })
         })
@@ -230,7 +230,7 @@ describe('Users Service', () => {
 
     it('returns created user on success', async () => {
       server.use(
-        http.post('/api/v1/users', () => HttpResponse.json(mockUser, { status: 201 }))
+        http.post('*/api/v1/users', () => HttpResponse.json(mockUser, { status: 201 }))
       )
 
       const result = await createUser({
@@ -245,7 +245,7 @@ describe('Users Service', () => {
 
     it('propagates API errors on duplicate email', async () => {
       server.use(
-        http.post('/api/v1/users', () =>
+        http.post('*/api/v1/users', () =>
           HttpResponse.json({ detail: 'Email already exists' }, { status: 409 })
         )
       )
@@ -261,7 +261,7 @@ describe('Users Service', () => {
       let capturedBody: Record<string, unknown> | null = null
 
       server.use(
-        http.patch('/api/v1/users/user-1', async ({ request }) => {
+        http.patch('*/api/v1/users/user-1', async ({ request }) => {
           capturedBody = (await request.json()) as Record<string, unknown>
           return HttpResponse.json(mockUser)
         })
@@ -276,7 +276,7 @@ describe('Users Service', () => {
       const updated = { ...mockUser, role_id: 3, role_name: 'member' }
 
       server.use(
-        http.patch('/api/v1/users/user-1', () => HttpResponse.json(updated))
+        http.patch('*/api/v1/users/user-1', () => HttpResponse.json(updated))
       )
 
       const result = await updateUser('user-1', { role_id: 3 })
@@ -285,7 +285,7 @@ describe('Users Service', () => {
 
     it('propagates 404 when user not found', async () => {
       server.use(
-        http.patch('/api/v1/users/nonexistent', () =>
+        http.patch('*/api/v1/users/nonexistent', () =>
           HttpResponse.json({ detail: 'User not found' }, { status: 404 })
         )
       )
@@ -299,7 +299,7 @@ describe('Users Service', () => {
       let requestReceived = false
 
       server.use(
-        http.delete('/api/v1/users/user-1', () => {
+        http.delete('*/api/v1/users/user-1', () => {
           requestReceived = true
           return new HttpResponse(null, { status: 204 })
         })
@@ -311,7 +311,7 @@ describe('Users Service', () => {
 
     it('resolves without a return value on success', async () => {
       server.use(
-        http.delete('/api/v1/users/user-1', () => new HttpResponse(null, { status: 204 }))
+        http.delete('*/api/v1/users/user-1', () => new HttpResponse(null, { status: 204 }))
       )
 
       const result = await deactivateUser('user-1')
@@ -320,7 +320,7 @@ describe('Users Service', () => {
 
     it('propagates 404 when user not found', async () => {
       server.use(
-        http.delete('/api/v1/users/nonexistent', () =>
+        http.delete('*/api/v1/users/nonexistent', () =>
           HttpResponse.json({ detail: 'User not found' }, { status: 404 })
         )
       )
@@ -334,7 +334,7 @@ describe('Users Service', () => {
       let capturedBody: Record<string, unknown> | null = null
 
       server.use(
-        http.put('/api/v1/users/user-1/password', async ({ request }) => {
+        http.put('*/api/v1/users/user-1/password', async ({ request }) => {
           capturedBody = (await request.json()) as Record<string, unknown>
           return HttpResponse.json({ message: 'Password updated' })
         })
@@ -347,7 +347,7 @@ describe('Users Service', () => {
 
     it('returns message on success', async () => {
       server.use(
-        http.put('/api/v1/users/user-1/password', () =>
+        http.put('*/api/v1/users/user-1/password', () =>
           HttpResponse.json({ message: 'Password updated' })
         )
       )
@@ -362,7 +362,7 @@ describe('Users Service', () => {
       let requestReceived = false
 
       server.use(
-        http.post('/api/v1/users/user-1/verify', () => {
+        http.post('*/api/v1/users/user-1/verify', () => {
           requestReceived = true
           return HttpResponse.json({ message: 'Email verified' })
         })
@@ -374,7 +374,7 @@ describe('Users Service', () => {
 
     it('returns message on success', async () => {
       server.use(
-        http.post('/api/v1/users/user-1/verify', () =>
+        http.post('*/api/v1/users/user-1/verify', () =>
           HttpResponse.json({ message: 'Email verified' })
         )
       )
@@ -389,7 +389,7 @@ describe('Users Service', () => {
       let requestReceived = false
 
       server.use(
-        http.post('/api/v1/users/user-1/resend-verification', () => {
+        http.post('*/api/v1/users/user-1/resend-verification', () => {
           requestReceived = true
           return HttpResponse.json({ message: 'Verification email sent' })
         })
@@ -401,7 +401,7 @@ describe('Users Service', () => {
 
     it('returns message on success', async () => {
       server.use(
-        http.post('/api/v1/users/user-1/resend-verification', () =>
+        http.post('*/api/v1/users/user-1/resend-verification', () =>
           HttpResponse.json({ message: 'Verification email sent' })
         )
       )

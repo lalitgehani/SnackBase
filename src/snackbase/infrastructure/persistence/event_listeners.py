@@ -211,8 +211,15 @@ def _make_listener(hook_registry: HookRegistry, op_type: str):
                     sync_repo = SyncAuditLogRepository(connection)
                     audit_entries = []
                     
-                    # Extract auth method
-                    auth_method = context.user.token_type if context.user and hasattr(context.user, "token_type") else "unknown"
+                    # Extract auth method (string value, never raw token material)
+                    auth_method = "unknown"
+                    if context.user and hasattr(context.user, "token_type"):
+                        token_type = context.user.token_type
+                        auth_method = (
+                            token_type.value
+                            if hasattr(token_type, "value")
+                            else str(token_type)
+                        )
                     extra_metadata = {"auth_method": auth_method}
 
                     user_id = str(context.user.id)

@@ -1,0 +1,22 @@
+/** Relative studio route suffixes shared between self-host (/admin/X) and platform (/project/:ref/X). */
+export const ADMIN_STUDIO_ROUTE_SUFFIXES = [
+  'dashboard',
+  'users',
+  'invitations',
+  'groups',
+  'collections',
+  'roles',
+  'audit-logs',
+  'migrations',
+  'macros',
+  'codelists',
+  'configuration',
+  'api-keys',
+  'webhooks',
+  'jobs',
+  'scheduled-tasks',
+  'hooks',
+  'endpoints',
+  'functions',
+  'workflows',
+] as const;

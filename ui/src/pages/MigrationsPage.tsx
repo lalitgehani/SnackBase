@@ -11,7 +11,7 @@ import MigrationsTable from '@/components/migrations/MigrationsTable';
 import MigrationDetailDialog from '@/components/migrations/MigrationDetailDialog';
 import { listMigrations } from '@/services/migrations.service';
 import type { MigrationRevision, MigrationListResponse } from '@/types/migrations';
-import { handleApiError } from '@/lib/api';
+import { handleApiError } from '@/lib/errors';
 
 export default function MigrationsPage() {
     const [data, setData] = useState<MigrationListResponse | null>(null);

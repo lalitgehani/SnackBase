@@ -68,7 +68,7 @@ describe('Migrations Service', () => {
       let requestReceived = false
 
       server.use(
-        http.get('/api/v1/migrations', () => {
+        http.get('*/api/v1/migrations', () => {
           requestReceived = true
           return HttpResponse.json(mockMigrationListResponse)
         })
@@ -80,7 +80,7 @@ describe('Migrations Service', () => {
 
     it('returns migration list response on success', async () => {
       server.use(
-        http.get('/api/v1/migrations', () => HttpResponse.json(mockMigrationListResponse))
+        http.get('*/api/v1/migrations', () => HttpResponse.json(mockMigrationListResponse))
       )
 
       const result = await listMigrations()
@@ -89,7 +89,7 @@ describe('Migrations Service', () => {
 
     it('includes both applied and pending revisions', async () => {
       server.use(
-        http.get('/api/v1/migrations', () => HttpResponse.json(mockMigrationListResponse))
+        http.get('*/api/v1/migrations', () => HttpResponse.json(mockMigrationListResponse))
       )
 
       const result = await listMigrations()
@@ -102,7 +102,7 @@ describe('Migrations Service', () => {
 
     it('includes current_revision in the response', async () => {
       server.use(
-        http.get('/api/v1/migrations', () => HttpResponse.json(mockMigrationListResponse))
+        http.get('*/api/v1/migrations', () => HttpResponse.json(mockMigrationListResponse))
       )
 
       const result = await listMigrations()
@@ -117,7 +117,7 @@ describe('Migrations Service', () => {
       }
 
       server.use(
-        http.get('/api/v1/migrations', () => HttpResponse.json(noMigrationsResponse))
+        http.get('*/api/v1/migrations', () => HttpResponse.json(noMigrationsResponse))
       )
 
       const result = await listMigrations()
@@ -126,7 +126,7 @@ describe('Migrations Service', () => {
 
     it('marks head revision correctly', async () => {
       server.use(
-        http.get('/api/v1/migrations', () => HttpResponse.json(mockMigrationListResponse))
+        http.get('*/api/v1/migrations', () => HttpResponse.json(mockMigrationListResponse))
       )
 
       const result = await listMigrations()
@@ -138,7 +138,7 @@ describe('Migrations Service', () => {
 
     it('marks dynamic (user-created) revisions correctly', async () => {
       server.use(
-        http.get('/api/v1/migrations', () => HttpResponse.json(mockMigrationListResponse))
+        http.get('*/api/v1/migrations', () => HttpResponse.json(mockMigrationListResponse))
       )
 
       const result = await listMigrations()
@@ -150,7 +150,7 @@ describe('Migrations Service', () => {
 
     it('propagates API errors', async () => {
       server.use(
-        http.get('/api/v1/migrations', () =>
+        http.get('*/api/v1/migrations', () =>
           HttpResponse.json({ detail: 'Forbidden' }, { status: 403 })
         )
       )
@@ -168,7 +168,7 @@ describe('Migrations Service', () => {
       let requestReceived = false
 
       server.use(
-        http.get('/api/v1/migrations/current', () => {
+        http.get('*/api/v1/migrations/current', () => {
           requestReceived = true
           return HttpResponse.json(mockCurrentRevision)
         })
@@ -180,7 +180,7 @@ describe('Migrations Service', () => {
 
     it('returns current revision on success', async () => {
       server.use(
-        http.get('/api/v1/migrations/current', () => HttpResponse.json(mockCurrentRevision))
+        http.get('*/api/v1/migrations/current', () => HttpResponse.json(mockCurrentRevision))
       )
 
       const result = await getCurrentMigration()
@@ -189,7 +189,7 @@ describe('Migrations Service', () => {
 
     it('returns null when no current revision exists (404)', async () => {
       server.use(
-        http.get('/api/v1/migrations/current', () =>
+        http.get('*/api/v1/migrations/current', () =>
           HttpResponse.json({ detail: 'No current revision' }, { status: 404 })
         )
       )
@@ -200,7 +200,7 @@ describe('Migrations Service', () => {
 
     it('includes revision description in response', async () => {
       server.use(
-        http.get('/api/v1/migrations/current', () => HttpResponse.json(mockCurrentRevision))
+        http.get('*/api/v1/migrations/current', () => HttpResponse.json(mockCurrentRevision))
       )
 
       const result = await getCurrentMigration()
@@ -209,7 +209,7 @@ describe('Migrations Service', () => {
 
     it('propagates non-404 errors', async () => {
       server.use(
-        http.get('/api/v1/migrations/current', () =>
+        http.get('*/api/v1/migrations/current', () =>
           HttpResponse.json({ detail: 'Internal Server Error' }, { status: 500 })
         )
       )
@@ -227,7 +227,7 @@ describe('Migrations Service', () => {
       let requestReceived = false
 
       server.use(
-        http.get('/api/v1/migrations/history', () => {
+        http.get('*/api/v1/migrations/history', () => {
           requestReceived = true
           return HttpResponse.json(mockHistoryResponse)
         })
@@ -239,7 +239,7 @@ describe('Migrations Service', () => {
 
     it('returns migration history on success', async () => {
       server.use(
-        http.get('/api/v1/migrations/history', () => HttpResponse.json(mockHistoryResponse))
+        http.get('*/api/v1/migrations/history', () => HttpResponse.json(mockHistoryResponse))
       )
 
       const result = await getMigrationHistory()
@@ -257,7 +257,7 @@ describe('Migrations Service', () => {
       }
 
       server.use(
-        http.get('/api/v1/migrations/history', () => HttpResponse.json(multiHistory))
+        http.get('*/api/v1/migrations/history', () => HttpResponse.json(multiHistory))
       )
 
       const result = await getMigrationHistory()
@@ -275,7 +275,7 @@ describe('Migrations Service', () => {
       }
 
       server.use(
-        http.get('/api/v1/migrations/history', () => HttpResponse.json(historyWithDynamic))
+        http.get('*/api/v1/migrations/history', () => HttpResponse.json(historyWithDynamic))
       )
 
       const result = await getMigrationHistory()
@@ -289,7 +289,7 @@ describe('Migrations Service', () => {
       const emptyHistory: MigrationHistoryResponse = { history: [], total: 0 }
 
       server.use(
-        http.get('/api/v1/migrations/history', () => HttpResponse.json(emptyHistory))
+        http.get('*/api/v1/migrations/history', () => HttpResponse.json(emptyHistory))
       )
 
       const result = await getMigrationHistory()
@@ -299,7 +299,7 @@ describe('Migrations Service', () => {
 
     it('propagates API errors', async () => {
       server.use(
-        http.get('/api/v1/migrations/history', () =>
+        http.get('*/api/v1/migrations/history', () =>
           HttpResponse.json({ detail: 'Forbidden' }, { status: 403 })
         )
       )

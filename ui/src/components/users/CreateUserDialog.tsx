@@ -19,7 +19,7 @@ import { Loader2 } from 'lucide-react';
 import { getAccounts, type Account } from '@/services/accounts.service';
 import { getRoles, type RoleListItem } from '@/services/roles.service';
 import type { CreateUserRequest } from '@/services/users.service';
-import { handleApiError } from '@/lib/api';
+import { handleApiError } from '@/lib/errors';
 
 interface CreateUserDialogProps {
   open: boolean;

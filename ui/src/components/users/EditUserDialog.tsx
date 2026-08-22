@@ -18,7 +18,7 @@ import {
 import { Loader2 } from 'lucide-react';
 import { getRoles, type RoleListItem } from '@/services/roles.service';
 import type { User, UpdateUserRequest } from '@/services/users.service';
-import { handleApiError } from '@/lib/api';
+import { handleApiError } from '@/lib/errors';
 
 interface EditUserDialogProps {
   open: boolean;

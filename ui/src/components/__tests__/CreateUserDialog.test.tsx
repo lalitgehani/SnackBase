@@ -13,6 +13,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { SnackBaseError } from '@snackbase/sdk'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
@@ -41,8 +42,8 @@ const VALID_PASSWORD = 'Secure@Pass1!'
 
 function setupHandlers() {
   server.use(
-    http.get('/api/v1/accounts', () => HttpResponse.json(MOCK_ACCOUNTS)),
-    http.get('/api/v1/roles', () => HttpResponse.json(MOCK_ROLES)),
+    http.get('*/api/v1/accounts', () => HttpResponse.json(MOCK_ACCOUNTS)),
+    http.get('*/api/v1/roles', () => HttpResponse.json(MOCK_ROLES)),
   )
 }
 
@@ -228,12 +229,10 @@ describe('CreateUserDialog', () => {
 
     it('shows API error when onSubmit throws', async () => {
       const user = userEvent.setup()
-      // handleApiError processes AxiosErrors; plain Errors fall back to generic message
-      const axiosError = Object.assign(new Error('Request failed'), {
-        isAxiosError: true,
-        response: { data: { detail: 'Email already registered' } },
+      const apiError = new SnackBaseError('Request failed', 'CONFLICT_ERROR', 409, {
+        detail: 'Email already registered',
       })
-      const onSubmit = vi.fn().mockRejectedValue(axiosError)
+      const onSubmit = vi.fn().mockRejectedValue(apiError)
 
       render(
         <CreateUserDialog

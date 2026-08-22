@@ -110,7 +110,7 @@ describe('Dashboard Service', () => {
       let requestUrl = ''
 
       server.use(
-        http.get('/api/v1/dashboard/stats', ({ request }) => {
+        http.get('*/api/v1/dashboard/stats', ({ request }) => {
           requestUrl = request.url
           return HttpResponse.json(mockDashboardStats)
         }),
@@ -125,7 +125,7 @@ describe('Dashboard Service', () => {
       let requestUrl = ''
 
       server.use(
-        http.get('/api/v1/dashboard/stats', ({ request }) => {
+        http.get('*/api/v1/dashboard/stats', ({ request }) => {
           requestUrl = request.url
           return HttpResponse.json({ ...mockDashboardStats, range: '30d' })
         }),
@@ -137,7 +137,7 @@ describe('Dashboard Service', () => {
 
     it('returns dashboard stats on success', async () => {
       server.use(
-        http.get('/api/v1/dashboard/stats', () => HttpResponse.json(mockDashboardStats)),
+        http.get('*/api/v1/dashboard/stats', () => HttpResponse.json(mockDashboardStats)),
       )
 
       const result = await getDashboardStats()
@@ -146,7 +146,7 @@ describe('Dashboard Service', () => {
 
     it('returns correct account and user counts', async () => {
       server.use(
-        http.get('/api/v1/dashboard/stats', () => HttpResponse.json(mockDashboardStats)),
+        http.get('*/api/v1/dashboard/stats', () => HttpResponse.json(mockDashboardStats)),
       )
 
       const result = await getDashboardStats()
@@ -158,7 +158,7 @@ describe('Dashboard Service', () => {
 
     it('returns system health status', async () => {
       server.use(
-        http.get('/api/v1/dashboard/stats', () => HttpResponse.json(mockDashboardStats)),
+        http.get('*/api/v1/dashboard/stats', () => HttpResponse.json(mockDashboardStats)),
       )
 
       const result = await getDashboardStats()
@@ -167,7 +167,7 @@ describe('Dashboard Service', () => {
 
     it('returns recent registrations array', async () => {
       server.use(
-        http.get('/api/v1/dashboard/stats', () => HttpResponse.json(mockDashboardStats)),
+        http.get('*/api/v1/dashboard/stats', () => HttpResponse.json(mockDashboardStats)),
       )
 
       const result = await getDashboardStats()
@@ -177,7 +177,7 @@ describe('Dashboard Service', () => {
 
     it('propagates API errors', async () => {
       server.use(
-        http.get('/api/v1/dashboard/stats', () =>
+        http.get('*/api/v1/dashboard/stats', () =>
           HttpResponse.json({ detail: 'Forbidden' }, { status: 403 }),
         ),
       )

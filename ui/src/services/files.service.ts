@@ -1,9 +1,9 @@
 /**
  * Files API service
- * Handles file upload and download operations
  */
-
-import { apiClient } from '@/lib/api';
+import type { SnackBaseClient } from '@snackbase/sdk';
+import { createServiceHook } from '@/lib/snackbase/createServiceHook';
+import { bindService } from '@/lib/snackbase/bindService';
 
 export interface FileMetadata {
   filename: string;
@@ -18,29 +18,15 @@ export interface FileUploadResponse {
   message: string;
 }
 
-/**
- * Upload a file to storage
- */
-export const uploadFile = async (file: File): Promise<FileMetadata> => {
-  const formData = new FormData();
-  formData.append('file', file);
+export function createFilesService(client: SnackBaseClient) {
+  return {
+    uploadFile: async (file: File): Promise<FileMetadata> => client.files.upload(file),
+    getFileDownloadUrl: (filePath: string): string => client.files.getDownloadUrl(filePath),
+  };
+}
 
-  const response = await apiClient.post<FileUploadResponse>('/files/upload', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
-  });
+export const useFilesService = createServiceHook(createFilesService);
 
-  return response.data.file;
-};
-
-/**
- * Get file download URL
- */
-export const getFileDownloadUrl = (filePath: string): string => {
-  // Use the API client's base URL
-  const baseUrl = import.meta.env.VITE_API_BASE_URL || '/api/v1';
-  // Ensure we have the full URL for file downloads
-  const apiUrl = baseUrl.startsWith('http') ? baseUrl : `${window.location.origin}${baseUrl}`;
-  return `${apiUrl}/files/${filePath}`;
-};
+const filesService = bindService(createFilesService);
+export const uploadFile = filesService.uploadFile;
+export const getFileDownloadUrl = filesService.getFileDownloadUrl;

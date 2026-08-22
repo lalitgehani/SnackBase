@@ -20,7 +20,6 @@ export default defineConfig([
       globals: globals.browser,
     },
     rules: {
-      // Allow intentionally unused names (e.g. Playwright fixtures kept for side effects)
       '@typescript-eslint/no-unused-vars': [
         'error',
         {
@@ -29,16 +28,69 @@ export default defineConfig([
           caughtErrorsIgnorePattern: '^_',
         },
       ],
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'axios',
+              message: 'Use @snackbase/sdk via useInstanceClient() instead of axios.',
+            },
+          ],
+        },
+      ],
     },
   },
-  // Playwright fixture `use` is not a React hook — disable rules-of-hooks for e2e
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: [
+      'src/pages/platform/**',
+      'src/components/platform/**',
+      'src/layouts/platform/**',
+      'src/lib/control-plane/**',
+      'src/lib/platform/**',
+      'src/platform/**',
+      'src/routes/platform.tsx',
+      'src/routes/ProjectStudioRoot.tsx',
+      'src/RootProviders.tsx',
+    ],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'axios',
+              message: 'Use @snackbase/sdk via useInstanceClient() instead of axios.',
+            },
+            {
+              name: '@snackbase/react',
+              message: 'Import @snackbase/react only from platform modules.',
+            },
+          ],
+          patterns: [
+            {
+              group: ['@/pages/platform/*', '@/components/platform/*', '@/layouts/platform/*'],
+              message: 'Do not import platform modules from self-host code.',
+            },
+          ],
+        },
+      ],
+    },
+  },
   {
     files: ['e2e/**/*.{ts,tsx}'],
     rules: {
       'react-hooks/rules-of-hooks': 'off',
     },
   },
-  // Intentional mixed component + helper/constant exports (shadcn, forms, test utils)
+  {
+    files: ['src/lib/snackbase/InstanceClientProvider.tsx'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+      'react-hooks/refs': 'off',
+    },
+  },
   {
     files: [
       'src/components/ui/**/*.{ts,tsx}',
@@ -47,6 +99,11 @@ export default defineConfig([
       'src/pages/Hooks/HookStatusBadge.tsx',
       'src/pages/Workflows/InstanceStatusBadge.tsx',
       'src/test/utils.tsx',
+      'src/lib/platform/StudioBasePathContext.tsx',
+      'src/components/platform/PlatformStudioChrome.tsx',
+      'src/components/platform/EnvironmentColdStartGate.tsx',
+      'src/components/platform/EnvironmentStatusBadge.tsx',
+      'src/layouts/platform/PlatformStudioLayout.tsx',
     ],
     rules: {
       'react-refresh/only-export-components': 'off',

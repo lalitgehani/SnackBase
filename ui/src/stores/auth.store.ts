@@ -1,15 +1,13 @@
 /**
- * Authentication store using Zustand
- * Manages authentication state, login, logout, and session persistence
+ * Auth store — Zustand session state delegating to the instance SDK client.
  */
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import * as authService from '@/services/auth.service';
-import type { AuthResponse, UserInfo, AccountInfo } from '@/types/auth.types';
+import { getInstanceClient } from '@/lib/snackbase/instanceClientRef';
+import type { AuthResponse, AccountInfo, UserInfo } from '@/types/auth.types';
 
 interface AuthState {
-  // State
   user: UserInfo | null;
   account: AccountInfo | null;
   token: string | null;
@@ -17,19 +15,53 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
-
-  // Actions
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
-  clearError: () => void;
   restoreSession: () => Promise<void>;
+  clearError: () => void;
   setAuth: (response: AuthResponse) => void;
+}
+
+function extractErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    return String((error as { message: unknown }).message);
+  }
+  return 'Login failed';
+}
+
+function toAuthResponse(raw: {
+  token?: string;
+  refresh_token?: string;
+  refreshToken?: string;
+  expires_in?: number;
+  account?: AccountInfo;
+  user?: UserInfo;
+}): AuthResponse {
+  return {
+    token: raw.token ?? '',
+    refresh_token: raw.refresh_token ?? raw.refreshToken ?? '',
+    expires_in: raw.expires_in ?? 3600,
+    account: raw.account as AccountInfo,
+    user: raw.user as UserInfo,
+  };
+}
+
+function authSliceFromResponse(response: AuthResponse) {
+  return {
+    user: response.user,
+    account: response.account,
+    token: response.token,
+    refreshToken: response.refresh_token,
+    isAuthenticated: true,
+    isLoading: false,
+    error: null,
+  };
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
-      // Initial state
       user: null,
       account: null,
       token: null,
@@ -38,90 +70,91 @@ export const useAuthStore = create<AuthState>()(
       isLoading: false,
       error: null,
 
-      // Login action
-      login: async (email: string, password: string) => {
+      login: async (email, password) => {
         set({ isLoading: true, error: null });
-
         try {
-          const response = await authService.login(email, password);
-
-          set({
-            user: response.user,
-            account: response.account,
-            token: response.token,
-            refreshToken: response.refresh_token,
-            isAuthenticated: true,
-            isLoading: false,
-            error: null,
+          const client = getInstanceClient();
+          const raw = await client.auth.login({
+            email,
+            password,
+            account: 'SY0000',
           });
+          set(authSliceFromResponse(toAuthResponse(raw)));
         } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : 'Login failed';
-          
           set({
+            isLoading: false,
+            error: extractErrorMessage(error),
+            isAuthenticated: false,
             user: null,
             account: null,
             token: null,
             refreshToken: null,
-            isAuthenticated: false,
-            isLoading: false,
-            error: errorMessage,
           });
-
           throw error;
         }
       },
 
-      // Logout action
       logout: () => {
-        authService.logout();
-        
+        try {
+          const client = getInstanceClient();
+          void client.auth.logout();
+        } catch {
+          // Provider may not be mounted during teardown.
+        }
         set({
           user: null,
           account: null,
           token: null,
           refreshToken: null,
           isAuthenticated: false,
-          isLoading: false,
           error: null,
         });
       },
 
-      // Clear error
-      clearError: () => {
-        set({ error: null });
-      },
-
-      // Restore session (called on app load)
       restoreSession: async () => {
-        const { token, isAuthenticated } = get();
+        set({ isLoading: true });
+        try {
+          const client = getInstanceClient();
+          const sdkAuth = client.internalAuthManager.getState();
+          const { token, refreshToken, user, account } = get();
 
-        // If we have a token, verify it's still valid
-        if (token && isAuthenticated) {
-          try {
-            // Try to get current user info to verify token
-            await authService.getCurrentUser();
-            
-            // Token is valid, session restored
-            set({ isLoading: false });
-          } catch (error) {
-            // Token is invalid, clear session
-            console.error('Session restoration failed:', error);
-            get().logout();
+          if (sdkAuth.token && sdkAuth.isAuthenticated) {
+            set({
+              user: sdkAuth.user as UserInfo | null,
+              account: sdkAuth.account as AccountInfo | null,
+              token: sdkAuth.token,
+              refreshToken: sdkAuth.refreshToken,
+              isAuthenticated: true,
+            });
+          } else if (token && user && account) {
+            await client.internalAuthManager.updateState({
+              token,
+              refresh_token: refreshToken ?? '',
+              expires_in: 3600,
+              user,
+              account,
+            });
+          } else {
+            set({ isLoading: false, isAuthenticated: false });
+            return;
           }
+
+          const raw = await client.auth.getCurrentUser();
+          set(authSliceFromResponse(toAuthResponse(raw)));
+        } catch {
+          get().logout();
+          set({ isLoading: false });
         }
       },
 
-      // Set auth state manually (e.g. after registration or invitation acceptance)
-      setAuth: (response: AuthResponse) => {
-        set({
-          user: response.user,
-          account: response.account,
-          token: response.token,
-          refreshToken: response.refresh_token,
-          isAuthenticated: true,
-          isLoading: false,
-          error: null,
-        });
+      clearError: () => set({ error: null }),
+
+      setAuth: (response) => {
+        void getInstanceClient()
+          .internalAuthManager.updateState(response)
+          .then(() => {
+            set(authSliceFromResponse(response));
+          });
       },
     }),
     {
@@ -129,10 +162,8 @@ export const useAuthStore = create<AuthState>()(
       partialize: (state) => ({
         user: state.user,
         account: state.account,
-        token: state.token,
-        refreshToken: state.refreshToken,
         isAuthenticated: state.isAuthenticated,
       }),
-    }
-  )
+    },
+  ),
 );

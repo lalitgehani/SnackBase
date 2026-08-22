@@ -30,6 +30,10 @@ import {
 import { useLocation, Link, useNavigate } from "react-router"
 import { useAuthStore } from "@/stores/auth.store"
 import { isSuperadminAccount } from "@/lib/auth"
+import { IS_PLATFORM } from "@/lib/config"
+import { filterStudioNavItems } from "@/lib/platform/platformNavAllowlist"
+import { normalizeToAdminPath } from "@/lib/platform/studioPath"
+import { useStudioBasePath, useStudioNavUrl } from "@/lib/platform/StudioBasePathContext"
 import {
     Sidebar,
     SidebarContent,
@@ -273,6 +277,15 @@ function buildInitialOpenState(pathname: string): Record<string, boolean> {
     return next
 }
 
+function NavLink({ to, children, ...props }: React.ComponentProps<typeof Link>) {
+    const resolved = useStudioNavUrl(typeof to === 'string' ? to : '')
+    return (
+        <Link to={resolved} {...props}>
+            {children}
+        </Link>
+    )
+}
+
 function NavGroupItem({
     group,
     visibleItems,
@@ -313,10 +326,10 @@ function NavGroupItem({
                         </DropdownMenuLabel>
                         {visibleItems.map((item) => (
                             <DropdownMenuItem key={item.title} asChild>
-                                <Link to={item.url}>
+                                <NavLink to={item.url}>
                                     <item.icon />
                                     <span>{item.title}</span>
-                                </Link>
+                                </NavLink>
                             </DropdownMenuItem>
                         ))}
                     </DropdownMenuContent>
@@ -353,9 +366,9 @@ function NavGroupItem({
                                     asChild
                                     isActive={isNavItemActive(pathname, item.url)}
                                 >
-                                    <Link to={item.url}>
+                                    <NavLink to={item.url}>
                                         <span>{item.title}</span>
-                                    </Link>
+                                    </NavLink>
                                 </SidebarMenuSubButton>
                             </SidebarMenuSubItem>
                         ))}
@@ -373,9 +386,11 @@ export function AppSidebar() {
     const { user, account, logout } = useAuthStore()
     const isSuperadmin = isSuperadminAccount(account)
     const isIconCollapsed = state === "collapsed" && !isMobile
+    const pathname = normalizeToAdminPath(location.pathname)
+    const studioCtx = useStudioBasePath()
 
     const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() =>
-        buildInitialOpenState(location.pathname),
+        buildInitialOpenState(normalizeToAdminPath(location.pathname)),
     )
 
     // Keep the active section expanded when the route changes.
@@ -385,8 +400,9 @@ export function AppSidebar() {
         setOpenGroups((prev) => {
             let changed = false
             const next = { ...prev }
+            const normalizedPath = normalizeToAdminPath(location.pathname)
             for (const group of navigation) {
-                if (groupContainsActivePath(group, location.pathname) && !next[group.label]) {
+                if (groupContainsActivePath(group, normalizedPath) && !next[group.label]) {
                     next[group.label] = true
                     changed = true
                 }
@@ -406,7 +422,7 @@ export function AppSidebar() {
 
     const handleLogout = () => {
         logout()
-        navigate("/admin/login")
+        navigate(IS_PLATFORM || studioCtx ? "/login" : "/admin/login")
     }
 
     return (
@@ -441,23 +457,27 @@ export function AppSidebar() {
                                     <SidebarMenuButton
                                         asChild
                                         isActive={isNavItemActive(
-                                            location.pathname,
+                                            pathname,
                                             item.url,
                                         )}
                                         tooltip={item.title}
                                     >
-                                        <Link to={item.url}>
+                                        <NavLink to={item.url}>
                                             <item.icon />
                                             <span>{item.title}</span>
-                                        </Link>
+                                        </NavLink>
                                     </SidebarMenuButton>
                                 </SidebarMenuItem>
                             ))}
 
                             {/* Collapsible sections (expand inline, or flyout when icon-collapsed) */}
                             {navigation.map((group) => {
-                                const visibleItems = group.items.filter(
+                                const superadminFiltered = group.items.filter(
                                     (item) => !item.superadminOnly || isSuperadmin,
+                                )
+                                const visibleItems = filterStudioNavItems(
+                                    superadminFiltered,
+                                    IS_PLATFORM || Boolean(studioCtx),
                                 )
                                 if (visibleItems.length === 0) return null
 
@@ -470,7 +490,7 @@ export function AppSidebar() {
                                         onOpenChange={(open) =>
                                             handleOpenChange(group.label, open)
                                         }
-                                        pathname={location.pathname}
+                                        pathname={pathname}
                                     />
                                 )
                             })}

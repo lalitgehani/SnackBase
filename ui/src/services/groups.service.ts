@@ -3,10 +3,11 @@
  * Handles all API calls related to group management
  */
 
-import { apiClient } from '@/lib/api';
+import type { SnackBaseClient } from '@snackbase/sdk';
+import { createServiceHook } from '@/lib/snackbase/createServiceHook';
+import { bindService } from '@/lib/snackbase/bindService';
 import type { User } from './users.service';
 
-// Types
 export interface Group {
   id: string;
   account_id: string;
@@ -44,72 +45,32 @@ export interface GroupListResponse {
   total: number;
 }
 
-// API Functions
-
-/**
- * Get list of groups with optional filtering and pagination
- */
-export async function getGroups(params?: GroupListParams): Promise<GroupListResponse> {
-  const queryParams = new URLSearchParams();
-  
-  if (params?.skip !== undefined) queryParams.append('skip', params.skip.toString());
-  if (params?.limit !== undefined) queryParams.append('limit', params.limit.toString());
-  if (params?.search) queryParams.append('search', params.search);
-
-  const response = await apiClient.get(`/groups?${queryParams.toString()}`);
-  
-  // Backend returns array directly, we need to wrap it for consistency
-  if (Array.isArray(response.data)) {
-    return {
-      items: response.data,
-      total: response.data.length,
-    };
-  }
-  
-  return response.data;
+export function createGroupsService(client: SnackBaseClient) {
+  return {
+    getGroups: (params?: GroupListParams): Promise<GroupListResponse> =>
+      client.groups.list(params),
+    getGroup: (id: string) => client.groups.get(id),
+    createGroup: (data: CreateGroupRequest) => client.groups.create(data),
+    updateGroup: (id: string, data: UpdateGroupRequest) => client.groups.update(id, data),
+    deleteGroup: async (id: string) => {
+      await client.groups.delete(id);
+    },
+    addUserToGroup: async (groupId: string, userId: string) => {
+      await client.groups.addMember(groupId, userId);
+    },
+    removeUserFromGroup: async (groupId: string, userId: string) => {
+      await client.groups.removeMember(groupId, userId);
+    },
+  };
 }
 
-/**
- * Get a single group by ID
- */
-export async function getGroup(id: string): Promise<Group> {
-  const response = await apiClient.get(`/groups/${id}`);
-  return response.data;
-}
+export const useGroupsService = createServiceHook(createGroupsService);
 
-/**
- * Create a new group
- */
-export async function createGroup(data: CreateGroupRequest): Promise<Group> {
-  const response = await apiClient.post('/groups', data);
-  return response.data;
-}
-
-/**
- * Update an existing group
- */
-export async function updateGroup(id: string, data: UpdateGroupRequest): Promise<Group> {
-  const response = await apiClient.patch(`/groups/${id}`, data);
-  return response.data;
-}
-
-/**
- * Delete a group
- */
-export async function deleteGroup(id: string): Promise<void> {
-  await apiClient.delete(`/groups/${id}`);
-}
-
-/**
- * Add a user to a group
- */
-export async function addUserToGroup(groupId: string, userId: string): Promise<void> {
-  await apiClient.post(`/groups/${groupId}/users`, { user_id: userId });
-}
-
-/**
- * Remove a user from a group
- */
-export async function removeUserFromGroup(groupId: string, userId: string): Promise<void> {
-  await apiClient.delete(`/groups/${groupId}/users/${userId}`);
-}
+const groupsService = bindService(createGroupsService);
+export const getGroups = groupsService.getGroups;
+export const getGroup = groupsService.getGroup;
+export const createGroup = groupsService.createGroup;
+export const updateGroup = groupsService.updateGroup;
+export const deleteGroup = groupsService.deleteGroup;
+export const addUserToGroup = groupsService.addUserToGroup;
+export const removeUserFromGroup = groupsService.removeUserFromGroup;

@@ -95,10 +95,10 @@ function setupSuccessHandlers(
   templatesOverride: typeof mockTemplates = mockTemplates,
 ) {
   server.use(
-    http.get('/api/v1/admin/email/templates', () =>
+    http.get('*/api/v1/admin/email/templates', () =>
       HttpResponse.json(templatesOverride),
     ),
-    http.get('/api/v1/admin/email/logs', () =>
+    http.get('*/api/v1/admin/email/logs', () =>
       HttpResponse.json(mockEmailLogs),
     ),
   )
@@ -149,10 +149,10 @@ describe('EmailTemplatesTab', () => {
   describe('loading state', () => {
     it('shows a loading indicator while templates are fetching', () => {
       server.use(
-        http.get('/api/v1/admin/email/templates', async () => {
+        http.get('*/api/v1/admin/email/templates', async () => {
           await new Promise(() => {}) // never resolves
         }),
-        http.get('/api/v1/admin/email/logs', () =>
+        http.get('*/api/v1/admin/email/logs', () =>
           HttpResponse.json(mockEmailLogs),
         ),
       )
@@ -257,7 +257,7 @@ describe('EmailTemplatesTab', () => {
     it('calls API with template_type param when type filter is changed', async () => {
       let capturedParams: URLSearchParams | null = null
       server.use(
-        http.get('/api/v1/admin/email/templates', ({ request }) => {
+        http.get('*/api/v1/admin/email/templates', ({ request }) => {
           capturedParams = new URL(request.url).searchParams
           return HttpResponse.json(mockTemplates)
         }),

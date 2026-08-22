@@ -17,7 +17,7 @@ import {
     type AuditLogListResponse,
     type AuditLogFilters,
 } from '@/services/audit.service';
-import { handleApiError } from '@/lib/api';
+import { handleApiError } from '@/lib/errors';
 
 export default function AuditLogsPage() {
     const [data, setData] = useState<AuditLogListResponse | null>(null);

@@ -27,7 +27,7 @@ import FilterBuilderPanel, {
 import { getCollectionByName, type Collection } from '@/services/collections.service';
 import { aggregateRecords } from '@/services/records.service';
 import type { AggregationResult } from '@/types/records.types';
-import { handleApiError } from '@/lib/api';
+import { handleApiError } from '@/lib/errors';
 import { useEffect } from 'react';
 
 type AggFn = 'count' | 'sum' | 'avg' | 'min' | 'max';

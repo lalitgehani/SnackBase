@@ -3,6 +3,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest'
+import { SnackBaseError } from '@snackbase/sdk'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { render } from '@/test/utils'
@@ -227,11 +228,10 @@ describe('CreateCollectionDialog', () => {
 
     it('shows API error message when onSubmit throws', async () => {
       const user = userEvent.setup()
-      const axiosError = Object.assign(new Error('Request failed'), {
-        isAxiosError: true,
-        response: { data: { detail: 'Collection name already exists' } },
+      const apiError = new SnackBaseError('Request failed', 'CONFLICT_ERROR', 409, {
+        detail: 'Collection name already exists',
       })
-      const onSubmit = vi.fn().mockRejectedValue(axiosError)
+      const onSubmit = vi.fn().mockRejectedValue(apiError)
       renderDialog({ onSubmit })
 
       await user.type(screen.getByLabelText(/collection name \*/i), 'existing')

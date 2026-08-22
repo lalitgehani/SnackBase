@@ -74,7 +74,7 @@ function renderPage() {
 
 function setupSuccessHandler(override: Partial<typeof mockApiKeys> = {}) {
   server.use(
-    http.get('/api/v1/admin/api-keys', () =>
+    http.get('*/api/v1/admin/api-keys', () =>
       HttpResponse.json({ ...mockApiKeys, ...override }),
     ),
   )
@@ -126,7 +126,7 @@ describe('ApiKeysPage', () => {
   describe('loading state', () => {
     it('shows skeleton loaders before data loads', () => {
       server.use(
-        http.get('/api/v1/admin/api-keys', async () => {
+        http.get('*/api/v1/admin/api-keys', async () => {
           await new Promise(() => {}) // never resolves
         }),
       )
@@ -273,10 +273,10 @@ describe('ApiKeysPage', () => {
 
     it('shows the plaintext key after successful creation', async () => {
       server.use(
-        http.post('/api/v1/admin/api-keys', async () =>
+        http.post('*/api/v1/admin/api-keys', async () =>
           HttpResponse.json(createdKeyResponse, { status: 201 }),
         ),
-        http.get('/api/v1/admin/api-keys', () =>
+        http.get('*/api/v1/admin/api-keys', () =>
           HttpResponse.json({
             items: [
               ...mockApiKeys.items,
@@ -324,10 +324,10 @@ describe('ApiKeysPage', () => {
 
     it('shows security warning when key is created', async () => {
       server.use(
-        http.post('/api/v1/admin/api-keys', async () =>
+        http.post('*/api/v1/admin/api-keys', async () =>
           HttpResponse.json(createdKeyResponse, { status: 201 }),
         ),
-        http.get('/api/v1/admin/api-keys', () => HttpResponse.json(mockApiKeys)),
+        http.get('*/api/v1/admin/api-keys', () => HttpResponse.json(mockApiKeys)),
       )
 
       renderPage()
@@ -409,11 +409,11 @@ describe('ApiKeysPage', () => {
     it('calls the revoke endpoint when confirmed', async () => {
       let revokeCalled = false
       server.use(
-        http.delete('/api/v1/admin/api-keys/key-1', () => {
+        http.delete('*/api/v1/admin/api-keys/key-1', () => {
           revokeCalled = true
           return new HttpResponse(null, { status: 204 })
         }),
-        http.get('/api/v1/admin/api-keys', () =>
+        http.get('*/api/v1/admin/api-keys', () =>
           HttpResponse.json({
             items: mockApiKeys.items.map((k) =>
               k.id === 'key-1' ? { ...k, is_active: false } : k,

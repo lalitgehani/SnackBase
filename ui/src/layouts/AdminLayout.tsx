@@ -7,9 +7,11 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/s
 import { AppSidebar } from '@/components/AppSidebar';
 import { ModeToggle } from '@/components/mode-toggle';
 import { getAdminPageTitle, isFullBleedAdminPath } from '@/layouts/adminLayoutHelpers';
+import { normalizeToAdminPath } from '@/lib/platform/studioPath';
 
 export default function AdminLayout() {
     const location = useLocation();
+    const adminPath = normalizeToAdminPath(location.pathname);
 
     return (
         <SidebarProvider>
@@ -20,7 +22,7 @@ export default function AdminLayout() {
                     <SidebarTrigger className="-ml-1" />
                     <div className="h-4 w-px bg-border mx-2" />
                     <h2 className="text-lg font-semibold">
-                        {getAdminPageTitle(location.pathname)}
+                        {getAdminPageTitle(adminPath)}
                     </h2>
                     <div className="ml-auto">
                         <ModeToggle />
@@ -30,7 +32,7 @@ export default function AdminLayout() {
                 {/* Page content — collections, workflows, hooks non-list use full-bleed shell */}
                 <main
                     className={
-                        isFullBleedAdminPath(location.pathname)
+                        isFullBleedAdminPath(adminPath)
                             ? 'flex flex-1 min-h-0 min-w-0 flex-col overflow-hidden bg-background p-0'
                             : 'flex-1 min-w-0 overflow-y-auto bg-background p-6'
                     }

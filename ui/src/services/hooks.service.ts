@@ -1,4 +1,6 @@
-import { apiClient } from '@/lib/api';
+import type { SnackBaseClient } from '@snackbase/sdk';
+import { createServiceHook } from '@/lib/snackbase/createServiceHook';
+import { bindService } from '@/lib/snackbase/bindService';
 
 export interface EventTrigger {
   type: 'event';
@@ -87,87 +89,63 @@ function sortHooksByUpdatedAtDesc(items: Hook[]): Hook[] {
   });
 }
 
-export const hooksService = {
-  /**
-   * List hooks. When `trigger_type` is omitted, loads event + manual in parallel
-   * (Hooks admin page). Pass `trigger_type` for a single filtered request.
-   */
-  list: async (params?: HookListParams): Promise<HookListResponse> => {
-    if (params?.trigger_type) {
-      const response = await apiClient.get<HookListResponse>('/hooks', {
-        params: {
+export function createHooksService(client: SnackBaseClient) {
+  return {
+    /**
+     * List hooks. When `trigger_type` is omitted, loads event + manual in parallel
+     * (Hooks admin page). Pass `trigger_type` for a single filtered request.
+     */
+    list: async (params?: HookListParams): Promise<HookListResponse> => {
+      if (params?.trigger_type) {
+        return client.hooks.list({
           limit: params.limit ?? 200,
           offset: params.offset ?? 0,
           ...(params.enabled !== undefined ? { enabled: params.enabled } : {}),
           trigger_type: params.trigger_type,
-        },
-      });
-      return response.data;
-    }
+        }) as Promise<HookListResponse>;
+      }
 
-    // Default: server-side event + manual only (never unfiltered / schedule-inclusive dump)
-    const limit = params?.limit ?? 200;
-    const offset = params?.offset ?? 0;
-    const enabled = params?.enabled;
-    const common = {
-      limit,
-      offset,
-      ...(enabled !== undefined ? { enabled } : {}),
-    };
+      const limit = params?.limit ?? 200;
+      const offset = params?.offset ?? 0;
+      const enabled = params?.enabled;
+      const common = {
+        limit,
+        offset,
+        ...(enabled !== undefined ? { enabled } : {}),
+      };
 
-    const [eventRes, manualRes] = await Promise.all([
-      apiClient.get<HookListResponse>('/hooks', {
-        params: { ...common, trigger_type: 'event' },
-      }),
-      apiClient.get<HookListResponse>('/hooks', {
-        params: { ...common, trigger_type: 'manual' },
-      }),
-    ]);
+      const [eventRes, manualRes] = await Promise.all([
+        client.hooks.list({ ...common, trigger_type: 'event' }),
+        client.hooks.list({ ...common, trigger_type: 'manual' }),
+      ]);
 
-    const byId = new Map<string, Hook>();
-    for (const item of [...eventRes.data.items, ...manualRes.data.items]) {
-      byId.set(item.id, item);
-    }
-    const items = sortHooksByUpdatedAtDesc(Array.from(byId.values()));
-    const total = (eventRes.data.total ?? 0) + (manualRes.data.total ?? 0);
-    return { items, total };
-  },
+      const byId = new Map<string, Hook>();
+      for (const item of [...eventRes.items, ...manualRes.items] as Hook[]) {
+        byId.set(item.id, item);
+      }
+      const items = sortHooksByUpdatedAtDesc(Array.from(byId.values()));
+      const total = (eventRes.total ?? 0) + (manualRes.total ?? 0);
+      return { items, total };
+    },
 
-  get: async (id: string): Promise<Hook> => {
-    const response = await apiClient.get<Hook>(`/hooks/${id}`);
-    return response.data;
-  },
+    get: (id: string) => client.hooks.get(id) as Promise<Hook>,
+    create: (data: CreateHookRequest) => client.hooks.create(data) as Promise<Hook>,
+    update: (id: string, data: UpdateHookRequest) => client.hooks.update(id, data) as Promise<Hook>,
+    toggle: (id: string) => client.hooks.toggle(id) as Promise<Hook>,
+    trigger: (id: string) =>
+      client.hooks.trigger(id) as Promise<{
+        message: string;
+        status: string;
+        actions_executed: number;
+        error?: string;
+      }>,
+    delete: async (id: string) => {
+      await client.hooks.delete(id);
+    },
+    listExecutions: (id: string) =>
+      client.hooks.listExecutions(id, { limit: 50 }) as Promise<HookExecutionListResponse>,
+  };
+}
 
-  create: async (data: CreateHookRequest): Promise<Hook> => {
-    const response = await apiClient.post<Hook>('/hooks', data);
-    return response.data;
-  },
-
-  update: async (id: string, data: UpdateHookRequest): Promise<Hook> => {
-    const response = await apiClient.patch<Hook>(`/hooks/${id}`, data);
-    return response.data;
-  },
-
-  toggle: async (id: string): Promise<Hook> => {
-    const response = await apiClient.patch<Hook>(`/hooks/${id}/toggle`);
-    return response.data;
-  },
-
-  trigger: async (id: string): Promise<{ message: string; status: string; actions_executed: number; error?: string }> => {
-    const response = await apiClient.post<{ message: string; status: string; actions_executed: number; error?: string }>(
-      `/hooks/${id}/trigger`,
-    );
-    return response.data;
-  },
-
-  delete: async (id: string): Promise<void> => {
-    await apiClient.delete(`/hooks/${id}`);
-  },
-
-  listExecutions: async (id: string): Promise<HookExecutionListResponse> => {
-    const response = await apiClient.get<HookExecutionListResponse>(`/hooks/${id}/executions`, {
-      params: { limit: 50 },
-    });
-    return response.data;
-  },
-};
+export const useHooksService = createServiceHook(createHooksService);
+export const hooksService = bindService(createHooksService);

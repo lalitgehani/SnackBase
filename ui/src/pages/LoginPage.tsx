@@ -20,7 +20,7 @@ import {
     FieldError,
 } from '@/components/ui/field';
 import { useAuthStore } from '@/stores/auth.store';
-import { handleApiError } from '@/lib/api';
+import { handleApiError } from '@/lib/errors';
 import { ModeToggle } from '@/components/mode-toggle';
 
 // Validation schema

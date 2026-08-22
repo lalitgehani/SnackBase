@@ -21,7 +21,6 @@ PIP_AUDIT_IGNORE = REPO_ROOT / ".pip-audit-ignore"
 
 # Minimum patched versions from the VAPT of 2026-08-09.
 MINIMUM_PINS = {
-    "axios": (1, 18),
     "react-router": (7, 18),
 }
 

@@ -1,4 +1,6 @@
-import { apiClient } from '@/lib/api';
+import type { SnackBaseClient } from '@snackbase/sdk';
+import { createServiceHook } from '@/lib/snackbase/createServiceHook';
+import { bindService } from '@/lib/snackbase/bindService';
 
 export type JobStatus = 'pending' | 'running' | 'completed' | 'failed' | 'retrying' | 'dead';
 
@@ -46,23 +48,14 @@ export interface JobListParams {
   offset?: number;
 }
 
-export const jobsService = {
-  list: async (params?: JobListParams): Promise<JobListResponse> => {
-    const response = await apiClient.get<JobListResponse>('/admin/jobs', { params });
-    return response.data;
-  },
+export function createJobsService(client: SnackBaseClient) {
+  return {
+    list: (params?: JobListParams) => client.jobs.list(params),
+    getStats: () => client.jobs.stats(),
+    retry: (id: string) => client.jobs.retry(id),
+    cancel: (id: string) => client.jobs.cancel(id),
+  };
+}
 
-  getStats: async (): Promise<JobStats> => {
-    const response = await apiClient.get<JobStats>('/admin/jobs/stats');
-    return response.data;
-  },
-
-  retry: async (id: string): Promise<Job> => {
-    const response = await apiClient.post<Job>(`/admin/jobs/${id}/retry`);
-    return response.data;
-  },
-
-  cancel: async (id: string): Promise<void> => {
-    await apiClient.delete(`/admin/jobs/${id}`);
-  },
-};
+export const useJobsService = createServiceHook(createJobsService);
+export const jobsService = bindService(createJobsService);

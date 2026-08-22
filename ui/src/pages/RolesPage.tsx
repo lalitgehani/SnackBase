@@ -21,7 +21,7 @@ import {
     type CreateRoleData,
     type UpdateRoleData,
 } from '@/services/roles.service';
-import { handleApiError } from '@/lib/api';
+import { handleApiError } from '@/lib/errors';
 
 export default function RolesPage() {
     const [data, setData] = useState<RoleListResponse | null>(null);

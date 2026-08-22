@@ -157,6 +157,7 @@ class AuditLogRepository:
         record_id: str | None = None,
         user_id: str | None = None,
         operation: str | None = None,
+        auth_method: str | None = None,
         from_date: datetime | None = None,
         to_date: datetime | None = None,
         skip: int = 0,
@@ -196,6 +197,10 @@ class AuditLogRepository:
             filters.append(AuditLogModel.user_id == user_id)
         if operation:
             filters.append(AuditLogModel.operation == operation)
+        if auth_method:
+            filters.append(
+                AuditLogModel.extra_metadata["auth_method"].as_string() == auth_method
+            )
         if from_date:
             filters.append(AuditLogModel.occurred_at >= from_date)
         if to_date:

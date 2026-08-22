@@ -53,7 +53,7 @@ function setupAuth() {
 function renderSchemaTab(overrides: Partial<CollectionDetailContextValue> = {}) {
   setupAuth()
   server.use(
-    http.get('/api/v1/collections', () =>
+    http.get('*/api/v1/collections', () =>
       HttpResponse.json({
         items: [
           {
@@ -72,7 +72,7 @@ function renderSchemaTab(overrides: Partial<CollectionDetailContextValue> = {}) 
         total_pages: 1,
       }),
     ),
-    http.put('/api/v1/collections/:id', async ({ request }) => {
+    http.put('*/api/v1/collections/:id', async ({ request }) => {
       const body = (await request.json()) as { schema: unknown[] }
       return HttpResponse.json({
         ...collection,

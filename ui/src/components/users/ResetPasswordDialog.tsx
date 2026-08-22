@@ -7,7 +7,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, AlertTriangle, Mail, Key } from 'lucide-react';
 import type { User, PasswordResetRequest } from '@/services/users.service';
-import { handleApiError } from '@/lib/api';
+import { handleApiError } from '@/lib/errors';
 import { useToast } from '@/hooks/use-toast';
 
 interface ResetPasswordDialogProps {

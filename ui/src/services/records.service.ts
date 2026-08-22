@@ -1,139 +1,62 @@
 /**
  * Records API service
- * Handles API calls for record CRUD operations
  */
-
-import { apiClient } from '@/lib/api';
+import type { SnackBaseClient } from '@snackbase/sdk';
+import { createServiceHook } from '@/lib/snackbase/createServiceHook';
+import { bindService } from '@/lib/snackbase/bindService';
 import type {
-	RecordDetail,
-	RecordData,
-	GetRecordsParams,
-	ListResponse,
-	BatchUpdateItem,
-	BatchCreateResponse,
-	BatchUpdateResponse,
-	BatchDeleteResponse,
-	AggregationRequest,
-	AggregationResponse,
+  RecordDetail,
+  RecordData,
+  GetRecordsParams,
+  ListResponse,
+  BatchUpdateItem,
+  BatchCreateResponse,
+  BatchUpdateResponse,
+  BatchDeleteResponse,
+  AggregationRequest,
+  AggregationResponse,
 } from '@/types/records.types';
 
-// Re-export commonly used types
 export type { RecordData, RecordListItem } from '@/types/records.types';
 
-/**
- * Get list of records for a collection
- * Supports both offset-based pagination (paginated response) and cursor-based pagination (cursor response)
- */
-export const getRecords = async (params: GetRecordsParams): Promise<ListResponse> => {
-	const { collection, ...queryParams } = params;
-	const response = await apiClient.get<ListResponse>(`/records/${collection}`, {
-		params: queryParams,
-	});
-	return response.data;
-};
+export function createRecordsService(client: SnackBaseClient) {
+  return {
+    getRecords: (params: GetRecordsParams): Promise<ListResponse> => {
+      const { collection, ...queryParams } = params;
+      return client.records.list(collection, queryParams);
+    },
+    getRecordById: (collection: string, recordId: string): Promise<RecordDetail> =>
+      client.records.get(collection, recordId),
+    createRecord: (collection: string, data: RecordData): Promise<RecordDetail> =>
+      client.records.create(collection, data),
+    updateRecord: (collection: string, recordId: string, data: RecordData): Promise<RecordDetail> =>
+      client.records.update(collection, recordId, data),
+    patchRecord: (collection: string, recordId: string, data: Partial<RecordData>): Promise<RecordDetail> =>
+      client.records.patch(collection, recordId, data),
+    deleteRecord: async (collection: string, recordId: string) => {
+      await client.records.delete(collection, recordId);
+    },
+    batchCreateRecords: (collection: string, records: RecordData[]): Promise<BatchCreateResponse> =>
+      client.records.batchCreate(collection, records),
+    batchUpdateRecords: (collection: string, updates: BatchUpdateItem[]): Promise<BatchUpdateResponse> =>
+      client.records.batchUpdate(collection, updates),
+    batchDeleteRecords: (collection: string, ids: string[]): Promise<BatchDeleteResponse> =>
+      client.records.batchDelete(collection, ids),
+    aggregateRecords: (collection: string, params: AggregationRequest): Promise<AggregationResponse> =>
+      client.records.aggregate(collection, params),
+  };
+}
 
-/**
- * Get a single record by ID
- */
-export const getRecordById = async (collection: string, recordId: string): Promise<RecordDetail> => {
-	const response = await apiClient.get<RecordDetail>(`/records/${collection}/${recordId}`);
-	return response.data;
-};
+export const useRecordsService = createServiceHook(createRecordsService);
 
-/**
- * Create a new record
- */
-export const createRecord = async (collection: string, data: RecordData): Promise<RecordDetail> => {
-	const response = await apiClient.post<RecordDetail>(`/records/${collection}`, data);
-	return response.data;
-};
-
-/**
- * Update a record (full replacement)
- */
-export const updateRecord = async (
-	collection: string,
-	recordId: string,
-	data: RecordData,
-): Promise<RecordDetail> => {
-	const response = await apiClient.put<RecordDetail>(`/records/${collection}/${recordId}`, data);
-	return response.data;
-};
-
-/**
- * Partially update a record
- */
-export const patchRecord = async (
-	collection: string,
-	recordId: string,
-	data: Partial<RecordData>,
-): Promise<RecordDetail> => {
-	const response = await apiClient.patch<RecordDetail>(`/records/${collection}/${recordId}`, data);
-	return response.data;
-};
-
-/**
- * Delete a record
- */
-export const deleteRecord = async (collection: string, recordId: string): Promise<void> => {
-	await apiClient.delete(`/records/${collection}/${recordId}`);
-};
-
-/**
- * Batch create records (all succeed or all fail atomically)
- */
-export const batchCreateRecords = async (
-	collection: string,
-	records: RecordData[],
-): Promise<BatchCreateResponse> => {
-	const response = await apiClient.post<BatchCreateResponse>(
-		`/records/${collection}/batch`,
-		{ records },
-	);
-	return response.data;
-};
-
-/**
- * Batch patch records (all succeed or all fail atomically)
- * Returns 404 if any ID does not exist — entire batch fails.
- */
-export const batchUpdateRecords = async (
-	collection: string,
-	updates: BatchUpdateItem[],
-): Promise<BatchUpdateResponse> => {
-	const response = await apiClient.patch<BatchUpdateResponse>(
-		`/records/${collection}/batch`,
-		{ records: updates },
-	);
-	return response.data;
-};
-
-/**
- * Batch delete records (all succeed or all fail atomically)
- * Returns 404 if any ID does not exist — entire batch fails.
- */
-export const batchDeleteRecords = async (
-	collection: string,
-	ids: string[],
-): Promise<BatchDeleteResponse> => {
-	// Axios requires { data: body } to send a body with DELETE
-	const response = await apiClient.delete<BatchDeleteResponse>(
-		`/records/${collection}/batch`,
-		{ data: { ids } },
-	);
-	return response.data;
-};
-
-/**
- * Run aggregation query on a collection
- */
-export const aggregateRecords = async (
-	collection: string,
-	params: AggregationRequest,
-): Promise<AggregationResponse> => {
-	const response = await apiClient.get<AggregationResponse>(
-		`/records/${collection}/aggregate`,
-		{ params },
-	);
-	return response.data;
-};
+const recordsService = bindService(createRecordsService);
+export const getRecords = recordsService.getRecords;
+export const getRecordById = recordsService.getRecordById;
+export const createRecord = recordsService.createRecord;
+export const updateRecord = recordsService.updateRecord;
+export const patchRecord = recordsService.patchRecord;
+export const deleteRecord = recordsService.deleteRecord;
+export const batchCreateRecords = recordsService.batchCreateRecords;
+export const batchUpdateRecords = recordsService.batchUpdateRecords;
+export const batchDeleteRecords = recordsService.batchDeleteRecords;
+export const aggregateRecords = recordsService.aggregateRecords;

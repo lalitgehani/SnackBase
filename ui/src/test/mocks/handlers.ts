@@ -6,7 +6,7 @@ import { http, HttpResponse } from 'msw'
  */
 export const handlers = [
   // Auth: get current user (commonly needed for authenticated page renders)
-  http.get('/api/v1/auth/me', () => {
+  http.get('*/api/v1/auth/me', () => {
     return HttpResponse.json({
       id: 'user-1',
       email: 'admin@example.com',

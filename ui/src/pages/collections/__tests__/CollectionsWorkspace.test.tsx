@@ -111,7 +111,7 @@ function setupHandlers(listOverrides?: Partial<typeof mockCollectionList>) {
   const listResponse = { ...mockCollectionList, ...listOverrides }
 
   server.use(
-    http.get('/api/v1/collections', ({ request }) => {
+    http.get('*/api/v1/collections', ({ request }) => {
       const url = new URL(request.url)
       // Full collection fetch by id: never hits this path (id is a path segment).
       // getCollectionByName uses search query.
@@ -136,7 +136,7 @@ function setupHandlers(listOverrides?: Partial<typeof mockCollectionList>) {
       }
       return HttpResponse.json(listResponse)
     }),
-    http.get('/api/v1/collections/:id/rules', () =>
+    http.get('*/api/v1/collections/:id/rules', () =>
       HttpResponse.json({
         id: 'rule-1',
         collection_id: 'col-1',
@@ -153,7 +153,7 @@ function setupHandlers(listOverrides?: Partial<typeof mockCollectionList>) {
         updated_at: '2026-01-01T00:00:00Z',
       }),
     ),
-    http.get('/api/v1/collections/:id', ({ params }) => {
+    http.get('*/api/v1/collections/:id', ({ params }) => {
       // Skip if this is somehow the list path (defensive)
       if (params.id === 'rules') {
         return new HttpResponse(null, { status: 404 })
@@ -163,16 +163,16 @@ function setupHandlers(listOverrides?: Partial<typeof mockCollectionList>) {
       }
       return HttpResponse.json(mockCollectionFull)
     }),
-    http.get('/api/v1/records/posts', () =>
+    http.get('*/api/v1/records/posts', () =>
       HttpResponse.json({ items: [], total: 0, skip: 0, limit: 25 }),
     ),
-    http.get('/api/v1/records/products', () =>
+    http.get('*/api/v1/records/products', () =>
       HttpResponse.json({ items: [], total: 0, skip: 0, limit: 25 }),
     ),
-    http.post('/api/v1/records/posts/aggregate', () =>
+    http.post('*/api/v1/records/posts/aggregate', () =>
       HttpResponse.json({ results: [] }),
     ),
-    http.post('/api/v1/records/products/aggregate', () =>
+    http.post('*/api/v1/records/products/aggregate', () =>
       HttpResponse.json({ results: [] }),
     ),
   )
@@ -401,7 +401,7 @@ describe('CollectionsWorkspace', () => {
     it('shows error retry when list fails', async () => {
       const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
       server.use(
-        http.get('/api/v1/collections', () =>
+        http.get('*/api/v1/collections', () =>
           HttpResponse.json({ detail: 'boom' }, { status: 500 }),
         ),
       )

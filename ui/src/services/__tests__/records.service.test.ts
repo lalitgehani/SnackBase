@@ -43,7 +43,7 @@ describe('Records Service', () => {
       let requestReceived = false
 
       server.use(
-        http.get('/api/v1/records/posts', () => {
+        http.get('*/api/v1/records/posts', () => {
           requestReceived = true
           return HttpResponse.json(mockRecordListResponse)
         })
@@ -55,7 +55,7 @@ describe('Records Service', () => {
 
     it('returns list response on success', async () => {
       server.use(
-        http.get('/api/v1/records/posts', () => HttpResponse.json(mockRecordListResponse))
+        http.get('*/api/v1/records/posts', () => HttpResponse.json(mockRecordListResponse))
       )
 
       const result = await getRecords({ collection: 'posts' })
@@ -66,7 +66,7 @@ describe('Records Service', () => {
       let capturedUrl: string | null = null
 
       server.use(
-        http.get('/api/v1/records/posts', ({ request }) => {
+        http.get('*/api/v1/records/posts', ({ request }) => {
           capturedUrl = request.url
           return HttpResponse.json(mockRecordListResponse)
         })
@@ -88,7 +88,7 @@ describe('Records Service', () => {
       }
 
       server.use(
-        http.get('/api/v1/records/posts', ({ request }) => {
+        http.get('*/api/v1/records/posts', ({ request }) => {
           capturedUrl = request.url
           return HttpResponse.json(cursorResponse)
         })
@@ -104,7 +104,7 @@ describe('Records Service', () => {
       let capturedUrl: string | null = null
 
       server.use(
-        http.get('/api/v1/records/posts', ({ request }) => {
+        http.get('*/api/v1/records/posts', ({ request }) => {
           capturedUrl = request.url
           return HttpResponse.json(mockRecordListResponse)
         })
@@ -120,7 +120,7 @@ describe('Records Service', () => {
       let capturedUrl: string | null = null
 
       server.use(
-        http.get('/api/v1/records/posts', ({ request }) => {
+        http.get('*/api/v1/records/posts', ({ request }) => {
           capturedUrl = request.url
           return HttpResponse.json(mockRecordListResponse)
         })
@@ -133,7 +133,7 @@ describe('Records Service', () => {
 
     it('propagates API errors', async () => {
       server.use(
-        http.get('/api/v1/records/posts', () =>
+        http.get('*/api/v1/records/posts', () =>
           HttpResponse.json({ detail: 'Forbidden' }, { status: 403 })
         )
       )
@@ -151,7 +151,7 @@ describe('Records Service', () => {
       let requestReceived = false
 
       server.use(
-        http.get('/api/v1/records/posts/rec-1', () => {
+        http.get('*/api/v1/records/posts/rec-1', () => {
           requestReceived = true
           return HttpResponse.json(mockRecord)
         })
@@ -163,7 +163,7 @@ describe('Records Service', () => {
 
     it('returns record detail on success', async () => {
       server.use(
-        http.get('/api/v1/records/posts/rec-1', () => HttpResponse.json(mockRecord))
+        http.get('*/api/v1/records/posts/rec-1', () => HttpResponse.json(mockRecord))
       )
 
       const result = await getRecordById('posts', 'rec-1')
@@ -172,7 +172,7 @@ describe('Records Service', () => {
 
     it('propagates 404 when record not found', async () => {
       server.use(
-        http.get('/api/v1/records/posts/missing', () =>
+        http.get('*/api/v1/records/posts/missing', () =>
           HttpResponse.json({ detail: 'Record not found' }, { status: 404 })
         )
       )
@@ -191,7 +191,7 @@ describe('Records Service', () => {
       const newRecord: RecordData = { title: 'New Post', body: 'Content here' }
 
       server.use(
-        http.post('/api/v1/records/posts', async ({ request }) => {
+        http.post('*/api/v1/records/posts', async ({ request }) => {
           capturedBody = (await request.json()) as RecordData
           return HttpResponse.json(mockRecord, { status: 201 })
         })
@@ -204,7 +204,7 @@ describe('Records Service', () => {
 
     it('returns created record on success', async () => {
       server.use(
-        http.post('/api/v1/records/posts', () =>
+        http.post('*/api/v1/records/posts', () =>
           HttpResponse.json(mockRecord, { status: 201 })
         )
       )
@@ -215,7 +215,7 @@ describe('Records Service', () => {
 
     it('propagates validation errors', async () => {
       server.use(
-        http.post('/api/v1/records/posts', () =>
+        http.post('*/api/v1/records/posts', () =>
           HttpResponse.json({ detail: 'Validation error' }, { status: 422 })
         )
       )
@@ -234,7 +234,7 @@ describe('Records Service', () => {
       const updateData: RecordData = { title: 'Updated', body: 'New content' }
 
       server.use(
-        http.put('/api/v1/records/posts/rec-1', async ({ request }) => {
+        http.put('*/api/v1/records/posts/rec-1', async ({ request }) => {
           capturedBody = (await request.json()) as RecordData
           return HttpResponse.json({ ...mockRecord, ...updateData })
         })
@@ -249,7 +249,7 @@ describe('Records Service', () => {
       const updateData: RecordData = { title: 'Updated' }
 
       server.use(
-        http.put('/api/v1/records/posts/rec-1', () =>
+        http.put('*/api/v1/records/posts/rec-1', () =>
           HttpResponse.json({ ...mockRecord, ...updateData })
         )
       )
@@ -260,7 +260,7 @@ describe('Records Service', () => {
 
     it('propagates 404 when record not found', async () => {
       server.use(
-        http.put('/api/v1/records/posts/missing', () =>
+        http.put('*/api/v1/records/posts/missing', () =>
           HttpResponse.json({ detail: 'Record not found' }, { status: 404 })
         )
       )
@@ -279,7 +279,7 @@ describe('Records Service', () => {
       const patchData: Partial<RecordData> = { title: 'Patched title' }
 
       server.use(
-        http.patch('/api/v1/records/posts/rec-1', async ({ request }) => {
+        http.patch('*/api/v1/records/posts/rec-1', async ({ request }) => {
           capturedBody = (await request.json()) as Partial<RecordData>
           return HttpResponse.json({ ...mockRecord, ...patchData })
         })
@@ -292,7 +292,7 @@ describe('Records Service', () => {
 
     it('returns patched record on success', async () => {
       server.use(
-        http.patch('/api/v1/records/posts/rec-1', () =>
+        http.patch('*/api/v1/records/posts/rec-1', () =>
           HttpResponse.json({ ...mockRecord, title: 'Patched' })
         )
       )
@@ -311,7 +311,7 @@ describe('Records Service', () => {
       let requestReceived = false
 
       server.use(
-        http.delete('/api/v1/records/posts/rec-1', () => {
+        http.delete('*/api/v1/records/posts/rec-1', () => {
           requestReceived = true
           return new HttpResponse(null, { status: 204 })
         })
@@ -323,7 +323,7 @@ describe('Records Service', () => {
 
     it('resolves without a return value on success', async () => {
       server.use(
-        http.delete('/api/v1/records/posts/rec-1', () =>
+        http.delete('*/api/v1/records/posts/rec-1', () =>
           new HttpResponse(null, { status: 204 })
         )
       )
@@ -334,7 +334,7 @@ describe('Records Service', () => {
 
     it('propagates 404 when record not found', async () => {
       server.use(
-        http.delete('/api/v1/records/posts/missing', () =>
+        http.delete('*/api/v1/records/posts/missing', () =>
           HttpResponse.json({ detail: 'Record not found' }, { status: 404 })
         )
       )
@@ -358,7 +358,7 @@ describe('Records Service', () => {
       const records = [{ title: 'Post 1' }, { title: 'Post 2' }]
 
       server.use(
-        http.post('/api/v1/records/posts/batch', async ({ request }) => {
+        http.post('*/api/v1/records/posts/batch', async ({ request }) => {
           capturedBody = (await request.json()) as Record<string, unknown>
           return HttpResponse.json(mockBatchCreateResponse, { status: 201 })
         })
@@ -371,7 +371,7 @@ describe('Records Service', () => {
 
     it('returns batch create response on success', async () => {
       server.use(
-        http.post('/api/v1/records/posts/batch', () =>
+        http.post('*/api/v1/records/posts/batch', () =>
           HttpResponse.json(mockBatchCreateResponse, { status: 201 })
         )
       )
@@ -383,7 +383,7 @@ describe('Records Service', () => {
 
     it('propagates errors when batch fails', async () => {
       server.use(
-        http.post('/api/v1/records/posts/batch', () =>
+        http.post('*/api/v1/records/posts/batch', () =>
           HttpResponse.json({ detail: 'Validation failed' }, { status: 422 })
         )
       )
@@ -407,7 +407,7 @@ describe('Records Service', () => {
       const updates = [{ id: 'rec-1', data: { title: 'Updated' } }]
 
       server.use(
-        http.patch('/api/v1/records/posts/batch', async ({ request }) => {
+        http.patch('*/api/v1/records/posts/batch', async ({ request }) => {
           capturedBody = (await request.json()) as Record<string, unknown>
           return HttpResponse.json(mockBatchUpdateResponse)
         })
@@ -420,7 +420,7 @@ describe('Records Service', () => {
 
     it('returns batch update response on success', async () => {
       server.use(
-        http.patch('/api/v1/records/posts/batch', () =>
+        http.patch('*/api/v1/records/posts/batch', () =>
           HttpResponse.json(mockBatchUpdateResponse)
         )
       )
@@ -432,7 +432,7 @@ describe('Records Service', () => {
 
     it('propagates 404 when any record id does not exist', async () => {
       server.use(
-        http.patch('/api/v1/records/posts/batch', () =>
+        http.patch('*/api/v1/records/posts/batch', () =>
           HttpResponse.json({ detail: 'Record not found' }, { status: 404 })
         )
       )
@@ -457,7 +457,7 @@ describe('Records Service', () => {
       let capturedBody: Record<string, unknown> | null = null
 
       server.use(
-        http.delete('/api/v1/records/posts/batch', async ({ request }) => {
+        http.delete('*/api/v1/records/posts/batch', async ({ request }) => {
           capturedBody = (await request.json()) as Record<string, unknown>
           return HttpResponse.json(mockBatchDeleteResponse)
         })
@@ -470,7 +470,7 @@ describe('Records Service', () => {
 
     it('returns batch delete response on success', async () => {
       server.use(
-        http.delete('/api/v1/records/posts/batch', () =>
+        http.delete('*/api/v1/records/posts/batch', () =>
           HttpResponse.json(mockBatchDeleteResponse)
         )
       )
@@ -482,7 +482,7 @@ describe('Records Service', () => {
 
     it('propagates 404 when any id does not exist', async () => {
       server.use(
-        http.delete('/api/v1/records/posts/batch', () =>
+        http.delete('*/api/v1/records/posts/batch', () =>
           HttpResponse.json({ detail: 'Record not found' }, { status: 404 })
         )
       )
@@ -505,7 +505,7 @@ describe('Records Service', () => {
       let requestReceived = false
 
       server.use(
-        http.get('/api/v1/records/posts/aggregate', () => {
+        http.get('*/api/v1/records/posts/aggregate', () => {
           requestReceived = true
           return HttpResponse.json(mockAggregationResponse)
         })
@@ -519,7 +519,7 @@ describe('Records Service', () => {
       let capturedUrl: string | null = null
 
       server.use(
-        http.get('/api/v1/records/posts/aggregate', ({ request }) => {
+        http.get('*/api/v1/records/posts/aggregate', ({ request }) => {
           capturedUrl = request.url
           return HttpResponse.json(mockAggregationResponse)
         })
@@ -537,7 +537,7 @@ describe('Records Service', () => {
 
     it('returns aggregation response on success', async () => {
       server.use(
-        http.get('/api/v1/records/posts/aggregate', () =>
+        http.get('*/api/v1/records/posts/aggregate', () =>
           HttpResponse.json(mockAggregationResponse)
         )
       )
@@ -548,7 +548,7 @@ describe('Records Service', () => {
 
     it('propagates API errors', async () => {
       server.use(
-        http.get('/api/v1/records/posts/aggregate', () =>
+        http.get('*/api/v1/records/posts/aggregate', () =>
           HttpResponse.json({ detail: 'Invalid aggregation' }, { status: 400 })
         )
       )

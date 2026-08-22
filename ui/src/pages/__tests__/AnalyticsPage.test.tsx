@@ -74,13 +74,13 @@ const mockCollectionListResponse = {
 
 function setupSuccessHandlers() {
   server.use(
-    http.get('/api/v1/collections', () =>
+    http.get('*/api/v1/collections', () =>
       HttpResponse.json(mockCollectionListResponse),
     ),
-    http.get('/api/v1/collections/:id', () =>
+    http.get('*/api/v1/collections/:id', () =>
       HttpResponse.json(mockCollection),
     ),
-    http.get('/api/v1/records/orders/aggregate', () =>
+    http.get('*/api/v1/records/orders/aggregate', () =>
       HttpResponse.json(mockAggregationResult),
     ),
   )
@@ -88,7 +88,7 @@ function setupSuccessHandlers() {
 
 function setupCollectionErrorHandler() {
   server.use(
-    http.get('/api/v1/collections', () =>
+    http.get('*/api/v1/collections', () =>
       HttpResponse.json({ items: [], total: 0, page: 1, page_size: 20 }),
     ),
   )
@@ -119,7 +119,7 @@ describe('AnalyticsPage', () => {
   describe('loading state', () => {
     it('shows a loading spinner while the collection is loading', () => {
       server.use(
-        http.get('/api/v1/collections/orders', async () => {
+        http.get('*/api/v1/collections/orders', async () => {
           await new Promise(() => {}) // never resolves
         }),
       )
@@ -146,9 +146,7 @@ describe('AnalyticsPage', () => {
       setupCollectionErrorHandler()
       renderPage()
       await waitFor(() => {
-        // getCollectionByName throws a plain Error, so handleApiError returns
-        // 'An unexpected error occurred'
-        expect(screen.getByText('An unexpected error occurred')).toBeInTheDocument()
+        expect(screen.getByText(/collection 'orders' not found/i)).toBeInTheDocument()
       })
     })
 
@@ -318,7 +316,7 @@ describe('AnalyticsPage', () => {
     it('calls aggregation API when Run is clicked', async () => {
       let aggregateCalled = false
       server.use(
-        http.get('/api/v1/records/orders/aggregate', () => {
+        http.get('*/api/v1/records/orders/aggregate', () => {
           aggregateCalled = true
           return HttpResponse.json(mockAggregationResult)
         }),
@@ -386,7 +384,7 @@ describe('AnalyticsPage', () => {
 
     it('shows "No results" state when aggregation returns empty', async () => {
       server.use(
-        http.get('/api/v1/records/orders/aggregate', () =>
+        http.get('*/api/v1/records/orders/aggregate', () =>
           HttpResponse.json({ results: [], total_groups: 0 }),
         ),
       )
@@ -505,7 +503,7 @@ describe('AnalyticsPage', () => {
     it('still runs aggregation query', async () => {
       let aggregateCalled = false
       server.use(
-        http.get('/api/v1/records/orders/aggregate', () => {
+        http.get('*/api/v1/records/orders/aggregate', () => {
           aggregateCalled = true
           return HttpResponse.json(mockAggregationResult)
         }),

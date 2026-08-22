@@ -178,7 +178,7 @@ function renderDashboard() {
 
 function setupSuccessHandler(overrides: Partial<typeof mockDashboardStats> = {}) {
   server.use(
-    http.get('/api/v1/dashboard/stats', ({ request }) => {
+    http.get('*/api/v1/dashboard/stats', ({ request }) => {
       const url = new URL(request.url)
       const range = url.searchParams.get('range') || '7d'
       return HttpResponse.json({
@@ -193,7 +193,7 @@ function setupSuccessHandler(overrides: Partial<typeof mockDashboardStats> = {})
 
 function setupErrorHandler(status = 500, detail = 'Internal server error') {
   server.use(
-    http.get('/api/v1/dashboard/stats', () =>
+    http.get('*/api/v1/dashboard/stats', () =>
       HttpResponse.json({ detail }, { status }),
     ),
   )
@@ -222,7 +222,7 @@ describe('DashboardPage', () => {
   describe('loading state', () => {
     it('displays loading skeletons before stats are fetched', () => {
       server.use(
-        http.get('/api/v1/dashboard/stats', async () => {
+        http.get('*/api/v1/dashboard/stats', async () => {
           await new Promise(() => {}) // never resolves
         }),
       )

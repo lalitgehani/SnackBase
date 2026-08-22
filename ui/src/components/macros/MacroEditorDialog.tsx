@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { X, Plus, Info } from 'lucide-react';
 import type { Macro, MacroCreate, MacroUpdate } from '@/types/macro';
-import { handleApiError } from '@/lib/api';
+import { handleApiError } from '@/lib/errors';
 
 interface MacroEditorDialogProps {
     open: boolean;

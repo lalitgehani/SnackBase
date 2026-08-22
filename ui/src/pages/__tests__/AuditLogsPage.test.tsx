@@ -108,7 +108,7 @@ function renderPage() {
 
 function setupSuccessHandler(override: Partial<typeof mockAuditLogs> = {}) {
   server.use(
-    http.get('/api/v1/audit-logs/', () =>
+    http.get('*/api/v1/audit-logs', () =>
       HttpResponse.json({ ...mockAuditLogs, ...override }),
     ),
   )
@@ -116,7 +116,7 @@ function setupSuccessHandler(override: Partial<typeof mockAuditLogs> = {}) {
 
 function setupErrorHandler(status = 500, detail = 'Internal server error') {
   server.use(
-    http.get('/api/v1/audit-logs/', () =>
+    http.get('*/api/v1/audit-logs', () =>
       HttpResponse.json({ detail }, { status }),
     ),
   )
@@ -175,7 +175,7 @@ describe('AuditLogsPage', () => {
   describe('loading state', () => {
     it('shows a loading spinner before data loads', () => {
       server.use(
-        http.get('/api/v1/audit-logs/', async () => {
+        http.get('*/api/v1/audit-logs', async () => {
           await new Promise(() => {}) // never resolves
         }),
       )
@@ -351,7 +351,7 @@ describe('AuditLogsPage', () => {
     it('sends filter request when Filter button is clicked', async () => {
       let capturedParams: URLSearchParams | null = null
       server.use(
-        http.get('/api/v1/audit-logs/', ({ request }) => {
+        http.get('*/api/v1/audit-logs', ({ request }) => {
           capturedParams = new URL(request.url).searchParams
           return HttpResponse.json(mockAuditLogs)
         }),

@@ -62,7 +62,7 @@ function renderDialog(props: Partial<{
 describe('MacroTestDialog', () => {
   beforeEach(() => {
     server.use(
-      http.post('/api/v1/macros/:id/test', () =>
+      http.post('*/api/v1/macros/:id/test', () =>
         HttpResponse.json({ result: '42', execution_time: 1.5, rows_affected: 0 })
       )
     )
@@ -122,7 +122,7 @@ describe('MacroTestDialog', () => {
 
     it('shows error when test fails', async () => {
       server.use(
-        http.post('/api/v1/macros/:id/test', () =>
+        http.post('*/api/v1/macros/:id/test', () =>
           HttpResponse.json({ detail: 'SQL syntax error' }, { status: 400 })
         )
       )

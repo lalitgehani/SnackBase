@@ -79,10 +79,10 @@ function renderTab() {
 
 function setupSuccessHandlers(configs: typeof mockConfigs = mockConfigs) {
   server.use(
-    http.get('/api/v1/admin/configuration/system', () =>
+    http.get('*/api/v1/admin/configuration/system', () =>
       HttpResponse.json(configs),
     ),
-    http.get('/api/v1/admin/configuration/providers', () =>
+    http.get('*/api/v1/admin/configuration/providers', () =>
       HttpResponse.json([]),
     ),
   )
@@ -113,7 +113,7 @@ describe('SystemProvidersTab', () => {
   describe('loading state', () => {
     it('shows a loading indicator before configs load', () => {
       server.use(
-        http.get('/api/v1/admin/configuration/system', async () => {
+        http.get('*/api/v1/admin/configuration/system', async () => {
           await new Promise(() => {}) // never resolves
         }),
       )
@@ -221,7 +221,7 @@ describe('SystemProvidersTab', () => {
     it('calls API with category param when filter is changed', async () => {
       let capturedParams: URLSearchParams | null = null
       server.use(
-        http.get('/api/v1/admin/configuration/system', ({ request }) => {
+        http.get('*/api/v1/admin/configuration/system', ({ request }) => {
           capturedParams = new URL(request.url).searchParams
           return HttpResponse.json(mockConfigs)
         }),
@@ -282,7 +282,7 @@ describe('SystemProvidersTab', () => {
     it('calls update API when toggle is clicked', async () => {
       let updateCalled = false
       server.use(
-        http.patch('/api/v1/admin/configuration/conf-2', () => {
+        http.patch('*/api/v1/admin/configuration/conf-2', () => {
           updateCalled = true
           return HttpResponse.json({ ...mockConfigs[1], enabled: false })
         }),

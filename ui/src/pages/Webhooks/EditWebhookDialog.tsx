@@ -14,7 +14,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Field, FieldLabel, FieldContent } from '@/components/ui/field';
-import { handleApiError } from '@/lib/api';
+import { handleApiError } from '@/lib/errors';
 import { webhooksService, type WebhookListItem } from '@/services/webhooks.service';
 import { getCollections, type CollectionListItem } from '@/services/collections.service';
 import { useToast } from '@/hooks/use-toast';

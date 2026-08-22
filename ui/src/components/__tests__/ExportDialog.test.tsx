@@ -53,7 +53,7 @@ function renderDialog(props: Partial<{
 describe('ExportDialog', () => {
   beforeEach(() => {
     server.use(
-      http.get('/api/v1/records/products', () =>
+      http.get('*/api/v1/records/products', () =>
         HttpResponse.json({
           items: [{ id: '1', title: 'Product 1' }],
           total: 1,

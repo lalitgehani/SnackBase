@@ -49,7 +49,7 @@ const mockRoleList = {
 
 function setupSuccessHandler(overrides: Partial<typeof mockRoleList> = {}) {
   server.use(
-    http.get('/api/v1/roles', () =>
+    http.get('*/api/v1/roles', () =>
       HttpResponse.json({ ...mockRoleList, ...overrides }),
     ),
   )
@@ -57,7 +57,7 @@ function setupSuccessHandler(overrides: Partial<typeof mockRoleList> = {}) {
 
 function setupEmptyHandler() {
   server.use(
-    http.get('/api/v1/roles', () =>
+    http.get('*/api/v1/roles', () =>
       HttpResponse.json({ items: [], total: 0 }),
     ),
   )
@@ -65,7 +65,7 @@ function setupEmptyHandler() {
 
 function setupErrorHandler(status = 500, detail = 'Internal server error') {
   server.use(
-    http.get('/api/v1/roles', () =>
+    http.get('*/api/v1/roles', () =>
       HttpResponse.json({ detail }, { status }),
     ),
   )
@@ -73,7 +73,7 @@ function setupErrorHandler(status = 500, detail = 'Internal server error') {
 
 function setupCreateHandler() {
   server.use(
-    http.post('/api/v1/roles', () =>
+    http.post('*/api/v1/roles', () =>
       HttpResponse.json(
         {
           id: 3,
@@ -92,7 +92,7 @@ function setupCreateHandler() {
 
 function setupDeleteHandler() {
   server.use(
-    http.delete('/api/v1/roles/:id', () =>
+    http.delete('*/api/v1/roles/:id', () =>
       new HttpResponse(null, { status: 204 }),
     ),
   )
@@ -128,7 +128,7 @@ describe('RolesPage', () => {
   describe('loading state', () => {
     it('displays a loading spinner before roles are fetched', () => {
       server.use(
-        http.get('/api/v1/roles', async () => {
+        http.get('*/api/v1/roles', async () => {
           await new Promise(() => {}) // never resolves
         }),
       )
@@ -351,7 +351,7 @@ describe('RolesPage', () => {
       })
 
       // Queue the updated list for the refetch after creation
-      server.use(http.get('/api/v1/roles', () => HttpResponse.json(updatedList)))
+      server.use(http.get('*/api/v1/roles', () => HttpResponse.json(updatedList)))
     })
   })
 

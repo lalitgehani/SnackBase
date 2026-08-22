@@ -2,58 +2,42 @@
  * Macros service for managing SQL macros
  */
 
-import { apiClient } from '@/lib/api';
+import type { SnackBaseClient } from '@snackbase/sdk';
+import { createServiceHook } from '@/lib/snackbase/createServiceHook';
+import { bindService } from '@/lib/snackbase/bindService';
 import type {
-    Macro,
-    MacroCreate,
-    MacroUpdate,
-    MacroTestRequest,
-    MacroTestResponse,
+  Macro,
+  MacroCreate,
+  MacroUpdate,
+  MacroTestRequest,
+  MacroTestResponse,
 } from '@/types/macro';
 
-/**
- * List all SQL macros
- */
-export const listMacros = async (skip = 0, limit = 100): Promise<Macro[]> => {
-    const response = await apiClient.get<Macro[]>('/macros', { params: { skip, limit } });
-    return response.data;
-};
+export function createMacrosService(client: SnackBaseClient) {
+  return {
+    listMacros: async (skip = 0, limit = 100): Promise<Macro[]> => {
+      const result = await client.macros.list({ skip, limit });
+      if (Array.isArray(result)) return result;
+      return result.items;
+    },
+    getMacro: (macroId: number) => client.macros.get(String(macroId)),
+    createMacro: (macro: MacroCreate) => client.macros.create(macro),
+    updateMacro: (macroId: number, macro: MacroUpdate) =>
+      client.macros.update(String(macroId), macro),
+    deleteMacro: async (macroId: number) => {
+      await client.macros.delete(String(macroId));
+    },
+    testMacro: (macroId: number, testRequest: MacroTestRequest): Promise<MacroTestResponse> =>
+      client.macros.test(String(macroId), testRequest.parameters as string[]),
+  };
+}
 
-/**
- * Get a SQL macro by ID
- */
-export const getMacro = async (macroId: number): Promise<Macro> => {
-    const response = await apiClient.get<Macro>(`/macros/${macroId}`);
-    return response.data;
-};
+export const useMacrosService = createServiceHook(createMacrosService);
 
-/**
- * Create a new SQL macro
- */
-export const createMacro = async (macro: MacroCreate): Promise<Macro> => {
-    const response = await apiClient.post<Macro>('/macros', macro);
-    return response.data;
-};
-
-/**
- * Update a SQL macro
- */
-export const updateMacro = async (macroId: number, macro: MacroUpdate): Promise<Macro> => {
-    const response = await apiClient.put<Macro>(`/macros/${macroId}`, macro);
-    return response.data;
-};
-
-/**
- * Delete a SQL macro
- */
-export const deleteMacro = async (macroId: number): Promise<void> => {
-    await apiClient.delete(`/macros/${macroId}`);
-};
-
-/**
- * Test a SQL macro execution
- */
-export const testMacro = async (macroId: number, testRequest: MacroTestRequest): Promise<MacroTestResponse> => {
-    const response = await apiClient.post<MacroTestResponse>(`/macros/${macroId}/test`, testRequest);
-    return response.data;
-};
+const macrosService = bindService(createMacrosService);
+export const listMacros = macrosService.listMacros;
+export const getMacro = macrosService.getMacro;
+export const createMacro = macrosService.createMacro;
+export const updateMacro = macrosService.updateMacro;
+export const deleteMacro = macrosService.deleteMacro;
+export const testMacro = macrosService.testMacro;

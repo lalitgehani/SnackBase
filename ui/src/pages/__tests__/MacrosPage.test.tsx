@@ -64,13 +64,13 @@ function renderPage() {
 
 function setupSuccessHandler(macros = mockMacros) {
   server.use(
-    http.get('/api/v1/macros', () => HttpResponse.json(macros)),
+    http.get('*/api/v1/macros', () => HttpResponse.json(macros)),
   )
 }
 
 function setupErrorHandler(status = 500, detail = 'Internal server error') {
   server.use(
-    http.get('/api/v1/macros', () =>
+    http.get('*/api/v1/macros', () =>
       HttpResponse.json({ detail }, { status }),
     ),
   )
@@ -129,7 +129,7 @@ describe('MacrosPage', () => {
   describe('loading state', () => {
     it('shows a loading spinner before data loads', () => {
       server.use(
-        http.get('/api/v1/macros', async () => {
+        http.get('*/api/v1/macros', async () => {
           await new Promise(() => {}) // never resolves
         }),
       )
@@ -281,11 +281,11 @@ describe('MacrosPage', () => {
     it('creates a new macro and refreshes the list on submit', async () => {
       let createCalled = false
       server.use(
-        http.post('/api/v1/macros', async () => {
+        http.post('*/api/v1/macros', async () => {
           createCalled = true
           return HttpResponse.json(newMacro, { status: 201 })
         }),
-        http.get('/api/v1/macros', () =>
+        http.get('*/api/v1/macros', () =>
           HttpResponse.json([...mockMacros, newMacro]),
         ),
       )
@@ -354,7 +354,7 @@ describe('MacrosPage', () => {
       let deleteCalled = false
       // Set up delete handler only — initial GET uses the beforeEach handler (both macros)
       server.use(
-        http.delete('/api/v1/macros/1', () => {
+        http.delete('*/api/v1/macros/1', () => {
           deleteCalled = true
           return new HttpResponse(null, { status: 204 })
         }),
@@ -393,7 +393,7 @@ describe('MacrosPage', () => {
     it('calls the API again when Refresh is clicked', async () => {
       let callCount = 0
       server.use(
-        http.get('/api/v1/macros', () => {
+        http.get('*/api/v1/macros', () => {
           callCount++
           return HttpResponse.json(mockMacros)
         }),

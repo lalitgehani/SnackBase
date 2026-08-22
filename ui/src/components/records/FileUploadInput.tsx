@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Upload, X, File, Loader2 } from 'lucide-react';
 import { uploadFile } from '@/services/files.service';
 import type { FileMetadata } from '@/services/files.service';
-import { handleApiError } from '@/lib/api';
+import { handleApiError } from '@/lib/errors';
 
 interface FileUploadInputProps {
     value: FileMetadata | null;

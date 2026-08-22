@@ -102,7 +102,7 @@ const mockAggregationResponse = {
 function setupSuccessHandlers(overrides: { records?: typeof mockRecordsResponse } = {}) {
   server.use(
     // getCollectionByName: step 1 — search by name
-    http.get('/api/v1/collections', () =>
+    http.get('*/api/v1/collections', () =>
       HttpResponse.json({
         items: [mockCollectionListItem],
         total: 1,
@@ -112,19 +112,19 @@ function setupSuccessHandlers(overrides: { records?: typeof mockRecordsResponse 
       }),
     ),
     // getCollectionByName: step 2 — fetch full collection by ID
-    http.get('/api/v1/collections/:id', () =>
+    http.get('*/api/v1/collections/:id', () =>
       HttpResponse.json(mockCollectionFull),
     ),
     // getRecords
-    http.get('/api/v1/records/posts', () =>
+    http.get('*/api/v1/records/posts', () =>
       HttpResponse.json(overrides.records ?? mockRecordsResponse),
     ),
     // AggregationSummaryBar
-    http.post('/api/v1/records/posts/aggregate', () =>
+    http.post('*/api/v1/records/posts/aggregate', () =>
       HttpResponse.json(mockAggregationResponse),
     ),
     // getRecordById
-    http.get('/api/v1/records/posts/:recordId', () =>
+    http.get('*/api/v1/records/posts/:recordId', () =>
       HttpResponse.json(mockRecordFull),
     ),
   )
@@ -132,7 +132,7 @@ function setupSuccessHandlers(overrides: { records?: typeof mockRecordsResponse 
 
 function setupCollectionNotFoundHandler() {
   server.use(
-    http.get('/api/v1/collections', () =>
+    http.get('*/api/v1/collections', () =>
       HttpResponse.json({
         items: [],
         total: 0,
@@ -146,7 +146,7 @@ function setupCollectionNotFoundHandler() {
 
 function setupCollectionErrorHandler(status = 500, detail = 'Server error') {
   server.use(
-    http.get('/api/v1/collections', () =>
+    http.get('*/api/v1/collections', () =>
       HttpResponse.json({ detail }, { status }),
     ),
   )
@@ -154,7 +154,7 @@ function setupCollectionErrorHandler(status = 500, detail = 'Server error') {
 
 function setupEmptyRecordsHandler() {
   server.use(
-    http.get('/api/v1/records/posts', () =>
+    http.get('*/api/v1/records/posts', () =>
       HttpResponse.json({ items: [], total: 0, skip: 0, limit: 25 }),
     ),
   )
@@ -202,7 +202,7 @@ describe('RecordsPage', () => {
   describe('loading state', () => {
     it('displays a loading spinner before the collection is fetched', () => {
       server.use(
-        http.get('/api/v1/collections', async () => {
+        http.get('*/api/v1/collections', async () => {
           await new Promise(() => {}) // never resolves
         }),
       )
@@ -631,16 +631,16 @@ describe('RecordsPage', () => {
   describe('collection with no schema', () => {
     it('shows "No schema defined" message when collection has empty schema', async () => {
       server.use(
-        http.get('/api/v1/collections', () =>
+        http.get('*/api/v1/collections', () =>
           HttpResponse.json({
             items: [mockCollectionListItem],
             total: 1, page: 1, page_size: 10, total_pages: 1,
           }),
         ),
-        http.get('/api/v1/collections/:id', () =>
+        http.get('*/api/v1/collections/:id', () =>
           HttpResponse.json({ ...mockCollectionFull, schema: [] }),
         ),
-        http.get('/api/v1/records/posts', () =>
+        http.get('*/api/v1/records/posts', () =>
           HttpResponse.json({ items: [], total: 0, skip: 0, limit: 25 }),
         ),
       )
@@ -654,16 +654,16 @@ describe('RecordsPage', () => {
 
     it('hides Create Record, Export, and Import buttons when schema is empty', async () => {
       server.use(
-        http.get('/api/v1/collections', () =>
+        http.get('*/api/v1/collections', () =>
           HttpResponse.json({
             items: [mockCollectionListItem],
             total: 1, page: 1, page_size: 10, total_pages: 1,
           }),
         ),
-        http.get('/api/v1/collections/:id', () =>
+        http.get('*/api/v1/collections/:id', () =>
           HttpResponse.json({ ...mockCollectionFull, schema: [] }),
         ),
-        http.get('/api/v1/records/posts', () =>
+        http.get('*/api/v1/records/posts', () =>
           HttpResponse.json({ items: [], total: 0, skip: 0, limit: 25 }),
         ),
       )
@@ -681,16 +681,16 @@ describe('RecordsPage', () => {
 
     it('shows Open Schema CTA when schema is empty', async () => {
       server.use(
-        http.get('/api/v1/collections', () =>
+        http.get('*/api/v1/collections', () =>
           HttpResponse.json({
             items: [mockCollectionListItem],
             total: 1, page: 1, page_size: 10, total_pages: 1,
           }),
         ),
-        http.get('/api/v1/collections/:id', () =>
+        http.get('*/api/v1/collections/:id', () =>
           HttpResponse.json({ ...mockCollectionFull, schema: [] }),
         ),
-        http.get('/api/v1/records/posts', () =>
+        http.get('*/api/v1/records/posts', () =>
           HttpResponse.json({ items: [], total: 0, skip: 0, limit: 25 }),
         ),
       )

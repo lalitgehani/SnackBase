@@ -12,7 +12,7 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
-import { handleApiError } from '@/lib/api';
+import { handleApiError } from '@/lib/errors';
 import { webhooksService, type WebhookListItem, type WebhookDelivery } from '@/services/webhooks.service';
 import { useToast } from '@/hooks/use-toast';
 import { format, formatDistanceToNow } from 'date-fns';

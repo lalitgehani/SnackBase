@@ -2,16 +2,19 @@
 
 Implements the Authenticator class which handles:
 - Standard JWT Bearer tokens
+- Trusted-issuer (platform) JWT tokens (RS256/ES256)
 - SnackBase tokens (sb_ak, sb_pt, sb_ot)
 - Legacy API keys (sb_sk)
 """
 
 from datetime import UTC, datetime
 
+import jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from snackbase.core.config import get_settings
 from snackbase.core.logging import get_logger
 from snackbase.infrastructure.auth.api_key_service import api_key_service
 from snackbase.infrastructure.auth.jwt_service import (
@@ -19,9 +22,12 @@ from snackbase.infrastructure.auth.jwt_service import (
     TokenExpiredError,
     jwt_service,
 )
+from snackbase.infrastructure.auth.password_hasher import generate_random_password, hash_password
+from snackbase.infrastructure.auth.platform_jwks import get_platform_jwks_client
 from snackbase.infrastructure.auth.token_codec import AuthenticationError, TokenCodec
 from snackbase.infrastructure.auth.token_types import AuthenticatedUser, TokenType
-from snackbase.infrastructure.persistence.models import APIKeyModel, UserModel
+from snackbase.infrastructure.persistence.models import APIKeyModel, RoleModel, UserModel
+from snackbase.infrastructure.persistence.repositories import AccountRepository
 
 logger = get_logger(__name__)
 
@@ -78,13 +84,47 @@ class Authenticator:
     async def _authenticate_bearer(
         self, token: str, session: AsyncSession | None
     ) -> AuthenticatedUser:
-        """Authenticate a Bearer token (either JWT or SB token)."""
-        # SnackBase tokens start with 'sb_'
+        """Authenticate a Bearer token (JWT, platform JWT, or SB token)."""
         if token.startswith("sb_"):
             return await self._authenticate_sb_token(token, session)
 
-        # Otherwise, assume it's a standard JWT
-        return await self._authenticate_jwt(token, session)
+        jwt_error: AuthenticationError | None = None
+        try:
+            return await self._authenticate_jwt(token, session)
+        except AuthenticationError as exc:
+            jwt_error = exc
+
+        if self._should_try_platform_jwt(token):
+            return await self._try_authenticate_platform_jwt(token, session)
+
+        if jwt_error is not None:
+            raise jwt_error
+        raise AuthenticationError("Invalid token")
+
+    def _should_try_platform_jwt(self, token: str) -> bool:
+        """Return True when the token looks like a configured platform issuer JWT."""
+        settings = get_settings()
+        if not settings.platform_auth_enabled:
+            return False
+
+        try:
+            header = jwt.get_unverified_header(token)
+            unverified = jwt.decode(
+                token,
+                options={"verify_signature": False},
+                algorithms=["RS256", "ES256", "HS256"],
+            )
+        except jwt.InvalidTokenError:
+            return False
+
+        if unverified.get("iss") != settings.platform_issuer:
+            return False
+
+        alg = header.get("alg")
+        if not isinstance(alg, str):
+            return False
+
+        return alg.upper() in {"RS256", "ES256", "HS256", "NONE"}
 
     async def _authenticate_api_key_header(
         self, token: str, session: AsyncSession | None
@@ -125,6 +165,133 @@ class Authenticator:
         except Exception as e:
             logger.error("JWT authentication error", error=str(e))
             raise AuthenticationError("Invalid token") from e
+
+    async def _try_authenticate_platform_jwt(
+        self, token: str, session: AsyncSession | None
+    ) -> AuthenticatedUser:
+        """Validate a trusted-issuer (platform) JWT when configured."""
+        settings = get_settings()
+        if not settings.platform_auth_enabled:
+            raise AuthenticationError("Invalid token")
+
+        try:
+            header = jwt.get_unverified_header(token)
+        except jwt.InvalidTokenError as exc:
+            raise AuthenticationError("Invalid token") from exc
+
+        alg = header.get("alg")
+        if not isinstance(alg, str):
+            raise AuthenticationError("Unsupported token algorithm")
+        alg_upper = alg.upper()
+        if alg_upper in {"HS256", "NONE"}:
+            raise AuthenticationError("Unsupported token algorithm")
+        if alg_upper not in {"RS256", "ES256"}:
+            raise AuthenticationError("Unsupported token algorithm")
+
+        try:
+            unverified = jwt.decode(
+                token,
+                options={"verify_signature": False},
+                algorithms=[alg],
+            )
+        except jwt.InvalidTokenError as exc:
+            raise AuthenticationError("Invalid token") from exc
+
+        if unverified.get("iss") != settings.platform_issuer:
+            raise AuthenticationError("Invalid token issuer")
+
+        if session is None:
+            raise AuthenticationError("Authentication requires database session")
+
+        jwks_client = get_platform_jwks_client()
+        if jwks_client is None:
+            raise AuthenticationError("Invalid token")
+
+        signing_key = jwks_client.get_signing_key(token)
+
+        try:
+            payload = jwt.decode(
+                token,
+                signing_key,
+                algorithms=[alg_upper],
+                audience=settings.platform_audience,
+                issuer=settings.platform_issuer,
+                options={"require": ["exp", "iat", "sub"]},
+            )
+        except jwt.ExpiredSignatureError as exc:
+            raise AuthenticationError("Token has expired") from exc
+        except jwt.InvalidTokenError as exc:
+            raise AuthenticationError("Invalid token") from exc
+
+        now = int(datetime.now(UTC).timestamp())
+        issued_at = int(payload["iat"])
+        if now - issued_at > settings.platform_max_token_age_seconds:
+            raise AuthenticationError("Token is too old")
+
+        sub = payload.get("sub")
+        email = payload.get(settings.platform_email_claim)
+        role_name = payload.get(settings.platform_role_claim)
+        if not sub or not email or not role_name:
+            raise AuthenticationError("Token missing required claims")
+
+        user = await self._resolve_platform_user(
+            session=session,
+            user_id=str(sub),
+            email=str(email),
+            role_name=str(role_name),
+        )
+
+        await self._verify_user_account(user.id, user.account_id, session)
+
+        return AuthenticatedUser(
+            user_id=user.id,
+            account_id=user.account_id,
+            email=user.email,
+            role=role_name,
+            token_type=TokenType.PLATFORM,
+            groups=[],
+        )
+
+    async def _resolve_platform_user(
+        self,
+        *,
+        session: AsyncSession,
+        user_id: str,
+        email: str,
+        role_name: str,
+    ) -> UserModel:
+        """Look up or just-in-time provision a platform-mapped user."""
+        result = await session.execute(select(UserModel).where(UserModel.id == user_id))
+        existing = result.scalar_one_or_none()
+        if existing is not None:
+            return existing
+
+        role_result = await session.execute(
+            select(RoleModel).where(RoleModel.name == role_name)
+        )
+        role = role_result.scalar_one_or_none()
+        if role is None:
+            raise AuthenticationError(f"Unknown role: {role_name}")
+
+        settings = get_settings()
+        account = await AccountRepository(session).get_by_slug(settings.single_tenant_account or "")
+        if account is None:
+            raise AuthenticationError("Single-tenant account not configured")
+
+        user = UserModel(
+            id=user_id,
+            account_id=account.id,
+            email=email,
+            password_hash=hash_password(generate_random_password()),
+            role_id=role.id,
+            is_active=True,
+            auth_provider="platform",
+            external_id=user_id,
+        )
+        session.add(user)
+        await session.commit()
+        await session.refresh(user)
+        return user
 
     async def _verify_user_account(
         self, user_id: str, account_id: str, session: AsyncSession

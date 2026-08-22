@@ -17,7 +17,7 @@ import {
     type ImportStrategy,
     type CollectionImportResult,
 } from '@/services/collections.service';
-import { handleApiError } from '@/lib/api';
+import { handleApiError } from '@/lib/errors';
 
 interface ImportCollectionsDialogProps {
     open: boolean;

@@ -10,7 +10,8 @@ React admin console for [SnackBase](../README.md) — the open-source, self-host
 | Vite 7 | Dev server and production build |
 | TailwindCSS 4 + ShadCN/Radix | Design system |
 | TanStack Query | Server state |
-| Zustand | Client auth state |
+| Zustand | Client auth presentation state |
+| @snackbase/sdk | Instance API client (collections, records, auth, automation) |
 | next-themes | Light / Dark / System appearance |
 | Vitest + Testing Library | Unit tests |
 | Playwright | E2E tests |
@@ -27,6 +28,15 @@ npm run dev        # http://localhost:5173
 ```
 
 Proxy: Vite forwards `/api` to `http://localhost:8000` (see `vite.config.ts`).
+
+## SDK dependency
+
+The Studio is an SDK consumer. The instance client comes from `@snackbase/sdk` (pinned in `package.json` as `file:../../SnackBase-sdk-js/packages/sdk`) and is provided by `InstanceClientProvider` in `src/lib/snackbase/`.
+
+- **Self-host**: tokens persist under `snackbase-auth` in localStorage; `loadConfig()` resolves `apiBaseUrl` from runtime `/config.js` or `VITE_*` env.
+- **Platform** (future): proxied `baseUrl` and external `getAccessToken`; instance storage is in-memory only.
+
+Service modules expose `createXxxService(client)`, `useXxxService()`, and bound exports for legacy call sites. Do not import `axios` or add a module-level HTTP client.
 
 ## Scripts
 

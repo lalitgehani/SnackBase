@@ -146,7 +146,7 @@ describe('CreateRecordDialog', () => {
       await user.click(screen.getByRole('button', { name: /create record/i }))
 
       await waitFor(() => {
-        expect(screen.getByText(/an unexpected error occurred/i)).toBeInTheDocument()
+        expect(screen.getByText(/network error/i)).toBeInTheDocument()
       })
     })
   })

@@ -3,7 +3,9 @@
  * Handles API calls for dashboard statistics
  */
 
-import { apiClient } from '@/lib/api';
+import type { SnackBaseClient } from '@snackbase/sdk';
+import { createServiceHook } from '@/lib/snackbase/createServiceHook';
+import { bindService } from '@/lib/snackbase/bindService';
 
 import type { AuditLogItem } from './audit.service';
 
@@ -153,17 +155,17 @@ export interface DashboardStats {
   recent_audit_logs: AuditLogItem[];
 }
 
-/**
- * Get dashboard statistics for the given time range.
- */
-export const getDashboardStats = async (
-  range: DashboardRange = '7d',
-): Promise<DashboardStats> => {
-  const response = await apiClient.get<DashboardStats>('/dashboard/stats', {
-    params: { range },
-  });
-  return response.data;
-};
+export function createDashboardService(client: SnackBaseClient) {
+  return {
+    getDashboardStats: (range: DashboardRange = '7d') =>
+      client.dashboard.getStats({ range }),
+  };
+}
+
+export const useDashboardService = createServiceHook(createDashboardService);
+
+const dashboardService = bindService(createDashboardService);
+export const getDashboardStats = dashboardService.getDashboardStats;
 
 /**
  * Format storage usage with an appropriate unit.

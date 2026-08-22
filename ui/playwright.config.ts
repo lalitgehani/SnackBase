@@ -1,13 +1,12 @@
-import { defineConfig, devices } from '@playwright/test'
+import { defineConfig, devices } from '@playwright/test';
+
+const isPlatformProject = process.env.PLAYWRIGHT_PLATFORM === 'true';
 
 /**
- * Playwright E2E test configuration.
+ * Playwright E2E test configuration with dual-mode parity gate (F4.7).
  *
- * Prerequisites:
- *   - SnackBase backend must be running at http://localhost:8000
- *   - Run tests with: npm run test:e2e
- *
- * The Vite dev server is started automatically via the webServer option.
+ * Self-host (default): Vite dev server against local SnackBase instance.
+ * Platform: set PLAYWRIGHT_PLATFORM=true and PLATFORM_BASE_URL.
  */
 export default defineConfig({
   testDir: './e2e/tests',
@@ -19,26 +18,37 @@ export default defineConfig({
   outputDir: 'test-results',
 
   use: {
-    baseURL: 'http://localhost:5173',
+    baseURL: isPlatformProject
+      ? process.env.PLATFORM_BASE_URL ?? 'http://localhost:5173'
+      : 'http://localhost:5173',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
 
   projects: [
     {
-      name: 'chromium',
+      name: 'self-host',
+      testMatch: /^(?!.*\.platform\.).*\.test\.ts$/,
       use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'platform',
+      testMatch: /^(?!.*\.selfhost\.).*\.test\.ts$/,
+      use: {
+        ...devices['Desktop Chrome'],
+      },
     },
   ],
 
-  /** Start the Vite dev server before running tests */
-  webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:5173',
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-  },
+  webServer: isPlatformProject
+    ? undefined
+    : {
+        command: 'npm run dev',
+        url: 'http://localhost:5173',
+        reuseExistingServer: !process.env.CI,
+        timeout: 120_000,
+      },
 
-  globalSetup: './e2e/global-setup.ts',
-  globalTeardown: './e2e/global-teardown.ts',
-})
+  globalSetup: isPlatformProject ? undefined : './e2e/global-setup.ts',
+  globalTeardown: isPlatformProject ? undefined : './e2e/global-teardown.ts',
+});

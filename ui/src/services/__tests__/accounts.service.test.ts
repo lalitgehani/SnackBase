@@ -77,7 +77,7 @@ describe('Accounts Service', () => {
       let requestReceived = false
 
       server.use(
-        http.get('/api/v1/accounts', () => {
+        http.get('*/api/v1/accounts', () => {
           requestReceived = true
           return HttpResponse.json(mockAccountListResponse)
         })
@@ -89,7 +89,7 @@ describe('Accounts Service', () => {
 
     it('returns account list response on success', async () => {
       server.use(
-        http.get('/api/v1/accounts', () => HttpResponse.json(mockAccountListResponse))
+        http.get('*/api/v1/accounts', () => HttpResponse.json(mockAccountListResponse))
       )
 
       const result = await getAccounts()
@@ -100,7 +100,7 @@ describe('Accounts Service', () => {
       let capturedUrl: string | null = null
 
       server.use(
-        http.get('/api/v1/accounts', ({ request }) => {
+        http.get('*/api/v1/accounts', ({ request }) => {
           capturedUrl = request.url
           return HttpResponse.json(mockAccountListResponse)
         })
@@ -117,7 +117,7 @@ describe('Accounts Service', () => {
       let capturedUrl: string | null = null
 
       server.use(
-        http.get('/api/v1/accounts', ({ request }) => {
+        http.get('*/api/v1/accounts', ({ request }) => {
           capturedUrl = request.url
           return HttpResponse.json(mockAccountListResponse)
         })
@@ -131,7 +131,7 @@ describe('Accounts Service', () => {
 
     it('propagates API errors', async () => {
       server.use(
-        http.get('/api/v1/accounts', () =>
+        http.get('*/api/v1/accounts', () =>
           HttpResponse.json({ detail: 'Forbidden' }, { status: 403 })
         )
       )
@@ -145,7 +145,7 @@ describe('Accounts Service', () => {
       let requestReceived = false
 
       server.use(
-        http.get('/api/v1/accounts/AB1234', () => {
+        http.get('*/api/v1/accounts/AB1234', () => {
           requestReceived = true
           return HttpResponse.json(mockAccountDetail)
         })
@@ -157,7 +157,7 @@ describe('Accounts Service', () => {
 
     it('returns account detail on success', async () => {
       server.use(
-        http.get('/api/v1/accounts/AB1234', () => HttpResponse.json(mockAccountDetail))
+        http.get('*/api/v1/accounts/AB1234', () => HttpResponse.json(mockAccountDetail))
       )
 
       const result = await getAccountById('AB1234')
@@ -166,7 +166,7 @@ describe('Accounts Service', () => {
 
     it('returns collections_used in the response', async () => {
       server.use(
-        http.get('/api/v1/accounts/AB1234', () => HttpResponse.json(mockAccountDetail))
+        http.get('*/api/v1/accounts/AB1234', () => HttpResponse.json(mockAccountDetail))
       )
 
       const result = await getAccountById('AB1234')
@@ -175,7 +175,7 @@ describe('Accounts Service', () => {
 
     it('propagates 404 when account not found', async () => {
       server.use(
-        http.get('/api/v1/accounts/ZZZZZZ', () =>
+        http.get('*/api/v1/accounts/ZZZZZZ', () =>
           HttpResponse.json({ detail: 'Account not found' }, { status: 404 })
         )
       )
@@ -189,7 +189,7 @@ describe('Accounts Service', () => {
       let capturedBody: Record<string, unknown> | null = null
 
       server.use(
-        http.post('/api/v1/accounts', async ({ request }) => {
+        http.post('*/api/v1/accounts', async ({ request }) => {
           capturedBody = (await request.json()) as Record<string, unknown>
           return HttpResponse.json(mockAccountDetail, { status: 201 })
         })
@@ -204,7 +204,7 @@ describe('Accounts Service', () => {
       let capturedBody: Record<string, unknown> | null = null
 
       server.use(
-        http.post('/api/v1/accounts', async ({ request }) => {
+        http.post('*/api/v1/accounts', async ({ request }) => {
           capturedBody = (await request.json()) as Record<string, unknown>
           return HttpResponse.json(mockAccountDetail, { status: 201 })
         })
@@ -217,7 +217,7 @@ describe('Accounts Service', () => {
 
     it('returns created account detail on success', async () => {
       server.use(
-        http.post('/api/v1/accounts', () =>
+        http.post('*/api/v1/accounts', () =>
           HttpResponse.json(mockAccountDetail, { status: 201 })
         )
       )
@@ -228,7 +228,7 @@ describe('Accounts Service', () => {
 
     it('propagates API errors on duplicate slug', async () => {
       server.use(
-        http.post('/api/v1/accounts', () =>
+        http.post('*/api/v1/accounts', () =>
           HttpResponse.json({ detail: 'Slug already exists' }, { status: 409 })
         )
       )
@@ -242,7 +242,7 @@ describe('Accounts Service', () => {
       let capturedBody: Record<string, unknown> | null = null
 
       server.use(
-        http.put('/api/v1/accounts/AB1234', async ({ request }) => {
+        http.put('*/api/v1/accounts/AB1234', async ({ request }) => {
           capturedBody = (await request.json()) as Record<string, unknown>
           return HttpResponse.json(mockAccountDetail)
         })
@@ -257,7 +257,7 @@ describe('Accounts Service', () => {
       const updated = { ...mockAccountDetail, name: 'Acme Corp Updated' }
 
       server.use(
-        http.put('/api/v1/accounts/AB1234', () => HttpResponse.json(updated))
+        http.put('*/api/v1/accounts/AB1234', () => HttpResponse.json(updated))
       )
 
       const result = await updateAccount('AB1234', { name: 'Acme Corp Updated' })
@@ -266,7 +266,7 @@ describe('Accounts Service', () => {
 
     it('propagates 404 when account not found', async () => {
       server.use(
-        http.put('/api/v1/accounts/ZZZZZZ', () =>
+        http.put('*/api/v1/accounts/ZZZZZZ', () =>
           HttpResponse.json({ detail: 'Account not found' }, { status: 404 })
         )
       )
@@ -280,7 +280,7 @@ describe('Accounts Service', () => {
       let requestReceived = false
 
       server.use(
-        http.delete('/api/v1/accounts/AB1234', () => {
+        http.delete('*/api/v1/accounts/AB1234', () => {
           requestReceived = true
           return new HttpResponse(null, { status: 204 })
         })
@@ -292,7 +292,7 @@ describe('Accounts Service', () => {
 
     it('resolves without a return value on success', async () => {
       server.use(
-        http.delete('/api/v1/accounts/AB1234', () =>
+        http.delete('*/api/v1/accounts/AB1234', () =>
           new HttpResponse(null, { status: 204 })
         )
       )
@@ -303,7 +303,7 @@ describe('Accounts Service', () => {
 
     it('propagates 404 when account not found', async () => {
       server.use(
-        http.delete('/api/v1/accounts/ZZZZZZ', () =>
+        http.delete('*/api/v1/accounts/ZZZZZZ', () =>
           HttpResponse.json({ detail: 'Account not found' }, { status: 404 })
         )
       )
@@ -317,7 +317,7 @@ describe('Accounts Service', () => {
       let requestReceived = false
 
       server.use(
-        http.get('/api/v1/accounts/AB1234/users', () => {
+        http.get('*/api/v1/accounts/AB1234/users', () => {
           requestReceived = true
           return HttpResponse.json(mockAccountUsersResponse)
         })
@@ -329,7 +329,7 @@ describe('Accounts Service', () => {
 
     it('returns account users response on success', async () => {
       server.use(
-        http.get('/api/v1/accounts/AB1234/users', () =>
+        http.get('*/api/v1/accounts/AB1234/users', () =>
           HttpResponse.json(mockAccountUsersResponse)
         )
       )
@@ -342,7 +342,7 @@ describe('Accounts Service', () => {
       let capturedUrl: string | null = null
 
       server.use(
-        http.get('/api/v1/accounts/AB1234/users', ({ request }) => {
+        http.get('*/api/v1/accounts/AB1234/users', ({ request }) => {
           capturedUrl = request.url
           return HttpResponse.json(mockAccountUsersResponse)
         })

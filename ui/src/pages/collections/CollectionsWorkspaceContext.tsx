@@ -16,7 +16,7 @@ import {
   getCollections,
   type CollectionListItem,
 } from '@/services/collections.service';
-import { handleApiError } from '@/lib/api';
+import { handleApiError } from '@/lib/errors';
 import { isSuperadminAccount } from '@/lib/auth';
 import { useAuthStore } from '@/stores/auth.store';
 

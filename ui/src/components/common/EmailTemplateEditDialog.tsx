@@ -14,7 +14,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { handleApiError } from '@/lib/api';
+import { handleApiError } from '@/lib/errors';
 import { emailService, type EmailTemplate, type EmailTemplateUpdate } from '@/services/email.service';
 import { adminService, type Configuration } from '@/services/admin.service';
 import { useQuery } from '@tanstack/react-query';

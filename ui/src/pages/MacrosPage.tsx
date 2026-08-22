@@ -10,7 +10,7 @@ import MacroDetailDialog from '@/components/macros/MacroDetailDialog';
 import DeleteMacroDialog from '@/components/macros/DeleteMacroDialog';
 import { listMacros, deleteMacro, createMacro, updateMacro } from '@/services/macros.service';
 import type { Macro, MacroCreate, MacroUpdate } from '@/types/macro';
-import { handleApiError } from '@/lib/api';
+import { handleApiError } from '@/lib/errors';
 
 export default function MacrosPage() {
     const [macros, setMacros] = useState<Macro[]>([]);

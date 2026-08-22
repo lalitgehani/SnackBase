@@ -95,10 +95,10 @@ describe('ManageGroupUsersDialog', () => {
   beforeEach(() => {
     // Default: users list returns empty, group has no users
     server.use(
-      http.get('/api/v1/users', () =>
+      http.get('*/api/v1/users', () =>
         HttpResponse.json({ items: [availableUser], total: 1 })
       ),
-      http.get('/api/v1/groups/:id', () =>
+      http.get('*/api/v1/groups/:id', () =>
         HttpResponse.json(group)
       )
     )
@@ -130,10 +130,10 @@ describe('ManageGroupUsersDialog', () => {
   describe('with existing members', () => {
     beforeEach(() => {
       server.use(
-        http.get('/api/v1/users', () =>
+        http.get('*/api/v1/users', () =>
           HttpResponse.json({ items: [availableUser], total: 1 })
         ),
-        http.get('/api/v1/groups/:id', () =>
+        http.get('*/api/v1/groups/:id', () =>
           HttpResponse.json(groupWithUsers)
         )
       )

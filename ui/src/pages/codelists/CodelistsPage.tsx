@@ -40,7 +40,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { handleApiError } from '@/lib/api';
+import { handleApiError } from '@/lib/errors';
 import { isSuperadminAccount, SYSTEM_ACCOUNT_ID } from '@/lib/auth';
 import { useAuthStore } from '@/stores/auth.store';
 import * as codelistsService from '@/services/codelists.service';

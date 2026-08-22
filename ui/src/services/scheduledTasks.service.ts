@@ -1,4 +1,6 @@
-import { apiClient } from '@/lib/api';
+import type { SnackBaseClient } from '@snackbase/sdk';
+import { createServiceHook } from '@/lib/snackbase/createServiceHook';
+import { bindService } from '@/lib/snackbase/bindService';
 
 export interface ScheduledTask {
   id: string;
@@ -37,53 +39,35 @@ export interface UpdateScheduledTaskRequest {
   enabled?: boolean;
 }
 
-export const scheduledTasksService = {
-  list: async (): Promise<ScheduledTaskListResponse> => {
-    const response = await apiClient.get<ScheduledTaskListResponse>('/hooks', {
-      params: { trigger_type: 'schedule', limit: 200 },
-    });
-    return response.data;
-  },
+export function createScheduledTasksService(client: SnackBaseClient) {
+  return {
+    list: () =>
+      client.hooks.list({ trigger_type: 'schedule', limit: 200 }) as Promise<ScheduledTaskListResponse>,
+    get: (id: string) => client.hooks.get(id) as Promise<ScheduledTask>,
+    create: (data: CreateScheduledTaskRequest) =>
+      client.hooks.create({
+        name: data.name,
+        description: data.description,
+        trigger: { type: 'schedule', cron: data.cron },
+        actions: data.actions ?? [],
+        enabled: data.enabled ?? true,
+      }) as Promise<ScheduledTask>,
+    update: (id: string, data: UpdateScheduledTaskRequest) => {
+      const payload: Record<string, unknown> = {};
+      if (data.name !== undefined) payload.name = data.name;
+      if (data.description !== undefined) payload.description = data.description;
+      if (data.cron !== undefined) payload.trigger = { type: 'schedule', cron: data.cron };
+      if (data.enabled !== undefined) payload.enabled = data.enabled;
+      return client.hooks.update(id, payload) as Promise<ScheduledTask>;
+    },
+    toggle: (id: string) => client.hooks.toggle(id) as Promise<ScheduledTask>,
+    trigger: (id: string) =>
+      client.hooks.trigger(id) as Promise<{ job_id: string; message: string }>,
+    delete: async (id: string) => {
+      await client.hooks.delete(id);
+    },
+  };
+}
 
-  get: async (id: string): Promise<ScheduledTask> => {
-    const response = await apiClient.get<ScheduledTask>(`/hooks/${id}`);
-    return response.data;
-  },
-
-  create: async (data: CreateScheduledTaskRequest): Promise<ScheduledTask> => {
-    const response = await apiClient.post<ScheduledTask>('/hooks', {
-      name: data.name,
-      description: data.description,
-      trigger: { type: 'schedule', cron: data.cron },
-      actions: data.actions ?? [],
-      enabled: data.enabled ?? true,
-    });
-    return response.data;
-  },
-
-  update: async (id: string, data: UpdateScheduledTaskRequest): Promise<ScheduledTask> => {
-    const payload: Record<string, unknown> = {};
-    if (data.name !== undefined) payload.name = data.name;
-    if (data.description !== undefined) payload.description = data.description;
-    if (data.cron !== undefined) payload.trigger = { type: 'schedule', cron: data.cron };
-    if (data.enabled !== undefined) payload.enabled = data.enabled;
-    const response = await apiClient.patch<ScheduledTask>(`/hooks/${id}`, payload);
-    return response.data;
-  },
-
-  toggle: async (id: string): Promise<ScheduledTask> => {
-    const response = await apiClient.patch<ScheduledTask>(`/hooks/${id}/toggle`);
-    return response.data;
-  },
-
-  trigger: async (id: string): Promise<{ job_id: string; message: string }> => {
-    const response = await apiClient.post<{ job_id: string; message: string }>(
-      `/hooks/${id}/trigger`,
-    );
-    return response.data;
-  },
-
-  delete: async (id: string): Promise<void> => {
-    await apiClient.delete(`/hooks/${id}`);
-  },
-};
+export const useScheduledTasksService = createServiceHook(createScheduledTasksService);
+export const scheduledTasksService = bindService(createScheduledTasksService);

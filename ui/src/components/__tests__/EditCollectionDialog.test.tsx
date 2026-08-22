@@ -50,7 +50,7 @@ function renderDialog(props: Partial<{
 
   // Stub collection rules endpoint
   server.use(
-    http.get('/api/v1/collection-rules/:id', () =>
+    http.get('*/api/v1/collection-rules/:id', () =>
       HttpResponse.json({
         id: 'rule_1',
         collection_id: col?.id ?? 'col_abc123',

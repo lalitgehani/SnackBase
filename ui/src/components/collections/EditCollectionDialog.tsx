@@ -21,7 +21,7 @@ import type {
   UpdateCollectionData,
   FieldDefinition,
 } from '@/services/collections.service';
-import { handleApiError } from '@/lib/api';
+import { handleApiError } from '@/lib/errors';
 
 interface EditCollectionDialogProps {
   open: boolean;

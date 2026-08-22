@@ -26,7 +26,7 @@ import {
   BLANK_TEMPLATE_ID,
   getTemplateById,
 } from '@/lib/collectionTemplates';
-import { handleApiError } from '@/lib/api';
+import { handleApiError } from '@/lib/errors';
 import { useToast } from '@/hooks/use-toast';
 import { useCollectionsWorkspace } from './CollectionsWorkspaceContext';
 

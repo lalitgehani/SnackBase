@@ -69,7 +69,7 @@ function renderDialog(props: Partial<{
 describe('ImportCollectionsDialog', () => {
   beforeEach(() => {
     server.use(
-      http.post('/api/v1/collections/import', () =>
+      http.post('*/api/v1/collections/import', () =>
         HttpResponse.json(importResult)
       )
     )

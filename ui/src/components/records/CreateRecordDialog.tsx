@@ -19,7 +19,7 @@ import DynamicFieldInput from './DynamicFieldInput';
 import type { FieldDefinition } from '@/services/collections.service';
 import type { RecordData } from '@/types/records.types';
 import { initializeFormState, validateFormState } from '@/lib/form-helpers';
-import { handleApiError } from '@/lib/api';
+import { handleApiError } from '@/lib/errors';
 import { useAuthStore } from '@/stores/auth.store';
 import { getAccounts, type AccountListItem } from '@/services/accounts.service';
 

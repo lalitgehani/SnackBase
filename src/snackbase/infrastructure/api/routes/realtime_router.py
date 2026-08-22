@@ -8,6 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSo
 from sse_starlette.sse import EventSourceResponse
 
 from snackbase.core.logging import get_logger
+from snackbase.core.config import get_settings
+from snackbase.infrastructure.auth.token_types import TokenType
 from snackbase.infrastructure.realtime.realtime_auth import authenticate_realtime, get_token_from_request
 from snackbase.infrastructure.realtime.realtime_manager import ConnectionManager, RealtimeConnection, Subscription
 
@@ -59,6 +61,7 @@ async def websocket_endpoint(
     await manager.add_connection(connection)
     
     heartbeat_task = None
+    lifetime_task = None
     
     try:
         # Start heartbeat task
@@ -74,6 +77,18 @@ async def websocket_endpoint(
                     break
         
         heartbeat_task = asyncio.create_task(heartbeat())
+
+        if current_user.token_type == TokenType.PLATFORM:
+            max_lifetime = get_settings().platform_socket_max_lifetime_seconds
+
+            async def enforce_platform_socket_lifetime() -> None:
+                await asyncio.sleep(max_lifetime)
+                try:
+                    await websocket.close(code=1000, reason="Connection lifetime exceeded")
+                except Exception:
+                    pass
+
+            lifetime_task = asyncio.create_task(enforce_platform_socket_lifetime())
         
         # Main loop for receiving messages
         while True:
@@ -126,6 +141,8 @@ async def websocket_endpoint(
     finally:
         if heartbeat_task:
             heartbeat_task.cancel()
+        if lifetime_task:
+            lifetime_task.cancel()
         await manager.remove_connection(connection_id)
 
 @router.get("/subscribe")

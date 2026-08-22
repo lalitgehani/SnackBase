@@ -48,7 +48,7 @@ import {
 } from '@/services/users.service';
 import { getAccounts, type AccountListItem } from '@/services/accounts.service';
 import { getRoles, type RoleListItem } from '@/services/roles.service';
-import { handleApiError } from '@/lib/api';
+import { handleApiError } from '@/lib/errors';
 import { DataTable, type Column } from '@/components/common/DataTable';
 import { useToast } from "@/hooks/use-toast";
 

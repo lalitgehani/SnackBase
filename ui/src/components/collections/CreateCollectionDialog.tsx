@@ -17,7 +17,7 @@ import {
   type SchemaFieldErrors,
 } from './schemaValidation';
 import type { CreateCollectionData, FieldDefinition } from '@/services/collections.service';
-import { handleApiError } from '@/lib/api';
+import { handleApiError } from '@/lib/errors';
 
 interface CreateCollectionDialogProps {
   open: boolean;

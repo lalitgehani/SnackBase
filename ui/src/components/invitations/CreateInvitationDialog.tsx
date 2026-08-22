@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/select';
 import { createInvitation, type InvitationCreateRequest } from '@/services/invitations.service';
 import { getAccounts, type AccountListItem } from '@/services/accounts.service';
-import { handleApiError } from '@/lib/api';
+import { handleApiError } from '@/lib/errors';
 import { useToast } from "@/hooks/use-toast";
 
 interface CreateInvitationDialogProps {

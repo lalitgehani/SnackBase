@@ -3,7 +3,9 @@
  * Handles API calls for user management (superadmin only)
  */
 
-import { apiClient } from '@/lib/api';
+import type { SnackBaseClient } from '@snackbase/sdk';
+import { createServiceHook } from '@/lib/snackbase/createServiceHook';
+import { bindService } from '@/lib/snackbase/bindService';
 
 export interface User {
   id: string;
@@ -56,68 +58,30 @@ export interface PasswordResetRequest {
   send_reset_link?: boolean;
 }
 
-/**
- * Get list of users with optional filters
- */
-export const getUsers = async (params?: UserListParams): Promise<UserListResponse> => {
-  const response = await apiClient.get<UserListResponse>('/users', { params });
-  return response.data;
-};
+export function createUsersService(client: SnackBaseClient) {
+  return {
+    getUsers: (params?: UserListParams) => client.users.list(params),
+    getUser: (userId: string) => client.users.get(userId),
+    createUser: (data: CreateUserRequest) => client.users.create(data),
+    updateUser: (userId: string, data: UpdateUserRequest) => client.users.update(userId, data),
+    resetUserPassword: (userId: string, data: PasswordResetRequest) =>
+      client.users.resetPassword(userId, data),
+    verifyUser: (userId: string) => client.users.verifyEmail(userId),
+    resendUserVerification: (userId: string) => client.users.resendVerification(userId),
+    deactivateUser: async (userId: string) => {
+      await client.users.delete(userId);
+    },
+  };
+}
 
-/**
- * Get a user by ID
- */
-export const getUser = async (userId: string): Promise<User> => {
-  const response = await apiClient.get<User>(`/users/${userId}`);
-  return response.data;
-};
+export const useUsersService = createServiceHook(createUsersService);
 
-/**
- * Create a new user
- */
-export const createUser = async (data: CreateUserRequest): Promise<User> => {
-  const response = await apiClient.post<User>('/users', data);
-  return response.data;
-};
-
-/**
- * Update a user
- */
-export const updateUser = async (userId: string, data: UpdateUserRequest): Promise<User> => {
-  const response = await apiClient.patch<User>(`/users/${userId}`, data);
-  return response.data;
-};
-
-/**
- * Reset a user's password
- */
-export const resetUserPassword = async (
-  userId: string,
-  data: PasswordResetRequest
-): Promise<{ message: string }> => {
-  const response = await apiClient.put<{ message: string }>(`/users/${userId}/password`, data);
-  return response.data;
-};
-
-/**
- * Manually verify a user's email
- */
-export const verifyUser = async (userId: string): Promise<{ message: string }> => {
-  const response = await apiClient.post<{ message: string }>(`/users/${userId}/verify`);
-  return response.data;
-};
-
-/**
- * Resend verification email to a user
- */
-export const resendUserVerification = async (userId: string): Promise<{ message: string }> => {
-  const response = await apiClient.post<{ message: string }>(`/users/${userId}/resend-verification`);
-  return response.data;
-};
-
-/**
- * Deactivate a user (soft delete)
- */
-export const deactivateUser = async (userId: string): Promise<void> => {
-  await apiClient.delete(`/users/${userId}`);
-};
+const usersService = bindService(createUsersService);
+export const getUsers = usersService.getUsers;
+export const getUser = usersService.getUser;
+export const createUser = usersService.createUser;
+export const updateUser = usersService.updateUser;
+export const resetUserPassword = usersService.resetUserPassword;
+export const verifyUser = usersService.verifyUser;
+export const resendUserVerification = usersService.resendUserVerification;
+export const deactivateUser = usersService.deactivateUser;

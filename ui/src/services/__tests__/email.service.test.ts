@@ -58,7 +58,7 @@ describe('Email Service', () => {
       let requestReceived = false
 
       server.use(
-        http.get('/api/v1/admin/email/templates', () => {
+        http.get('*/api/v1/admin/email/templates', () => {
           requestReceived = true
           return HttpResponse.json([mockEmailTemplate])
         })
@@ -70,7 +70,7 @@ describe('Email Service', () => {
 
     it('returns list of email templates on success', async () => {
       server.use(
-        http.get('/api/v1/admin/email/templates', () => HttpResponse.json([mockEmailTemplate]))
+        http.get('*/api/v1/admin/email/templates', () => HttpResponse.json([mockEmailTemplate]))
       )
 
       const result = await emailService.listEmailTemplates()
@@ -81,7 +81,7 @@ describe('Email Service', () => {
       let capturedUrl: string | null = null
 
       server.use(
-        http.get('/api/v1/admin/email/templates', ({ request }) => {
+        http.get('*/api/v1/admin/email/templates', ({ request }) => {
           capturedUrl = request.url
           return HttpResponse.json([mockEmailTemplate])
         })
@@ -96,7 +96,7 @@ describe('Email Service', () => {
       let capturedUrl: string | null = null
 
       server.use(
-        http.get('/api/v1/admin/email/templates', ({ request }) => {
+        http.get('*/api/v1/admin/email/templates', ({ request }) => {
           capturedUrl = request.url
           return HttpResponse.json([mockEmailTemplate])
         })
@@ -111,7 +111,7 @@ describe('Email Service', () => {
       let capturedUrl: string | null = null
 
       server.use(
-        http.get('/api/v1/admin/email/templates', ({ request }) => {
+        http.get('*/api/v1/admin/email/templates', ({ request }) => {
           capturedUrl = request.url
           return HttpResponse.json([mockEmailTemplate])
         })
@@ -126,7 +126,7 @@ describe('Email Service', () => {
       let capturedUrl: string | null = null
 
       server.use(
-        http.get('/api/v1/admin/email/templates', ({ request }) => {
+        http.get('*/api/v1/admin/email/templates', ({ request }) => {
           capturedUrl = request.url
           return HttpResponse.json([mockEmailTemplate])
         })
@@ -140,7 +140,7 @@ describe('Email Service', () => {
 
     it('propagates API errors', async () => {
       server.use(
-        http.get('/api/v1/admin/email/templates', () =>
+        http.get('*/api/v1/admin/email/templates', () =>
           HttpResponse.json({ detail: 'Forbidden' }, { status: 403 })
         )
       )
@@ -158,7 +158,7 @@ describe('Email Service', () => {
       let requestReceived = false
 
       server.use(
-        http.get('/api/v1/admin/email/templates/tmpl-1', () => {
+        http.get('*/api/v1/admin/email/templates/tmpl-1', () => {
           requestReceived = true
           return HttpResponse.json(mockEmailTemplate)
         })
@@ -170,7 +170,7 @@ describe('Email Service', () => {
 
     it('returns email template detail on success', async () => {
       server.use(
-        http.get('/api/v1/admin/email/templates/tmpl-1', () =>
+        http.get('*/api/v1/admin/email/templates/tmpl-1', () =>
           HttpResponse.json(mockEmailTemplate)
         )
       )
@@ -181,7 +181,7 @@ describe('Email Service', () => {
 
     it('propagates 404 when template not found', async () => {
       server.use(
-        http.get('/api/v1/admin/email/templates/missing', () =>
+        http.get('*/api/v1/admin/email/templates/missing', () =>
           HttpResponse.json({ detail: 'Template not found' }, { status: 404 })
         )
       )
@@ -199,7 +199,7 @@ describe('Email Service', () => {
       let capturedBody: Record<string, unknown> | null = null
 
       server.use(
-        http.put('/api/v1/admin/email/templates/tmpl-1', async ({ request }) => {
+        http.put('*/api/v1/admin/email/templates/tmpl-1', async ({ request }) => {
           capturedBody = (await request.json()) as Record<string, unknown>
           return HttpResponse.json(mockEmailTemplate)
         })
@@ -217,7 +217,7 @@ describe('Email Service', () => {
       const updatedTemplate = { ...mockEmailTemplate, subject: 'Updated Subject' }
 
       server.use(
-        http.put('/api/v1/admin/email/templates/tmpl-1', () =>
+        http.put('*/api/v1/admin/email/templates/tmpl-1', () =>
           HttpResponse.json(updatedTemplate)
         )
       )
@@ -230,7 +230,7 @@ describe('Email Service', () => {
 
     it('propagates 404 when template not found', async () => {
       server.use(
-        http.put('/api/v1/admin/email/templates/missing', () =>
+        http.put('*/api/v1/admin/email/templates/missing', () =>
           HttpResponse.json({ detail: 'Template not found' }, { status: 404 })
         )
       )
@@ -250,7 +250,7 @@ describe('Email Service', () => {
       let capturedBody: Record<string, unknown> | null = null
 
       server.use(
-        http.post('/api/v1/admin/email/templates/render', async ({ request }) => {
+        http.post('*/api/v1/admin/email/templates/render', async ({ request }) => {
           capturedBody = (await request.json()) as Record<string, unknown>
           return HttpResponse.json(mockRenderResponse)
         })
@@ -269,7 +269,7 @@ describe('Email Service', () => {
 
     it('returns rendered template content on success', async () => {
       server.use(
-        http.post('/api/v1/admin/email/templates/render', () =>
+        http.post('*/api/v1/admin/email/templates/render', () =>
           HttpResponse.json(mockRenderResponse)
         )
       )
@@ -284,7 +284,7 @@ describe('Email Service', () => {
 
     it('propagates API errors', async () => {
       server.use(
-        http.post('/api/v1/admin/email/templates/render', () =>
+        http.post('*/api/v1/admin/email/templates/render', () =>
           HttpResponse.json({ detail: 'Template not found' }, { status: 404 })
         )
       )
@@ -304,7 +304,7 @@ describe('Email Service', () => {
       let capturedBody: Record<string, unknown> | null = null
 
       server.use(
-        http.post('/api/v1/admin/email/templates/tmpl-1/test', async ({ request }) => {
+        http.post('*/api/v1/admin/email/templates/tmpl-1/test', async ({ request }) => {
           capturedBody = (await request.json()) as Record<string, unknown>
           return HttpResponse.json({ status: 'sent', message: 'Test email sent' })
         })
@@ -319,7 +319,7 @@ describe('Email Service', () => {
 
     it('returns status and message on success', async () => {
       server.use(
-        http.post('/api/v1/admin/email/templates/tmpl-1/test', () =>
+        http.post('*/api/v1/admin/email/templates/tmpl-1/test', () =>
           HttpResponse.json({ status: 'sent', message: 'Test email sent successfully' })
         )
       )
@@ -333,7 +333,7 @@ describe('Email Service', () => {
 
     it('propagates API errors', async () => {
       server.use(
-        http.post('/api/v1/admin/email/templates/tmpl-1/test', () =>
+        http.post('*/api/v1/admin/email/templates/tmpl-1/test', () =>
           HttpResponse.json({ detail: 'No email provider configured' }, { status: 500 })
         )
       )
@@ -353,7 +353,7 @@ describe('Email Service', () => {
       let requestReceived = false
 
       server.use(
-        http.get('/api/v1/admin/email/logs', () => {
+        http.get('*/api/v1/admin/email/logs', () => {
           requestReceived = true
           return HttpResponse.json(mockEmailLogListResponse)
         })
@@ -365,7 +365,7 @@ describe('Email Service', () => {
 
     it('returns email log list on success', async () => {
       server.use(
-        http.get('/api/v1/admin/email/logs', () =>
+        http.get('*/api/v1/admin/email/logs', () =>
           HttpResponse.json(mockEmailLogListResponse)
         )
       )
@@ -378,7 +378,7 @@ describe('Email Service', () => {
       let capturedUrl: string | null = null
 
       server.use(
-        http.get('/api/v1/admin/email/logs', ({ request }) => {
+        http.get('*/api/v1/admin/email/logs', ({ request }) => {
           capturedUrl = request.url
           return HttpResponse.json(mockEmailLogListResponse)
         })
@@ -393,7 +393,7 @@ describe('Email Service', () => {
       let capturedUrl: string | null = null
 
       server.use(
-        http.get('/api/v1/admin/email/logs', ({ request }) => {
+        http.get('*/api/v1/admin/email/logs', ({ request }) => {
           capturedUrl = request.url
           return HttpResponse.json(mockEmailLogListResponse)
         })
@@ -409,7 +409,7 @@ describe('Email Service', () => {
       let capturedUrl: string | null = null
 
       server.use(
-        http.get('/api/v1/admin/email/logs', ({ request }) => {
+        http.get('*/api/v1/admin/email/logs', ({ request }) => {
           capturedUrl = request.url
           return HttpResponse.json(mockEmailLogListResponse)
         })
@@ -423,7 +423,7 @@ describe('Email Service', () => {
 
     it('propagates API errors', async () => {
       server.use(
-        http.get('/api/v1/admin/email/logs', () =>
+        http.get('*/api/v1/admin/email/logs', () =>
           HttpResponse.json({ detail: 'Forbidden' }, { status: 403 })
         )
       )
@@ -441,7 +441,7 @@ describe('Email Service', () => {
       let requestReceived = false
 
       server.use(
-        http.get('/api/v1/admin/email/logs/log-1', () => {
+        http.get('*/api/v1/admin/email/logs/log-1', () => {
           requestReceived = true
           return HttpResponse.json(mockEmailLog)
         })
@@ -453,7 +453,7 @@ describe('Email Service', () => {
 
     it('returns email log detail on success', async () => {
       server.use(
-        http.get('/api/v1/admin/email/logs/log-1', () => HttpResponse.json(mockEmailLog))
+        http.get('*/api/v1/admin/email/logs/log-1', () => HttpResponse.json(mockEmailLog))
       )
 
       const result = await emailService.getEmailLog('log-1')
@@ -462,7 +462,7 @@ describe('Email Service', () => {
 
     it('returns correct status and recipient', async () => {
       server.use(
-        http.get('/api/v1/admin/email/logs/log-1', () => HttpResponse.json(mockEmailLog))
+        http.get('*/api/v1/admin/email/logs/log-1', () => HttpResponse.json(mockEmailLog))
       )
 
       const result = await emailService.getEmailLog('log-1')
@@ -472,7 +472,7 @@ describe('Email Service', () => {
 
     it('propagates 404 when log not found', async () => {
       server.use(
-        http.get('/api/v1/admin/email/logs/missing', () =>
+        http.get('*/api/v1/admin/email/logs/missing', () =>
           HttpResponse.json({ detail: 'Email log not found' }, { status: 404 })
         )
       )

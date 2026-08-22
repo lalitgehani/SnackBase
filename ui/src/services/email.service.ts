@@ -1,4 +1,6 @@
-import { apiClient as api } from '@/lib/api';
+import type { SnackBaseClient } from '@snackbase/sdk';
+import { createServiceHook } from '@/lib/snackbase/createServiceHook';
+import { bindService } from '@/lib/snackbase/bindService';
 
 export interface EmailTemplate {
   id: string;
@@ -62,84 +64,36 @@ export interface EmailLogListResponse {
   page_size: number;
 }
 
-export const emailService = {
-  listEmailTemplates: async (params?: {
-    template_type?: string;
-    locale?: string;
-    account_id?: string;
-    enabled?: boolean;
-  }): Promise<EmailTemplate[]> => {
-    const queryParams = new URLSearchParams();
-    if (params?.template_type) queryParams.append('template_type', params.template_type);
-    if (params?.locale) queryParams.append('locale', params.locale);
-    if (params?.account_id) queryParams.append('account_id', params.account_id);
-    if (params?.enabled !== undefined) queryParams.append('enabled', params.enabled.toString());
+export function createEmailService(client: SnackBaseClient) {
+  return {
+    listEmailTemplates: (params?: {
+      template_type?: string;
+      locale?: string;
+      account_id?: string;
+      enabled?: boolean;
+    }) => client.emailTemplates.list(params),
+    getEmailTemplate: (id: string) => client.emailTemplates.get(id),
+    updateEmailTemplate: (id: string, data: EmailTemplateUpdate) =>
+      client.emailTemplates.update(id, data),
+    renderEmailTemplate: (data: EmailTemplateRenderRequest) => client.emailTemplates.render(data),
+    sendTestEmail: (id: string, data: EmailTemplateTestRequest) =>
+      client.emailTemplates.sendTest(
+        id,
+        data.recipient_email,
+        data.variables ?? {},
+        data.provider,
+      ),
+    listEmailLogs: (params?: {
+      status_filter?: string;
+      template_type?: string;
+      start_date?: string;
+      end_date?: string;
+      page?: number;
+      page_size?: number;
+    }) => client.emailTemplates.listLogs(params),
+    getEmailLog: (id: string) => client.emailTemplates.getLog(id),
+  };
+}
 
-    const response = await api.get<EmailTemplate[]>(
-      `/admin/email/templates?${queryParams.toString()}`
-    );
-    return response.data;
-  },
-
-  getEmailTemplate: async (id: string): Promise<EmailTemplate> => {
-    const response = await api.get<EmailTemplate>(`/admin/email/templates/${id}`);
-    return response.data;
-  },
-
-  updateEmailTemplate: async (
-    id: string,
-    data: EmailTemplateUpdate
-  ): Promise<EmailTemplate> => {
-    const response = await api.put<EmailTemplate>(`/admin/email/templates/${id}`, data);
-    return response.data;
-  },
-
-  renderEmailTemplate: async (
-    data: EmailTemplateRenderRequest
-  ): Promise<EmailTemplateRenderResponse> => {
-    const response = await api.post<EmailTemplateRenderResponse>(
-      '/admin/email/templates/render',
-      data
-    );
-    return response.data;
-  },
-
-  sendTestEmail: async (
-    id: string,
-    data: EmailTemplateTestRequest
-  ): Promise<{ status: string; message: string }> => {
-    const response = await api.post<{ status: string; message: string }>(
-      `/admin/email/templates/${id}/test`,
-      data
-    );
-    return response.data;
-  },
-
-  listEmailLogs: async (params?: {
-    status_filter?: string;
-    template_type?: string;
-    start_date?: string;
-    end_date?: string;
-    page?: number;
-    page_size?: number;
-  }): Promise<EmailLogListResponse> => {
-    const queryParams = new URLSearchParams();
-    if (params?.status_filter) queryParams.append('status_filter', params.status_filter);
-    if (params?.template_type) queryParams.append('template_type', params.template_type);
-    if (params?.start_date) queryParams.append('start_date', params.start_date);
-    if (params?.end_date) queryParams.append('end_date', params.end_date);
-    if (params?.page) queryParams.append('page', params.page.toString());
-    if (params?.page_size) queryParams.append('page_size', params.page_size.toString());
-
-    const response = await api.get<EmailLogListResponse>(
-      `/admin/email/logs?${queryParams.toString()}`
-    );
-    return response.data;
-  },
-
-  getEmailLog: async (id: string): Promise<EmailLog> => {
-    const response = await api.get<EmailLog>(`/admin/email/logs/${id}`);
-    return response.data;
-  },
-};
-
+export const useEmailService = createServiceHook(createEmailService);
+export const emailService = bindService(createEmailService);

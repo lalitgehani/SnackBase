@@ -46,7 +46,7 @@ describe('API Keys Service', () => {
       let requestReceived = false
 
       server.use(
-        http.get('/api/v1/admin/api-keys', () => {
+        http.get('*/api/v1/admin/api-keys', () => {
           requestReceived = true
           return HttpResponse.json(mockApiKeyListResponse)
         })
@@ -58,7 +58,7 @@ describe('API Keys Service', () => {
 
     it('returns api key list on success', async () => {
       server.use(
-        http.get('/api/v1/admin/api-keys', () => HttpResponse.json(mockApiKeyListResponse))
+        http.get('*/api/v1/admin/api-keys', () => HttpResponse.json(mockApiKeyListResponse))
       )
 
       const result = await apiKeysService.getApiKeys()
@@ -67,7 +67,7 @@ describe('API Keys Service', () => {
 
     it('returns total count', async () => {
       server.use(
-        http.get('/api/v1/admin/api-keys', () => HttpResponse.json(mockApiKeyListResponse))
+        http.get('*/api/v1/admin/api-keys', () => HttpResponse.json(mockApiKeyListResponse))
       )
 
       const result = await apiKeysService.getApiKeys()
@@ -77,7 +77,7 @@ describe('API Keys Service', () => {
 
     it('returns masked key in list items', async () => {
       server.use(
-        http.get('/api/v1/admin/api-keys', () => HttpResponse.json(mockApiKeyListResponse))
+        http.get('*/api/v1/admin/api-keys', () => HttpResponse.json(mockApiKeyListResponse))
       )
 
       const result = await apiKeysService.getApiKeys()
@@ -86,7 +86,7 @@ describe('API Keys Service', () => {
 
     it('propagates API errors', async () => {
       server.use(
-        http.get('/api/v1/admin/api-keys', () =>
+        http.get('*/api/v1/admin/api-keys', () =>
           HttpResponse.json({ detail: 'Unauthorized' }, { status: 401 })
         )
       )
@@ -104,7 +104,7 @@ describe('API Keys Service', () => {
       let capturedBody: Record<string, unknown> | null = null
 
       server.use(
-        http.post('/api/v1/admin/api-keys', async ({ request }) => {
+        http.post('*/api/v1/admin/api-keys', async ({ request }) => {
           capturedBody = (await request.json()) as Record<string, unknown>
           return HttpResponse.json(mockApiKeyCreateResponse, { status: 201 })
         })
@@ -117,7 +117,7 @@ describe('API Keys Service', () => {
 
     it('returns the created key with plaintext key value', async () => {
       server.use(
-        http.post('/api/v1/admin/api-keys', () =>
+        http.post('*/api/v1/admin/api-keys', () =>
           HttpResponse.json(mockApiKeyCreateResponse, { status: 201 })
         )
       )
@@ -131,7 +131,7 @@ describe('API Keys Service', () => {
       let capturedBody: Record<string, unknown> | null = null
 
       server.use(
-        http.post('/api/v1/admin/api-keys', async ({ request }) => {
+        http.post('*/api/v1/admin/api-keys', async ({ request }) => {
           capturedBody = (await request.json()) as Record<string, unknown>
           return HttpResponse.json(mockApiKeyCreateResponse, { status: 201 })
         })
@@ -144,7 +144,7 @@ describe('API Keys Service', () => {
 
     it('propagates API errors', async () => {
       server.use(
-        http.post('/api/v1/admin/api-keys', () =>
+        http.post('*/api/v1/admin/api-keys', () =>
           HttpResponse.json({ detail: 'Validation error' }, { status: 422 })
         )
       )
@@ -162,7 +162,7 @@ describe('API Keys Service', () => {
       let requestReceived = false
 
       server.use(
-        http.get('/api/v1/admin/api-keys/key-1', () => {
+        http.get('*/api/v1/admin/api-keys/key-1', () => {
           requestReceived = true
           return HttpResponse.json(mockApiKeyDetail)
         })
@@ -174,7 +174,7 @@ describe('API Keys Service', () => {
 
     it('returns api key detail on success', async () => {
       server.use(
-        http.get('/api/v1/admin/api-keys/key-1', () => HttpResponse.json(mockApiKeyDetail))
+        http.get('*/api/v1/admin/api-keys/key-1', () => HttpResponse.json(mockApiKeyDetail))
       )
 
       const result = await apiKeysService.getApiKeyById('key-1')
@@ -183,7 +183,7 @@ describe('API Keys Service', () => {
 
     it('includes updated_at in the detail response', async () => {
       server.use(
-        http.get('/api/v1/admin/api-keys/key-1', () => HttpResponse.json(mockApiKeyDetail))
+        http.get('*/api/v1/admin/api-keys/key-1', () => HttpResponse.json(mockApiKeyDetail))
       )
 
       const result = await apiKeysService.getApiKeyById('key-1')
@@ -192,7 +192,7 @@ describe('API Keys Service', () => {
 
     it('propagates 404 when key not found', async () => {
       server.use(
-        http.get('/api/v1/admin/api-keys/missing', () =>
+        http.get('*/api/v1/admin/api-keys/missing', () =>
           HttpResponse.json({ detail: 'API key not found' }, { status: 404 })
         )
       )
@@ -210,7 +210,7 @@ describe('API Keys Service', () => {
       let requestReceived = false
 
       server.use(
-        http.delete('/api/v1/admin/api-keys/key-1', () => {
+        http.delete('*/api/v1/admin/api-keys/key-1', () => {
           requestReceived = true
           return new HttpResponse(null, { status: 204 })
         })
@@ -222,7 +222,7 @@ describe('API Keys Service', () => {
 
     it('resolves without a return value on success', async () => {
       server.use(
-        http.delete('/api/v1/admin/api-keys/key-1', () =>
+        http.delete('*/api/v1/admin/api-keys/key-1', () =>
           new HttpResponse(null, { status: 204 })
         )
       )
@@ -233,7 +233,7 @@ describe('API Keys Service', () => {
 
     it('propagates 404 when key not found', async () => {
       server.use(
-        http.delete('/api/v1/admin/api-keys/missing', () =>
+        http.delete('*/api/v1/admin/api-keys/missing', () =>
           HttpResponse.json({ detail: 'API key not found' }, { status: 404 })
         )
       )

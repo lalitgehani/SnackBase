@@ -36,7 +36,7 @@ import {
   type CollectionRule,
   type UpdateCollectionRulesData,
 } from '@/services/collections.service';
-import { handleApiError } from '@/lib/api';
+import { handleApiError } from '@/lib/errors';
 import { useToast } from '@/hooks/use-toast';
 
 interface CollectionRulesTabProps {

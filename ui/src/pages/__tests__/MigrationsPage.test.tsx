@@ -67,7 +67,7 @@ function renderPage() {
 
 function setupSuccessHandler(override: Partial<typeof mockMigrationsData> = {}) {
   server.use(
-    http.get('/api/v1/migrations', () =>
+    http.get('*/api/v1/migrations', () =>
       HttpResponse.json({ ...mockMigrationsData, ...override }),
     ),
   )
@@ -75,7 +75,7 @@ function setupSuccessHandler(override: Partial<typeof mockMigrationsData> = {}) 
 
 function setupErrorHandler(status = 500, detail = 'Internal server error') {
   server.use(
-    http.get('/api/v1/migrations', () =>
+    http.get('*/api/v1/migrations', () =>
       HttpResponse.json({ detail }, { status }),
     ),
   )
@@ -127,7 +127,7 @@ describe('MigrationsPage', () => {
   describe('loading state', () => {
     it('shows a loading spinner before data loads', () => {
       server.use(
-        http.get('/api/v1/migrations', async () => {
+        http.get('*/api/v1/migrations', async () => {
           await new Promise(() => {}) // never resolves
         }),
       )
@@ -382,7 +382,7 @@ describe('MigrationsPage', () => {
     it('calls the API again when Refresh is clicked', async () => {
       let callCount = 0
       server.use(
-        http.get('/api/v1/migrations', () => {
+        http.get('*/api/v1/migrations', () => {
           callCount++
           return HttpResponse.json(mockMigrationsData)
         }),

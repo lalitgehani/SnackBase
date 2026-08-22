@@ -82,18 +82,18 @@ function setupSuccessHandlers(
   recentOverride: typeof mockRecentConfigs = mockRecentConfigs,
 ) {
   server.use(
-    http.get('/api/v1/admin/configuration/stats', () =>
+    http.get('*/api/v1/admin/configuration/stats', () =>
       HttpResponse.json({ ...mockStats, ...statsOverride }),
     ),
-    http.get('/api/v1/admin/configuration/recent', () =>
+    http.get('*/api/v1/admin/configuration/recent', () =>
       HttpResponse.json(recentOverride),
     ),
     // System and account providers tabs — return empty arrays to prevent errors
-    http.get('/api/v1/admin/configuration/system', () => HttpResponse.json([])),
-    http.get('/api/v1/admin/configuration/account', () => HttpResponse.json([])),
-    http.get('/api/v1/admin/providers', () => HttpResponse.json([])),
-    http.get('/api/v1/admin/providers/available', () => HttpResponse.json([])),
-    http.get('/api/v1/email-templates/', () => HttpResponse.json({ items: [], total: 0 })),
+    http.get('*/api/v1/admin/configuration/system', () => HttpResponse.json([])),
+    http.get('*/api/v1/admin/configuration/account', () => HttpResponse.json([])),
+    http.get('*/api/v1/admin/providers', () => HttpResponse.json([])),
+    http.get('*/api/v1/admin/providers/available', () => HttpResponse.json([])),
+    http.get('*/api/v1/email-templates/', () => HttpResponse.json({ items: [], total: 0 })),
   )
 }
 

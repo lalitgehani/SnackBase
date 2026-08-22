@@ -21,7 +21,7 @@ import {
   getCollectionByName,
   type Collection,
 } from '@/services/collections.service';
-import { handleApiError } from '@/lib/api';
+import { handleApiError } from '@/lib/errors';
 import { cn } from '@/lib/utils';
 import { useCollectionsWorkspace } from './CollectionsWorkspaceContext';
 import {

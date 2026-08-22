@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Play, CheckCircle2, AlertCircle, Clock, Hash } from 'lucide-react';
 import type { Macro, MacroTestResponse } from '@/types/macro';
 import { testMacro } from '@/services/macros.service';
-import { handleApiError } from '@/lib/api';
+import { handleApiError } from '@/lib/errors';
 
 interface MacroTestDialogProps {
     open: boolean;

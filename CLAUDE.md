@@ -184,6 +184,16 @@ Optional deployment mode where all users join a pre-configured account instead o
 - Account auto-created on startup if it doesn't exist
 - Useful for SaaS applications, internal tools, or dedicated deployments
 
+### Platform Trusted-Issuer Authentication (optional, default-off)
+
+Instances can optionally accept RS256/ES256 access tokens from a configured external issuer (SnackBase Cloud or a self-hosted OIDC provider). **Every `SNACKBASE_PLATFORM_*` setting defaults to unset** — an instance with no platform configuration behaves exactly as it does without this feature: no JWKS fetch, no key cache, no alternate auth path.
+
+- Enable with `SNACKBASE_PLATFORM_ISSUER`, `SNACKBASE_PLATFORM_JWKS_URL`, and `SNACKBASE_PLATFORM_AUDIENCE`
+- Requires single-tenant mode (`SNACKBASE_SINGLE_TENANT_MODE=true`); multi-tenant instances must not enable platform auth
+- Platform principals are JIT-mapped to real users in the single-tenant account; audit entries record `auth_method=platform`
+- Realtime connections authenticate through the same `Authenticator` as HTTP; platform socket lifetime is capped separately from token `exp`
+- Cloud Console integrated Studio lives in `ui/` platform mode (`VITE_IS_PLATFORM=true`); docs in `docs/guides/cloud-studio.mdx` and `docs/guides/platform-oidc-self-host.mdx`
+
 ## Key Technical Decisions
 
 ### Database

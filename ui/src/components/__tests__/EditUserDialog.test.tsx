@@ -66,7 +66,7 @@ function renderDialog(props: Partial<{
 describe('EditUserDialog', () => {
   beforeEach(() => {
     server.use(
-      http.get('/api/v1/roles', () =>
+      http.get('*/api/v1/roles', () =>
         HttpResponse.json({ items: roles, total: 2 })
       )
     )
@@ -146,7 +146,7 @@ describe('EditUserDialog', () => {
       await user.click(screen.getByRole('button', { name: /update user/i }))
 
       await waitFor(() => {
-        expect(screen.getByText(/an unexpected error occurred/i)).toBeInTheDocument()
+        expect(screen.getByText(/email already in use/i)).toBeInTheDocument()
       })
     })
   })

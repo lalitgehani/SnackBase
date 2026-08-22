@@ -165,7 +165,7 @@ describe('LoginPage', () => {
     it('does not call the API when required fields are empty', async () => {
       let apiCalled = false
       server.use(
-        http.post('/api/v1/auth/login', () => {
+        http.post('*/api/v1/auth/login', () => {
           apiCalled = true
           return HttpResponse.json(mockAuthResponse)
         }),
@@ -192,7 +192,7 @@ describe('LoginPage', () => {
   describe('successful login', () => {
     beforeEach(() => {
       server.use(
-        http.post('/api/v1/auth/login', () => HttpResponse.json(mockAuthResponse)),
+        http.post('*/api/v1/auth/login', () => HttpResponse.json(mockAuthResponse)),
       )
     })
 
@@ -231,10 +231,8 @@ describe('LoginPage', () => {
 
   describe('failed login', () => {
     it('displays an error message when the API returns 401', async () => {
-      // The axios response interceptor intercepts 401 responses for token refresh.
-      // Since no refresh token exists, the error reaching the component is generic.
       server.use(
-        http.post('/api/v1/auth/login', () =>
+        http.post('*/api/v1/auth/login', () =>
           HttpResponse.json({ detail: 'Invalid email or password' }, { status: 401 }),
         ),
       )
@@ -247,14 +245,14 @@ describe('LoginPage', () => {
       await user.click(screen.getByRole('button', { name: 'Login' }))
 
       await waitFor(() => {
-        expect(screen.getByText(/an unexpected error occurred/i)).toBeInTheDocument()
+        expect(screen.getByText(/invalid email or password/i)).toBeInTheDocument()
       })
     })
 
     it('displays the API error detail when the server returns a 500', async () => {
       // Non-401 errors bypass the token-refresh interceptor and propagate normally
       server.use(
-        http.post('/api/v1/auth/login', () =>
+        http.post('*/api/v1/auth/login', () =>
           HttpResponse.json({ detail: 'Internal server error' }, { status: 500 }),
         ),
       )
@@ -273,7 +271,7 @@ describe('LoginPage', () => {
 
     it('does not navigate to dashboard after a failed login', async () => {
       server.use(
-        http.post('/api/v1/auth/login', () =>
+        http.post('*/api/v1/auth/login', () =>
           HttpResponse.json({ detail: 'Unauthorized' }, { status: 401 }),
         ),
       )
@@ -293,7 +291,7 @@ describe('LoginPage', () => {
     it('clears a previous error when a new successful submission occurs', async () => {
       // First attempt: fail with 500 (direct error propagation)
       server.use(
-        http.post('/api/v1/auth/login', () =>
+        http.post('*/api/v1/auth/login', () =>
           HttpResponse.json({ detail: 'Service temporarily unavailable' }, { status: 503 }),
         ),
       )
@@ -311,7 +309,7 @@ describe('LoginPage', () => {
 
       // Second attempt: succeed
       server.use(
-        http.post('/api/v1/auth/login', () => HttpResponse.json(mockAuthResponse)),
+        http.post('*/api/v1/auth/login', () => HttpResponse.json(mockAuthResponse)),
       )
 
       await user.click(screen.getByRole('button', { name: 'Login' }))
@@ -334,7 +332,7 @@ describe('LoginPage', () => {
       })
 
       server.use(
-        http.post('/api/v1/auth/login', async () => {
+        http.post('*/api/v1/auth/login', async () => {
           await loginPending
           return HttpResponse.json(mockAuthResponse)
         }),
@@ -367,7 +365,7 @@ describe('LoginPage', () => {
       })
 
       server.use(
-        http.post('/api/v1/auth/login', async () => {
+        http.post('*/api/v1/auth/login', async () => {
           await loginPending
           return HttpResponse.json(mockAuthResponse)
         }),
@@ -398,7 +396,7 @@ describe('LoginPage', () => {
       })
 
       server.use(
-        http.post('/api/v1/auth/login', async () => {
+        http.post('*/api/v1/auth/login', async () => {
           await loginPending
           return HttpResponse.json(mockAuthResponse)
         }),
@@ -429,7 +427,7 @@ describe('LoginPage', () => {
       })
 
       server.use(
-        http.post('/api/v1/auth/login', async () => {
+        http.post('*/api/v1/auth/login', async () => {
           await loginPending
           return HttpResponse.json(mockAuthResponse)
         }),

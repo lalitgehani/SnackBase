@@ -8,7 +8,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { handleApiError } from '@/lib/api';
+import { handleApiError } from '@/lib/errors';
 import { apiKeysService } from '@/services/api-keys.service';
 import type { APIKeyListItem } from '@/services/api-keys.service';
 import { useToast } from '@/hooks/use-toast';

@@ -74,11 +74,11 @@ function renderTab() {
 
 function setupSuccessHandlers() {
   server.use(
-    http.get('/api/v1/accounts', () => HttpResponse.json(mockAccounts)),
-    http.get('/api/v1/admin/configuration/account', () =>
+    http.get('*/api/v1/accounts', () => HttpResponse.json(mockAccounts)),
+    http.get('*/api/v1/admin/configuration/account', () =>
       HttpResponse.json(mockAccountConfigs),
     ),
-    http.get('/api/v1/admin/configuration/providers', () =>
+    http.get('*/api/v1/admin/configuration/providers', () =>
       HttpResponse.json([]),
     ),
   )
@@ -282,7 +282,7 @@ describe('AccountProvidersTab', () => {
 
     it('renders empty state message when account has no configs', async () => {
       server.use(
-        http.get('/api/v1/admin/configuration/account', () =>
+        http.get('*/api/v1/admin/configuration/account', () =>
           HttpResponse.json([]),
         ),
       )
@@ -304,7 +304,7 @@ describe('AccountProvidersTab', () => {
     it('calls update API when a switch is toggled', async () => {
       let updateCalled = false
       server.use(
-        http.patch('/api/v1/admin/configuration/aconf-1', () => {
+        http.patch('*/api/v1/admin/configuration/aconf-1', () => {
           updateCalled = true
           return HttpResponse.json({ ...mockAccountConfigs[0], enabled: false })
         }),

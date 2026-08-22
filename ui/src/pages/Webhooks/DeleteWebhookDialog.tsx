@@ -9,7 +9,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { handleApiError } from '@/lib/api';
+import { handleApiError } from '@/lib/errors';
 import { webhooksService, type WebhookListItem } from '@/services/webhooks.service';
 import { useToast } from '@/hooks/use-toast';
 

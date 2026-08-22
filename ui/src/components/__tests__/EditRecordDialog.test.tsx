@@ -159,7 +159,7 @@ describe('EditRecordDialog', () => {
       await user.click(screen.getByRole('button', { name: /save changes/i }))
 
       await waitFor(() => {
-        expect(screen.getByText(/an unexpected error occurred/i)).toBeInTheDocument()
+        expect(screen.getByText(/network error/i)).toBeInTheDocument()
       })
     })
   })

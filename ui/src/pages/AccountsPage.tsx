@@ -23,7 +23,7 @@ import {
     type CreateAccountData,
     type UpdateAccountData,
 } from '@/services/accounts.service';
-import { handleApiError } from '@/lib/api';
+import { handleApiError } from '@/lib/errors';
 
 export default function AccountsPage() {
     const [data, setData] = useState<AccountListResponse | null>(null);

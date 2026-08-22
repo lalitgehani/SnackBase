@@ -1,9 +1,11 @@
-import { apiClient as api } from '@/lib/api';
+import type { SnackBaseClient } from '@snackbase/sdk';
+import { createServiceHook } from '@/lib/snackbase/createServiceHook';
+import { bindService } from '@/lib/snackbase/bindService';
 
 export interface APIKeyListItem {
   id: string;
   name: string;
-  key: string; // Masked key
+  key: string;
   last_used_at: string | null;
   expires_at: string | null;
   is_active: boolean;
@@ -23,7 +25,7 @@ export interface APIKeyCreateRequest {
 export interface APIKeyCreateResponse {
   id: string;
   name: string;
-  key: string; // Plaintext key (returned once)
+  key: string;
   expires_at: string | null;
   created_at: string;
 }
@@ -32,23 +34,17 @@ export interface APIKeyDetailResponse extends APIKeyListItem {
   updated_at: string;
 }
 
-export const apiKeysService = {
-  getApiKeys: async (): Promise<APIKeyListResponse> => {
-    const response = await api.get<APIKeyListResponse>('/admin/api-keys');
-    return response.data;
-  },
+export function createApiKeysService(client: SnackBaseClient) {
+  return {
+    getApiKeys: () => client.apiKeys.list() as Promise<APIKeyListResponse>,
+    createApiKey: (data: APIKeyCreateRequest) =>
+      client.apiKeys.create(data) as Promise<APIKeyCreateResponse>,
+    getApiKeyById: (id: string) => client.apiKeys.get(id) as Promise<APIKeyDetailResponse>,
+    revokeApiKey: async (id: string) => {
+      await client.apiKeys.revoke(id);
+    },
+  };
+}
 
-  createApiKey: async (data: APIKeyCreateRequest): Promise<APIKeyCreateResponse> => {
-    const response = await api.post<APIKeyCreateResponse>('/admin/api-keys', data);
-    return response.data;
-  },
-
-  getApiKeyById: async (id: string): Promise<APIKeyDetailResponse> => {
-    const response = await api.get<APIKeyDetailResponse>(`/admin/api-keys/${id}`);
-    return response.data;
-  },
-
-  revokeApiKey: async (id: string): Promise<void> => {
-    await api.delete(`/admin/api-keys/${id}`);
-  },
-};
+export const useApiKeysService = createServiceHook(createApiKeysService);
+export const apiKeysService = bindService(createApiKeysService);

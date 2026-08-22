@@ -79,31 +79,31 @@ const mockRoleList = {
 
 function setupSuccessHandler(overrides: Partial<typeof mockUserList> = {}) {
   server.use(
-    http.get('/api/v1/users', () =>
+    http.get('*/api/v1/users', () =>
       HttpResponse.json({ ...mockUserList, ...overrides }),
     ),
-    http.get('/api/v1/accounts', () => HttpResponse.json(mockAccountList)),
-    http.get('/api/v1/roles', () => HttpResponse.json(mockRoleList)),
+    http.get('*/api/v1/accounts', () => HttpResponse.json(mockAccountList)),
+    http.get('*/api/v1/roles', () => HttpResponse.json(mockRoleList)),
   )
 }
 
 function setupEmptyHandler() {
   server.use(
-    http.get('/api/v1/users', () =>
+    http.get('*/api/v1/users', () =>
       HttpResponse.json({ items: [], total: 0, skip: 0, limit: 10 }),
     ),
-    http.get('/api/v1/accounts', () => HttpResponse.json(mockAccountList)),
-    http.get('/api/v1/roles', () => HttpResponse.json(mockRoleList)),
+    http.get('*/api/v1/accounts', () => HttpResponse.json(mockAccountList)),
+    http.get('*/api/v1/roles', () => HttpResponse.json(mockRoleList)),
   )
 }
 
 function setupErrorHandler(status = 500, detail = 'Internal server error') {
   server.use(
-    http.get('/api/v1/users', () =>
+    http.get('*/api/v1/users', () =>
       HttpResponse.json({ detail }, { status }),
     ),
-    http.get('/api/v1/accounts', () => HttpResponse.json(mockAccountList)),
-    http.get('/api/v1/roles', () => HttpResponse.json(mockRoleList)),
+    http.get('*/api/v1/accounts', () => HttpResponse.json(mockAccountList)),
+    http.get('*/api/v1/roles', () => HttpResponse.json(mockRoleList)),
   )
 }
 
@@ -137,11 +137,11 @@ describe('UsersPage', () => {
   describe('loading state', () => {
     it('displays a loading spinner before users are fetched', () => {
       server.use(
-        http.get('/api/v1/users', async () => {
+        http.get('*/api/v1/users', async () => {
           await new Promise(() => {}) // never resolves
         }),
-        http.get('/api/v1/accounts', () => HttpResponse.json(mockAccountList)),
-        http.get('/api/v1/roles', () => HttpResponse.json(mockRoleList)),
+        http.get('*/api/v1/accounts', () => HttpResponse.json(mockAccountList)),
+        http.get('*/api/v1/roles', () => HttpResponse.json(mockRoleList)),
       )
 
       renderPage()

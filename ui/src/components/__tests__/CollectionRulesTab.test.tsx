@@ -46,8 +46,8 @@ const defaultRules = {
 
 function setupRulesHandler(rules = defaultRules) {
   server.use(
-    http.get('/api/v1/collections/:name/rules', () => HttpResponse.json(rules)),
-    http.put('/api/v1/collections/:name/rules', async ({ request }) => {
+    http.get('*/api/v1/collections/:name/rules', () => HttpResponse.json(rules)),
+    http.put('*/api/v1/collections/:name/rules', async ({ request }) => {
       const body = (await request.json()) as Record<string, unknown>
       return HttpResponse.json({ ...rules, ...body })
     }),
@@ -56,7 +56,7 @@ function setupRulesHandler(rules = defaultRules) {
 
 function setupRulesError() {
   server.use(
-    http.get('/api/v1/collections/:name/rules', () =>
+    http.get('*/api/v1/collections/:name/rules', () =>
       HttpResponse.json({ detail: 'Not found' }, { status: 404 }),
     ),
   )
@@ -208,10 +208,10 @@ describe('CollectionRulesTab', () => {
     it('shows error when save fails and keeps dirty state', async () => {
       const user = userEvent.setup()
       server.use(
-        http.get('/api/v1/collections/:name/rules', () =>
+        http.get('*/api/v1/collections/:name/rules', () =>
           HttpResponse.json(defaultRules),
         ),
-        http.put('/api/v1/collections/:name/rules', () =>
+        http.put('*/api/v1/collections/:name/rules', () =>
           HttpResponse.json({ detail: 'Save failed' }, { status: 500 }),
         ),
       )

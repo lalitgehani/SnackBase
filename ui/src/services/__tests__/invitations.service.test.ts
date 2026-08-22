@@ -53,7 +53,7 @@ describe('Invitations Service', () => {
       let requestReceived = false
 
       server.use(
-        http.get('/api/v1/invitations', () => {
+        http.get('*/api/v1/invitations', () => {
           requestReceived = true
           return HttpResponse.json(mockInvitationListResponse)
         })
@@ -65,7 +65,7 @@ describe('Invitations Service', () => {
 
     it('returns invitation list response on success', async () => {
       server.use(
-        http.get('/api/v1/invitations', () => HttpResponse.json(mockInvitationListResponse))
+        http.get('*/api/v1/invitations', () => HttpResponse.json(mockInvitationListResponse))
       )
 
       const result = await getInvitations()
@@ -76,7 +76,7 @@ describe('Invitations Service', () => {
       let capturedUrl: string | null = null
 
       server.use(
-        http.get('/api/v1/invitations', ({ request }) => {
+        http.get('*/api/v1/invitations', ({ request }) => {
           capturedUrl = request.url
           return HttpResponse.json(mockInvitationListResponse)
         })
@@ -91,7 +91,7 @@ describe('Invitations Service', () => {
       let capturedUrl: string | null = null
 
       server.use(
-        http.get('/api/v1/invitations', ({ request }) => {
+        http.get('*/api/v1/invitations', ({ request }) => {
           capturedUrl = request.url
           return HttpResponse.json(mockInvitationListResponse)
         })
@@ -106,7 +106,7 @@ describe('Invitations Service', () => {
       let capturedUrl: string | null = null
 
       server.use(
-        http.get('/api/v1/invitations', ({ request }) => {
+        http.get('*/api/v1/invitations', ({ request }) => {
           capturedUrl = request.url
           return HttpResponse.json(mockInvitationListResponse)
         })
@@ -122,7 +122,7 @@ describe('Invitations Service', () => {
       let capturedUrl: string | null = null
 
       server.use(
-        http.get('/api/v1/invitations', ({ request }) => {
+        http.get('*/api/v1/invitations', ({ request }) => {
           capturedUrl = request.url
           return HttpResponse.json(mockInvitationListResponse)
         })
@@ -136,7 +136,7 @@ describe('Invitations Service', () => {
 
     it('propagates API errors', async () => {
       server.use(
-        http.get('/api/v1/invitations', () =>
+        http.get('*/api/v1/invitations', () =>
           HttpResponse.json({ detail: 'Forbidden' }, { status: 403 })
         )
       )
@@ -150,7 +150,7 @@ describe('Invitations Service', () => {
       let capturedBody: Record<string, unknown> | null = null
 
       server.use(
-        http.post('/api/v1/invitations', async ({ request }) => {
+        http.post('*/api/v1/invitations', async ({ request }) => {
           capturedBody = (await request.json()) as Record<string, unknown>
           return HttpResponse.json(mockInvitation, { status: 201 })
         })
@@ -165,7 +165,7 @@ describe('Invitations Service', () => {
       let capturedBody: Record<string, unknown> | null = null
 
       server.use(
-        http.post('/api/v1/invitations', async ({ request }) => {
+        http.post('*/api/v1/invitations', async ({ request }) => {
           capturedBody = (await request.json()) as Record<string, unknown>
           return HttpResponse.json(mockInvitation, { status: 201 })
         })
@@ -188,7 +188,7 @@ describe('Invitations Service', () => {
 
     it('returns created invitation on success', async () => {
       server.use(
-        http.post('/api/v1/invitations', () =>
+        http.post('*/api/v1/invitations', () =>
           HttpResponse.json(mockInvitation, { status: 201 })
         )
       )
@@ -199,7 +199,7 @@ describe('Invitations Service', () => {
 
     it('returns invitation with pending status', async () => {
       server.use(
-        http.post('/api/v1/invitations', () =>
+        http.post('*/api/v1/invitations', () =>
           HttpResponse.json(mockInvitation, { status: 201 })
         )
       )
@@ -210,7 +210,7 @@ describe('Invitations Service', () => {
 
     it('propagates API errors on duplicate email', async () => {
       server.use(
-        http.post('/api/v1/invitations', () =>
+        http.post('*/api/v1/invitations', () =>
           HttpResponse.json({ detail: 'Invitation already exists for this email' }, { status: 409 })
         )
       )
@@ -224,7 +224,7 @@ describe('Invitations Service', () => {
       let requestReceived = false
 
       server.use(
-        http.delete('/api/v1/invitations/inv-1', () => {
+        http.delete('*/api/v1/invitations/inv-1', () => {
           requestReceived = true
           return new HttpResponse(null, { status: 204 })
         })
@@ -236,7 +236,7 @@ describe('Invitations Service', () => {
 
     it('resolves without a return value on success', async () => {
       server.use(
-        http.delete('/api/v1/invitations/inv-1', () =>
+        http.delete('*/api/v1/invitations/inv-1', () =>
           new HttpResponse(null, { status: 204 })
         )
       )
@@ -247,7 +247,7 @@ describe('Invitations Service', () => {
 
     it('propagates 404 when invitation not found', async () => {
       server.use(
-        http.delete('/api/v1/invitations/nonexistent', () =>
+        http.delete('*/api/v1/invitations/nonexistent', () =>
           HttpResponse.json({ detail: 'Invitation not found' }, { status: 404 })
         )
       )
@@ -261,7 +261,7 @@ describe('Invitations Service', () => {
       let requestReceived = false
 
       server.use(
-        http.post('/api/v1/invitations/inv-1/resend', () => {
+        http.post('*/api/v1/invitations/inv-1/resend', () => {
           requestReceived = true
           return HttpResponse.json({ message: 'Invitation resent' })
         })
@@ -273,7 +273,7 @@ describe('Invitations Service', () => {
 
     it('returns message on success', async () => {
       server.use(
-        http.post('/api/v1/invitations/inv-1/resend', () =>
+        http.post('*/api/v1/invitations/inv-1/resend', () =>
           HttpResponse.json({ message: 'Invitation resent' })
         )
       )
@@ -284,7 +284,7 @@ describe('Invitations Service', () => {
 
     it('propagates 404 when invitation not found', async () => {
       server.use(
-        http.post('/api/v1/invitations/nonexistent/resend', () =>
+        http.post('*/api/v1/invitations/nonexistent/resend', () =>
           HttpResponse.json({ detail: 'Invitation not found' }, { status: 404 })
         )
       )
@@ -298,7 +298,7 @@ describe('Invitations Service', () => {
       let requestReceived = false
 
       server.use(
-        http.get('/api/v1/invitations/invite-token-abc123', () => {
+        http.get('*/api/v1/invitations/invite-token-abc123', () => {
           requestReceived = true
           return HttpResponse.json(mockPublicInvitation)
         })
@@ -310,7 +310,7 @@ describe('Invitations Service', () => {
 
     it('returns public invitation info on success', async () => {
       server.use(
-        http.get('/api/v1/invitations/invite-token-abc123', () =>
+        http.get('*/api/v1/invitations/invite-token-abc123', () =>
           HttpResponse.json(mockPublicInvitation)
         )
       )
@@ -321,7 +321,7 @@ describe('Invitations Service', () => {
 
     it('returns is_valid: true for a valid invitation', async () => {
       server.use(
-        http.get('/api/v1/invitations/invite-token-abc123', () =>
+        http.get('*/api/v1/invitations/invite-token-abc123', () =>
           HttpResponse.json(mockPublicInvitation)
         )
       )
@@ -332,7 +332,7 @@ describe('Invitations Service', () => {
 
     it('returns is_valid: false for an expired invitation', async () => {
       server.use(
-        http.get('/api/v1/invitations/expired-token', () =>
+        http.get('*/api/v1/invitations/expired-token', () =>
           HttpResponse.json({ ...mockPublicInvitation, is_valid: false })
         )
       )
@@ -343,7 +343,7 @@ describe('Invitations Service', () => {
 
     it('propagates 404 when token not found', async () => {
       server.use(
-        http.get('/api/v1/invitations/bad-token', () =>
+        http.get('*/api/v1/invitations/bad-token', () =>
           HttpResponse.json({ detail: 'Invitation not found' }, { status: 404 })
         )
       )
@@ -357,7 +357,7 @@ describe('Invitations Service', () => {
       let capturedBody: Record<string, unknown> | null = null
 
       server.use(
-        http.post('/api/v1/invitations/invite-token-abc123/accept', async ({ request }) => {
+        http.post('*/api/v1/invitations/invite-token-abc123/accept', async ({ request }) => {
           capturedBody = (await request.json()) as Record<string, unknown>
           return HttpResponse.json(mockAuthResponse)
         })
@@ -372,7 +372,7 @@ describe('Invitations Service', () => {
       let capturedBody: Record<string, unknown> | null = null
 
       server.use(
-        http.post('/api/v1/invitations/invite-token-abc123/accept', async ({ request }) => {
+        http.post('*/api/v1/invitations/invite-token-abc123/accept', async ({ request }) => {
           capturedBody = (await request.json()) as Record<string, unknown>
           return HttpResponse.json(mockAuthResponse)
         })
@@ -385,7 +385,7 @@ describe('Invitations Service', () => {
 
     it('returns auth response on successful acceptance', async () => {
       server.use(
-        http.post('/api/v1/invitations/invite-token-abc123/accept', () =>
+        http.post('*/api/v1/invitations/invite-token-abc123/accept', () =>
           HttpResponse.json(mockAuthResponse)
         )
       )
@@ -396,7 +396,7 @@ describe('Invitations Service', () => {
 
     it('returns token and user info in the auth response', async () => {
       server.use(
-        http.post('/api/v1/invitations/invite-token-abc123/accept', () =>
+        http.post('*/api/v1/invitations/invite-token-abc123/accept', () =>
           HttpResponse.json(mockAuthResponse)
         )
       )
@@ -408,7 +408,7 @@ describe('Invitations Service', () => {
 
     it('propagates errors for expired or already-accepted token', async () => {
       server.use(
-        http.post('/api/v1/invitations/expired-token/accept', () =>
+        http.post('*/api/v1/invitations/expired-token/accept', () =>
           HttpResponse.json({ detail: 'Invitation has expired' }, { status: 400 })
         )
       )

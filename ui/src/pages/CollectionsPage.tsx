@@ -28,7 +28,7 @@ import {
     type UpdateCollectionData,
     exportCollections,
 } from '@/services/collections.service';
-import { handleApiError } from '@/lib/api';
+import { handleApiError } from '@/lib/errors';
 import { useToast } from '@/hooks/use-toast';
 
 export default function CollectionsPage() {

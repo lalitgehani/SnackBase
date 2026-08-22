@@ -107,7 +107,7 @@ function renderPage(token?: string) {
 /** Register default MSW handlers for a valid invitation fetch. */
 function mockValidInvitation(token = VALID_TOKEN) {
   server.use(
-    http.get(`/api/v1/invitations/${token}`, () =>
+    http.get(`*/api/v1/invitations/${token}`, () =>
       HttpResponse.json(mockInvitation),
     ),
   )
@@ -168,7 +168,7 @@ describe('AcceptInvitationPage', () => {
       const pending = new Promise<void>((resolve) => { resolveRequest = resolve })
 
       server.use(
-        http.get(`/api/v1/invitations/${VALID_TOKEN}`, async () => {
+        http.get(`*/api/v1/invitations/${VALID_TOKEN}`, async () => {
           await pending
           return HttpResponse.json(mockInvitation)
         }),
@@ -194,7 +194,7 @@ describe('AcceptInvitationPage', () => {
   describe('when the invitation token is invalid or expired', () => {
     it('shows an error when the API returns 404', async () => {
       server.use(
-        http.get(`/api/v1/invitations/${VALID_TOKEN}`, () =>
+        http.get(`*/api/v1/invitations/${VALID_TOKEN}`, () =>
           HttpResponse.json(
             { message: 'Invitation not found.' },
             { status: 404 },
@@ -211,7 +211,7 @@ describe('AcceptInvitationPage', () => {
 
     it('falls back to a generic error message when backend provides no message', async () => {
       server.use(
-        http.get(`/api/v1/invitations/${VALID_TOKEN}`, () =>
+        http.get(`*/api/v1/invitations/${VALID_TOKEN}`, () =>
           HttpResponse.json({}, { status: 404 }),
         ),
       )
@@ -225,7 +225,7 @@ describe('AcceptInvitationPage', () => {
 
     it('does not render the password form after a fetch error', async () => {
       server.use(
-        http.get(`/api/v1/invitations/${VALID_TOKEN}`, () =>
+        http.get(`*/api/v1/invitations/${VALID_TOKEN}`, () =>
           HttpResponse.json({ message: 'Expired.' }, { status: 400 }),
         ),
       )
@@ -239,7 +239,7 @@ describe('AcceptInvitationPage', () => {
 
     it('shows the "Invitation Error" heading on fetch failure', async () => {
       server.use(
-        http.get(`/api/v1/invitations/${VALID_TOKEN}`, () =>
+        http.get(`*/api/v1/invitations/${VALID_TOKEN}`, () =>
           HttpResponse.json({ message: 'Already used.' }, { status: 400 }),
         ),
       )
@@ -259,7 +259,7 @@ describe('AcceptInvitationPage', () => {
   describe('already-accepted token', () => {
     it('shows the backend error message for an already-accepted token', async () => {
       server.use(
-        http.get(`/api/v1/invitations/${VALID_TOKEN}`, () =>
+        http.get(`*/api/v1/invitations/${VALID_TOKEN}`, () =>
           HttpResponse.json(
             { message: 'This invitation has already been accepted.' },
             { status: 400 },
@@ -379,7 +379,7 @@ describe('AcceptInvitationPage', () => {
     it('does not call the API when validation fails', async () => {
       let apiCalled = false
       server.use(
-        http.post(`/api/v1/invitations/${VALID_TOKEN}/accept`, () => {
+        http.post(`*/api/v1/invitations/${VALID_TOKEN}/accept`, () => {
           apiCalled = true
           return HttpResponse.json(mockAuthResponseAdmin)
         }),
@@ -410,7 +410,7 @@ describe('AcceptInvitationPage', () => {
     beforeEach(() => {
       mockValidInvitation()
       server.use(
-        http.post(`/api/v1/invitations/${VALID_TOKEN}/accept`, () =>
+        http.post(`*/api/v1/invitations/${VALID_TOKEN}/accept`, () =>
           HttpResponse.json(mockAuthResponseAdmin),
         ),
       )
@@ -457,7 +457,7 @@ describe('AcceptInvitationPage', () => {
     beforeEach(() => {
       mockValidInvitation()
       server.use(
-        http.post(`/api/v1/invitations/${VALID_TOKEN}/accept`, () =>
+        http.post(`*/api/v1/invitations/${VALID_TOKEN}/accept`, () =>
           HttpResponse.json(mockAuthResponseRegularUser),
         ),
       )
@@ -522,7 +522,7 @@ describe('AcceptInvitationPage', () => {
       server.use(
         // Return a 500 with no message/error fields so the component falls
         // back to the hardcoded "Failed to accept invitation. Please try again."
-        http.post(`/api/v1/invitations/${VALID_TOKEN}/accept`, () =>
+        http.post(`*/api/v1/invitations/${VALID_TOKEN}/accept`, () =>
           HttpResponse.json({}, { status: 500 }),
         ),
       )
@@ -543,7 +543,7 @@ describe('AcceptInvitationPage', () => {
 
     it('shows the backend error message for a 400 response', async () => {
       server.use(
-        http.post(`/api/v1/invitations/${VALID_TOKEN}/accept`, () =>
+        http.post(`*/api/v1/invitations/${VALID_TOKEN}/accept`, () =>
           HttpResponse.json(
             { error: 'Password does not meet requirements.' },
             { status: 400 },
@@ -569,7 +569,7 @@ describe('AcceptInvitationPage', () => {
 
     it('does not navigate to dashboard after a failed acceptance', async () => {
       server.use(
-        http.post(`/api/v1/invitations/${VALID_TOKEN}/accept`, () =>
+        http.post(`*/api/v1/invitations/${VALID_TOKEN}/accept`, () =>
           HttpResponse.json({ message: 'Error' }, { status: 500 }),
         ),
       )
@@ -603,7 +603,7 @@ describe('AcceptInvitationPage', () => {
       const pending = new Promise<void>((resolve) => { resolveAccept = resolve })
 
       server.use(
-        http.post(`/api/v1/invitations/${VALID_TOKEN}/accept`, async () => {
+        http.post(`*/api/v1/invitations/${VALID_TOKEN}/accept`, async () => {
           await pending
           return HttpResponse.json(mockAuthResponseAdmin)
         }),
@@ -634,7 +634,7 @@ describe('AcceptInvitationPage', () => {
       const pending = new Promise<void>((resolve) => { resolveAccept = resolve })
 
       server.use(
-        http.post(`/api/v1/invitations/${VALID_TOKEN}/accept`, async () => {
+        http.post(`*/api/v1/invitations/${VALID_TOKEN}/accept`, async () => {
           await pending
           return HttpResponse.json(mockAuthResponseAdmin)
         }),

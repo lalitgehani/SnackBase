@@ -180,7 +180,7 @@ describe('ResetPasswordDialog', () => {
       await user.click(screen.getByRole('button', { name: /send reset link/i }))
 
       await waitFor(() => {
-        expect(screen.getByText(/an unexpected error occurred/i)).toBeInTheDocument()
+        expect(screen.getByText(/reset failed/i)).toBeInTheDocument()
       })
     })
   })

@@ -55,7 +55,7 @@ const mockAccountList = {
 
 function setupSuccessHandler(overrides: Partial<typeof mockAccountList> = {}) {
   server.use(
-    http.get('/api/v1/accounts', () =>
+    http.get('*/api/v1/accounts', () =>
       HttpResponse.json({ ...mockAccountList, ...overrides }),
     ),
   )
@@ -63,7 +63,7 @@ function setupSuccessHandler(overrides: Partial<typeof mockAccountList> = {}) {
 
 function setupEmptyHandler() {
   server.use(
-    http.get('/api/v1/accounts', () =>
+    http.get('*/api/v1/accounts', () =>
       HttpResponse.json({
         items: [],
         total: 0,
@@ -77,7 +77,7 @@ function setupEmptyHandler() {
 
 function setupErrorHandler(status = 500, detail = 'Internal server error') {
   server.use(
-    http.get('/api/v1/accounts', () =>
+    http.get('*/api/v1/accounts', () =>
       HttpResponse.json({ detail }, { status }),
     ),
   )
@@ -85,7 +85,7 @@ function setupErrorHandler(status = 500, detail = 'Internal server error') {
 
 function setupCreateHandler() {
   server.use(
-    http.post('/api/v1/accounts', () =>
+    http.post('*/api/v1/accounts', () =>
       HttpResponse.json(
         {
           id: 'EF9012',
@@ -104,7 +104,7 @@ function setupCreateHandler() {
 
 function setupDeleteHandler() {
   server.use(
-    http.delete('/api/v1/accounts/:id', () =>
+    http.delete('*/api/v1/accounts/:id', () =>
       new HttpResponse(null, { status: 204 }),
     ),
   )
@@ -140,7 +140,7 @@ describe('AccountsPage', () => {
   describe('loading state', () => {
     it('displays a loading spinner before accounts are fetched', () => {
       server.use(
-        http.get('/api/v1/accounts', async () => {
+        http.get('*/api/v1/accounts', async () => {
           await new Promise(() => {}) // never resolves
         }),
       )
@@ -328,7 +328,7 @@ describe('AccountsPage', () => {
       })
 
       // After creation succeeds, make the list endpoint return the updated list
-      server.use(http.get('/api/v1/accounts', () => HttpResponse.json(updatedList)))
+      server.use(http.get('*/api/v1/accounts', () => HttpResponse.json(updatedList)))
     })
   })
 

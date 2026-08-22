@@ -8,7 +8,7 @@ import { Download, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ImportCollectionsDialog from '@/components/collections/ImportCollectionsDialog';
 import { exportCollections } from '@/services/collections.service';
-import { handleApiError } from '@/lib/api';
+import { handleApiError } from '@/lib/errors';
 import { useToast } from '@/hooks/use-toast';
 import { useCollectionsWorkspaceShortcuts } from '@/hooks/useCollectionsWorkspaceShortcuts';
 import {

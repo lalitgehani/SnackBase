@@ -109,8 +109,10 @@ def test_token_type_mismatch(sample_payload, secret):
         TokenCodec.decode(mismatched_token, secret)
 
 def test_all_token_types(secret):
-    """Test all supported token types."""
+    """Test all SnackBase-encoded token types."""
     for token_type in TokenType:
+        if token_type == TokenType.PLATFORM:
+            continue
         payload = TokenPayload(
             version=1,
             type=token_type,

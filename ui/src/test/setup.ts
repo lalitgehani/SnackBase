@@ -1,6 +1,8 @@
 import '@testing-library/jest-dom'
 import { cleanup } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll } from 'vitest'
+import { SnackBaseClient } from '@snackbase/sdk'
+import { setInstanceClientForTests } from '@/lib/snackbase/instanceClientRef'
 import { server } from './mocks/server'
 
 // Mock ResizeObserver — jsdom does not implement it, but Radix UI Select uses it
@@ -58,14 +60,32 @@ Element.prototype.getClientRects = function getClientRects() {
   } as unknown as DOMRectList
 }
 
-// Start MSW server before all tests
-beforeAll(() => server.listen({ onUnhandledRequest: 'warn' }))
+// Start MSW server and mount a test instance client for bindService exports
+beforeAll(() => {
+  server.listen({ onUnhandledRequest: 'warn' })
+  setInstanceClientForTests(
+    new SnackBaseClient({
+      baseUrl: 'http://localhost',
+      storageBackend: 'memory',
+      defaultAccount: 'SY0000',
+      maxRetries: 0,
+    }),
+  )
+})
 
 // Reset handlers and cleanup DOM after each test
-afterEach(() => {
+afterEach(async () => {
   cleanup()
   server.resetHandlers()
+  try {
+    await getInstanceClient().internalAuthManager.clear()
+  } catch {
+    // Instance client may be unavailable during teardown.
+  }
 })
 
 // Close MSW server after all tests
-afterAll(() => server.close())
+afterAll(() => {
+  setInstanceClientForTests(null)
+  server.close()
+})

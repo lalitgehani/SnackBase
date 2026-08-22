@@ -44,7 +44,7 @@ describe('Groups Service', () => {
       let requestReceived = false
 
       server.use(
-        http.get('/api/v1/groups', () => {
+        http.get('*/api/v1/groups', () => {
           requestReceived = true
           return HttpResponse.json(mockGroupListResponse)
         })
@@ -56,7 +56,7 @@ describe('Groups Service', () => {
 
     it('returns group list response on success', async () => {
       server.use(
-        http.get('/api/v1/groups', () => HttpResponse.json(mockGroupListResponse))
+        http.get('*/api/v1/groups', () => HttpResponse.json(mockGroupListResponse))
       )
 
       const result = await getGroups()
@@ -65,7 +65,7 @@ describe('Groups Service', () => {
 
     it('wraps array response into GroupListResponse shape', async () => {
       server.use(
-        http.get('/api/v1/groups', () => HttpResponse.json([mockGroup]))
+        http.get('*/api/v1/groups', () => HttpResponse.json([mockGroup]))
       )
 
       const result = await getGroups()
@@ -77,7 +77,7 @@ describe('Groups Service', () => {
       let capturedUrl: string | null = null
 
       server.use(
-        http.get('/api/v1/groups', ({ request }) => {
+        http.get('*/api/v1/groups', ({ request }) => {
           capturedUrl = request.url
           return HttpResponse.json(mockGroupListResponse)
         })
@@ -93,7 +93,7 @@ describe('Groups Service', () => {
       let capturedUrl: string | null = null
 
       server.use(
-        http.get('/api/v1/groups', ({ request }) => {
+        http.get('*/api/v1/groups', ({ request }) => {
           capturedUrl = request.url
           return HttpResponse.json(mockGroupListResponse)
         })
@@ -106,7 +106,7 @@ describe('Groups Service', () => {
 
     it('propagates API errors', async () => {
       server.use(
-        http.get('/api/v1/groups', () =>
+        http.get('*/api/v1/groups', () =>
           HttpResponse.json({ detail: 'Forbidden' }, { status: 403 })
         )
       )
@@ -120,7 +120,7 @@ describe('Groups Service', () => {
       let requestReceived = false
 
       server.use(
-        http.get('/api/v1/groups/group-1', () => {
+        http.get('*/api/v1/groups/group-1', () => {
           requestReceived = true
           return HttpResponse.json(mockGroup)
         })
@@ -132,7 +132,7 @@ describe('Groups Service', () => {
 
     it('returns group on success', async () => {
       server.use(
-        http.get('/api/v1/groups/group-1', () => HttpResponse.json(mockGroup))
+        http.get('*/api/v1/groups/group-1', () => HttpResponse.json(mockGroup))
       )
 
       const result = await getGroup('group-1')
@@ -141,7 +141,7 @@ describe('Groups Service', () => {
 
     it('propagates 404 when group not found', async () => {
       server.use(
-        http.get('/api/v1/groups/nonexistent', () =>
+        http.get('*/api/v1/groups/nonexistent', () =>
           HttpResponse.json({ detail: 'Group not found' }, { status: 404 })
         )
       )
@@ -155,7 +155,7 @@ describe('Groups Service', () => {
       let capturedBody: Record<string, unknown> | null = null
 
       server.use(
-        http.post('/api/v1/groups', async ({ request }) => {
+        http.post('*/api/v1/groups', async ({ request }) => {
           capturedBody = (await request.json()) as Record<string, unknown>
           return HttpResponse.json(mockGroup, { status: 201 })
         })
@@ -170,7 +170,7 @@ describe('Groups Service', () => {
       let capturedBody: Record<string, unknown> | null = null
 
       server.use(
-        http.post('/api/v1/groups', async ({ request }) => {
+        http.post('*/api/v1/groups', async ({ request }) => {
           capturedBody = (await request.json()) as Record<string, unknown>
           return HttpResponse.json(mockGroup, { status: 201 })
         })
@@ -183,7 +183,7 @@ describe('Groups Service', () => {
 
     it('returns created group on success', async () => {
       server.use(
-        http.post('/api/v1/groups', () => HttpResponse.json(mockGroup, { status: 201 }))
+        http.post('*/api/v1/groups', () => HttpResponse.json(mockGroup, { status: 201 }))
       )
 
       const result = await createGroup({ name: 'Engineering' })
@@ -192,7 +192,7 @@ describe('Groups Service', () => {
 
     it('propagates API errors on duplicate name', async () => {
       server.use(
-        http.post('/api/v1/groups', () =>
+        http.post('*/api/v1/groups', () =>
           HttpResponse.json({ detail: 'Group name already exists' }, { status: 409 })
         )
       )
@@ -206,7 +206,7 @@ describe('Groups Service', () => {
       let capturedBody: Record<string, unknown> | null = null
 
       server.use(
-        http.patch('/api/v1/groups/group-1', async ({ request }) => {
+        http.patch('*/api/v1/groups/group-1', async ({ request }) => {
           capturedBody = (await request.json()) as Record<string, unknown>
           return HttpResponse.json(mockGroup)
         })
@@ -221,7 +221,7 @@ describe('Groups Service', () => {
       const updated = { ...mockGroup, name: 'Engineering Updated' }
 
       server.use(
-        http.patch('/api/v1/groups/group-1', () => HttpResponse.json(updated))
+        http.patch('*/api/v1/groups/group-1', () => HttpResponse.json(updated))
       )
 
       const result = await updateGroup('group-1', { name: 'Engineering Updated' })
@@ -230,7 +230,7 @@ describe('Groups Service', () => {
 
     it('propagates 404 when group not found', async () => {
       server.use(
-        http.patch('/api/v1/groups/nonexistent', () =>
+        http.patch('*/api/v1/groups/nonexistent', () =>
           HttpResponse.json({ detail: 'Group not found' }, { status: 404 })
         )
       )
@@ -244,7 +244,7 @@ describe('Groups Service', () => {
       let requestReceived = false
 
       server.use(
-        http.delete('/api/v1/groups/group-1', () => {
+        http.delete('*/api/v1/groups/group-1', () => {
           requestReceived = true
           return new HttpResponse(null, { status: 204 })
         })
@@ -256,7 +256,7 @@ describe('Groups Service', () => {
 
     it('resolves without a return value on success', async () => {
       server.use(
-        http.delete('/api/v1/groups/group-1', () => new HttpResponse(null, { status: 204 }))
+        http.delete('*/api/v1/groups/group-1', () => new HttpResponse(null, { status: 204 }))
       )
 
       const result = await deleteGroup('group-1')
@@ -265,7 +265,7 @@ describe('Groups Service', () => {
 
     it('propagates 404 when group not found', async () => {
       server.use(
-        http.delete('/api/v1/groups/nonexistent', () =>
+        http.delete('*/api/v1/groups/nonexistent', () =>
           HttpResponse.json({ detail: 'Group not found' }, { status: 404 })
         )
       )
@@ -279,7 +279,7 @@ describe('Groups Service', () => {
       let capturedBody: Record<string, unknown> | null = null
 
       server.use(
-        http.post('/api/v1/groups/group-1/users', async ({ request }) => {
+        http.post('*/api/v1/groups/group-1/users', async ({ request }) => {
           capturedBody = (await request.json()) as Record<string, unknown>
           return new HttpResponse(null, { status: 204 })
         })
@@ -292,7 +292,7 @@ describe('Groups Service', () => {
 
     it('resolves without a return value on success', async () => {
       server.use(
-        http.post('/api/v1/groups/group-1/users', () => new HttpResponse(null, { status: 204 }))
+        http.post('*/api/v1/groups/group-1/users', () => new HttpResponse(null, { status: 204 }))
       )
 
       const result = await addUserToGroup('group-1', 'user-1')
@@ -301,7 +301,7 @@ describe('Groups Service', () => {
 
     it('propagates 404 when group not found', async () => {
       server.use(
-        http.post('/api/v1/groups/nonexistent/users', () =>
+        http.post('*/api/v1/groups/nonexistent/users', () =>
           HttpResponse.json({ detail: 'Group not found' }, { status: 404 })
         )
       )
@@ -315,7 +315,7 @@ describe('Groups Service', () => {
       let requestReceived = false
 
       server.use(
-        http.delete('/api/v1/groups/group-1/users/user-1', () => {
+        http.delete('*/api/v1/groups/group-1/users/user-1', () => {
           requestReceived = true
           return new HttpResponse(null, { status: 204 })
         })
@@ -327,7 +327,7 @@ describe('Groups Service', () => {
 
     it('resolves without a return value on success', async () => {
       server.use(
-        http.delete('/api/v1/groups/group-1/users/user-1', () =>
+        http.delete('*/api/v1/groups/group-1/users/user-1', () =>
           new HttpResponse(null, { status: 204 })
         )
       )
@@ -338,7 +338,7 @@ describe('Groups Service', () => {
 
     it('propagates 404 when user not in group', async () => {
       server.use(
-        http.delete('/api/v1/groups/group-1/users/nonexistent', () =>
+        http.delete('*/api/v1/groups/group-1/users/nonexistent', () =>
           HttpResponse.json({ detail: 'User not in group' }, { status: 404 })
         )
       )

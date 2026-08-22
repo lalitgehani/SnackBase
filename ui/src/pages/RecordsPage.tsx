@@ -49,7 +49,7 @@ import {
     type RecordData,
     type RecordListItem,
 } from '@/services/records.service';
-import { handleApiError } from '@/lib/api';
+import { handleApiError } from '@/lib/errors';
 import { useAuthStore } from '@/stores/auth.store';
 
 interface RecordsPageProps {

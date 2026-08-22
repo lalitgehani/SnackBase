@@ -64,7 +64,7 @@ import {
   type DashboardRange,
   type DashboardStats,
 } from '@/services/dashboard.service';
-import { handleApiError } from '@/lib/api';
+import { handleApiError } from '@/lib/errors';
 import { cn } from '@/lib/utils';
 
 const REFRESH_OPTIONS = [

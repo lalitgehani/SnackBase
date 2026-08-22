@@ -3,7 +3,9 @@
  * Handles API calls for role and permission management
  */
 
-import { apiClient } from '@/lib/api';
+import type { SnackBaseClient } from '@snackbase/sdk';
+import { createServiceHook } from '@/lib/snackbase/createServiceHook';
+import { bindService } from '@/lib/snackbase/bindService';
 
 export interface Role {
   id: number;
@@ -87,97 +89,42 @@ export interface BulkPermissionUpdateResponse {
   errors: string[];
 }
 
-/**
- * Get list of roles
- */
-export const getRoles = async (): Promise<RoleListResponse> => {
-  const response = await apiClient.get<RoleListResponse>('/roles');
-  return response.data;
-};
+export function createRolesService(client: SnackBaseClient) {
+  return {
+    getRoles: () => client.roles.list(),
+    getRoleById: (roleId: number) => client.roles.get(String(roleId)),
+    createRole: (data: CreateRoleData) => client.roles.create(data),
+    updateRole: (roleId: number, data: UpdateRoleData) =>
+      client.roles.update(String(roleId), data),
+    deleteRole: async (roleId: number) => {
+      await client.roles.delete(String(roleId));
+    },
+    getRolePermissions: (roleId: number) =>
+      client.roles.getPermissions(String(roleId)) as Promise<RolePermissionsResponse>,
+    getRolePermissionsMatrix: (roleId: number) =>
+      client.roles.getPermissionsMatrix(String(roleId)) as Promise<RolePermissionsResponse>,
+    validateRule: (rule: string) => client.roles.validateRule(rule),
+    testRule: (rule: string, context: Record<string, unknown>) =>
+      client.roles.testRule(rule, context),
+    updateRolePermissionsBulk: (roleId: number, request: BulkPermissionUpdateRequest) =>
+      client.roles.updatePermissionsBulk(String(roleId), request),
+    deletePermission: async (permissionId: number) => {
+      await client.roles.deletePermission(permissionId);
+    },
+  };
+}
 
-/**
- * Get role by ID
- */
-export const getRoleById = async (roleId: number): Promise<Role> => {
-  const response = await apiClient.get<Role>(`/roles/${roleId}`);
-  return response.data;
-};
+export const useRolesService = createServiceHook(createRolesService);
 
-/**
- * Create a new role
- */
-export const createRole = async (data: CreateRoleData): Promise<Role> => {
-  const response = await apiClient.post<Role>('/roles', data);
-  return response.data;
-};
-
-/**
- * Update a role
- */
-export const updateRole = async (roleId: number, data: UpdateRoleData): Promise<Role> => {
-  const response = await apiClient.put<Role>(`/roles/${roleId}`, data);
-  return response.data;
-};
-
-/**
- * Delete a role
- */
-export const deleteRole = async (roleId: number): Promise<void> => {
-  await apiClient.delete(`/roles/${roleId}`);
-};
-
-/**
- * Get permissions for a role
- */
-export const getRolePermissions = async (roleId: number): Promise<RolePermissionsResponse> => {
-  const response = await apiClient.get<RolePermissionsResponse>(`/roles/${roleId}/permissions`);
-  return response.data;
-};
-
-/**
- * Get permissions in matrix format for a role (includes all collections)
- */
-export const getRolePermissionsMatrix = async (roleId: number): Promise<RolePermissionsResponse> => {
-  const response = await apiClient.get<RolePermissionsResponse>(`/roles/${roleId}/permissions/matrix`);
-  return response.data;
-};
-
-/**
- * Validate a permission rule
- */
-export const validateRule = async (rule: string): Promise<ValidateRuleResponse> => {
-  const response = await apiClient.post<ValidateRuleResponse>('/roles/validate-rule', { rule });
-  return response.data;
-};
-
-/**
- * Test a permission rule with sample data
- */
-export const testRule = async (
-  rule: string,
-  context: Record<string, unknown>
-): Promise<TestRuleResponse> => {
-  const response = await apiClient.post<TestRuleResponse>('/roles/test-rule', { rule, context });
-  return response.data;
-};
-
-/**
- * Bulk update permissions for a role
- */
-export const updateRolePermissionsBulk = async (
-  roleId: number,
-  request: BulkPermissionUpdateRequest
-): Promise<BulkPermissionUpdateResponse> => {
-  const response = await apiClient.put<BulkPermissionUpdateResponse>(
-    `/roles/${roleId}/permissions/bulk`,
-    request
-  );
-  return response.data;
-};
-
-/**
- * Delete a permission by ID
- */
-export const deletePermission = async (permissionId: number): Promise<void> => {
-  await apiClient.delete(`/permissions/${permissionId}`);
-};
+const rolesService = bindService(createRolesService);
+export const getRoles = rolesService.getRoles;
+export const getRoleById = rolesService.getRoleById;
+export const createRole = rolesService.createRole;
+export const updateRole = rolesService.updateRole;
+export const deleteRole = rolesService.deleteRole;
+export const getRolePermissions = rolesService.getRolePermissions;
+export const getRolePermissionsMatrix = rolesService.getRolePermissionsMatrix;
+export const validateRule = rolesService.validateRule;
+export const testRule = rolesService.testRule;
+export const updateRolePermissionsBulk = rolesService.updateRolePermissionsBulk;
+export const deletePermission = rolesService.deletePermission;

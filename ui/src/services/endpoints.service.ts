@@ -1,4 +1,6 @@
-import { apiClient } from '@/lib/api';
+import type { SnackBaseClient } from '@snackbase/sdk';
+import { createServiceHook } from '@/lib/snackbase/createServiceHook';
+import { bindService } from '@/lib/snackbase/bindService';
 
 export interface EndpointAction {
   type: string;
@@ -68,43 +70,22 @@ export interface UpdateEndpointPayload {
   enabled?: boolean;
 }
 
-export const endpointsService = {
-  list: async (filters?: { method?: string; enabled?: boolean }): Promise<EndpointListResponse> => {
-    const response = await apiClient.get<EndpointListResponse>('/endpoints', {
-      params: { limit: 200, ...filters },
-    });
-    return response.data;
-  },
+export function createEndpointsService(client: SnackBaseClient) {
+  return {
+    list: (filters?: { method?: string; enabled?: boolean }) =>
+      client.endpoints.list({ limit: 200, ...filters }) as Promise<EndpointListResponse>,
+    get: (id: string) => client.endpoints.get(id) as Promise<Endpoint>,
+    create: (data: CreateEndpointPayload) => client.endpoints.create(data) as Promise<Endpoint>,
+    update: (id: string, data: UpdateEndpointPayload) =>
+      client.endpoints.update(id, data) as Promise<Endpoint>,
+    toggle: (id: string) => client.endpoints.toggle(id) as Promise<Endpoint>,
+    delete: async (id: string) => {
+      await client.endpoints.delete(id);
+    },
+    listExecutions: (id: string) =>
+      client.endpoints.listExecutions(id, { limit: 50 }) as Promise<EndpointExecutionListResponse>,
+  };
+}
 
-  get: async (id: string): Promise<Endpoint> => {
-    const response = await apiClient.get<Endpoint>(`/endpoints/${id}`);
-    return response.data;
-  },
-
-  create: async (data: CreateEndpointPayload): Promise<Endpoint> => {
-    const response = await apiClient.post<Endpoint>('/endpoints', data);
-    return response.data;
-  },
-
-  update: async (id: string, data: UpdateEndpointPayload): Promise<Endpoint> => {
-    const response = await apiClient.put<Endpoint>(`/endpoints/${id}`, data);
-    return response.data;
-  },
-
-  toggle: async (id: string): Promise<Endpoint> => {
-    const response = await apiClient.patch<Endpoint>(`/endpoints/${id}/toggle`);
-    return response.data;
-  },
-
-  delete: async (id: string): Promise<void> => {
-    await apiClient.delete(`/endpoints/${id}`);
-  },
-
-  listExecutions: async (id: string): Promise<EndpointExecutionListResponse> => {
-    const response = await apiClient.get<EndpointExecutionListResponse>(
-      `/endpoints/${id}/executions`,
-      { params: { limit: 50 } },
-    );
-    return response.data;
-  },
-};
+export const useEndpointsService = createServiceHook(createEndpointsService);
+export const endpointsService = bindService(createEndpointsService);

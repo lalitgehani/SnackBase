@@ -70,8 +70,8 @@ export const test = base.extend<PageFixtures>({
   authenticatedPage: async ({ page }, use) => {
     const loginPage = new LoginPage(page)
     await loginPage.loginAsSuperadmin()
-    // Wait for redirect to dashboard after successful login
-    await page.waitForURL('**/admin/dashboard', { timeout: 10_000 })
+    const { studioPath } = await import('../helpers/studioPath.js')
+    await page.waitForURL(`**${studioPath('/dashboard')}*`, { timeout: 10_000 })
     await use({ loginPage, dashboardPage: new DashboardPage(page) })
   },
 })

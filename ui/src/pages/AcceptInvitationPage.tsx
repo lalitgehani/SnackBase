@@ -1,25 +1,17 @@
 
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
-import axios from "axios";
 import { getInvitation, acceptInvitation, type InvitationPublicResponse } from "@/services/invitations.service";
+import { handleApiError } from "@/lib/errors";
 import { InvitationPasswordForm } from "@/components/invitations/InvitationPasswordForm";
 import { useAuthStore } from "@/stores/auth.store";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertTriangle, Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
-/** Prefer API body message/error fields; otherwise use a page-specific fallback (not axios generic status text). */
 function invitationApiMessage(err: unknown, fallback: string): string {
-    if (axios.isAxiosError(err)) {
-        const data = err.response?.data as
-            | { message?: string; error?: string; detail?: string }
-            | undefined;
-        if (typeof data?.message === "string" && data.message.trim()) return data.message;
-        if (typeof data?.error === "string" && data.error.trim()) return data.error;
-        if (typeof data?.detail === "string" && data.detail.trim()) return data.detail;
-    }
-    return fallback;
+    const message = handleApiError(err);
+    return message === 'An unexpected error occurred' ? fallback : message;
 }
 
 export default function AcceptInvitationPage() {

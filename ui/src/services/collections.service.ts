@@ -3,7 +3,9 @@
  * Handles API calls for collection management
  */
 
-import { apiClient } from '@/lib/api';
+import type { SnackBaseClient } from '@snackbase/sdk';
+import { createServiceHook } from '@/lib/snackbase/createServiceHook';
+import { bindService } from '@/lib/snackbase/bindService';
 
 export interface FieldDefinition {
   name: string;
@@ -94,87 +96,6 @@ export interface GetCollectionsParams {
   search?: string;
 }
 
-/**
- * Get list of collections with pagination and search
- */
-export const getCollections = async (params: GetCollectionsParams = {}): Promise<CollectionListResponse> => {
-  const response = await apiClient.get<CollectionListResponse>('/collections', { params });
-  return response.data;
-};
-
-/**
- * Get collection by ID
- */
-export const getCollectionById = async (collectionId: string): Promise<Collection> => {
-  const response = await apiClient.get<Collection>(`/collections/${collectionId}`);
-  return response.data;
-};
-
-/**
- * Get collection by name
- */
-export const getCollectionByName = async (collectionName: string): Promise<Collection> => {
-  const response = await apiClient.get<CollectionListResponse>('/collections', {
-    params: { search: collectionName }
-  });
-  // Find exact match from results
-  const collection = response.data.items.find((c: CollectionListItem) => c.name === collectionName);
-  if (!collection) {
-    throw new Error(`Collection '${collectionName}' not found`);
-  }
-  // Need to fetch full schema using getCollectionById
-  return getCollectionById(collection.id);
-};
-
-/**
- * Create a new collection
- */
-export const createCollection = async (data: CreateCollectionData): Promise<Collection> => {
-  const response = await apiClient.post<Collection>('/collections', data);
-  return response.data;
-};
-
-/**
- * Update a collection schema
- */
-export const updateCollection = async (
-  collectionId: string,
-  data: UpdateCollectionData
-): Promise<Collection> => {
-  const response = await apiClient.put<Collection>(`/collections/${collectionId}`, data);
-  return response.data;
-};
-
-/**
- * Delete a collection
- */
-export const deleteCollection = async (collectionId: string): Promise<void> => {
-  await apiClient.delete(`/collections/${collectionId}`);
-};
-
-/**
- * Get collection rules by collection name
- */
-export const getCollectionRules = async (collectionName: string): Promise<CollectionRule> => {
-  const response = await apiClient.get<CollectionRule>(`/collections/${collectionName}/rules`);
-  return response.data;
-};
-
-/**
- * Update collection rules by collection name
- */
-export const updateCollectionRules = async (
-  collectionName: string,
-  data: UpdateCollectionRulesData
-): Promise<CollectionRule> => {
-  const response = await apiClient.put<CollectionRule>(`/collections/${collectionName}/rules`, data);
-  return response.data;
-};
-
-// ============================================================================
-// Collection Export/Import Types and Functions
-// ============================================================================
-
 export interface CollectionExportRules {
   list_rule: string | null;
   view_rule: string | null;
@@ -224,29 +145,20 @@ export interface CollectionImportResult {
   migrations_created: string[];
 }
 
-/**
- * Export collections to JSON file (triggers download)
- */
-export const exportCollections = async (collectionIds?: string[]): Promise<void> => {
-  const params = collectionIds?.length ? { collection_ids: collectionIds.join(',') } : {};
-  
-  const response = await apiClient.get('/collections/export', {
-    params,
-    responseType: 'blob',
-  });
+function toUiCollection(raw: Record<string, unknown>): Collection {
+  const schema = (raw.schema ?? raw.fields ?? []) as FieldDefinition[];
+  return {
+    id: raw.id as string,
+    name: raw.name as string,
+    table_name: (raw.table_name as string) ?? (raw.name as string),
+    schema,
+    created_at: raw.created_at as string,
+    updated_at: raw.updated_at as string,
+  };
+}
 
-  // Get filename from Content-Disposition header or generate one
-  const contentDisposition = response.headers['content-disposition'];
-  let filename = `collections_export_${new Date().toISOString().slice(0, 19).replace(/[:-]/g, '')}.json`;
-  if (contentDisposition) {
-    const match = contentDisposition.match(/filename=([^;]+)/);
-    if (match) {
-      filename = match[1].trim();
-    }
-  }
-
-  // Create blob and download
-  const blob = new Blob([response.data], { type: 'application/json' });
+function downloadJson(data: unknown, filename: string): void {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = window.URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
@@ -255,27 +167,78 @@ export const exportCollections = async (collectionIds?: string[]): Promise<void>
   link.click();
   document.body.removeChild(link);
   window.URL.revokeObjectURL(url);
-};
+}
 
-/**
- * Import collections from export data
- * Migrations are always generated to ensure database tables are created
- */
-export const importCollections = async (
-  data: CollectionExportData,
-  strategy: ImportStrategy = 'error'
-): Promise<CollectionImportResult> => {
-  const response = await apiClient.post<CollectionImportResult>('/collections/import', {
-    data,
-    strategy,
-    generate_migrations: true,
-  });
-  return response.data;
-};
+export function createCollectionsService(client: SnackBaseClient) {
+  return {
+    getCollections: (params: GetCollectionsParams = {}) =>
+      client.collections.listPaginated(params) as Promise<CollectionListResponse>,
 
-/**
- * Field type options for the schema builder
- */
+    getCollectionById: async (collectionId: string): Promise<Collection> => {
+      const raw = await client.collections.get(collectionId);
+      return toUiCollection(raw as unknown as Record<string, unknown>);
+    },
+
+    getCollectionByName: async (collectionName: string): Promise<Collection> => {
+      const list = await client.collections.listPaginated({ search: collectionName });
+      const collection = list.items.find((c) => c.name === collectionName);
+      if (!collection) {
+        throw new Error(`Collection '${collectionName}' not found`);
+      }
+      const raw = await client.collections.get(collection.id);
+      return toUiCollection(raw as unknown as Record<string, unknown>);
+    },
+
+    createCollection: async (data: CreateCollectionData): Promise<Collection> => {
+      const raw = await client.collections.create({ name: data.name, fields: data.schema });
+      return toUiCollection(raw as unknown as Record<string, unknown>);
+    },
+
+    updateCollection: async (collectionId: string, data: UpdateCollectionData): Promise<Collection> => {
+      const raw = await client.collections.update(collectionId, { fields: data.schema });
+      return toUiCollection(raw as unknown as Record<string, unknown>);
+    },
+
+    deleteCollection: async (collectionId: string): Promise<void> => {
+      await client.collections.delete(collectionId);
+    },
+
+    getCollectionRules: (collectionName: string) =>
+      client.collectionRules.get(collectionName) as Promise<CollectionRule>,
+
+    updateCollectionRules: (collectionName: string, data: UpdateCollectionRulesData) =>
+      client.collectionRules.update(collectionName, data) as Promise<CollectionRule>,
+
+    exportCollections: async (collectionIds?: string[]): Promise<void> => {
+      const data = await client.collections.export(
+        collectionIds?.length ? { collection_ids: collectionIds } : undefined,
+      );
+      const filename = `collections_export_${new Date().toISOString().slice(0, 19).replace(/[:-]/g, '')}.json`;
+      downloadJson(data, filename);
+    },
+
+    importCollections: (
+      data: CollectionExportData,
+      strategy: ImportStrategy = 'error',
+    ): Promise<CollectionImportResult> =>
+      client.collections.import({ data, strategy, generate_migrations: true }),
+  };
+}
+
+export const useCollectionsService = createServiceHook(createCollectionsService);
+
+const collectionsService = bindService(createCollectionsService);
+export const getCollections = collectionsService.getCollections;
+export const getCollectionById = collectionsService.getCollectionById;
+export const getCollectionByName = collectionsService.getCollectionByName;
+export const createCollection = collectionsService.createCollection;
+export const updateCollection = collectionsService.updateCollection;
+export const deleteCollection = collectionsService.deleteCollection;
+export const getCollectionRules = collectionsService.getCollectionRules;
+export const updateCollectionRules = collectionsService.updateCollectionRules;
+export const exportCollections = collectionsService.exportCollections;
+export const importCollections = collectionsService.importCollections;
+
 export const FIELD_TYPES = [
   { value: 'boolean', label: 'Boolean' },
   { value: 'computed', label: 'Computed' },
@@ -290,18 +253,12 @@ export const FIELD_TYPES = [
   { value: 'url', label: 'URL' },
 ] as const;
 
-/**
- * On delete action options for reference fields
- */
 export const ON_DELETE_OPTIONS = [
   { value: 'cascade', label: 'Cascade' },
   { value: 'set_null', label: 'Set Null' },
   { value: 'restrict', label: 'Restrict' },
 ] as const;
 
-/**
- * PII mask type options
- */
 export const MASK_TYPE_OPTIONS = [
   { value: 'email', label: 'Email' },
   { value: 'ssn', label: 'SSN' },
@@ -311,9 +268,6 @@ export const MASK_TYPE_OPTIONS = [
   { value: 'custom', label: 'Custom' },
 ] as const;
 
-/**
- * Return type options for computed fields
- */
 export const RETURN_TYPE_OPTIONS = [
   { value: 'text', label: 'Text' },
   { value: 'number', label: 'Number' },
@@ -321,24 +275,20 @@ export const RETURN_TYPE_OPTIONS = [
   { value: 'datetime', label: 'DateTime' },
 ] as const;
 
-/**
- * Import strategy options for the import dialog
- */
 export const IMPORT_STRATEGY_OPTIONS = [
-  { 
-    value: 'error' as ImportStrategy, 
-    label: 'Error on Conflict', 
-    description: 'Fail if any collection already exists (safest)' 
+  {
+    value: 'error' as ImportStrategy,
+    label: 'Error on Conflict',
+    description: 'Fail if any collection already exists (safest)',
   },
-  { 
-    value: 'skip' as ImportStrategy, 
-    label: 'Skip Existing', 
-    description: 'Skip existing collections, import only new ones' 
+  {
+    value: 'skip' as ImportStrategy,
+    label: 'Skip Existing',
+    description: 'Skip existing collections, import only new ones',
   },
-  { 
-    value: 'update' as ImportStrategy, 
-    label: 'Update Existing', 
-    description: 'Update existing collections with new schema (add fields only)' 
+  {
+    value: 'update' as ImportStrategy,
+    label: 'Update Existing',
+    description: 'Update existing collections with new schema (add fields only)',
   },
 ] as const;
-

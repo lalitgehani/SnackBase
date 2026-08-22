@@ -1,4 +1,6 @@
-import { apiClient } from '@/lib/api';
+import type { SnackBaseClient } from '@snackbase/sdk';
+import { createServiceHook } from '@/lib/snackbase/createServiceHook';
+import { bindService } from '@/lib/snackbase/bindService';
 
 export interface WebhookListItem {
   id: string;
@@ -67,44 +69,26 @@ export interface WebhookTestResponse {
   error: string | null;
 }
 
-export const webhooksService = {
-  list: async (): Promise<WebhookListResponse> => {
-    const response = await apiClient.get<WebhookListResponse>('/webhooks');
-    return response.data;
-  },
+export interface WebhookDeliveryListParams {
+  limit?: number;
+  offset?: number;
+}
 
-  get: async (id: string): Promise<WebhookListItem> => {
-    const response = await apiClient.get<WebhookListItem>(`/webhooks/${id}`);
-    return response.data;
-  },
+export function createWebhooksService(client: SnackBaseClient) {
+  return {
+    list: async (): Promise<WebhookListResponse> => client.webhooks.list(),
+    get: (id: string) => client.webhooks.get(id),
+    create: (data: WebhookCreateRequest): Promise<WebhookCreateResponse> =>
+      client.webhooks.create(data),
+    update: (id: string, data: WebhookUpdateRequest) => client.webhooks.update(id, data),
+    delete: async (id: string) => {
+      await client.webhooks.delete(id);
+    },
+    getDeliveries: (id: string, params?: WebhookDeliveryListParams) =>
+      client.webhooks.listDeliveries(id, params),
+    test: (id: string): Promise<WebhookTestResponse> => client.webhooks.test(id),
+  };
+}
 
-  create: async (data: WebhookCreateRequest): Promise<WebhookCreateResponse> => {
-    const response = await apiClient.post<WebhookCreateResponse>('/webhooks', data);
-    return response.data;
-  },
-
-  update: async (id: string, data: WebhookUpdateRequest): Promise<WebhookListItem> => {
-    const response = await apiClient.put<WebhookListItem>(`/webhooks/${id}`, data);
-    return response.data;
-  },
-
-  delete: async (id: string): Promise<void> => {
-    await apiClient.delete(`/webhooks/${id}`);
-  },
-
-  getDeliveries: async (
-    webhookId: string,
-    params: { limit?: number; offset?: number } = {}
-  ): Promise<WebhookDeliveryListResponse> => {
-    const response = await apiClient.get<WebhookDeliveryListResponse>(
-      `/webhooks/${webhookId}/deliveries`,
-      { params }
-    );
-    return response.data;
-  },
-
-  test: async (id: string): Promise<WebhookTestResponse> => {
-    const response = await apiClient.post<WebhookTestResponse>(`/webhooks/${id}/test`);
-    return response.data;
-  },
-};
+export const useWebhooksService = createServiceHook(createWebhooksService);
+export const webhooksService = bindService(createWebhooksService);

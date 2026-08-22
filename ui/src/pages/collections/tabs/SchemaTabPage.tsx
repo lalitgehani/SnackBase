@@ -19,7 +19,7 @@ import {
   updateCollection,
   type FieldDefinition,
 } from '@/services/collections.service';
-import { handleApiError } from '@/lib/api';
+import { handleApiError } from '@/lib/errors';
 import { useToast } from '@/hooks/use-toast';
 import { useCollectionDetail } from '../CollectionDetailContext';
 import { useCollectionsWorkspace } from '../CollectionsWorkspaceContext';

@@ -16,6 +16,7 @@ import { http, HttpResponse } from 'msw'
 import { render } from '@/test/utils'
 import { server } from '@/test/mocks/server'
 import { useAuthStore } from '@/stores/auth.store'
+import { getInstanceClient } from '@/lib/snackbase/instanceClientRef'
 import ProtectedRoute from '../ProtectedRoute'
 
 // ---------------------------------------------------------------------------
@@ -23,6 +24,8 @@ import ProtectedRoute from '../ProtectedRoute'
 // ---------------------------------------------------------------------------
 
 /** Reset Zustand auth store to a clean slate between tests */
+let originalRestoreSession: () => Promise<void>
+
 function resetAuthStore() {
   useAuthStore.setState({
     user: null,
@@ -32,6 +35,7 @@ function resetAuthStore() {
     isAuthenticated: false,
     isLoading: false,
     error: null,
+    restoreSession: originalRestoreSession,
   })
 }
 
@@ -88,10 +92,14 @@ function renderWithRoutes(initialEntries: string[] = ['/protected']) {
 // ---------------------------------------------------------------------------
 
 beforeEach(() => {
+  if (!originalRestoreSession) {
+    originalRestoreSession = useAuthStore.getState().restoreSession
+  }
+  localStorage.clear()
   resetAuthStore()
   // Default: /auth/me succeeds (token valid)
   server.use(
-    http.get('/api/v1/auth/me', () =>
+    http.get('*/api/v1/auth/me', () =>
       HttpResponse.json({
         user_id: 'user-1',
         account_id: 'SY0000',
@@ -181,17 +189,23 @@ describe('ProtectedRoute', () => {
 
   describe('loading state', () => {
     it('shows loading spinner while isLoading is true', () => {
-      // Set loading state before rendering
-      useAuthStore.setState({ isLoading: true, isAuthenticated: false })
+      useAuthStore.setState({
+        isLoading: true,
+        isAuthenticated: false,
+        restoreSession: async () => {},
+      })
 
       renderWithRoutes()
 
-      // The spinner (Loader2 icon) and loading text should be visible
       expect(screen.getByText('Loading...')).toBeInTheDocument()
     })
 
     it('does not show protected content while loading', () => {
-      useAuthStore.setState({ isLoading: true, isAuthenticated: false })
+      useAuthStore.setState({
+        isLoading: true,
+        isAuthenticated: false,
+        restoreSession: async () => {},
+      })
 
       renderWithRoutes()
 
@@ -199,7 +213,11 @@ describe('ProtectedRoute', () => {
     })
 
     it('does not redirect to login while loading', () => {
-      useAuthStore.setState({ isLoading: true, isAuthenticated: false })
+      useAuthStore.setState({
+        isLoading: true,
+        isAuthenticated: false,
+        restoreSession: async () => {},
+      })
 
       renderWithRoutes()
 
@@ -226,6 +244,8 @@ describe('ProtectedRoute', () => {
 
   describe('when token exists but is expired', () => {
     it('redirects to login when API returns 401 on session restore', async () => {
+      await getInstanceClient().internalAuthManager.clear()
+
       // Set authenticated state with a token that the server will reject
       useAuthStore.setState({
         token: 'expired-token',
@@ -249,7 +269,7 @@ describe('ProtectedRoute', () => {
 
       // Override: /auth/me returns 401 (expired token)
       server.use(
-        http.get('/api/v1/auth/me', () =>
+        http.get('*/api/v1/auth/me', () =>
           HttpResponse.json({ detail: 'Token expired' }, { status: 401 }),
         ),
       )
@@ -264,6 +284,8 @@ describe('ProtectedRoute', () => {
     })
 
     it('clears auth state when token is expired', async () => {
+      await getInstanceClient().internalAuthManager.clear()
+
       useAuthStore.setState({
         token: 'expired-token',
         refreshToken: 'expired-refresh-token',
@@ -285,7 +307,7 @@ describe('ProtectedRoute', () => {
       })
 
       server.use(
-        http.get('/api/v1/auth/me', () =>
+        http.get('*/api/v1/auth/me', () =>
           HttpResponse.json({ detail: 'Token expired' }, { status: 401 }),
         ),
       )

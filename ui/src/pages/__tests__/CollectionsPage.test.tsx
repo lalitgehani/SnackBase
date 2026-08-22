@@ -67,10 +67,10 @@ const mockCollectionFull = {
 
 function setupSuccessHandler(overrides: Partial<typeof mockCollectionList> = {}) {
   server.use(
-    http.get('/api/v1/collections', () =>
+    http.get('*/api/v1/collections', () =>
       HttpResponse.json({ ...mockCollectionList, ...overrides }),
     ),
-    http.get('/api/v1/collections/:id', () =>
+    http.get('*/api/v1/collections/:id', () =>
       HttpResponse.json(mockCollectionFull),
     ),
   )
@@ -78,7 +78,7 @@ function setupSuccessHandler(overrides: Partial<typeof mockCollectionList> = {})
 
 function setupEmptyHandler() {
   server.use(
-    http.get('/api/v1/collections', () =>
+    http.get('*/api/v1/collections', () =>
       HttpResponse.json({
         items: [],
         total: 0,
@@ -92,7 +92,7 @@ function setupEmptyHandler() {
 
 function setupErrorHandler(status = 500, detail = 'Internal server error') {
   server.use(
-    http.get('/api/v1/collections', () =>
+    http.get('*/api/v1/collections', () =>
       HttpResponse.json({ detail }, { status }),
     ),
   )
@@ -100,7 +100,7 @@ function setupErrorHandler(status = 500, detail = 'Internal server error') {
 
 function setupDeleteHandler() {
   server.use(
-    http.delete('/api/v1/collections/:id', () =>
+    http.delete('*/api/v1/collections/:id', () =>
       new HttpResponse(null, { status: 204 }),
     ),
   )
@@ -136,7 +136,7 @@ describe('CollectionsPage', () => {
   describe('loading state', () => {
     it('displays a loading spinner before collections are fetched', () => {
       server.use(
-        http.get('/api/v1/collections', async () => {
+        http.get('*/api/v1/collections', async () => {
           await new Promise(() => {}) // never resolves
         }),
       )

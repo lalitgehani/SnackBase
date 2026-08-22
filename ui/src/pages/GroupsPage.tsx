@@ -33,7 +33,7 @@ import {
     type CreateGroupRequest,
     type UpdateGroupRequest,
 } from '@/services/groups.service';
-import { handleApiError } from '@/lib/api';
+import { handleApiError } from '@/lib/errors';
 import { DataTable, type Column } from '@/components/common/DataTable';
 
 export default function GroupsPage() {

@@ -264,6 +264,48 @@ class Settings(BaseSettings):
         description="Display name for single-tenant account (defaults to slug)",
     )
 
+    # Platform (Trusted Issuer) Authentication Settings
+    # Optional federated access: leave unset for default-off behaviour identical to
+    # instances that have never heard of an external issuer.
+    platform_issuer: str | None = Field(
+        default=None,
+        description="Trusted JWT issuer URL (SNACKBASE_PLATFORM_ISSUER)",
+    )
+    platform_jwks_url: str | None = Field(
+        default=None,
+        description="JWKS endpoint for the trusted issuer (SNACKBASE_PLATFORM_JWKS_URL)",
+    )
+    platform_audience: str | None = Field(
+        default=None,
+        description="Expected aud claim for platform tokens (SNACKBASE_PLATFORM_AUDIENCE)",
+    )
+    platform_role_claim: str = Field(
+        default="snackbase_role",
+        description="JWT claim carrying the SnackBase role name (SNACKBASE_PLATFORM_ROLE_CLAIM)",
+    )
+    platform_email_claim: str = Field(
+        default="email",
+        description="JWT claim carrying the user email (SNACKBASE_PLATFORM_EMAIL_CLAIM)",
+    )
+    platform_jwks_cache_seconds: int = Field(
+        default=300,
+        description="JWKS signing-key cache TTL in seconds (SNACKBASE_PLATFORM_JWKS_CACHE_SECONDS)",
+    )
+    platform_max_token_age_seconds: int = Field(
+        default=300,
+        description=(
+            "Reject platform tokens whose iat is older than this many seconds "
+            "(SNACKBASE_PLATFORM_MAX_TOKEN_AGE_SECONDS)"
+        ),
+    )
+    platform_socket_max_lifetime_seconds: int = Field(
+        default=3600,
+        description=(
+            "Maximum open realtime socket lifetime for platform principals "
+            "(SNACKBASE_PLATFORM_SOCKET_MAX_LIFETIME_SECONDS)"
+        ),
+    )
+
     # Audit Logging Settings
     audit_logging_enabled: bool = Field(
         default=True,
@@ -448,7 +490,7 @@ class Settings(BaseSettings):
         return bool(self.encryption_key != DEFAULT_ENCRYPTION_KEY)
 
     @model_validator(mode="after")
-    def validate_production_encryption_key(self) -> "Settings":
+    def validate_production_encryption_key(self) -> Settings:
         """Reject the default encryption key in production (fail-closed)."""
         from snackbase.infrastructure.security.encryption import DEFAULT_ENCRYPTION_KEY
 
@@ -460,7 +502,7 @@ class Settings(BaseSettings):
         return self
 
     @model_validator(mode="after")
-    def validate_production_signing_secrets(self) -> "Settings":
+    def validate_production_signing_secrets(self) -> Settings:
         """Reject the default signing secrets in production (fail-closed).
 
         `secret_key` signs every JWT and `token_secret` signs API keys, so a
@@ -486,7 +528,7 @@ class Settings(BaseSettings):
         return self
 
     @model_validator(mode="after")
-    def validate_sqlite_workers(self) -> "Settings":
+    def validate_sqlite_workers(self) -> Settings:
         """Validate that SQLite is not used with multiple workers."""
         if self.workers > 1 and self.database_url.startswith("sqlite"):
             raise ValueError(
@@ -497,13 +539,51 @@ class Settings(BaseSettings):
         return self
 
     @model_validator(mode="after")
-    def validate_single_tenant_config(self) -> "Settings":
+    def validate_single_tenant_config(self) -> Settings:
         """Validate single-tenant mode configuration."""
         if self.single_tenant_mode and not self.single_tenant_account:
             raise ValueError(
                 "SNACKBASE_SINGLE_TENANT_ACCOUNT is required when SNACKBASE_SINGLE_TENANT_MODE=true"
             )
         return self
+
+    @model_validator(mode="after")
+    def validate_platform_auth_config(self) -> Settings:
+        """Validate trusted-issuer (platform) authentication settings."""
+        if self.platform_issuer is None:
+            return self
+
+        missing: list[str] = []
+        if not self.platform_jwks_url:
+            missing.append("platform_jwks_url")
+        if not self.platform_audience:
+            missing.append("platform_audience")
+        if missing:
+            raise ValueError(
+                f"When platform_issuer is set, {', '.join(missing)} must also be configured"
+            )
+
+        if (
+            self.environment == "production"
+            and self.platform_jwks_url
+            and not self.platform_jwks_url.startswith("https://")
+        ):
+            raise ValueError(
+                "platform_jwks_url must use https:// when SNACKBASE_ENVIRONMENT=production"
+            )
+
+        if not self.single_tenant_mode:
+            raise ValueError(
+                "Platform authentication requires single-tenant mode "
+                "(SNACKBASE_SINGLE_TENANT_MODE=true and SNACKBASE_SINGLE_TENANT_ACCOUNT set)"
+            )
+
+        return self
+
+    @property
+    def platform_auth_enabled(self) -> bool:
+        """True when a trusted external issuer is configured."""
+        return self.platform_issuer is not None
 
     @property
     def database_url_sync(self) -> str:

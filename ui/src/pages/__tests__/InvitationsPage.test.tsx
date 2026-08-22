@@ -86,28 +86,28 @@ const mockAccountList = {
 
 function setupSuccessHandler(overrides: Partial<typeof mockInvitationList> = {}) {
   server.use(
-    http.get('/api/v1/invitations', () =>
+    http.get('*/api/v1/invitations', () =>
       HttpResponse.json({ ...mockInvitationList, ...overrides }),
     ),
-    http.get('/api/v1/accounts', () => HttpResponse.json(mockAccountList)),
+    http.get('*/api/v1/accounts', () => HttpResponse.json(mockAccountList)),
   )
 }
 
 function setupEmptyHandler() {
   server.use(
-    http.get('/api/v1/invitations', () =>
+    http.get('*/api/v1/invitations', () =>
       HttpResponse.json({ invitations: [], total: 0 }),
     ),
-    http.get('/api/v1/accounts', () => HttpResponse.json(mockAccountList)),
+    http.get('*/api/v1/accounts', () => HttpResponse.json(mockAccountList)),
   )
 }
 
 function setupErrorHandler(status = 500, detail = 'Internal server error') {
   server.use(
-    http.get('/api/v1/invitations', () =>
+    http.get('*/api/v1/invitations', () =>
       HttpResponse.json({ detail }, { status }),
     ),
-    http.get('/api/v1/accounts', () => HttpResponse.json(mockAccountList)),
+    http.get('*/api/v1/accounts', () => HttpResponse.json(mockAccountList)),
   )
 }
 
@@ -141,10 +141,10 @@ describe('InvitationsPage', () => {
   describe('loading state', () => {
     it('displays a loading spinner before invitations are fetched', () => {
       server.use(
-        http.get('/api/v1/invitations', async () => {
+        http.get('*/api/v1/invitations', async () => {
           await new Promise(() => {}) // never resolves
         }),
-        http.get('/api/v1/accounts', () => HttpResponse.json(mockAccountList)),
+        http.get('*/api/v1/accounts', () => HttpResponse.json(mockAccountList)),
       )
 
       renderPage()
@@ -355,7 +355,7 @@ describe('InvitationsPage', () => {
     it('does not render cancel button for non-pending invitations', async () => {
       // Render with only accepted and expired invitations (no pending)
       server.use(
-        http.get('/api/v1/invitations', () =>
+        http.get('*/api/v1/invitations', () =>
           HttpResponse.json({
             invitations: [
               mockInvitationList.invitations[1], // accepted
@@ -419,7 +419,7 @@ describe('InvitationsPage', () => {
         return Promise.resolve()
       })
       server.use(
-        http.post('/api/v1/invitations/inv-1/resend', () =>
+        http.post('*/api/v1/invitations/inv-1/resend', () =>
           HttpResponse.json({ message: 'Invitation email resent successfully', token: 'tok-rotated' }),
         ),
       )

@@ -55,7 +55,7 @@ describe('Roles Service', () => {
       let requestReceived = false
 
       server.use(
-        http.get('/api/v1/roles', () => {
+        http.get('*/api/v1/roles', () => {
           requestReceived = true
           return HttpResponse.json(mockRoleListResponse)
         })
@@ -67,7 +67,7 @@ describe('Roles Service', () => {
 
     it('returns role list response on success', async () => {
       server.use(
-        http.get('/api/v1/roles', () => HttpResponse.json(mockRoleListResponse))
+        http.get('*/api/v1/roles', () => HttpResponse.json(mockRoleListResponse))
       )
 
       const result = await getRoles()
@@ -76,7 +76,7 @@ describe('Roles Service', () => {
 
     it('returns items array and total count', async () => {
       server.use(
-        http.get('/api/v1/roles', () => HttpResponse.json(mockRoleListResponse))
+        http.get('*/api/v1/roles', () => HttpResponse.json(mockRoleListResponse))
       )
 
       const result = await getRoles()
@@ -86,7 +86,7 @@ describe('Roles Service', () => {
 
     it('propagates API errors', async () => {
       server.use(
-        http.get('/api/v1/roles', () =>
+        http.get('*/api/v1/roles', () =>
           HttpResponse.json({ detail: 'Forbidden' }, { status: 403 })
         )
       )
@@ -100,7 +100,7 @@ describe('Roles Service', () => {
       let requestReceived = false
 
       server.use(
-        http.get('/api/v1/roles/1', () => {
+        http.get('*/api/v1/roles/1', () => {
           requestReceived = true
           return HttpResponse.json(mockRole)
         })
@@ -112,7 +112,7 @@ describe('Roles Service', () => {
 
     it('returns role on success', async () => {
       server.use(
-        http.get('/api/v1/roles/1', () => HttpResponse.json(mockRole))
+        http.get('*/api/v1/roles/1', () => HttpResponse.json(mockRole))
       )
 
       const result = await getRoleById(1)
@@ -121,7 +121,7 @@ describe('Roles Service', () => {
 
     it('propagates 404 when role not found', async () => {
       server.use(
-        http.get('/api/v1/roles/9999', () =>
+        http.get('*/api/v1/roles/9999', () =>
           HttpResponse.json({ detail: 'Role not found' }, { status: 404 })
         )
       )
@@ -135,7 +135,7 @@ describe('Roles Service', () => {
       let capturedBody: Record<string, unknown> | null = null
 
       server.use(
-        http.post('/api/v1/roles', async ({ request }) => {
+        http.post('*/api/v1/roles', async ({ request }) => {
           capturedBody = (await request.json()) as Record<string, unknown>
           return HttpResponse.json(mockRole, { status: 201 })
         })
@@ -150,7 +150,7 @@ describe('Roles Service', () => {
       let capturedBody: Record<string, unknown> | null = null
 
       server.use(
-        http.post('/api/v1/roles', async ({ request }) => {
+        http.post('*/api/v1/roles', async ({ request }) => {
           capturedBody = (await request.json()) as Record<string, unknown>
           return HttpResponse.json({ ...mockRole, description: null }, { status: 201 })
         })
@@ -163,7 +163,7 @@ describe('Roles Service', () => {
 
     it('returns created role on success', async () => {
       server.use(
-        http.post('/api/v1/roles', () => HttpResponse.json(mockRole, { status: 201 }))
+        http.post('*/api/v1/roles', () => HttpResponse.json(mockRole, { status: 201 }))
       )
 
       const result = await createRole({ name: 'Admin' })
@@ -172,7 +172,7 @@ describe('Roles Service', () => {
 
     it('propagates API errors on duplicate name', async () => {
       server.use(
-        http.post('/api/v1/roles', () =>
+        http.post('*/api/v1/roles', () =>
           HttpResponse.json({ detail: 'Role name already exists' }, { status: 409 })
         )
       )
@@ -186,7 +186,7 @@ describe('Roles Service', () => {
       let capturedBody: Record<string, unknown> | null = null
 
       server.use(
-        http.put('/api/v1/roles/1', async ({ request }) => {
+        http.put('*/api/v1/roles/1', async ({ request }) => {
           capturedBody = (await request.json()) as Record<string, unknown>
           return HttpResponse.json(mockRole)
         })
@@ -201,7 +201,7 @@ describe('Roles Service', () => {
       const updated = { ...mockRole, name: 'Super Admin' }
 
       server.use(
-        http.put('/api/v1/roles/1', () => HttpResponse.json(updated))
+        http.put('*/api/v1/roles/1', () => HttpResponse.json(updated))
       )
 
       const result = await updateRole(1, { name: 'Super Admin' })
@@ -210,7 +210,7 @@ describe('Roles Service', () => {
 
     it('propagates 404 when role not found', async () => {
       server.use(
-        http.put('/api/v1/roles/9999', () =>
+        http.put('*/api/v1/roles/9999', () =>
           HttpResponse.json({ detail: 'Role not found' }, { status: 404 })
         )
       )
@@ -224,7 +224,7 @@ describe('Roles Service', () => {
       let requestReceived = false
 
       server.use(
-        http.delete('/api/v1/roles/1', () => {
+        http.delete('*/api/v1/roles/1', () => {
           requestReceived = true
           return new HttpResponse(null, { status: 204 })
         })
@@ -236,7 +236,7 @@ describe('Roles Service', () => {
 
     it('resolves without a return value on success', async () => {
       server.use(
-        http.delete('/api/v1/roles/1', () => new HttpResponse(null, { status: 204 }))
+        http.delete('*/api/v1/roles/1', () => new HttpResponse(null, { status: 204 }))
       )
 
       const result = await deleteRole(1)
@@ -245,7 +245,7 @@ describe('Roles Service', () => {
 
     it('propagates 404 when role not found', async () => {
       server.use(
-        http.delete('/api/v1/roles/9999', () =>
+        http.delete('*/api/v1/roles/9999', () =>
           HttpResponse.json({ detail: 'Role not found' }, { status: 404 })
         )
       )
@@ -259,7 +259,7 @@ describe('Roles Service', () => {
       let requestReceived = false
 
       server.use(
-        http.get('/api/v1/roles/1/permissions', () => {
+        http.get('*/api/v1/roles/1/permissions', () => {
           requestReceived = true
           return HttpResponse.json(mockPermissionsResponse)
         })
@@ -271,7 +271,7 @@ describe('Roles Service', () => {
 
     it('returns permissions response on success', async () => {
       server.use(
-        http.get('/api/v1/roles/1/permissions', () => HttpResponse.json(mockPermissionsResponse))
+        http.get('*/api/v1/roles/1/permissions', () => HttpResponse.json(mockPermissionsResponse))
       )
 
       const result = await getRolePermissions(1)
@@ -284,7 +284,7 @@ describe('Roles Service', () => {
       let requestReceived = false
 
       server.use(
-        http.get('/api/v1/roles/1/permissions/matrix', () => {
+        http.get('*/api/v1/roles/1/permissions/matrix', () => {
           requestReceived = true
           return HttpResponse.json(mockPermissionsResponse)
         })
@@ -296,7 +296,7 @@ describe('Roles Service', () => {
 
     it('returns permissions matrix response on success', async () => {
       server.use(
-        http.get('/api/v1/roles/1/permissions/matrix', () =>
+        http.get('*/api/v1/roles/1/permissions/matrix', () =>
           HttpResponse.json(mockPermissionsResponse)
         )
       )
@@ -312,7 +312,7 @@ describe('Roles Service', () => {
       let capturedBody: Record<string, unknown> | null = null
 
       server.use(
-        http.post('/api/v1/roles/validate-rule', async ({ request }) => {
+        http.post('*/api/v1/roles/validate-rule', async ({ request }) => {
           capturedBody = (await request.json()) as Record<string, unknown>
           return HttpResponse.json({ valid: true, error: null })
         })
@@ -325,7 +325,7 @@ describe('Roles Service', () => {
 
     it('returns valid: true for a correct rule', async () => {
       server.use(
-        http.post('/api/v1/roles/validate-rule', () =>
+        http.post('*/api/v1/roles/validate-rule', () =>
           HttpResponse.json({ valid: true, error: null })
         )
       )
@@ -337,7 +337,7 @@ describe('Roles Service', () => {
 
     it('returns valid: false with error for an invalid rule', async () => {
       server.use(
-        http.post('/api/v1/roles/validate-rule', () =>
+        http.post('*/api/v1/roles/validate-rule', () =>
           HttpResponse.json({ valid: false, error: 'Unexpected token' })
         )
       )
@@ -353,7 +353,7 @@ describe('Roles Service', () => {
       let capturedBody: Record<string, unknown> | null = null
 
       server.use(
-        http.post('/api/v1/roles/test-rule', async ({ request }) => {
+        http.post('*/api/v1/roles/test-rule', async ({ request }) => {
           capturedBody = (await request.json()) as Record<string, unknown>
           return HttpResponse.json({ allowed: true, error: null, evaluation_details: null })
         })
@@ -367,7 +367,7 @@ describe('Roles Service', () => {
 
     it('returns allowed: true when rule passes', async () => {
       server.use(
-        http.post('/api/v1/roles/test-rule', () =>
+        http.post('*/api/v1/roles/test-rule', () =>
           HttpResponse.json({ allowed: true, error: null, evaluation_details: null })
         )
       )
@@ -378,7 +378,7 @@ describe('Roles Service', () => {
 
     it('returns allowed: false when rule fails', async () => {
       server.use(
-        http.post('/api/v1/roles/test-rule', () =>
+        http.post('*/api/v1/roles/test-rule', () =>
           HttpResponse.json({ allowed: false, error: null, evaluation_details: 'rule evaluated to false' })
         )
       )
@@ -393,7 +393,7 @@ describe('Roles Service', () => {
       let capturedBody: Record<string, unknown> | null = null
 
       server.use(
-        http.put('/api/v1/roles/1/permissions/bulk', async ({ request }) => {
+        http.put('*/api/v1/roles/1/permissions/bulk', async ({ request }) => {
           capturedBody = (await request.json()) as Record<string, unknown>
           return HttpResponse.json({ success_count: 1, failure_count: 0, errors: [] })
         })
@@ -412,7 +412,7 @@ describe('Roles Service', () => {
 
     it('returns success count on success', async () => {
       server.use(
-        http.put('/api/v1/roles/1/permissions/bulk', () =>
+        http.put('*/api/v1/roles/1/permissions/bulk', () =>
           HttpResponse.json({ success_count: 2, failure_count: 0, errors: [] })
         )
       )
@@ -428,7 +428,7 @@ describe('Roles Service', () => {
       let requestReceived = false
 
       server.use(
-        http.delete('/api/v1/permissions/10', () => {
+        http.delete('*/api/v1/permissions/10', () => {
           requestReceived = true
           return new HttpResponse(null, { status: 204 })
         })
@@ -440,7 +440,7 @@ describe('Roles Service', () => {
 
     it('resolves without a return value on success', async () => {
       server.use(
-        http.delete('/api/v1/permissions/10', () => new HttpResponse(null, { status: 204 }))
+        http.delete('*/api/v1/permissions/10', () => new HttpResponse(null, { status: 204 }))
       )
 
       const result = await deletePermission(10)

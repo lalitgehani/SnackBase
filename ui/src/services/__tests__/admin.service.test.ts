@@ -76,7 +76,7 @@ describe('Admin Service', () => {
       let requestReceived = false
 
       server.use(
-        http.get('/api/v1/admin/configuration/stats', () => {
+        http.get('*/api/v1/admin/configuration/stats', () => {
           requestReceived = true
           return HttpResponse.json(mockConfigStats)
         })
@@ -88,7 +88,7 @@ describe('Admin Service', () => {
 
     it('returns configuration stats on success', async () => {
       server.use(
-        http.get('/api/v1/admin/configuration/stats', () => HttpResponse.json(mockConfigStats))
+        http.get('*/api/v1/admin/configuration/stats', () => HttpResponse.json(mockConfigStats))
       )
 
       const result = await adminService.getStats()
@@ -97,7 +97,7 @@ describe('Admin Service', () => {
 
     it('returns system and account config counts', async () => {
       server.use(
-        http.get('/api/v1/admin/configuration/stats', () => HttpResponse.json(mockConfigStats))
+        http.get('*/api/v1/admin/configuration/stats', () => HttpResponse.json(mockConfigStats))
       )
 
       const result = await adminService.getStats()
@@ -115,7 +115,7 @@ describe('Admin Service', () => {
       let requestReceived = false
 
       server.use(
-        http.get('/api/v1/admin/configuration/recent', () => {
+        http.get('*/api/v1/admin/configuration/recent', () => {
           requestReceived = true
           return HttpResponse.json([mockConfiguration])
         })
@@ -127,7 +127,7 @@ describe('Admin Service', () => {
 
     it('returns recent configurations on success', async () => {
       server.use(
-        http.get('/api/v1/admin/configuration/recent', () =>
+        http.get('*/api/v1/admin/configuration/recent', () =>
           HttpResponse.json([mockConfiguration])
         )
       )
@@ -140,7 +140,7 @@ describe('Admin Service', () => {
       let capturedUrl: string | null = null
 
       server.use(
-        http.get('/api/v1/admin/configuration/recent', ({ request }) => {
+        http.get('*/api/v1/admin/configuration/recent', ({ request }) => {
           capturedUrl = request.url
           return HttpResponse.json([mockConfiguration])
         })
@@ -154,7 +154,7 @@ describe('Admin Service', () => {
       let capturedUrl: string | null = null
 
       server.use(
-        http.get('/api/v1/admin/configuration/recent', ({ request }) => {
+        http.get('*/api/v1/admin/configuration/recent', ({ request }) => {
           capturedUrl = request.url
           return HttpResponse.json([mockConfiguration])
         })
@@ -174,7 +174,7 @@ describe('Admin Service', () => {
       let requestReceived = false
 
       server.use(
-        http.get('/api/v1/admin/configuration/system', () => {
+        http.get('*/api/v1/admin/configuration/system', () => {
           requestReceived = true
           return HttpResponse.json([mockConfiguration])
         })
@@ -186,7 +186,7 @@ describe('Admin Service', () => {
 
     it('returns system configurations on success', async () => {
       server.use(
-        http.get('/api/v1/admin/configuration/system', () =>
+        http.get('*/api/v1/admin/configuration/system', () =>
           HttpResponse.json([mockConfiguration])
         )
       )
@@ -199,7 +199,7 @@ describe('Admin Service', () => {
       let capturedUrl: string | null = null
 
       server.use(
-        http.get('/api/v1/admin/configuration/system', ({ request }) => {
+        http.get('*/api/v1/admin/configuration/system', ({ request }) => {
           capturedUrl = request.url
           return HttpResponse.json([mockConfiguration])
         })
@@ -213,7 +213,7 @@ describe('Admin Service', () => {
       let capturedUrl: string | null = null
 
       server.use(
-        http.get('/api/v1/admin/configuration/system', ({ request }) => {
+        http.get('*/api/v1/admin/configuration/system', ({ request }) => {
           capturedUrl = request.url
           return HttpResponse.json([mockConfiguration])
         })
@@ -227,7 +227,7 @@ describe('Admin Service', () => {
       let capturedUrl: string | null = null
 
       server.use(
-        http.get('/api/v1/admin/configuration/system', ({ request }) => {
+        http.get('*/api/v1/admin/configuration/system', ({ request }) => {
           capturedUrl = request.url
           return HttpResponse.json([mockConfiguration])
         })
@@ -247,7 +247,7 @@ describe('Admin Service', () => {
       let capturedUrl: string | null = null
 
       server.use(
-        http.get('/api/v1/admin/configuration/account', ({ request }) => {
+        http.get('*/api/v1/admin/configuration/account', ({ request }) => {
           capturedUrl = request.url
           return HttpResponse.json([mockConfiguration])
         })
@@ -259,7 +259,7 @@ describe('Admin Service', () => {
 
     it('returns account configurations on success', async () => {
       server.use(
-        http.get('/api/v1/admin/configuration/account', () =>
+        http.get('*/api/v1/admin/configuration/account', () =>
           HttpResponse.json([mockConfiguration])
         )
       )
@@ -272,7 +272,7 @@ describe('Admin Service', () => {
       let capturedUrl: string | null = null
 
       server.use(
-        http.get('/api/v1/admin/configuration/account', ({ request }) => {
+        http.get('*/api/v1/admin/configuration/account', ({ request }) => {
           capturedUrl = request.url
           return HttpResponse.json([mockConfiguration])
         })
@@ -287,7 +287,7 @@ describe('Admin Service', () => {
       let capturedUrl: string | null = null
 
       server.use(
-        http.get('/api/v1/admin/configuration/account', ({ request }) => {
+        http.get('*/api/v1/admin/configuration/account', ({ request }) => {
           capturedUrl = request.url
           return HttpResponse.json([mockConfiguration])
         })
@@ -307,7 +307,7 @@ describe('Admin Service', () => {
       let requestReceived = false
 
       server.use(
-        http.get('/api/v1/accounts', () => {
+        http.get('*/api/v1/accounts', () => {
           requestReceived = true
           return HttpResponse.json(mockAccountListResponse)
         })
@@ -319,7 +319,7 @@ describe('Admin Service', () => {
 
     it('returns account list on success', async () => {
       server.use(
-        http.get('/api/v1/accounts', () => HttpResponse.json(mockAccountListResponse))
+        http.get('*/api/v1/accounts', () => HttpResponse.json(mockAccountListResponse))
       )
 
       const result = await adminService.getAccounts()
@@ -330,7 +330,7 @@ describe('Admin Service', () => {
       let capturedUrl: string | null = null
 
       server.use(
-        http.get('/api/v1/accounts', ({ request }) => {
+        http.get('*/api/v1/accounts', ({ request }) => {
           capturedUrl = request.url
           return HttpResponse.json(mockAccountListResponse)
         })
@@ -345,7 +345,7 @@ describe('Admin Service', () => {
       let capturedUrl: string | null = null
 
       server.use(
-        http.get('/api/v1/accounts', ({ request }) => {
+        http.get('*/api/v1/accounts', ({ request }) => {
           capturedUrl = request.url
           return HttpResponse.json(mockAccountListResponse)
         })
@@ -359,7 +359,7 @@ describe('Admin Service', () => {
       let capturedUrl: string | null = null
 
       server.use(
-        http.get('/api/v1/accounts', ({ request }) => {
+        http.get('*/api/v1/accounts', ({ request }) => {
           capturedUrl = request.url
           return HttpResponse.json(mockAccountListResponse)
         })
@@ -380,7 +380,7 @@ describe('Admin Service', () => {
       let capturedBody: Record<string, unknown> | null = null
 
       server.use(
-        http.patch('/api/v1/admin/configuration/cfg-1', async ({ request }) => {
+        http.patch('*/api/v1/admin/configuration/cfg-1', async ({ request }) => {
           capturedBody = (await request.json()) as Record<string, unknown>
           return HttpResponse.json({ ...mockConfiguration, enabled: false })
         })
@@ -394,7 +394,7 @@ describe('Admin Service', () => {
       const updatedConfig = { ...mockConfiguration, enabled: false }
 
       server.use(
-        http.patch('/api/v1/admin/configuration/cfg-1', () =>
+        http.patch('*/api/v1/admin/configuration/cfg-1', () =>
           HttpResponse.json(updatedConfig)
         )
       )
@@ -405,7 +405,7 @@ describe('Admin Service', () => {
 
     it('propagates 404 when config not found', async () => {
       server.use(
-        http.patch('/api/v1/admin/configuration/missing', () =>
+        http.patch('*/api/v1/admin/configuration/missing', () =>
           HttpResponse.json({ detail: 'Configuration not found' }, { status: 404 })
         )
       )
@@ -423,7 +423,7 @@ describe('Admin Service', () => {
       let requestReceived = false
 
       server.use(
-        http.delete('/api/v1/admin/configuration/cfg-1', () => {
+        http.delete('*/api/v1/admin/configuration/cfg-1', () => {
           requestReceived = true
           return new HttpResponse(null, { status: 204 })
         })
@@ -435,7 +435,7 @@ describe('Admin Service', () => {
 
     it('resolves without a return value on success', async () => {
       server.use(
-        http.delete('/api/v1/admin/configuration/cfg-1', () =>
+        http.delete('*/api/v1/admin/configuration/cfg-1', () =>
           new HttpResponse(null, { status: 204 })
         )
       )
@@ -446,7 +446,7 @@ describe('Admin Service', () => {
 
     it('propagates 404 when config not found', async () => {
       server.use(
-        http.delete('/api/v1/admin/configuration/missing', () =>
+        http.delete('*/api/v1/admin/configuration/missing', () =>
           HttpResponse.json({ detail: 'Configuration not found' }, { status: 404 })
         )
       )
@@ -464,7 +464,7 @@ describe('Admin Service', () => {
       let requestReceived = false
 
       server.use(
-        http.get('/api/v1/admin/configuration/providers', () => {
+        http.get('*/api/v1/admin/configuration/providers', () => {
           requestReceived = true
           return HttpResponse.json([mockAvailableProvider])
         })
@@ -476,7 +476,7 @@ describe('Admin Service', () => {
 
     it('returns list of available providers on success', async () => {
       server.use(
-        http.get('/api/v1/admin/configuration/providers', () =>
+        http.get('*/api/v1/admin/configuration/providers', () =>
           HttpResponse.json([mockAvailableProvider])
         )
       )
@@ -489,7 +489,7 @@ describe('Admin Service', () => {
       let capturedUrl: string | null = null
 
       server.use(
-        http.get('/api/v1/admin/configuration/providers', ({ request }) => {
+        http.get('*/api/v1/admin/configuration/providers', ({ request }) => {
           capturedUrl = request.url
           return HttpResponse.json([mockAvailableProvider])
         })
@@ -503,7 +503,7 @@ describe('Admin Service', () => {
       let capturedUrl: string | null = null
 
       server.use(
-        http.get('/api/v1/admin/configuration/providers', ({ request }) => {
+        http.get('*/api/v1/admin/configuration/providers', ({ request }) => {
           capturedUrl = request.url
           return HttpResponse.json([mockAvailableProvider])
         })
@@ -523,7 +523,7 @@ describe('Admin Service', () => {
       let requestReceived = false
 
       server.use(
-        http.get('/api/v1/admin/configuration/schema/oauth/google', () => {
+        http.get('*/api/v1/admin/configuration/schema/oauth/google', () => {
           requestReceived = true
           return HttpResponse.json(mockProviderSchema)
         })
@@ -535,7 +535,7 @@ describe('Admin Service', () => {
 
     it('returns provider schema on success', async () => {
       server.use(
-        http.get('/api/v1/admin/configuration/schema/oauth/google', () =>
+        http.get('*/api/v1/admin/configuration/schema/oauth/google', () =>
           HttpResponse.json(mockProviderSchema)
         )
       )
@@ -546,7 +546,7 @@ describe('Admin Service', () => {
 
     it('returns required fields list', async () => {
       server.use(
-        http.get('/api/v1/admin/configuration/schema/oauth/google', () =>
+        http.get('*/api/v1/admin/configuration/schema/oauth/google', () =>
           HttpResponse.json(mockProviderSchema)
         )
       )
@@ -558,7 +558,7 @@ describe('Admin Service', () => {
 
     it('propagates 404 when schema not found', async () => {
       server.use(
-        http.get('/api/v1/admin/configuration/schema/oauth/unknown', () =>
+        http.get('*/api/v1/admin/configuration/schema/oauth/unknown', () =>
           HttpResponse.json({ detail: 'Provider not found' }, { status: 404 })
         )
       )
@@ -576,7 +576,7 @@ describe('Admin Service', () => {
       let requestReceived = false
 
       server.use(
-        http.get('/api/v1/admin/configuration/cfg-1/values', () => {
+        http.get('*/api/v1/admin/configuration/cfg-1/values', () => {
           requestReceived = true
           return HttpResponse.json({ client_id: 'abc123' })
         })
@@ -588,7 +588,7 @@ describe('Admin Service', () => {
 
     it('returns config values on success', async () => {
       server.use(
-        http.get('/api/v1/admin/configuration/cfg-1/values', () =>
+        http.get('*/api/v1/admin/configuration/cfg-1/values', () =>
           HttpResponse.json({ client_id: 'abc123', client_secret: '***' })
         )
       )
@@ -599,7 +599,7 @@ describe('Admin Service', () => {
 
     it('propagates 404 when config not found', async () => {
       server.use(
-        http.get('/api/v1/admin/configuration/missing/values', () =>
+        http.get('*/api/v1/admin/configuration/missing/values', () =>
           HttpResponse.json({ detail: 'Configuration not found' }, { status: 404 })
         )
       )
@@ -617,7 +617,7 @@ describe('Admin Service', () => {
       let capturedBody: Record<string, unknown> | null = null
 
       server.use(
-        http.patch('/api/v1/admin/configuration/cfg-1/values', async ({ request }) => {
+        http.patch('*/api/v1/admin/configuration/cfg-1/values', async ({ request }) => {
           capturedBody = (await request.json()) as Record<string, unknown>
           return HttpResponse.json(mockConfiguration)
         })
@@ -630,7 +630,7 @@ describe('Admin Service', () => {
 
     it('returns updated configuration on success', async () => {
       server.use(
-        http.patch('/api/v1/admin/configuration/cfg-1/values', () =>
+        http.patch('*/api/v1/admin/configuration/cfg-1/values', () =>
           HttpResponse.json(mockConfiguration)
         )
       )
@@ -649,7 +649,7 @@ describe('Admin Service', () => {
       let capturedBody: Record<string, unknown> | null = null
 
       server.use(
-        http.post('/api/v1/admin/configuration', async ({ request }) => {
+        http.post('*/api/v1/admin/configuration', async ({ request }) => {
           capturedBody = (await request.json()) as Record<string, unknown>
           return HttpResponse.json(mockConfiguration, { status: 201 })
         })
@@ -671,7 +671,7 @@ describe('Admin Service', () => {
 
     it('returns created configuration on success', async () => {
       server.use(
-        http.post('/api/v1/admin/configuration', () =>
+        http.post('*/api/v1/admin/configuration', () =>
           HttpResponse.json(mockConfiguration, { status: 201 })
         )
       )
@@ -687,7 +687,7 @@ describe('Admin Service', () => {
 
     it('propagates API errors', async () => {
       server.use(
-        http.post('/api/v1/admin/configuration', () =>
+        http.post('*/api/v1/admin/configuration', () =>
           HttpResponse.json({ detail: 'Provider already configured' }, { status: 409 })
         )
       )
@@ -712,7 +712,7 @@ describe('Admin Service', () => {
       let capturedBody: Record<string, unknown> | null = null
 
       server.use(
-        http.post('/api/v1/admin/configuration/test-connection', async ({ request }) => {
+        http.post('*/api/v1/admin/configuration/test-connection', async ({ request }) => {
           capturedBody = (await request.json()) as Record<string, unknown>
           return HttpResponse.json({ success: true, message: 'Connection successful' })
         })
@@ -729,7 +729,7 @@ describe('Admin Service', () => {
 
     it('returns success and message on successful connection', async () => {
       server.use(
-        http.post('/api/v1/admin/configuration/test-connection', () =>
+        http.post('*/api/v1/admin/configuration/test-connection', () =>
           HttpResponse.json({ success: true, message: 'Connection successful' })
         )
       )
@@ -745,7 +745,7 @@ describe('Admin Service', () => {
 
     it('returns failure details on unsuccessful connection', async () => {
       server.use(
-        http.post('/api/v1/admin/configuration/test-connection', () =>
+        http.post('*/api/v1/admin/configuration/test-connection', () =>
           HttpResponse.json({ success: false, message: 'Invalid credentials' })
         )
       )
@@ -768,7 +768,7 @@ describe('Admin Service', () => {
       let requestReceived = false
 
       server.use(
-        http.post('/api/v1/admin/configuration/cfg-1/set-default', () => {
+        http.post('*/api/v1/admin/configuration/cfg-1/set-default', () => {
           requestReceived = true
           return HttpResponse.json({
             status: 'ok',
@@ -785,7 +785,7 @@ describe('Admin Service', () => {
 
     it('returns is_default: true on success', async () => {
       server.use(
-        http.post('/api/v1/admin/configuration/cfg-1/set-default', () =>
+        http.post('*/api/v1/admin/configuration/cfg-1/set-default', () =>
           HttpResponse.json({
             status: 'ok',
             is_default: true,
@@ -801,7 +801,7 @@ describe('Admin Service', () => {
 
     it('propagates 404 when config not found', async () => {
       server.use(
-        http.post('/api/v1/admin/configuration/missing/set-default', () =>
+        http.post('*/api/v1/admin/configuration/missing/set-default', () =>
           HttpResponse.json({ detail: 'Configuration not found' }, { status: 404 })
         )
       )
@@ -819,7 +819,7 @@ describe('Admin Service', () => {
       let requestReceived = false
 
       server.use(
-        http.delete('/api/v1/admin/configuration/cfg-1/set-default', () => {
+        http.delete('*/api/v1/admin/configuration/cfg-1/set-default', () => {
           requestReceived = true
           return HttpResponse.json({ status: 'ok', is_default: false })
         })
@@ -831,7 +831,7 @@ describe('Admin Service', () => {
 
     it('returns is_default: false on success', async () => {
       server.use(
-        http.delete('/api/v1/admin/configuration/cfg-1/set-default', () =>
+        http.delete('*/api/v1/admin/configuration/cfg-1/set-default', () =>
           HttpResponse.json({ status: 'ok', is_default: false })
         )
       )
@@ -842,7 +842,7 @@ describe('Admin Service', () => {
 
     it('propagates 404 when config not found', async () => {
       server.use(
-        http.delete('/api/v1/admin/configuration/missing/set-default', () =>
+        http.delete('*/api/v1/admin/configuration/missing/set-default', () =>
           HttpResponse.json({ detail: 'Configuration not found' }, { status: 404 })
         )
       )
