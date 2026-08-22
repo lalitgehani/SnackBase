@@ -406,6 +406,54 @@ async def test_legacy_platform_user_is_migrated_to_system_account(
 
 
 @pytest.mark.asyncio
+async def test_platform_principal_adopts_bootstrap_superadmin(
+    client, db_session, system_account, platform_keys, jwks_mock
+):
+    """Provisioning creates the instance's bootstrap superadmin from the procuring user's
+    email, so that person already exists in SY0000 under a locally-generated id. The
+    platform token carries the control-plane id instead, so inserting would violate
+    UNIQUE(account_id, email). The existing operator row must be adopted, unmodified, so
+    break-glass password login keeps working."""
+    role_id = (
+        await db_session.execute(select(RoleModel.id).where(RoleModel.name == "admin"))
+    ).scalar_one()
+    db_session.add(
+        UserModel(
+            id="bootstrap-generated-id",
+            account_id=SYSTEM_ACCOUNT_ID,
+            email="operator@example.com",
+            password_hash="bootstrap-hash",
+            role_id=role_id,
+            is_active=True,
+            auth_provider="password",
+        )
+    )
+    await db_session.commit()
+
+    private_key, _ = platform_keys
+    token = _platform_token(
+        private_key,
+        sub="control-plane-user-id",
+        role="admin",
+        email="operator@example.com",
+    )
+    response = await client.get(
+        "/api/v1/collections",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == status.HTTP_200_OK, response.text
+
+    rows = (
+        await db_session.execute(
+            select(UserModel).where(UserModel.email == "operator@example.com")
+        )
+    ).scalars().all()
+    assert len(rows) == 1, "must adopt the bootstrap superadmin, not insert a duplicate"
+    assert rows[0].id == "bootstrap-generated-id"
+    assert rows[0].auth_provider == "password", "break-glass login must keep working"
+
+
+@pytest.mark.asyncio
 async def test_platform_sub_never_adopts_a_local_user(
     client, db_session, system_account, platform_keys, jwks_mock
 ):

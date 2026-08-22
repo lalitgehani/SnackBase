@@ -44,6 +44,11 @@ export function StudioChildRoutes() {
 }
 
 /** Route elements for nesting under a parent `<Route>` — call as `{studioChildRouteElements()}`, not `<… />`. */
+// Deliberately a factory, not a component: it must be invoked so the <Route> elements nest
+// directly under the parent. It mirrors StudioChildRoutes above and belongs beside it;
+// splitting the routing table across files to regain Fast Refresh on a static route list
+// is a poor trade.
+// eslint-disable-next-line react-refresh/only-export-components
 export function studioChildRouteElements() {
   return (
     <>

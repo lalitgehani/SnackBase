@@ -106,6 +106,37 @@ describe('EnvironmentsPage', () => {
     )
   })
 
+  it('shows Open Studio for ready multi-tenant environments too', async () => {
+    // Platform principals are instance operators resolved into the system account, so the
+    // integrated Studio is independent of the instance's own tenancy. Multi-tenant
+    // projects previously got an "Open instance URL" fallback instead.
+    listMock.mockResolvedValue({
+      items: [
+        {
+          id: 'e1',
+          project: 'p1',
+          name: 'Production',
+          slug: 'production',
+          ref: 'abc123def456ghi789jk',
+          status: 'ready',
+          tenancy_mode: 'multi',
+          instance_url: 'https://api.example.local',
+        },
+      ],
+    })
+    renderAt('/organizations/o1/projects/p1/environments')
+
+    await waitFor(() => {
+      expect(screen.getByTestId('open-studio-e1')).toBeInTheDocument()
+    })
+    expect(screen.getByTestId('open-studio-e1')).toHaveAttribute(
+      'href',
+      '/project/abc123def456ghi789jk/collections',
+    )
+    expect(screen.queryByTestId('multi-tenant-note-e1')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('open-instance-e1')).not.toBeInTheDocument()
+  })
+
   it('shows error message for failed environments', async () => {
     listMock.mockResolvedValue({
       items: [

@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router'
 import {
   Server,
-  ExternalLink,
   Copy,
   Check,
   ChevronRight,
@@ -50,11 +49,6 @@ import { environmentRouteRef } from '@/lib/control-plane/env-ref'
 import type { Environment, Organization, Project } from '@/types/control-plane'
 
 const IN_FLIGHT = new Set(['pending', 'provisioning', 'deleting'])
-
-function isSingleTenant(env: Environment, project?: Project | null): boolean {
-  const mode = env.tenancy_mode ?? project?.tenancy_mode
-  return mode !== 'multi'
-}
 
 export default function EnvironmentsPage() {
   const { orgId, projectId } = useParams<{ orgId: string; projectId: string }>()
@@ -558,7 +552,7 @@ const client = new SnackBaseClient({
                   )}
                 </div>
                 <div className="flex shrink-0 flex-wrap gap-2">
-                  {isReady && isSingleTenant(env, project) && (
+                  {isReady && (
                     <>
                       <Button
                         type="button"
@@ -612,89 +606,6 @@ const client = new SnackBaseClient({
                               is rotated immediately after reveal and the action is
                               audited. Use only when integrated Studio access is
                               broken.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              disabled={breakGlassMutation.isPending}
-                              onClick={(e) => {
-                                e.preventDefault()
-                                breakGlassMutation.mutate(env)
-                              }}
-                              data-testid={`break-glass-confirm-${env.id}`}
-                            >
-                              {breakGlassMutation.isPending
-                                ? 'Revealing…'
-                                : 'Reveal credentials'}
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </>
-                  )}
-                  {isReady && !isSingleTenant(env, project) && env.instance_url && (
-                    <>
-                      <p
-                        className="text-xs text-muted-foreground sm:max-w-xs"
-                        data-testid={`multi-tenant-note-${env.id}`}
-                      >
-                        Integrated Studio is available for single-tenant projects.
-                        Use the instance URL for multi-tenant environments.
-                      </p>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        asChild
-                        data-testid={`open-instance-${env.id}`}
-                      >
-                        <a href={env.instance_url} target="_blank" rel="noreferrer">
-                          <ExternalLink className="size-4" />
-                          Open instance URL
-                        </a>
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => copyUrl(env)}
-                        data-testid={`copy-url-${env.id}`}
-                      >
-                        {copiedId === env.id ? (
-                          <Check className="size-4" />
-                        ) : (
-                          <Copy className="size-4" />
-                        )}
-                        {copiedId === env.id ? 'Copied' : 'Copy API URL'}
-                      </Button>
-                      <AlertDialog
-                        open={breakGlassEnvId === env.id}
-                        onOpenChange={(open) => {
-                          if (!open) setBreakGlassEnvId(null)
-                        }}
-                      >
-                        <AlertDialogTrigger asChild>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setBreakGlassEnvId(env.id)}
-                            data-testid={`break-glass-${env.id}`}
-                          >
-                            Break-glass access
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>
-                              Reveal direct instance credentials?
-                            </AlertDialogTitle>
-                            <AlertDialogDescription>
-                              This bypasses platform session controls and returns
-                              the instance superadmin password once. The credential
-                              is rotated immediately after reveal and the action is
-                              audited.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>

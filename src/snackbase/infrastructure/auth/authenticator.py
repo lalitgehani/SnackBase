@@ -308,17 +308,30 @@ class Authenticator:
                 await session.refresh(existing)
             return existing
 
+        # The bootstrap superadmin is created at provision time from the procuring user's
+        # email, so the operator usually already exists in the system account under a
+        # locally-generated id. That is the same person arriving by a second route: adopt
+        # the row rather than inserting a duplicate, which would violate
+        # UNIQUE(account_id, email). Scoped to the system account, whose members are by
+        # definition operators of this instance -- a tenant user can never be matched here.
+        # The row is returned unmodified so break-glass password login keeps working.
+        await SuperadminService.ensure_system_account_exists(session)
+        by_email = await session.execute(
+            select(UserModel).where(
+                UserModel.account_id == SYSTEM_ACCOUNT_ID,
+                UserModel.email == email,
+            )
+        )
+        operator = by_email.scalar_one_or_none()
+        if operator is not None:
+            return operator
+
         role_result = await session.execute(
             select(RoleModel).where(RoleModel.name == role_name)
         )
         role = role_result.scalar_one_or_none()
         if role is None:
             raise AuthenticationError(f"Unknown role: {role_name}")
-
-        # Platform principals operate the instance itself, so they belong to the system
-        # account (SY0000) exactly as a self-hosted superadmin does. This is independent of
-        # the instance's own tenancy, which is why multi-tenant instances work identically.
-        await SuperadminService.ensure_system_account_exists(session)
 
         user = UserModel(
             id=user_id,

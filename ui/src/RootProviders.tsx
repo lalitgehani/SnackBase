@@ -1,4 +1,4 @@
-import { lazy, Suspense, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import { IS_PLATFORM } from '@/lib/config';
 import { PlatformProvidersInner } from '@/platform/PlatformProvidersInner';
 
