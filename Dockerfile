@@ -22,8 +22,8 @@ COPY ui/ .
 RUN node <<'EOF'
 const fs = require('fs')
 const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'))
-pkg.dependencies['@snackbase/sdk'] = '0.8.0'
-pkg.dependencies['@snackbase/react'] = '0.5.0'
+pkg.dependencies['@snackbase/sdk'] = '0.9.0'
+pkg.dependencies['@snackbase/react'] = '0.6.0'
 fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n')
 try { fs.unlinkSync('package-lock.json') } catch {}
 EOF
