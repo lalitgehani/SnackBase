@@ -10,11 +10,7 @@ export class CollectionsPage extends BasePage {
   // Locators
   readonly heading = () => this.page.getByRole('heading', { name: /collections/i })
   readonly createButton = () =>
-    this.page
-      .getByRole('button', {
-        name: /new collection|create blank collection|create collection/i,
-      })
-      .first()
+    this.page.getByTestId('collections-new-collection').first()
   readonly rail = () => this.page.getByTestId('collection-browser-rail')
   readonly emptyState = () => this.page.getByText(/no collections/i)
   readonly newPage = () => this.page.getByTestId('collection-new-page')
@@ -45,6 +41,13 @@ export class CollectionsPage extends BasePage {
     name: string,
     fields: Array<{ name: string; type?: string }>,
   ) {
+    await this.page
+      .locator(
+        '[data-testid="collection-browser-rail"], [data-testid="collection-browser-rail-collapsed"]',
+      )
+      .first()
+      .waitFor({ state: 'visible', timeout: 10_000 })
+    await this.createButton().waitFor({ state: 'visible', timeout: 10_000 })
     await this.createButton().click()
     await this.page.waitForURL('**/admin/collections/new**', { timeout: 10_000 })
     await this.newPage().waitFor({ state: 'visible' })

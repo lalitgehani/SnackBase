@@ -24,6 +24,7 @@
 
 import { request } from '@playwright/test'
 import { test, expect } from '../fixtures.js'
+import { deleteCollectionByName } from '../helpers/apiCleanup.js'
 
 // ── Test constants ─────────────────────────────────────────────────────────────
 
@@ -64,9 +65,7 @@ async function getSuperadminToken(): Promise<string> {
 /** Best-effort API cleanup — remove the test collection if it still exists. */
 async function cleanupCollection(token: string) {
   const ctx = await request.newContext({ baseURL: BACKEND_URL })
-  await ctx.delete(`/api/v1/collections/${COLLECTION_NAME}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
+  await deleteCollectionByName(ctx, token, COLLECTION_NAME)
   await ctx.dispose()
 }
 

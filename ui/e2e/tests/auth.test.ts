@@ -100,23 +100,26 @@ test.describe('Authentication E2E Flow', () => {
       return raw ? JSON.parse(raw) : null
     })
     expect(beforeLogout?.state?.isAuthenticated).toBe(true)
-    expect(beforeLogout?.state?.token).not.toBeNull()
+    expect(beforeLogout?.state?.token).toBeUndefined()
+    expect(beforeLogout?.state?.refreshToken).toBeUndefined()
 
     // Logout
     await page.locator('[data-sidebar="footer"]').getByRole('button').first().click()
     await page.getByRole('menuitem', { name: /log out/i }).click()
     await page.waitForURL('**/admin/login', { timeout: 10_000 })
 
-    // Zustand persist re-writes the key with nulled values after logout,
-    // so the key stays but isAuthenticated must be false and token must be null.
+    // Tokens are never written to Zustand persist (they live in snackbase-auth).
+    // After logout the persist key may remain with isAuthenticated: false and no tokens.
     const afterLogout = await page.evaluate(() => {
       const raw = localStorage.getItem('auth-storage')
       return raw ? JSON.parse(raw) : null
     })
-    // Either the key was removed entirely OR the persisted state has no auth
     if (afterLogout !== null) {
       expect(afterLogout.state.isAuthenticated).toBe(false)
-      expect(afterLogout.state.token).toBeNull()
+      expect(afterLogout.state.token).toBeUndefined()
+      expect(afterLogout.state.refreshToken).toBeUndefined()
+      expect(afterLogout.state.user).toBeNull()
+      expect(afterLogout.state.account).toBeNull()
     }
   })
 

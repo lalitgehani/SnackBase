@@ -73,7 +73,7 @@ async function cleanupTestAccount(token: string) {
   const authHeaders = { Authorization: `Bearer ${token}` }
 
   // List accounts and find the test account by slug
-  const listRes = await ctx.get('/api/v1/accounts/', {
+  const listRes = await ctx.get('/api/v1/accounts', {
     headers: authHeaders,
     params: { page_size: 200 },
   })
@@ -98,7 +98,7 @@ async function cleanupTestRole(token: string) {
   const ctx = await request.newContext({ baseURL: BACKEND_URL })
   const authHeaders = { Authorization: `Bearer ${token}` }
 
-  const listRes = await ctx.get('/api/v1/roles/', { headers: authHeaders })
+  const listRes = await ctx.get('/api/v1/roles', { headers: authHeaders })
 
   if (listRes.ok()) {
     const body = await listRes.json()

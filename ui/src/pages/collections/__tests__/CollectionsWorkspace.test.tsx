@@ -271,6 +271,7 @@ describe('CollectionsWorkspace', () => {
       await waitFor(() => {
         expect(screen.getByTestId('collections-workspace')).toBeInTheDocument()
         expect(screen.getByTestId('collection-browser-rail')).toBeInTheDocument()
+        expect(screen.getByTestId('collections-new-collection')).toBeInTheDocument()
       })
     })
 

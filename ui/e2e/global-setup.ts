@@ -62,7 +62,7 @@ export default async function globalSetup() {
   const authHeaders = { Authorization: `Bearer ${superadminToken}` }
 
   // ── 2. Create a dedicated test account ────────────────────────────────────
-  const accountRes = await ctx.post('/api/v1/accounts/', {
+  const accountRes = await ctx.post('/api/v1/accounts', {
     headers: authHeaders,
     data: {
       name: 'E2E Test Account',
@@ -79,7 +79,7 @@ export default async function globalSetup() {
 
   // ── 3. Create a test collection ───────────────────────────────────────────
   const collectionName = 'e2e_test_items'
-  const collectionRes = await ctx.post('/api/v1/collections/', {
+  const collectionRes = await ctx.post('/api/v1/collections', {
     headers: authHeaders,
     data: {
       name: collectionName,

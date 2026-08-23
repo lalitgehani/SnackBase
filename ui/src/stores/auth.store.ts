@@ -5,6 +5,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { getInstanceClient } from '@/lib/snackbase/instanceClientRef';
+import { instanceIdentityFromMe } from '@/lib/snackbase/instanceIdentity';
 import type { AuthResponse, AccountInfo, UserInfo } from '@/types/auth.types';
 
 interface AuthState {
@@ -139,8 +140,25 @@ export const useAuthStore = create<AuthState>()(
             return;
           }
 
+          // /auth/me is flat ({ user_id, account_id, email, role }); login is nested.
+          // Mapping through toAuthResponse drops account and replaces the token with ''.
           const raw = await client.auth.getCurrentUser();
-          set(authSliceFromResponse(toAuthResponse(raw)));
+          const identity = instanceIdentityFromMe(raw);
+          if (!identity) {
+            set({ isLoading: false, isAuthenticated: false });
+            return;
+          }
+
+          const latestSdk = client.internalAuthManager.getState();
+          set({
+            user: identity.user,
+            account: identity.account,
+            token: latestSdk.token ?? get().token,
+            refreshToken: latestSdk.refreshToken ?? get().refreshToken,
+            isAuthenticated: true,
+            isLoading: false,
+            error: null,
+          });
         } catch {
           get().logout();
           set({ isLoading: false });

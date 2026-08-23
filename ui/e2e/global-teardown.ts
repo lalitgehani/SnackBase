@@ -10,6 +10,7 @@ import { existsSync, readFileSync, unlinkSync } from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import type { E2EState } from './global-setup.js'
+import { deleteCollectionByName } from './helpers/apiCleanup.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const BACKEND_URL = process.env.E2E_BACKEND_URL ?? 'http://localhost:8000'
@@ -26,13 +27,11 @@ export default async function globalTeardown() {
   const authHeaders = { Authorization: `Bearer ${state.superadminToken}` }
 
   // ── 1. Delete test collection ─────────────────────────────────────────────
-  const collectionRes = await ctx.delete(
-    `/api/v1/collections/${state.testCollectionName}`,
-    { headers: authHeaders },
-  )
-  if (!collectionRes.ok() && collectionRes.status() !== 404) {
+  try {
+    await deleteCollectionByName(ctx, state.superadminToken, state.testCollectionName)
+  } catch (err) {
     console.warn(
-      `E2E teardown: failed to delete collection "${state.testCollectionName}" (${collectionRes.status()})`,
+      `E2E teardown: failed to delete collection "${state.testCollectionName}": ${err}`,
     )
   }
 

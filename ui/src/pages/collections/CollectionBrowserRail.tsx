@@ -86,6 +86,7 @@ export default function CollectionBrowserRail() {
               onClick={() => navigate('/admin/collections/new')}
               title="New collection"
               aria-label="New collection"
+              data-testid="collections-new-collection"
             >
               <Plus className="h-4 w-4" />
             </Button>
@@ -213,6 +214,7 @@ export default function CollectionBrowserRail() {
             size="sm"
             className="w-full gap-1.5"
             onClick={() => navigate('/admin/collections/new')}
+            data-testid="collections-new-collection"
           >
             <Plus className="h-3.5 w-3.5" />
             New collection
