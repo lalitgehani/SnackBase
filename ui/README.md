@@ -31,7 +31,25 @@ Proxy: Vite forwards `/api` to `http://localhost:8000` (see `vite.config.ts`).
 
 ## SDK dependency
 
-The Studio is an SDK consumer. The instance client comes from `@snackbase/sdk` (pinned in `package.json` as `file:../../SnackBase-sdk-js/packages/sdk`) and is provided by `InstanceClientProvider` in `src/lib/snackbase/`.
+The Studio is an SDK consumer. The instance client comes from `@snackbase/sdk`, resolved from
+the npm registry like any other dependency, and is provided by `InstanceClientProvider` in
+`src/lib/snackbase/`.
+
+To develop the Studio against an unpublished SDK change, link a local checkout of
+[`SnackBase-sdk-js`](https://github.com/lalitgehani/SnackBase-sdk-js) instead of editing
+`package.json`:
+
+```bash
+# From SnackBase-sdk-js/, after building the packages
+npm link ./packages/sdk ./packages/react
+
+# From SnackBase/ui/
+npm link @snackbase/sdk @snackbase/react
+```
+
+`npm unlink @snackbase/sdk @snackbase/react && npm install` restores the published versions.
+Keep the link out of commits — `package.json` must always name a registry version so the
+repository builds from a clean clone.
 
 - **Self-host**: tokens persist under `snackbase-auth` in localStorage; `loadConfig()` resolves `apiBaseUrl` from runtime `/config.js` or `VITE_*` env.
 - **Platform** (future): proxied `baseUrl` and external `getAccessToken`; instance storage is in-memory only.

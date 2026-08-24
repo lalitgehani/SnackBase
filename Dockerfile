@@ -15,20 +15,16 @@ FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a55
 
 WORKDIR /app/ui
 
-# Copy source (local file: SDK deps are patched before install)
+# Manifests first: dependencies only re-resolve when they actually change,
+# so editing UI source reuses the cached install layer.
+COPY ui/package.json ui/package-lock.json ./
+
+# `npm ci` installs the locked tree exactly — the same versions CI and a local
+# checkout resolve. The SDK packages come from the registry like any other
+# dependency, so this needs nothing outside the SnackBase build context.
+RUN npm ci
+
 COPY ui/ .
-
-# Docker build context is SnackBase/ only — replace file: SDK paths with published versions.
-RUN node <<'EOF'
-const fs = require('fs')
-const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'))
-pkg.dependencies['@snackbase/sdk'] = '0.9.0'
-pkg.dependencies['@snackbase/react'] = '0.6.0'
-fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n')
-try { fs.unlinkSync('package-lock.json') } catch {}
-EOF
-
-RUN npm install --legacy-peer-deps
 
 # Inject demo flag at build time so Vite inlines it into the bundle.
 # VITE_* vars are read from process.env by Vite at build time only.
