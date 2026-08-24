@@ -439,7 +439,7 @@ export function AppSidebar() {
                             <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
                                 <span className="truncate font-semibold">SnackBase</span>
                                 <span className="truncate text-xs text-muted-foreground">
-                                    v0.10.0
+                                    v0.11.0
                                 </span>
                             </div>
                         </div>

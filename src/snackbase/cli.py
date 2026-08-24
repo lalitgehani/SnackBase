@@ -14,7 +14,7 @@ from snackbase.core.logging import configure_logging, get_logger
 
 
 @click.group()
-@click.version_option(version="0.9.0", prog_name="SnackBase")
+@click.version_option(version="0.11.0", prog_name="SnackBase")
 @click.option(
     "--config",
     type=click.Path(exists=True),
