@@ -43,7 +43,9 @@ def check_ip_throttle(client_ip: str) -> float | None:
     """
     settings = get_settings()
     rate = settings.login_rate_limit_per_minute
-    allowed, retry_after = rate_limit_storage.peek(_key(client_ip), rate, burst=rate)
+    # Multiplier 1.0 holds capacity at exactly login_rate_limit_per_minute. This is
+    # load-bearing for H-02: a larger multiplier widens the online guessing budget.
+    allowed, retry_after = rate_limit_storage.peek(_key(client_ip), rate, burst_multiplier=1.0)
     return None if allowed else retry_after
 
 
@@ -51,7 +53,7 @@ def record_ip_failure(client_ip: str) -> None:
     """Charge one failed attempt against the address's budget."""
     settings = get_settings()
     rate = settings.login_rate_limit_per_minute
-    rate_limit_storage.consume(_key(client_ip), rate, burst=rate)
+    rate_limit_storage.consume(_key(client_ip), rate, burst_multiplier=1.0)
 
 
 def clear_ip_failures(client_ip: str) -> None:

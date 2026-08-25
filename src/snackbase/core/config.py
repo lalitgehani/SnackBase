@@ -166,8 +166,14 @@ class Settings(BaseSettings):
     # a throttle. Raise the numbers rather than turning this off.
     rate_limit_enabled: bool = True
     rate_limit_per_minute: int = 60
-    rate_limit_per_hour: int = 1000
-    rate_limit_burst: int = 10
+    rate_limit_burst_multiplier: float = Field(
+        default=1.0,
+        description=(
+            "Burst ceiling expressed as a multiple of the per-minute allowance. "
+            "1.0 lets a client spend a full minute's budget at once; the bucket "
+            "then refills at the per-minute rate."
+        ),
+    )
     rate_limit_authenticated_per_minute: int = 120
     rate_limit_endpoints: dict[str, int] = Field(default_factory=dict)
     trusted_proxies: CommaSepList = Field(

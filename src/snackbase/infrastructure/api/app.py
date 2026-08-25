@@ -9,7 +9,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 
@@ -262,9 +262,18 @@ def register_health_check(app: FastAPI) -> None:
         app: FastAPI application instance.
     """
 
-    @app.get("/health", tags=["health"])
-    async def health_check() -> dict[str, object]:
+    # Registered as two routes rather than one two-method route: FastAPI derives an
+    # operation ID from the route name and emits one operation per method, so a single
+    # GET+HEAD route produces two identical IDs and a duplicate-operation warning. Only
+    # the GET belongs in the schema anyway.
+    @app.api_route("/health", methods=["GET"], tags=["health"])
+    @app.api_route("/health", methods=["HEAD"], include_in_schema=False)
+    async def health_check(request: Request) -> Response:
         """Basic health check endpoint.
+
+        Answers HEAD as well as GET: FastAPI's APIRoute does not derive HEAD from
+        GET the way a plain Starlette route does, and uptime monitors that probe
+        with HEAD would otherwise report a healthy deployment as down.
 
         Returns 200 if the service is running. Does not check
         database connectivity or other dependencies.
@@ -273,13 +282,23 @@ def register_health_check(app: FastAPI) -> None:
         exposes the key value itself.
         """
         settings = get_settings()
-        return {
-            "status": "healthy",
-            "service": "SnackBase",
-            "version": settings.app_version,
-            "audit_logging_enabled": settings.audit_logging_enabled,
-            "encryption_key_configured": settings.has_non_default_encryption_key,
-        }
+        response = JSONResponse(
+            content={
+                "status": "healthy",
+                "service": "SnackBase",
+                "version": settings.app_version,
+                "audit_logging_enabled": settings.audit_logging_enabled,
+                "encryption_key_configured": settings.has_non_default_encryption_key,
+            }
+        )
+
+        if request.method == "HEAD":
+            # RFC 9110: a HEAD response carries the headers a GET would and no body.
+            # Starlette's plain Response writes its body regardless of method, so the
+            # suppression has to be explicit here (FileResponse already does its own).
+            return Response(status_code=response.status_code, headers=dict(response.headers))
+
+        return response
 
     @app.get("/ready", tags=["health"])
     async def readiness_check():
@@ -570,7 +589,9 @@ def register_frontend(app: FastAPI) -> None:
     settings = get_settings()
     api_prefix = settings.api_prefix.strip("/")
 
-    @app.get("/{full_path:path}", include_in_schema=False)
+    # HEAD is listed explicitly: FastAPI's APIRoute, unlike Starlette's plain Route,
+    # does not add HEAD alongside GET, so uptime monitors probing HEAD / got a 405.
+    @app.api_route("/{full_path:path}", methods=["GET", "HEAD"], include_in_schema=False)
     async def serve_frontend(full_path: str) -> Response:
         # Serve index.html for the root path
         if not full_path:

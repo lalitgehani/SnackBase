@@ -9,6 +9,24 @@ from dataclasses import dataclass
 from threading import Lock
 
 
+def compute_capacity(rate_per_minute: float, burst_multiplier: float) -> float:
+    """Return the bucket capacity a rate and multiplier imply.
+
+    The multiplier is expressed against the *per-minute* allowance, so the
+    default of 1.0 lets a client spend one minute's budget in a single burst.
+    A floor of one token keeps a zero or negative multiplier from locking every
+    caller out entirely.
+
+    Args:
+        rate_per_minute: Allowed requests per minute.
+        burst_multiplier: Burst ceiling as a multiple of that allowance.
+
+    Returns:
+        The maximum number of tokens the bucket can hold.
+    """
+    return max(1.0, rate_per_minute * burst_multiplier)
+
+
 @dataclass
 class TokenBucket:
     """Token bucket for a specific key (IP or User)."""
@@ -32,22 +50,21 @@ class RateLimitStorage:
         self._cleanup_interval = cleanup_interval
 
     def consume(
-        self, key: str, rate_per_minute: float, burst: float = 1.0
+        self, key: str, rate_per_minute: float, burst_multiplier: float = 1.0
     ) -> tuple[bool, int, float]:
         """Attempt to consume a token for the given key.
 
         Args:
             key: The unique key (IP address or User ID).
             rate_per_minute: Allowed requests per minute.
-            burst: Maximum burst capacity (multiplier of rate_per_second).
+            burst_multiplier: Burst ceiling as a multiple of the per-minute allowance.
 
         Returns:
             A tuple of (is_allowed, remaining_tokens, reset_time).
         """
         now = time.time()
         rate_per_second = rate_per_minute / 60.0
-        # Burst is at least 1 token, or a multiplier of the rate
-        capacity = max(1.0, burst)
+        capacity = compute_capacity(rate_per_minute, burst_multiplier)
 
         with self._lock:
             # Periodic cleanup
@@ -86,7 +103,9 @@ class RateLimitStorage:
                 reset_seconds = (capacity - bucket.tokens) / rate_per_second
                 return False, 0, wait_seconds
 
-    def peek(self, key: str, rate_per_minute: float, burst: float = 1.0) -> tuple[bool, float]:
+    def peek(
+        self, key: str, rate_per_minute: float, burst_multiplier: float = 1.0
+    ) -> tuple[bool, float]:
         """Report whether a token is available without spending one.
 
         Lets a caller gate on the limit but charge only the requests it wants to
@@ -96,14 +115,14 @@ class RateLimitStorage:
         Args:
             key: The unique key (IP address or User ID).
             rate_per_minute: Allowed requests per minute.
-            burst: Maximum burst capacity.
+            burst_multiplier: Burst ceiling as a multiple of the per-minute allowance.
 
         Returns:
             A tuple of (is_allowed, seconds_until_next_token).
         """
         now = time.time()
         rate_per_second = rate_per_minute / 60.0
-        capacity = max(1.0, burst)
+        capacity = compute_capacity(rate_per_minute, burst_multiplier)
 
         with self._lock:
             bucket = self._storage.get(key)
