@@ -21,13 +21,15 @@ that survives an attacker rotating source addresses.
 from __future__ import annotations
 
 import uuid
+from collections.abc import AsyncGenerator, Iterator
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 import pytest_asyncio
 from fastapi import status
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.datastructures import Headers
@@ -35,6 +37,7 @@ from starlette.datastructures import Headers
 from snackbase.core.config import Settings, get_settings
 from snackbase.infrastructure.api.middleware.client_ip import get_client_ip
 from snackbase.infrastructure.auth import hash_password
+from snackbase.infrastructure.auth.login_throttle import check_ip_throttle
 from snackbase.infrastructure.persistence.models import AccountModel, RoleModel, UserModel
 
 # Comfortably above any plausible threshold, small enough to stay fast.
@@ -302,3 +305,148 @@ async def test_rate_login_006_single_failure_returns_generic_401(
 
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
     assert response.json()["error"] == "Authentication failed"
+
+
+# --------------------------------------------------------------------------- #
+# RATE-LOGIN-013..016: attribution of the login budget behind a proxy.
+#
+# `get_client_ip` has two callers: the rate-limit middleware and the per-IP
+# failed-login budget. Under a shared key the login protection inverts in both
+# directions — one attacker locks out every visitor, and any visitor's successful
+# login wipes the attacker's accumulated failures. Neither direction had coverage.
+# --------------------------------------------------------------------------- #
+
+
+@pytest.fixture
+def trust_any_proxy() -> Iterator[None]:
+    """Configure `trusted_proxies=["*"]`, the correct value on a managed platform."""
+    settings = Settings(trusted_proxies=["*"])
+    with patch(
+        "snackbase.infrastructure.api.middleware.client_ip.get_settings",
+        return_value=settings,
+    ):
+        yield
+
+
+@pytest_asyncio.fixture
+async def non_loopback_client(client: AsyncClient) -> AsyncGenerator[AsyncClient]:
+    """A client whose socket peer is not loopback, as it is behind a real proxy.
+
+    Depends on `client` so the database dependency overrides are installed.
+    """
+    from snackbase.infrastructure.api.app import app
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app, client=("198.51.100.7", 5000)),
+        base_url="http://test",
+    ) as proxied:
+        yield proxied
+
+
+async def _login(client: AsyncClient, user: dict[str, Any], **kwargs: Any) -> int:
+    response = await client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": user["email"],
+            "password": user["password"],
+            "account": user["account"],
+        },
+        **kwargs,
+    )
+    return response.status_code
+
+
+@pytest.mark.asyncio
+async def test_rate_login_013_one_forwarded_client_cannot_lock_out_another(
+    client: AsyncClient, bruteforce_user: dict[str, Any], trust_any_proxy: None
+) -> None:
+    """RATE-LOGIN-013: an attacker's spent budget must not deny service to everyone.
+
+    Under a shared key, ten failures from one address exhaust the login budget for
+    every visitor behind the same proxy — the anti-guessing control becomes a
+    whole-instance lockout.
+    """
+    rate = get_settings().login_rate_limit_per_minute
+
+    attacker = await _failed_logins(
+        client, bruteforce_user, rate + 2, headers={"X-Forwarded-For": "203.0.113.10"}
+    )
+    assert status.HTTP_429_TOO_MANY_REQUESTS in attacker, (
+        "the attacker never exhausted their own budget, so the test proves nothing"
+    )
+
+    assert (
+        await _login(client, bruteforce_user, headers={"X-Forwarded-For": "203.0.113.99"})
+        == status.HTTP_200_OK
+    ), "a different forwarded client inherited the attacker's throttle"
+
+
+@pytest.mark.asyncio
+async def test_rate_login_014_success_does_not_clear_another_clients_failures(
+    client: AsyncClient, bruteforce_user: dict[str, Any], trust_any_proxy: None
+) -> None:
+    """RATE-LOGIN-014: one client's success must not refund another's guessing budget.
+
+    `clear_ip_failures` forgets the whole bucket for the key derived from
+    `get_client_ip`. Share that key and every legitimate login hands the attacker
+    a fresh allowance.
+    """
+    rate = get_settings().login_rate_limit_per_minute
+
+    await _failed_logins(
+        client, bruteforce_user, rate + 1, headers={"X-Forwarded-For": "203.0.113.10"}
+    )
+    assert check_ip_throttle("203.0.113.10") is not None, "the attacker was never throttled"
+
+    assert (
+        await _login(client, bruteforce_user, headers={"X-Forwarded-For": "203.0.113.99"})
+        == status.HTTP_200_OK
+    )
+
+    assert check_ip_throttle("203.0.113.10") is not None, (
+        "a successful login from another address refunded the attacker's budget"
+    )
+
+
+@pytest.mark.asyncio
+async def test_rate_login_015_default_trusted_proxies_shares_one_budget(
+    non_loopback_client: AsyncClient, bruteforce_user: dict[str, Any]
+) -> None:
+    """RATE-LOGIN-015: pin the cost of leaving `trusted_proxies` at its default.
+
+    This asserts the *undesirable* behaviour on purpose. Behind a proxy whose peer
+    is not loopback, the forwarded addresses are ignored and every client collapses
+    into one bucket — so the consequence of a misconfigured deployment is recorded
+    here rather than discovered in production.
+    """
+    rate = get_settings().login_rate_limit_per_minute
+
+    attacker = await _failed_logins(
+        non_loopback_client,
+        bruteforce_user,
+        rate + 1,
+        headers={"X-Forwarded-For": "203.0.113.10"},
+    )
+    assert status.HTTP_429_TOO_MANY_REQUESTS in attacker
+
+    other_client = await _failed_logins(
+        non_loopback_client,
+        bruteforce_user,
+        1,
+        headers={"X-Forwarded-For": "203.0.113.99"},
+    )
+    assert other_client == [status.HTTP_429_TOO_MANY_REQUESTS], (
+        "the shared-bucket misconfiguration no longer reproduces — update this test "
+        "and the deployment guidance together"
+    )
+
+
+def test_rate_login_016_ip_budget_stays_below_the_account_lockout() -> None:
+    """RATE-LOGIN-016: the invariant `login_throttle` documents must hold.
+
+    An attacker hammering one victim has to exhaust their own address budget before
+    the victim's account can lock, which keeps the lockout from becoming a
+    denial-of-service primitive against arbitrary users.
+    """
+    settings = Settings()
+    assert settings.login_rate_limit_per_minute < settings.login_lockout_threshold

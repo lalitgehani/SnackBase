@@ -5,8 +5,11 @@ environment variables and .env files. Configuration is loaded at application
 startup and is immutable during runtime.
 """
 
+import ipaddress
 import json
-from functools import lru_cache
+from collections.abc import Sequence
+from dataclasses import dataclass
+from functools import cached_property, lru_cache
 from typing import Annotated, Any, Literal
 
 from pydantic import BeforeValidator, Field, model_validator
@@ -53,6 +56,81 @@ class _LenientDotEnvSettingsSource(DotEnvSettingsSource):
 # A list[str] field that tolerates a CSV string or JSON array when set directly
 # (env/dotenv loading is handled by the lenient settings sources above).
 CommaSepList = Annotated[list[str], BeforeValidator(_decode_complex_value)]
+
+#: A ``trusted_proxies`` entry meaning "trust whatever peer connects", the same
+#: escape hatch as ``uvicorn --forwarded-allow-ips '*'``.
+TRUSTED_PROXY_WILDCARD = "*"
+
+IPNetwork = ipaddress.IPv4Network | ipaddress.IPv6Network
+
+
+@dataclass(frozen=True)
+class TrustedProxies:
+    """Which socket peers may have their forwarding headers believed.
+
+    Entries are parsed once — ``get_client_ip`` runs on every API request — and
+    an unparseable entry is a startup failure rather than a silent skip, because
+    a dropped entry produces exactly the shared-bucket misattribution the setting
+    exists to prevent.
+    """
+
+    trust_any: bool
+    networks: tuple[IPNetwork, ...]
+
+    def matches(self, peer: str) -> bool:
+        """Return whether this peer address is a configured trusted proxy.
+
+        Args:
+            peer: The socket peer address.
+
+        Returns:
+            True when the peer is trusted and its forwarding headers may be used.
+        """
+        if self.trust_any:
+            return True
+
+        try:
+            address = ipaddress.ip_address(peer)
+        except ValueError:
+            return False
+
+        return any(address in network for network in self.networks)
+
+
+def parse_trusted_proxies(entries: Sequence[str]) -> TrustedProxies:
+    """Parse trusted-proxy entries into a matcher.
+
+    Each entry may be a bare address (``127.0.0.1``), a CIDR network
+    (``10.0.0.0/8``), or the literal ``*``.
+
+    Args:
+        entries: The configured entries.
+
+    Raises:
+        ValueError: If an entry is neither an address, a network, nor ``*``.
+
+    Returns:
+        A matcher over the parsed entries.
+    """
+    networks: list[IPNetwork] = []
+    trust_any = False
+
+    for entry in entries:
+        candidate = entry.strip()
+        if not candidate:
+            continue
+        if candidate == TRUSTED_PROXY_WILDCARD:
+            trust_any = True
+            continue
+        try:
+            networks.append(ipaddress.ip_network(candidate, strict=False))
+        except ValueError as exc:
+            raise ValueError(
+                f"SNACKBASE_TRUSTED_PROXIES entry {entry!r} is not a valid IP address, "
+                f"CIDR network, or '*': {exc}"
+            ) from exc
+
+    return TrustedProxies(trust_any=trust_any, networks=tuple(networks))
 
 
 class Settings(BaseSettings):
@@ -179,9 +257,13 @@ class Settings(BaseSettings):
     trusted_proxies: CommaSepList = Field(
         default=["127.0.0.1", "::1"],
         description=(
-            "Peers whose X-Forwarded-For header may be trusted for client-IP "
-            "derivation. Anything else collapses every proxied client into one "
-            "rate-limit bucket, or lets a client forge its own identity."
+            "Peers whose X-Forwarded-For or CF-Connecting-IP header may be trusted "
+            "for client-IP derivation. Each entry is a bare address (127.0.0.1), a "
+            "CIDR network (10.0.0.0/8), or the literal '*' to trust any peer. "
+            "Anything else collapses every proxied client into one rate-limit "
+            "bucket, or lets a client forge its own identity. Use '*' on a managed "
+            "platform whose edge address is not stable, but only when the "
+            "application is not directly reachable from the internet."
         ),
     )
 
@@ -584,6 +666,17 @@ class Settings(BaseSettings):
     def platform_auth_enabled(self) -> bool:
         """True when a trusted external issuer is configured."""
         return self.platform_issuer is not None
+
+    @cached_property
+    def trusted_proxy_matcher(self) -> TrustedProxies:
+        """The parsed `trusted_proxies` entries, computed once per settings object."""
+        return parse_trusted_proxies(self.trusted_proxies)
+
+    @model_validator(mode="after")
+    def validate_trusted_proxies(self) -> Settings:
+        """Parse the trusted-proxy entries eagerly so a bad one fails at startup."""
+        _ = self.trusted_proxy_matcher
+        return self
 
     @property
     def database_url_sync(self) -> str:
