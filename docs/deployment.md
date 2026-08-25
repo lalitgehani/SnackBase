@@ -838,7 +838,94 @@ tar -czf files_backup_$(date +%Y%m%d).tar.gz sb_data/files/
 7. **Firewall**: Only expose necessary ports (80, 443)
 8. **Database security**: Use strong passwords, restrict network access
 9. **File permissions**: Ensure proper ownership and permissions
-10. **Rate limiting**: Add Nginx rate limiting (future enhancement)
+10. **Rate limiting**: On by default — see [Rate Limiting](#rate-limiting) below, and configure `SNACKBASE_TRUSTED_PROXIES` if you run behind a proxy
+
+### Rate Limiting
+
+Rate limiting is **on by default** (`SNACKBASE_RATE_LIMIT_ENABLED=true`). Raise the
+limits rather than turning it off — it is the only bound on request-rate abuse on a
+publicly reachable instance.
+
+**Only paths under `/api/v1` are metered.** The admin SPA, its JavaScript and CSS
+bundles, and the `/health`, `/ready` and `/live` probes are never rate limited, so a
+page load cannot rate-limit itself into a blank screen and a busy API cannot fail your
+uptime checks. Static assets ship with `cache-control: max-age=14400` and are meant to
+be absorbed by a CDN or reverse proxy.
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `SNACKBASE_RATE_LIMIT_ENABLED` | `true` | Master switch for the API limiter. |
+| `SNACKBASE_RATE_LIMIT_PER_MINUTE` | `60` | Requests per minute for an anonymous client. |
+| `SNACKBASE_RATE_LIMIT_AUTHENTICATED_PER_MINUTE` | `120` | Requests per minute for an authenticated user. |
+| `SNACKBASE_RATE_LIMIT_BURST_MULTIPLIER` | `1.0` | Burst ceiling as a **multiple of the per-minute allowance**. At the defaults a client may spend all 60 requests at once, after which the bucket refills at 1/second. |
+| `SNACKBASE_RATE_LIMIT_ENDPOINTS` | `{}` | Per-path per-minute overrides, e.g. `{"/api/v1/files": 10}`. |
+
+Responses carry `X-RateLimit-Limit` (the per-minute rate), `X-RateLimit-Burst` (the
+computed capacity), `X-RateLimit-Remaining` and `X-RateLimit-Reset`. A rejected request
+returns `429` with `Retry-After`.
+
+The limiter is per-process and in-memory, so `N` replicas enforce `N` times the
+configured limit.
+
+#### Login throttling
+
+Password guessing is bounded separately and is **not** affected by the settings above:
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `SNACKBASE_LOGIN_RATE_LIMIT_PER_MINUTE` | `10` | Failed logins allowed per client IP per minute. Charged only by failures, so ordinary traffic never spends the budget. |
+| `SNACKBASE_LOGIN_LOCKOUT_THRESHOLD` | `20` | Consecutive failures before the account itself locks. Each further lockout doubles the wait. |
+| `SNACKBASE_LOGIN_LOCKOUT_SECONDS` | `900` | Duration of the first lockout. |
+
+Keep `SNACKBASE_LOGIN_RATE_LIMIT_PER_MINUTE` below `SNACKBASE_LOGIN_LOCKOUT_THRESHOLD`.
+An attacker hammering one victim then exhausts their own address budget before the
+victim's account locks, which keeps the lockout from becoming a denial-of-service
+primitive against arbitrary users.
+
+#### Trusted proxies — configure this before you deploy behind anything
+
+Both limits above are keyed on the client's IP address. Behind a reverse proxy the
+socket peer is the *proxy*, so unless SnackBase is told which peers to believe, **every
+visitor collapses into one rate-limit bucket and one login-failure budget**. One
+attacker then locks out every user, and any user's successful login refunds the
+attacker's accumulated failures.
+
+`SNACKBASE_TRUSTED_PROXIES` names the peers whose forwarding headers may be believed.
+Each entry is one of:
+
+- a bare address — `127.0.0.1`
+- a CIDR network — `10.0.0.0/8`, `fd00::/8`
+- the literal `*` — trust whatever peer connects
+
+From a trusted peer, `CF-Connecting-IP` is used first, then the rightmost entry of
+`X-Forwarded-For`, then the peer itself. From an untrusted peer both headers are
+ignored and a warning naming the peer is logged once per process. An unparseable entry
+fails at startup naming the entry.
+
+**Behind Cloudflare**, with your own Nginx or Traefik terminating TLS on the same host:
+
+```bash
+# The peer is your own proxy; Cloudflare's CF-Connecting-IP arrives through it.
+SNACKBASE_TRUSTED_PROXIES=127.0.0.1,::1
+```
+
+If the proxy runs on another host in a private network, name that network instead:
+
+```bash
+SNACKBASE_TRUSTED_PROXIES=10.0.0.0/8
+```
+
+**On a managed platform** — Railway, Fly, Render — the edge peer address is neither
+stable nor published, so no address or range is correct:
+
+```bash
+SNACKBASE_TRUSTED_PROXIES=*
+```
+
+`*` is safe there only because the container is reachable *solely* through the
+platform's edge. Never use `*` on an instance clients can connect to without passing
+your proxy: any client could then forge `X-Forwarded-For`, mint an unlimited number of
+rate-limit buckets, and escape the login throttle entirely.
 
 ### Security Headers
 

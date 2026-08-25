@@ -42,6 +42,11 @@
       "description": "Allowed CORS origins",
       "defaultValue": "https://${{RAILWAY_PUBLIC_DOMAIN}}",
       "required": false
+    },
+    "SNACKBASE_TRUSTED_PROXIES": {
+      "description": "Peers whose X-Forwarded-For or CF-Connecting-IP may be believed. Accepts bare addresses, CIDR ranges, and '*'. Railway's edge address is neither stable nor published, so use '*' here: the container is reachable only through that edge. Leaving the loopback default collapses every visitor into one rate-limit bucket and one login-failure budget.",
+      "defaultValue": "*",
+      "required": false
     }
   }
 }

@@ -1,3 +1,63 @@
+# Release Notes - Unreleased
+
+## 🚦 Rate limiting and client-IP attribution
+
+- **The limiter now meters only `/api/v1` paths.** It previously applied to every
+  path, so a single cold load of the admin SPA spent the whole token bucket on its
+  own HTML, JavaScript and CSS and returned `429` for chunks the page needed to
+  render — reaching the browser as unparseable JSON and leaving a blank screen.
+  `/health`, `/ready` and `/live` fall outside the prefix and are exempt by the same
+  rule.
+- **`rate_limit_burst` is replaced by `rate_limit_burst_multiplier`.** The old
+  setting documented itself as a multiplier but implemented an absolute ceiling of
+  10 requests regardless of `rate_limit_per_minute`. Capacity is now
+  `max(1, rate_per_minute × multiplier)`, so the limit an operator configures is the
+  limit that is enforced. See the upgrade notes.
+- **`trusted_proxies` accepts CIDR networks and `*`.** Entries were compared by exact
+  string against the socket peer, so on a managed platform whose edge address is
+  neither stable nor published there was no correct value to write. Entries are
+  parsed once, and an unparseable one now fails at startup naming the entry rather
+  than being silently skipped.
+- **`CF-Connecting-IP` is honoured** ahead of `X-Forwarded-For`, gated by the same
+  trust check, so an untrusted peer cannot forge it.
+- **A warning is logged** — once per peer — when a request arrives proxied from a peer
+  that is not trusted, naming the setting and the consequence.
+- **`HEAD` is answered on the SPA catch-all and `/health`.** FastAPI's `APIRoute`
+  does not derive `HEAD` from `GET` the way Starlette's plain route does, so uptime
+  monitors probing with `HEAD` saw `405` on a working deployment.
+- **New response header `X-RateLimit-Burst`** reports the computed capacity alongside
+  `X-RateLimit-Limit`, on both `200` and `429`.
+- `rate_limit_per_hour` is removed. It was defined in settings and documented in
+  `.env.example` but never read by the limiter.
+- `SNACKBASE_TRUSTED_PROXIES` is now declared in `railway.json` and both compose
+  files.
+
+## ⚠️ Upgrade notes
+
+- **Breaking configuration change: `SNACKBASE_RATE_LIMIT_BURST` →
+  `SNACKBASE_RATE_LIMIT_BURST_MULTIPLIER`.** The old variable is no longer read;
+  delete it. The value is no longer a token count but a multiple of the per-minute
+  allowance, so the default of `1.0` with `SNACKBASE_RATE_LIMIT_PER_MINUTE=60` gives
+  a capacity of 60 — six times the old default of 10, which is the point. Multiply
+  your old intent rather than your old number: `SNACKBASE_RATE_LIMIT_BURST=120`
+  against a rate of 60 becomes `SNACKBASE_RATE_LIMIT_BURST_MULTIPLIER=2.0`.
+- **`SNACKBASE_RATE_LIMIT_PER_HOUR` is no longer read**; delete it. It never had an
+  effect.
+- **Correction to the v0.11.0 upgrade note on trusted proxies.** That note said to
+  "configure the trusted-proxy setting so `X-Forwarded-For` is honoured" without
+  saying that no correct value existed on a managed platform, which is why instances
+  shipped misconfigured. Stated plainly: **leaving `trusted_proxies` at its loopback
+  default behind a proxy collapses every client into one rate-limit bucket and one
+  login-failure budget.** One attacker then exhausts the login budget for every
+  visitor, and any visitor's successful login clears the attacker's accumulated
+  failure count. Set `SNACKBASE_TRUSTED_PROXIES` to your proxy's address or network,
+  or to `*` when the platform's edge address is not stable — `*` is safe only where
+  the application is not directly reachable from the internet.
+- **Known limitation, unchanged:** rate-limit state is per-process and in-memory, so
+  `N` replicas enforce `N` times the configured limit.
+
+---
+
 # Release Notes - v0.11.0
 
 SnackBase v0.11.0 is a security and platform release. It remediates every
@@ -193,6 +253,10 @@ the runtime to Python 3.14, and ships a substantially smaller Docker image.
   `SNACKBASE_RATE_LIMIT_PER_MINUTE` and, if you run behind a proxy, configure
   the trusted-proxy setting so `X-Forwarded-For` is honoured — it is believed
   only from a configured peer and defaults to loopback.
+  **Corrected in the next release:** at the time this was written there was no
+  correct value to write on a managed platform, because entries were matched by
+  exact string against an edge address that is neither stable nor published. See
+  the Unreleased upgrade notes above.
 - **`SNACKBASE_TOKEN_SECRET` and `SNACKBASE_SECRET_KEY` must be set to
   non-default values in production**, or the instance refuses to boot. Generate
   with `openssl rand -hex 32`.

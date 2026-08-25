@@ -1782,17 +1782,13 @@ This means:
 
 ### Rate Limiting and API Keys
 
-API keys can be used for rate limiting (future feature):
+API requests are rate limited by default. An authenticated caller — including one
+presenting an API key — is metered per user at
+`SNACKBASE_RATE_LIMIT_AUTHENTICATED_PER_MINUTE` (default 120) rather than per IP. Only
+paths under `/api/v1` are metered. See
+[Rate Limiting](../deployment.md#rate-limiting) for the full configuration surface.
 
-```python
-# Rate limit per API key
-rate_limits = {
-    "ak_abc123xyz": {
-        "requests_per_minute": 1000,
-        "requests_per_hour": 10000
-    }
-}
-```
+Per-key limits distinct from the per-user limit are not implemented.
 
 ### Common Patterns
 
@@ -1964,16 +1960,34 @@ if secrets.compare_digest(provided_hash, stored_hash):
 
 ### Failed Login Attempts
 
-SnackBase tracks failed login attempts and can implement rate limiting:
+SnackBase bounds online password guessing with two independent layers, both enabled by
+default:
+
+- **Per-client-IP throttle** — in-memory and charged *only* by failed attempts, so
+  ordinary successful traffic never spends the budget. Defaults to
+  `SNACKBASE_LOGIN_RATE_LIMIT_PER_MINUTE=10`. Exceeding it returns `429` with
+  `Retry-After`, before the request touches the database.
+- **Per-account lockout** — persisted on the user row, so it survives a restart and is
+  shared by every instance pointed at the same database. After
+  `SNACKBASE_LOGIN_LOCKOUT_THRESHOLD=20` consecutive failures the account locks for
+  `SNACKBASE_LOGIN_LOCKOUT_SECONDS=900`, and each further lockout doubles that. A
+  successful login clears the counter.
+
+The IP budget is deliberately tighter than the lockout threshold, so an attacker
+hammering one victim exhausts their own address budget long before the victim's account
+locks — which keeps the lockout from becoming a denial-of-service primitive.
+
+The per-IP layer is only as good as the address it sees. Behind a proxy, set
+`SNACKBASE_TRUSTED_PROXIES` or every visitor shares one failure budget — see
+[Trusted proxies](../deployment.md#trusted-proxies--configure-this-before-you-deploy-behind-anything).
 
 ```python
-# Track failed attempts (future feature)
+# Persisted on the user row
 {
   "email": "alice@acme.com",
   "account_id": "550e8400-...",
-  "failed_attempts": 3,
-  "last_attempt": "2025-01-01T00:00:00Z",
-  "locked_until": "2025-01-01T00:05:00Z"  # Locked for 5 minutes
+  "failed_login_attempts": 3,
+  "locked_until": None,  # set once the threshold is crossed
 }
 ```
 

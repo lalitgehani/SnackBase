@@ -2,6 +2,9 @@
 import os
 from unittest.mock import patch
 
+import pytest
+from pydantic import ValidationError
+
 from snackbase.core.config import Settings, get_settings
 
 
@@ -116,3 +119,30 @@ def test_database_url_sync():
     # PostgreSQL
     settings = Settings(database_url="postgresql+asyncpg://user:pass@localhost/db")
     assert settings.database_url_sync == "postgresql://user:pass@localhost/db"
+
+
+def test_rate_limit_burst_multiplier_default():
+    """The burst ceiling is a multiple of the per-minute allowance, defaulting to 1.0."""
+    settings = Settings()
+    assert settings.rate_limit_burst_multiplier == 1.0
+    assert not hasattr(settings, "rate_limit_burst")
+
+
+def test_rate_limit_burst_multiplier_parsed_as_float_from_env():
+    with patch.dict(os.environ, {"SNACKBASE_RATE_LIMIT_BURST_MULTIPLIER": "2.5"}):
+        settings = Settings()
+        assert settings.rate_limit_burst_multiplier == 2.5
+
+
+def test_trusted_proxies_accepts_cidr_and_wildcard_from_env():
+    with patch.dict(os.environ, {"SNACKBASE_TRUSTED_PROXIES": "10.0.0.0/8,*"}):
+        settings = Settings()
+        assert settings.trusted_proxies == ["10.0.0.0/8", "*"]
+        assert settings.trusted_proxy_matcher.trust_any is True
+        assert settings.trusted_proxy_matcher.matches("198.51.100.4") is True
+
+
+def test_trusted_proxies_rejects_an_unparseable_entry_at_startup():
+    with patch.dict(os.environ, {"SNACKBASE_TRUSTED_PROXIES": "127.0.0.1,not-an-ip"}):
+        with pytest.raises(ValidationError, match="not-an-ip"):
+            Settings()

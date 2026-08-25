@@ -32,6 +32,14 @@ services:
       - SNACKBASE_SUPERADMIN_EMAIL=${SNACKBASE_SUPERADMIN_EMAIL:-admin@admin.com}
       - SNACKBASE_SUPERADMIN_PASSWORD=${SNACKBASE_SUPERADMIN_PASSWORD:-Admin@123456}
       - SNACKBASE_TOKEN_SECRET=${SNACKBASE_TOKEN_SECRET:-change-me-in-production-use-openssl-rand-hex-32}
+      # '*' trusts whatever peer connects, so X-Forwarded-For and CF-Connecting-IP
+      # are believed and each visitor gets their own rate-limit bucket and
+      # login-failure budget. That is only safe because this service declares
+      # `expose:` rather than `ports:` — it is never published to the host, so an
+      # external proxy always fronts it and no client can reach it directly to
+      # forge the header. Do not copy this default into a stack that publishes a
+      # port. Accepts bare addresses and CIDR ranges too, e.g. 10.0.0.0/8.
+      - SNACKBASE_TRUSTED_PROXIES=${SNACKBASE_TRUSTED_PROXIES:-*}
     volumes:
       - ./sb_data:/app/sb_data
     healthcheck:

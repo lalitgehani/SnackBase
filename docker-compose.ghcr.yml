@@ -44,6 +44,13 @@ services:
       SNACKBASE_IS_DEMO: ${SNACKBASE_IS_DEMO:-false}
       SNACKBASE_ACCESS_TOKEN_EXPIRE_MINUTES: ${SNACKBASE_ACCESS_TOKEN_EXPIRE_MINUTES:-60}
       SNACKBASE_REFRESH_TOKEN_EXPIRE_DAYS: ${SNACKBASE_REFRESH_TOKEN_EXPIRE_DAYS:-7}
+      SNACKBASE_TOKEN_SECRET: ${SNACKBASE_TOKEN_SECRET:-change-me-in-production-use-openssl-rand-hex-32}
+      # Peers whose X-Forwarded-For or CF-Connecting-IP may be believed. Accepts
+      # bare addresses, CIDR ranges (10.0.0.0/8), and '*' for any peer.
+      # Unlike docker-compose.yml this stack publishes `ports:`, so the app is
+      # reachable directly and a client could forge the header — hence the
+      # loopback default. Set '*' only once a reverse proxy is the sole route in.
+      SNACKBASE_TRUSTED_PROXIES: ${SNACKBASE_TRUSTED_PROXIES:-127.0.0.1,::1}
       # Multi-tenant control plane (default). Leave unset/false.
       # SNACKBASE_SINGLE_TENANT_MODE: "false"
     volumes:
