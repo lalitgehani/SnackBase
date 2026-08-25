@@ -1,50 +1,17 @@
 # syntax=docker/dockerfile:1
 #
 # SnackBase Cloud platform Studio image (nginx + runtime config injection).
-# Build context: workspace root (SnackBase-projects/) so file: SDK deps resolve.
+# Build context: SnackBase repo root. SDK packages come from the registry pins
+# in ui/package-lock.json (@snackbase/sdk, @snackbase/react).
 # Proxies /platform/v1/* to the platform gateway.
 
-FROM node:20-bookworm-slim AS sdk-build
-WORKDIR /repo/SnackBase-sdk-js/packages/tsconfig
-COPY SnackBase-sdk-js/packages/tsconfig ./
-
-WORKDIR /repo/SnackBase-sdk-js/packages/sdk
-COPY SnackBase-sdk-js/packages/sdk/package.json SnackBase-sdk-js/packages/sdk/tsconfig.json ./
-COPY SnackBase-sdk-js/packages/sdk/src ./src
-RUN npm pkg set "devDependencies.@snackbase/tsconfig=file:../tsconfig" \
-  && npm pkg set "devDependencies.tsdown=^0.20.0-beta.4" \
-  && npm pkg set "devDependencies.typescript=^5.9.3" \
-  && npm install \
-  && npm run build
-
-WORKDIR /repo/SnackBase-sdk-js/packages/react
-COPY SnackBase-sdk-js/packages/react/package.json SnackBase-sdk-js/packages/react/tsconfig.json ./
-COPY SnackBase-sdk-js/packages/react/src ./src
-RUN npm pkg set "dependencies.@snackbase/sdk=file:../sdk" \
-  && npm pkg set "devDependencies.@snackbase/tsconfig=file:../tsconfig" \
-  && npm pkg set "devDependencies.tsdown=^0.20.0-beta.4" \
-  && npm pkg set "devDependencies.typescript=^5.9.3" \
-  && npm install \
-  && npm run build
-
 FROM node:20-bookworm-slim AS build
-WORKDIR /repo
+WORKDIR /app/ui
 
-COPY --from=sdk-build /repo/SnackBase-sdk-js/packages/tsconfig ./SnackBase-sdk-js/packages/tsconfig
-COPY --from=sdk-build /repo/SnackBase-sdk-js/packages/sdk ./SnackBase-sdk-js/packages/sdk
-COPY --from=sdk-build /repo/SnackBase-sdk-js/packages/react ./SnackBase-sdk-js/packages/react
+COPY ui/package.json ui/package-lock.json ./
+RUN npm ci
 
-WORKDIR /repo/SnackBase/ui
-COPY SnackBase/ui/package.json ./
-RUN npm install --legacy-peer-deps \
-  && rm -rf ../SnackBase-sdk-js/packages/react/node_modules/react \
-             ../SnackBase-sdk-js/packages/react/node_modules/react-dom \
-             ../SnackBase-sdk-js/packages/sdk/node_modules/react \
-             ../SnackBase-sdk-js/packages/sdk/node_modules/react-dom 2>/dev/null || true
-
-COPY SnackBase/ui/index.html SnackBase/ui/vite.config.ts SnackBase/ui/tsconfig.json SnackBase/ui/tsconfig.app.json SnackBase/ui/tsconfig.node.json SnackBase/ui/components.json ./
-COPY SnackBase/ui/public ./public
-COPY SnackBase/ui/src ./src
+COPY ui/ .
 
 ENV VITE_IS_PLATFORM=true
 ENV VITE_SNACKBASE_URL=http://localhost:8002
@@ -54,10 +21,10 @@ ENV VITE_PLATFORM_PATH_PREFIX=/platform/v1
 RUN npm run build
 
 FROM nginx:1.27-alpine AS runtime
-COPY SnackBase/ui/docker/nginx.platform.conf.template /etc/nginx/conf.d/default.conf.template
-COPY SnackBase/ui/docker/entrypoint.platform.sh /entrypoint.sh
+COPY ui/docker/nginx.platform.conf.template /etc/nginx/conf.d/default.conf.template
+COPY ui/docker/entrypoint.platform.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
-COPY --from=build /repo/SnackBase/ui/dist /usr/share/nginx/html
+COPY --from=build /app/ui/dist /usr/share/nginx/html
 
 ENV SNACKBASE_URL=http://localhost:8002
 ENV PROVISION_API_URL=http://localhost:8091
