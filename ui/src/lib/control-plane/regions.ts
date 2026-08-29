@@ -47,19 +47,25 @@ export async function listAvailableRegions(client: SnackBaseClient): Promise<Reg
     values = Array.isArray(data) ? data : []
   }
 
-  return values.map((v) => {
-    const meta = (v.metadata || {}) as Record<string, unknown>
-    const status =
-      (typeof meta.status === 'string' ? meta.status : 'available') as Region['status']
-    return {
-      id: v.code,
-      code: v.code,
-      name: v.label,
-      country: typeof meta.country === 'string' ? meta.country : '',
-      status,
-      sort_order: v.sort_order ?? 0,
-    } satisfies Region
-  })
+  // Only presentation keys are mapped. Region metadata also carries the
+  // platform's placement contract (provider, provider_region, domain_suffix);
+  // the Console must never surface which vendor runs a region, so those keys
+  // are deliberately dropped here.
+  return values
+    .map((v) => {
+      const meta = (v.metadata || {}) as Record<string, unknown>
+      const status =
+        (typeof meta.status === 'string' ? meta.status : 'available') as Region['status']
+      return {
+        id: v.code,
+        code: v.code,
+        name: v.label,
+        country: typeof meta.country === 'string' ? meta.country : '',
+        status,
+        sort_order: v.sort_order ?? 0,
+      } satisfies Region
+    })
+    .sort((a, b) => a.sort_order - b.sort_order || a.code.localeCompare(b.code))
 }
 
 export function isRegionAvailable(regions: Region[], code: string): boolean {
