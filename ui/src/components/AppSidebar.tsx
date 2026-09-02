@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react"
 
 import {
+    DatabaseBackup,
     LayoutDashboard,
     Users,
     UserCog,
@@ -227,6 +228,12 @@ const navigation: NavGroup[] = [
                 title: "Migrations",
                 url: "/admin/migrations",
                 icon: GitBranch,
+            },
+            {
+                title: "Backups",
+                url: "/admin/backups",
+                icon: DatabaseBackup,
+                superadminOnly: true,
             },
         ],
     },

@@ -23,6 +23,8 @@ import ConfigurationDashboardPage from '@/pages/ConfigurationDashboardPage';
 import ApiKeysPage from '@/pages/ApiKeys/ApiKeysPage';
 import WebhooksPage from '@/pages/Webhooks/WebhooksPage';
 import JobsPage from '@/pages/Jobs/JobsPage';
+import BackupsListPage from '@/pages/Backups/BackupsListPage';
+import BackupSettingsPage from '@/pages/Backups/BackupSettingsPage';
 import ScheduledTasksPage from '@/pages/ScheduledTasks/ScheduledTasksPage';
 import HooksPage from '@/pages/Hooks/HooksPage';
 import HookEditorPage from '@/pages/Hooks/editor/HookEditorPage';
@@ -81,6 +83,8 @@ export function studioChildRouteElements() {
       <Route path="api-keys" element={<ApiKeysPage />} />
       <Route path="webhooks" element={<WebhooksPage />} />
       <Route path="jobs" element={<JobsPage />} />
+      <Route path="backups" element={<BackupsListPage />} />
+      <Route path="backups/settings" element={<BackupSettingsPage />} />
       <Route path="scheduled-tasks" element={<ScheduledTasksPage />} />
       <Route path="hooks" element={<HooksPage />} />
       <Route path="hooks/new" element={<HookEditorPage />} />

@@ -65,6 +65,7 @@ class BackupListResponse(BaseModel):
     active: dict[str, Any] | None = None
     consecutive_failures: int = 0
     last_error: str | None = None
+    database_engine: str = "sqlite"
 
 
 class BackupCreatedResponse(BaseModel):

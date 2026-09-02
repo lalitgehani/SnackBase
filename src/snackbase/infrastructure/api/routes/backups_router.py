@@ -231,6 +231,10 @@ async def list_backups(
     session: AsyncSession = Depends(get_db_session),
 ) -> BackupListResponse:
     """List every archive at the destination, newest first, plus in-flight state."""
+    from snackbase.core.config import get_settings
+    from snackbase.infrastructure.backup.manifest import running_engine
+
+    settings = get_settings()
     destination = await resolve_destination(session)
     entries = await destination.list()
     working_dir = backup_working_dir(destination)
@@ -255,6 +259,7 @@ async def list_backups(
         active=active_operation(working_dir),
         consecutive_failures=int(failures or 0),
         last_error=last_error,
+        database_engine=running_engine(settings.database_url),
     )
 
 
@@ -319,6 +324,27 @@ async def download_backup(
     )
 
 
+@router.get("/cron-description")
+async def get_cron_description(
+    _: SuperadminUser,
+    expr: str,
+) -> dict[str, Any]:
+    """Human-readable description of a cron expression (shared with hooks).
+
+    Backs the settings UI's live schedule preview; validation still happens
+    server-side on write with the parser's own message.
+    """
+    from snackbase.core.cron.parser import describe_cron, validate_cron
+
+    valid, error = validate_cron(expr)
+    return {
+        "expr": expr,
+        "valid": valid,
+        "error": error,
+        "description": describe_cron(expr) if valid else None,
+    }
+
+
 @router.get("/restore-status", response_model=RestoreStatusResponse)
 async def get_restore_status(
     _: SuperadminUser,
@@ -343,6 +369,51 @@ async def get_restore_status(
         completed_at=result.completed_at,
         error=result.error,
     )
+
+
+@router.get("/{name}/restore-preview")
+async def restore_preview(
+    name: str,
+    _: SuperadminUser,
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    """Validation-only preview for the restore confirmation dialog (F6.3).
+
+    Returns the parsed manifest summary and any compatibility issues without
+    writing a marker or touching live state.
+    """
+    from snackbase.core.config import get_settings
+
+    settings = get_settings()
+    destination = await resolve_destination(session)
+    try:
+        validation = validate_restore_candidate(destination, name, settings)
+    except BackupNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
+    manifest = validation.manifest
+    return {
+        "archive_name": name,
+        "manifest": manifest.to_dict(),
+        "created_at": manifest.created_at,
+        "source_version": manifest.snackbase_version,
+        "includes_files": manifest.includes_files,
+        "database_engine": manifest.database_engine,
+        "backup_type": manifest.backup_type,
+        "blocking": [
+            {"type": i.type, "severity": i.severity, "message": i.message}
+            for i in validation.blocking
+        ],
+        "warnings": [
+            {"type": i.type, "severity": i.severity, "message": i.message}
+            for i in validation.warnings
+        ],
+    }
 
 
 @router.post("/{name}/restore", status_code=status.HTTP_202_ACCEPTED)

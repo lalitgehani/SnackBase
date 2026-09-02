@@ -45,6 +45,8 @@ export function getAdminPageTitle(pathname: string): string {
     if (pathname.match(/^\/admin\/workflows\/[^/]+$/)) return 'Workflow Overview';
     if (pathname.startsWith('/admin/workflows')) return 'Workflows';
     if (pathname.startsWith('/admin/jobs')) return 'Jobs';
+    if (pathname.startsWith('/admin/backups/settings')) return 'Backup Settings';
+    if (pathname.startsWith('/admin/backups')) return 'Backups';
     if (pathname.startsWith('/admin/webhooks')) return 'Webhooks';
     if (pathname.startsWith('/admin/endpoints')) return 'Endpoints';
     if (pathname.startsWith('/admin/configuration')) return 'Configuration';

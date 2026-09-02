@@ -306,3 +306,44 @@ SnackBase.
 Ephemeral tables (`token_blacklist`, `refresh_tokens`, `password_resets`,
 `email_verifications`) and `alembic_version` are excluded from logical
 exports by design; the manifest records the excluded list.
+
+## Walkthrough
+
+Configuring, creating, and restoring a backup from the admin UI.
+
+### 1. Configure the destination and schedule
+
+Open **System → Backups → Settings**. Choose the destination (Local or S3 —
+S3 fields appear only for S3), pick a schedule preset or type a cron
+expression (a live human-readable description follows the field), and set
+how many automatic archives to keep. Local archives warn that they share the
+volume with the database.
+
+![Backup settings](images/backups-settings.png)
+
+### 2. Create and inspect archives
+
+**System → Backups** lists every archive, newest first. **Create backup**
+accepts an optional name; **Upload** stores an archive taken elsewhere.
+Each row shows its type — `Restorable` for physical archives, `Portable`
+for logical ones — plus size, creation time, and whether it was created
+automatically. Download and Delete act per row; Delete requires
+confirmation.
+
+![Backups list](images/backups-list.png)
+
+### 3. Restore
+
+**Restore** opens a confirmation dialog that states exactly what happens:
+all data created after the archive's timestamp is discarded and the
+instance restarts. Compatibility warnings appear with an explicit
+"restore anyway" checkbox; blocking issues disable the confirm button
+outright. The operator must type the archive name to enable Restore. After
+the request, the dialog follows the restart and reports the outcome from
+the restore-status endpoint.
+
+![Restore confirmation](images/backups-restore-dialog.png)
+
+A supervised deployment (container restart policy `unless-stopped` or
+`always`) brings the instance back automatically; the swap happens before
+the database is opened.
