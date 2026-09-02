@@ -22,6 +22,7 @@ import re
 import tempfile
 import zipfile
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
 from fastapi.responses import StreamingResponse
@@ -35,15 +36,31 @@ from snackbase.infrastructure.api.schemas.backup_schemas import (
     BackupCreateRequest,
     BackupEntryResponse,
     BackupListResponse,
+    RestoreRequest,
+    RestoreStatusResponse,
     validate_backup_name,
 )
 from snackbase.infrastructure.backup.archive import MANIFEST_MEMBER, member_names
+from snackbase.infrastructure.backup.audit import (
+    EVENT_RESTORE_REQUESTED,
+    write_backup_event,
+)
 from snackbase.infrastructure.backup.destinations import (
+    BackupInProgressError,
     BackupNotFoundError,
     resolve_destination,
 )
-from snackbase.infrastructure.backup.lock import active_operation
+from snackbase.infrastructure.backup.lock import active_operation, backup_lock
 from snackbase.infrastructure.backup.manifest import BackupManifest
+from snackbase.infrastructure.backup.restart import schedule_restart
+from snackbase.infrastructure.backup.restore import (
+    RestoreAbortedError,
+    check_engine_is_sqlite,
+    destination_to_marker_dict,
+    read_last_restore,
+    validate_restore_candidate,
+    write_marker,
+)
 from snackbase.infrastructure.backup.service import (
     backup_working_dir,
     create_backup,
@@ -273,3 +290,136 @@ async def download_backup(
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{name}"'},
     )
+
+
+@router.get("/restore-status", response_model=RestoreStatusResponse)
+async def get_restore_status(
+    _: SuperadminUser,
+) -> RestoreStatusResponse:
+    """Report the outcome of the last restore (F3.3).
+
+    Read from ``<data_dir>/.restore-last.json``, which the pre-boot executor
+    writes on both success and failure. Returns 404 when no restore has
+    been performed on this instance.
+    """
+    from snackbase.core.config import get_settings
+
+    result = read_last_restore(get_settings())
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No restore has been performed on this instance",
+        )
+    return RestoreStatusResponse(
+        archive_name=result.archive_name,
+        status=result.status,
+        completed_at=result.completed_at,
+        error=result.error,
+    )
+
+
+@router.post("/{name}/restore", status_code=status.HTTP_202_ACCEPTED)
+async def restore_backup(
+    name: str,
+    user: SuperadminUser,
+    request: RestoreRequest | None = None,
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    """Request a restore; the swap happens before the next boot opens the DB.
+
+    The full validation sequence runs before anything is written. On
+    success a marker file is written beside the database, the instance
+    schedules its own graceful shutdown, and the supervisor restarts it —
+    the pre-boot executor then performs the swap before any database
+    connection is opened.
+    """
+    from snackbase.core.config import get_settings
+    from snackbase.infrastructure.backup.manifest import fingerprints_from_settings
+
+    settings = get_settings()
+    force = bool(request.force) if request is not None else False
+    destination = await resolve_destination(session)
+    working_dir = backup_working_dir(destination)
+
+    try:
+        async with backup_lock(name, "restore", working_dir):
+            try:
+                validation = validate_restore_candidate(destination, name, settings)
+            except BackupNotFoundError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+                ) from exc
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+                ) from exc
+
+            try:
+                check_engine_is_sqlite(settings)
+            except RestoreAbortedError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+                ) from exc
+
+            if validation.blocking:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={
+                        "message": "Archive has blocking compatibility issues; "
+                        "restore refused",
+                        "issues": [
+                            {"type": i.type, "severity": i.severity, "message": i.message}
+                            for i in validation.blocking
+                        ],
+                    },
+                )
+            if validation.warnings and not force:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={
+                        "message": (
+                            "Archive has compatibility warnings; "
+                            "resend with force=true to proceed"
+                        ),
+                        "issues": [
+                            {"type": i.type, "severity": i.severity, "message": i.message}
+                            for i in validation.warnings
+                        ],
+                    },
+                )
+
+            marker = write_marker(
+                settings,
+                archive_name=name,
+                destination=destination_to_marker_dict(destination, settings),
+                requested_by=user.id,
+                manifest_fingerprints=fingerprints_from_settings(settings),
+            )
+    except BackupInProgressError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": "A backup or restore is already in progress",
+                "active": {"operation": exc.operation, "name": exc.name},
+            },
+        ) from exc
+
+    # Audit before exiting; the entry lands in the current (pre-restore) DB.
+    session_factory = get_db_manager().session
+    try:
+        await write_backup_event(
+            session_factory,
+            event=EVENT_RESTORE_REQUESTED,
+            name=name,
+            destination_type="",
+            actor_user_id=user.id,
+            actor_email=user.email,
+            actor_name=user.email,
+            account_id=user.account_id,
+        )
+    except Exception as exc:  # noqa: BLE001 - must not block the restart
+        logger.error("Failed to write restore audit entry", error=str(exc))
+
+    schedule_restart()
+
+    return marker

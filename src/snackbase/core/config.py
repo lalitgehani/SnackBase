@@ -440,6 +440,16 @@ class Settings(BaseSettings):
         description="Enable background job worker within FastAPI lifespan (SNACKBASE_JOB_WORKER_ENABLED)",
     )
 
+    # Backup & Restore Settings
+    restore_retain_old_data_hours: int = Field(
+        default=24,
+        description=(
+            "Hours to keep the pre-restore data under .restore_old/ after a "
+            "restore, giving an operator a window to recover manually "
+            "(SNACKBASE_RESTORE_RETAIN_OLD_DATA_HOURS)"
+        ),
+    )
+
     # Scheduler Settings
     scheduler_enabled: bool = Field(
         default=True,

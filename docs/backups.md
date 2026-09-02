@@ -149,3 +149,95 @@ When the active file storage provider is S3, the `files/` tree is not archived
 (files live in the bucket, not on the volume) and the manifest records
 `includes_files: false` and `storage_mode: "s3"`. The backup directory itself
 is never included in an archive.
+
+## Restoring a backup
+
+### How restore works
+
+Restore never swaps data in a running process. Instead:
+
+1. You request the restore (API or CLI). SnackBase validates the archive —
+   zip layout, `manifest.json`/`data.db` presence, secret fingerprints, engine —
+   and, if everything passes, writes a marker file
+   (`.restore-pending.json`) **beside the SQLite database file** and answers 202.
+2. The instance schedules its own graceful shutdown (SIGTERM after the
+   response flushes, exit code 75). The marker is the transaction record.
+3. The supervisor restarts the process. At startup — **before the database
+   engine is created and before migrations run** — SnackBase finds the marker,
+   moves the current database (with its `-wal`/`-shm` siblings) and the local
+   files tree aside under `.restore_old/<timestamp>/`, moves the archive's
+   `data.db` and `files/` into place, and deletes the marker. Only then does
+   the boot continue and migrations run.
+
+Because the swap happens before anything opens the database, a restore cannot
+corrupt a live instance, and a crash mid-restore is simply retried on the next
+boot: if a marker is present alongside `.restore_old/` data from an
+interrupted attempt, that data is rolled back first and the restore retried.
+
+### Requirements
+
+- **Restart policy**: the instance must be restarted after the restore
+  request. The container restart policy must be `unless-stopped` or `always`
+  (`docker-compose.yml` already sets `unless-stopped`), or a supervisor with
+  the equivalent behaviour. Without a restart the marker stays pending and
+  the restore begins on the next manual start.
+- **Disk space**: extraction needs roughly **2× the archive size** in free
+  disk space. A restore aborts with an explicit message when free space is
+  insufficient, leaving the instance untouched.
+
+### Compatibility checks
+
+Before anything is written, the archive's manifest is checked against the
+running instance:
+
+- *Blocking* (never overridable): mismatched `SNACKBASE_ENCRYPTION_KEY`
+  (stored credentials would be undecryptable), a manifest format newer than
+  this binary supports, an archive taken on a different database engine, or a
+  logical archive (PostgreSQL export — see below).
+- *Warnings* (overridable with `force: true` / `--force`): mismatched
+  `SNACKBASE_SECRET_KEY` or `SNACKBASE_TOKEN_SECRET` — restoring works, but
+  existing sessions and API keys are invalidated.
+
+### API
+
+```
+POST /api/v1/backups/{name}/restore     {"force": false}
+GET  /api/v1/backups/restore-status
+```
+
+The restore endpoint returns 202 with the marker contents and schedules the
+restart. Rejections return 400 (invalid archive, blocking issues, warnings
+without `force`, or non-SQLite instance) or 404 (unknown archive). The
+status endpoint reports the last restore's outcome — `archive_name`,
+`status` (`completed`/`failed`), `completed_at`, and `error` when failed —
+read from `.restore-last.json` in the data directory.
+
+### CLI
+
+```bash
+uv run python -m snackbase backup restore NAME [--force] [--yes]
+```
+
+The command prints a summary (archive name, creation time, source SnackBase
+version, whether files are included, compatibility warnings) and prompts for
+confirmation unless `--yes` is passed. It writes the same marker as the API;
+the restore itself completes on next start.
+
+### Recovering from a restore
+
+- **Automatic window**: the pre-restore data stays under
+  `.restore_old/<timestamp>/` for `SNACKBASE_RESTORE_RETAIN_OLD_DATA_HOURS`
+  (default 24) hours, then is removed at the next boot.
+- **Manual recovery**: to go back to the pre-restore state, stop the
+  instance, copy `data.db` from `.restore_old/<timestamp>/` over the
+  database file (and `files/` over the storage path) manually, delete the
+  marker file if present, and start the instance.
+
+### PostgreSQL
+
+Restore is SQLite-only. On PostgreSQL the database is a separate system the
+application does not own: configure disaster recovery on the database itself
+(managed snapshots or operator-run `pg_dump`/`pg_restore`). PostgreSQL
+backups produced by SnackBase are *portable logical archives* for inspection
+and environment seeding — they are explicitly not restorable in this
+release, and the API reports them with `restorable: false`.

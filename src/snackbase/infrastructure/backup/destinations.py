@@ -142,6 +142,14 @@ class BackupDestination(ABC):
         """
         raise NotImplementedError
 
+    def read_sync(self, name: str, local_path: Path) -> None:
+        """Blocking variant of :meth:`read` for pre-boot use.
+
+        The restore executor runs before the event loop is serving and may
+        not have a loop to await; blocking I/O is exactly right there.
+        """
+        raise NotImplementedError
+
 
 #: Chunk size for streaming downloads (1 MiB).
 DOWNLOAD_CHUNK_SIZE = 1024 * 1024
@@ -187,6 +195,9 @@ class LocalBackupDestination(BackupDestination):
         return source.stat().st_dev == destination_dir.stat().st_dev
 
     async def read(self, name: str, local_path: Path) -> None:
+        self.read_sync(name, local_path)
+
+    def read_sync(self, name: str, local_path: Path) -> None:
         source = self._path_for(name)
         if not source.is_file():
             raise BackupNotFoundError(f"Archive not found: {name}")
@@ -333,10 +344,12 @@ class S3BackupDestination(BackupDestination):
             ) from exc
 
     async def read(self, name: str, local_path: Path) -> None:
+        await asyncio.to_thread(self.read_sync, name, local_path)
+
+    def read_sync(self, name: str, local_path: Path) -> None:
         key = self._object_key(name)
         try:
-            await asyncio.to_thread(
-                self._get_client().download_file,
+            self._get_client().download_file(
                 self.bucket,
                 key,
                 str(local_path),

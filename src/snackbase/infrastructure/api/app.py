@@ -42,6 +42,22 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     settings = get_settings()
     logger = get_logger(__name__)
 
+    # Restore before anything else: no database engine, no migrations, no
+    # config or collection load may run while a data swap is pending (F3.2).
+    from snackbase.infrastructure.backup.restore import (
+        RestoreAbortedError,
+        execute_pending_restore,
+        pop_audit_pending,
+    )
+
+    try:
+        restore_result = execute_pending_restore(settings)
+    except RestoreAbortedError as exc:
+        logger.error(
+            "Aborting boot: pending restore could not be completed", error=str(exc)
+        )
+        raise SystemExit(1) from exc
+
     try:
         # Startup
         logger.info(
@@ -77,6 +93,26 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         except Exception as e:
             logger.error("Failed to initialize database during startup", error=str(e))
             raise
+
+        # The restore audit entries land in the (possibly restored) database,
+        # which is the correct place for them (F3.3).
+        if restore_result is not None:
+            pending = pop_audit_pending(settings)
+            if pending is not None:
+                from snackbase.infrastructure.backup.audit import write_backup_event
+                from snackbase.infrastructure.persistence.database import get_db_manager
+
+                try:
+                    await write_backup_event(
+                        get_db_manager().session,
+                        event=pending["event"],
+                        name=pending["archive_name"],
+                        destination_type="",
+                    )
+                except Exception as exc:  # noqa: BLE001 - never block boot on audit
+                    logger.error(
+                        "Failed to write restore audit entry", error=str(exc)
+                    )
 
         # Register built-in authentication providers
         await register_builtin_providers(app)

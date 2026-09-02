@@ -241,3 +241,176 @@ class TestBackupDelete:
         result = runner.invoke(cli, ["backup", "delete", "absent.zip", "--yes"])
 
         assert result.exit_code != 0
+
+
+class TestBackupRestore:
+    @pytest.fixture
+    def restore_setup(
+        self, cli_environment: tuple[Path, Path]
+    ) -> tuple[Path, Path, Path]:
+        """An archive at the destination plus its paths for assertions."""
+        import zipfile
+
+        from snackbase.core.config import get_settings
+        from snackbase.infrastructure.backup.manifest import (
+            BackupManifest,
+            fingerprints_from_settings,
+            load_alembic_heads,
+            running_engine,
+            snackbase_version,
+        )
+
+        backup_dir, db_path = cli_environment
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        settings = get_settings()
+        prints = fingerprints_from_settings(settings)
+        manifest = BackupManifest(
+            format_version=1,
+            created_at="2026-09-02T02:00:00+00:00",
+            snackbase_version=snackbase_version(),
+            backup_type="sqlite_physical",
+            database_engine=running_engine(settings.database_url),
+            alembic_heads=load_alembic_heads(),
+            includes_files=False,
+            storage_mode="local",
+            encryption_key_fingerprint=prints["encryption_key_fingerprint"],
+            secret_key_fingerprint=prints["secret_key_fingerprint"],
+            token_secret_fingerprint=prints["token_secret_fingerprint"],
+            table_row_counts={},
+        )
+        archive = backup_dir / "cli_restore.zip"
+        with zipfile.ZipFile(archive, "w") as zf:
+            zf.writestr("manifest.json", manifest.to_json())
+            zf.writestr("data.db", b"SQLite format 3\x00")
+        marker_path = db_path.parent / ".restore-pending.json"
+        return backup_dir, db_path, marker_path
+
+    def test_restore_yes_writes_marker_and_prints_summary(
+        self, restore_setup: tuple[Path, Path, Path]
+    ) -> None:
+        backup_dir, _db_path, marker_path = restore_setup
+        runner = CliRunner()
+
+        result = runner.invoke(cli, ["backup", "restore", "cli_restore.zip", "--yes"])
+
+        assert result.exit_code == 0, result.output
+        assert "cli_restore.zip" in result.output
+        assert "2026-09-02T02:00:00+00:00" in result.output
+        assert "next start" in result.output
+        assert "unless-stopped" in result.output
+        assert marker_path.exists()
+        marker = json.loads(marker_path.read_text())
+        assert marker["archive_name"] == "cli_restore.zip"
+        assert marker["requested_by"] == "system"
+        assert marker["destination"]["type"] == "local"
+
+    def test_restore_prompts_without_yes(
+        self, restore_setup: tuple[Path, Path, Path]
+    ) -> None:
+        _backup_dir, _db_path, marker_path = restore_setup
+        runner = CliRunner()
+
+        declined = runner.invoke(
+            cli, ["backup", "restore", "cli_restore.zip"], input="n\n"
+        )
+        assert declined.exit_code != 0
+        assert not marker_path.exists()
+
+        confirmed = runner.invoke(
+            cli, ["backup", "restore", "cli_restore.zip"], input="y\n"
+        )
+        assert confirmed.exit_code == 0, confirmed.output
+        assert marker_path.exists()
+
+    def test_restore_incompatible_archive_exits_non_zero(
+        self, restore_setup: tuple[Path, Path, Path]
+    ) -> None:
+        import zipfile
+
+        from snackbase.core.config import get_settings
+        from snackbase.infrastructure.backup.manifest import (
+            BackupManifest,
+            fingerprint,
+        )
+
+        backup_dir, _db_path, marker_path = restore_setup
+        settings = get_settings()
+        manifest = BackupManifest(
+            format_version=1,
+            created_at="2026-09-02T02:00:00+00:00",
+            snackbase_version="0.11.0",
+            backup_type="sqlite_physical",
+            database_engine="sqlite",
+            alembic_heads=[],
+            includes_files=False,
+            storage_mode="local",
+            encryption_key_fingerprint=fingerprint("a-different-key"),
+            secret_key_fingerprint=prints_key(settings.secret_key),
+            token_secret_fingerprint=prints_key(settings.token_secret),
+            table_row_counts={},
+        )
+        archive = backup_dir / "foreign.zip"
+        with zipfile.ZipFile(archive, "w") as zf:
+            zf.writestr("manifest.json", manifest.to_json())
+            zf.writestr("data.db", b"x")
+        runner = CliRunner()
+
+        result = runner.invoke(cli, ["backup", "restore", "foreign.zip", "--yes"])
+
+        assert result.exit_code != 0
+        assert "BLOCKING" in result.output
+        assert not marker_path.exists()
+
+    def test_restore_warning_archive_requires_force(
+        self, restore_setup: tuple[Path, Path, Path]
+    ) -> None:
+        import zipfile
+
+        from snackbase.core.config import get_settings
+        from snackbase.infrastructure.backup.manifest import (
+            BackupManifest,
+            fingerprint,
+            fingerprints_from_settings,
+        )
+
+        backup_dir, _db_path, marker_path = restore_setup
+        settings = get_settings()
+        prints = fingerprints_from_settings(settings)
+        manifest = BackupManifest(
+            format_version=1,
+            created_at="2026-09-02T02:00:00+00:00",
+            snackbase_version="0.11.0",
+            backup_type="sqlite_physical",
+            database_engine="sqlite",
+            alembic_heads=[],
+            includes_files=False,
+            storage_mode="local",
+            encryption_key_fingerprint=prints["encryption_key_fingerprint"],
+            secret_key_fingerprint=fingerprint("rotated-key"),
+            token_secret_fingerprint=prints["token_secret_fingerprint"],
+            table_row_counts={},
+        )
+        archive = backup_dir / "warned.zip"
+        with zipfile.ZipFile(archive, "w") as zf:
+            zf.writestr("manifest.json", manifest.to_json())
+            zf.writestr("data.db", b"x")
+        runner = CliRunner()
+
+        without_force = runner.invoke(
+            cli, ["backup", "restore", "warned.zip", "--yes"]
+        )
+        assert without_force.exit_code != 0
+        assert "WARNING" in without_force.output
+        assert not marker_path.exists()
+
+        with_force = runner.invoke(
+            cli, ["backup", "restore", "warned.zip", "--yes", "--force"]
+        )
+        assert with_force.exit_code == 0, with_force.output
+        assert marker_path.exists()
+
+
+def prints_key(secret: str) -> str:
+    from snackbase.infrastructure.backup.manifest import fingerprint
+
+    return fingerprint(secret)

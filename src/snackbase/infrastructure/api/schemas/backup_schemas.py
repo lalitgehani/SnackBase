@@ -53,3 +53,22 @@ class BackupCreatedResponse(BaseModel):
 
     name: str
     status: str = "started"
+
+
+class RestoreRequest(BaseModel):
+    """Request body for restoring an archive.
+
+    ``force`` proceeds despite warning-severity compatibility issues;
+    blocking issues are never overridable.
+    """
+
+    force: bool = False
+
+
+class RestoreStatusResponse(BaseModel):
+    """The outcome of the last restore, read from ``.restore-last.json``."""
+
+    archive_name: str
+    status: str
+    completed_at: str
+    error: str | None = None

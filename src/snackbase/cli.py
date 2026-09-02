@@ -651,11 +651,23 @@ def worker(queue: str | None, poll_interval: float | None) -> None:
     logger = get_logger(__name__)
 
     async def run() -> None:
+        from snackbase.infrastructure.backup.restore import (
+            RestoreAbortedError,
+            execute_pending_restore,
+        )
         from snackbase.infrastructure.persistence.database import (
             get_db_manager,
             init_database,
         )
         from snackbase.infrastructure.services.job_service import JobWorker
+
+        # Perform any pending restore before the database is opened, so a
+        # worker-only process cannot boot against half-restored data (F3.2).
+        try:
+            execute_pending_restore(settings)
+        except RestoreAbortedError as exc:
+            click.echo(f"Error: pending restore failed: {exc}", err=True)
+            raise SystemExit(1) from exc
 
         # Initialize database
         await init_database()
@@ -1025,6 +1037,123 @@ def delete(name: str, yes: bool) -> None:
                 ).lower(),
             )
             click.echo(f"Deleted {name}")
+            return 0
+        except BackupError as exc:
+            click.echo(f"Error: {exc}", err=True)
+            return 1
+        finally:
+            await db.disconnect()
+
+    raise SystemExit(asyncio.run(run()))
+
+
+@backup.command()
+@click.argument("name")
+@click.option(
+    "--force",
+    is_flag=True,
+    default=False,
+    help="Proceed despite warning-severity compatibility issues",
+)
+@click.option("--yes", is_flag=True, default=False, help="Skip confirmation prompt")
+def restore(name: str, force: bool, yes: bool) -> None:
+    """Restore the archive NAME; the swap happens on next start.
+
+    This command validates the archive and writes the pending-restore
+    marker — it does not perform the swap itself, so there is exactly one
+    restore implementation. A supervised deployment restarts the process
+    automatically and the swap runs before the database is opened.
+    """
+    import asyncio
+
+    from snackbase.infrastructure.backup.destinations import (
+        BackupError,
+        BackupNotFoundError,
+        resolve_destination,
+    )
+    from snackbase.infrastructure.backup.manifest import fingerprints_from_settings
+    from snackbase.infrastructure.backup.restore import (
+        RestoreAbortedError,
+        check_engine_is_sqlite,
+        destination_to_marker_dict,
+        validate_restore_candidate,
+        write_marker,
+    )
+    from snackbase.infrastructure.persistence.database import get_db_manager
+
+    settings = get_settings()
+    configure_logging(settings)
+
+    async def run() -> int:
+        db = get_db_manager()
+        try:
+            async with db.session() as session:
+                destination = await resolve_destination(session)
+
+            try:
+                validation = validate_restore_candidate(destination, name, settings)
+            except BackupNotFoundError as exc:
+                click.echo(f"Error: {exc}", err=True)
+                return 1
+            except ValueError as exc:
+                click.echo(f"Error: {exc}", err=True)
+                return 1
+
+            try:
+                check_engine_is_sqlite(settings)
+            except RestoreAbortedError as exc:
+                click.echo(f"Error: {exc}", err=True)
+                return 1
+
+            manifest = validation.manifest
+            click.echo(f"Archive:              {name}")
+            click.echo(f"Created:              {manifest.created_at}")
+            click.echo(f"Source SnackBase:     {manifest.snackbase_version}")
+            click.echo(f"Includes files:       {'yes' if manifest.includes_files else 'no'}")
+            click.echo(f"Database engine:      {manifest.database_engine}")
+            for issue in validation.blocking:
+                click.echo(f"BLOCKING: {issue.message}", err=True)
+            for issue in validation.warnings:
+                click.echo(f"WARNING:  {issue.message}")
+
+            if validation.blocking:
+                click.echo(
+                    "Restore refused: blocking compatibility issues cannot be overridden.",
+                    err=True,
+                )
+                return 1
+            if validation.warnings and not force:
+                click.echo(
+                    "Restore refused due to compatibility warnings. "
+                    "Re-run with --force to proceed anyway.",
+                    err=True,
+                )
+                return 1
+
+            if not yes:
+                click.confirm(
+                    f"All data created after {manifest.created_at} will be "
+                    "discarded and the instance will restart. Continue?",
+                    abort=True,
+                    default=False,
+                )
+
+            write_marker(
+                settings,
+                archive_name=name,
+                destination=destination_to_marker_dict(destination, settings),
+                requested_by="system",
+                manifest_fingerprints=fingerprints_from_settings(settings),
+            )
+            click.echo(
+                f"\nRestore of {name!r} scheduled.\n"
+                "\nThe restore completes on next start; a supervised deployment "
+                "restarts automatically.\n"
+                "Ensure the container restart policy is 'unless-stopped' or "
+                "'always' (docker-compose.yml already sets 'unless-stopped'), "
+                "or start the server manually:\n"
+                "  python -m snackbase serve"
+            )
             return 0
         except BackupError as exc:
             click.echo(f"Error: {exc}", err=True)

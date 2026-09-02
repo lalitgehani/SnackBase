@@ -12,7 +12,7 @@ or incompressible, so throughput beats ratio.
 """
 
 import zipfile
-from collections.abc import Iterator
+from collections.abc import Iterable
 from pathlib import Path
 from typing import IO, Protocol
 
@@ -97,7 +97,7 @@ class _MemberHandle:
         self.close()
 
 
-def validate_member_paths(names: Iterator[str]) -> None:
+def validate_member_paths(names: Iterable[str]) -> None:
     """Reject absolute paths or ``..`` segments before anything is extracted.
 
     Raises:
