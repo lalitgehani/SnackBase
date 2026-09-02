@@ -356,6 +356,7 @@ def register_routes(app: FastAPI) -> None:
         api_keys_router,
         audit_log_router,
         auth_router,
+        backups_router,
         codelists_router,
         collections_router,
         custom_endpoint_dispatcher_router,
@@ -544,6 +545,12 @@ def register_routes(app: FastAPI) -> None:
         workflow_webhook_router,
         prefix=settings.api_prefix,
         tags=["workflows"],
+    )
+
+    # Register backup management routes (superadmin only). Must be before
+    # records_router: records_router is a catch-all and must remain last.
+    app.include_router(
+        backups_router, prefix=f"{settings.api_prefix}/backups", tags=["backups"]
     )
 
     # Register dynamic record routes with /records prefix to avoid conflicts

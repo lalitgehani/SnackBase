@@ -6,6 +6,7 @@ from .accounts_router import router as accounts_router
 from .admin_router import router as admin_router
 from .api_keys_router import router as api_keys_router
 from .audit_log_router import router as audit_log_router
+from .backups_router import router as backups_router
 from .codelists_router import router as codelists_router
 from .collection_rules_router import router as collection_rules_router
 from .collections_router import router as collections_router
@@ -37,6 +38,7 @@ __all__ = [
     "api_keys_router",
     "audit_log_router",
     "auth_router",
+    "backups_router",
     "collections_router",
     "collection_rules_router",
     "dashboard_router",

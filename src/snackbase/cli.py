@@ -883,6 +883,158 @@ def functions_purge_executions() -> None:
     click.echo(f"Deleted {deleted} old function executions")
 
 
+@cli.group()
+def backup() -> None:
+    """Manage instance backups (archives of database and local files).
+
+    Commands operate directly against the configured destination without
+    requiring a running server, so they can be cron-driven independently of
+    the in-app scheduler.
+    """
+
+
+def _human_size(num_bytes: int) -> str:
+    size = float(num_bytes)
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if size < 1024 or unit == "TB":
+            return f"{size:.1f}{unit}" if unit != "B" else f"{int(size)}B"
+        size /= 1024
+    return f"{size:.1f}TB"  # pragma: no cover - unreachable
+
+
+@backup.command("create")
+@click.option(
+    "--name",
+    type=str,
+    default=None,
+    help="Archive name (default: snackbase_backup_<UTC timestamp>.zip)",
+)
+def backup_create(name: str | None) -> None:
+    """Create a consistent backup archive at the configured destination."""
+    import asyncio
+
+    from snackbase.infrastructure.backup.destinations import (
+        BackupError,
+        resolve_destination,
+    )
+    from snackbase.infrastructure.backup.service import (
+        create_backup,
+        generate_backup_name,
+    )
+    from snackbase.infrastructure.persistence.database import get_db_manager
+
+    settings = get_settings()
+    configure_logging(settings)
+    archive_name = name or generate_backup_name()
+
+    async def run() -> int:
+        db = get_db_manager()
+        try:
+            async with db.session() as session:
+                destination = await resolve_destination(session)
+            outcome = await create_backup(
+                name=archive_name,
+                destination=destination,
+                session_factory=db.session,
+            )
+            click.echo(
+                f"Created {outcome.name} "
+                f"({_human_size(outcome.size)}) at {outcome.destination_type}"
+            )
+            return 0
+        except BackupError as exc:
+            click.echo(f"Error: {exc}", err=True)
+            return 1
+        finally:
+            await db.disconnect()
+
+    raise SystemExit(asyncio.run(run()))
+
+
+@backup.command("list")
+def backup_list() -> None:
+    """List archives at the configured destination."""
+    import asyncio
+
+    from snackbase.infrastructure.backup.destinations import (
+        BackupError,
+        resolve_destination,
+    )
+    from snackbase.infrastructure.persistence.database import get_db_manager
+
+    settings = get_settings()
+    configure_logging(settings)
+
+    async def run() -> int:
+        db = get_db_manager()
+        try:
+            async with db.session() as session:
+                destination = await resolve_destination(session)
+            entries = await destination.list()
+            if not entries:
+                click.echo("No backups found.")
+                return 0
+            for entry in entries:
+                marker = "auto" if entry.name.startswith("@auto_") else "manual"
+                modified = entry.modified.strftime("%Y-%m-%d %H:%M:%S")
+                click.echo(
+                    f"{entry.name:<48} {_human_size(entry.size):>10} "
+                    f"{modified:<20} {marker}"
+                )
+            return 0
+        except BackupError as exc:
+            click.echo(f"Error: {exc}", err=True)
+            return 1
+        finally:
+            await db.disconnect()
+
+    raise SystemExit(asyncio.run(run()))
+
+
+@backup.command()
+@click.argument("name")
+@click.option("--yes", is_flag=True, default=False, help="Skip confirmation prompt")
+def delete(name: str, yes: bool) -> None:
+    """Delete the archive NAME from the configured destination."""
+    import asyncio
+
+    from snackbase.infrastructure.backup.audit import write_backup_event
+    from snackbase.infrastructure.backup.destinations import (
+        BackupError,
+        resolve_destination,
+    )
+    from snackbase.infrastructure.persistence.database import get_db_manager
+
+    settings = get_settings()
+    configure_logging(settings)
+
+    async def run() -> int:
+        db = get_db_manager()
+        try:
+            async with db.session() as session:
+                destination = await resolve_destination(session)
+            if not yes:
+                click.confirm(f"Delete backup {name!r}?", abort=True, default=False)
+            await destination.delete(name)
+            await write_backup_event(
+                db.session,
+                event="backup.delete",
+                name=name,
+                destination_type=type(destination).__name__.replace(
+                    "BackupDestination", ""
+                ).lower(),
+            )
+            click.echo(f"Deleted {name}")
+            return 0
+        except BackupError as exc:
+            click.echo(f"Error: {exc}", err=True)
+            return 1
+        finally:
+            await db.disconnect()
+
+    raise SystemExit(asyncio.run(run()))
+
+
 def main() -> NoReturn:
     """Main entry point for the CLI.
 

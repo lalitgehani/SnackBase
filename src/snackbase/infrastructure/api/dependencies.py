@@ -13,7 +13,9 @@ from snackbase.core.logging import get_logger
 from snackbase.infrastructure.auth.token_types import (
     AuthenticatedUser as AuthUser,
 )
-from snackbase.infrastructure.persistence.database import get_db_session
+from snackbase.infrastructure.persistence.database import (
+    get_db_session as get_db_session,
+)
 
 if TYPE_CHECKING:
     from snackbase.domain.services.email_verification_service import EmailVerificationService

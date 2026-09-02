@@ -12,6 +12,7 @@ import asyncio
 import os
 import shutil
 from abc import ABC, abstractmethod
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -43,6 +44,10 @@ class BackupError(Exception):
 
 class BackupNotFoundError(BackupError):
     """Raised when an archive does not exist at the destination."""
+
+
+class BackupExistsError(BackupError):
+    """Raised when an operation would overwrite an existing archive."""
 
 
 class BackupDestinationError(BackupError):
@@ -127,6 +132,19 @@ class BackupDestination(ABC):
     @abstractmethod
     async def exists(self, name: str) -> bool:
         """Return whether the archive ``name`` exists."""
+
+    def open_download_stream(self, name: str) -> Iterator[bytes]:
+        """Yield the archive ``name`` in chunks for HTTP download.
+
+        Concrete on both implementations so a download never buffers an
+        archive in memory. S3 clients return their body object directly
+        rather than downloading to a temp file first.
+        """
+        raise NotImplementedError
+
+
+#: Chunk size for streaming downloads (1 MiB).
+DOWNLOAD_CHUNK_SIZE = 1024 * 1024
 
 
 class LocalBackupDestination(BackupDestination):
@@ -223,6 +241,22 @@ class LocalBackupDestination(BackupDestination):
 
     async def exists(self, name: str) -> bool:
         return self._path_for(name).is_file()
+
+    def open_download_stream(self, name: str) -> Iterator[bytes]:
+        validate_archive_name(name)
+        path = self.base_path / name
+        if not path.is_file():
+            raise BackupNotFoundError(f"Archive not found: {name}")
+
+        def _chunks() -> Iterator[bytes]:
+            with open(path, "rb") as handle:
+                while True:
+                    chunk = handle.read(DOWNLOAD_CHUNK_SIZE)
+                    if not chunk:
+                        break
+                    yield chunk
+
+        return _chunks()
 
 
 class S3BackupDestination(BackupDestination):
@@ -385,6 +419,30 @@ class S3BackupDestination(BackupDestination):
                 f"Failed to check archive {name!r} in S3: {exc}"
             ) from exc
         return True
+
+    def open_download_stream(self, name: str) -> Iterator[bytes]:
+        key = self._object_key(name)
+        try:
+            response = self._get_client().get_object(Bucket=self.bucket, Key=key)
+        except ClientError as exc:
+            if self._is_not_found(exc):
+                raise BackupNotFoundError(f"Archive not found: {name}") from exc
+            raise BackupDestinationError(
+                f"Failed to open archive {name!r} from S3: {exc}"
+            ) from exc
+        except BotoCoreError as exc:
+            raise BackupDestinationError(
+                f"Failed to open archive {name!r} from S3: {exc}"
+            ) from exc
+        body = response["Body"]
+
+        def _chunks() -> Iterator[bytes]:
+            try:
+                yield from body.iter_chunks(DOWNLOAD_CHUNK_SIZE)
+            finally:
+                body.close()
+
+        return _chunks()
 
 
 async def resolve_destination(session: AsyncSession) -> BackupDestination:

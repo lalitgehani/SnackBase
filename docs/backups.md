@@ -81,3 +81,71 @@ encryption key is a hard refusal (the archive's stored credentials would be
 undecryptable), while signing-key mismatches are warnings an operator can
 override knowingly. An archive whose manifest format is newer than the running
 SnackBase supports is refused rather than misread.
+
+## Creating and managing backups
+
+### Admin API
+
+All endpoints require superadmin access and live under `/api/v1/backups`.
+
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /api/v1/backups` | Start creating an archive; returns 202. Body `{"name": "my_backup.zip"}` is optional — without it the archive is named `snackbase_backup_<UTC yyyymmddHHMMSS>.zip`. |
+| `GET /api/v1/backups` | List every archive (newest first) with `name`, `size`, `modified`, and `is_automatic`, plus the `active` in-flight operation when one is running. |
+| `DELETE /api/v1/backups/{name}` | Delete an archive (204). Returns 404 for an absent name and 409 while it is being written. |
+| `GET /api/v1/backups/{name}/download` | Stream the archive as `application/zip` attachment. |
+| `POST /api/v1/backups/upload` | Multipart upload of an archive taken elsewhere. The payload must be a readable zip carrying a parsable `manifest.json`. |
+
+Manual archive names must match `^[a-z0-9_-]{1,150}\.zip$`. The `@` character is
+reserved: automatic backups are named `@auto_…`, and a manual name can never
+collide with the retention prefix. Duplicate names answer 409, as does a create
+while another backup or restore is in flight (the response names the running
+operation). Uploads are exempt from the user-file `max_file_size` limit —
+archives are legitimately large.
+
+Only one backup or restore runs at a time. In-flight state is kept in memory
+plus a lock file at the backup directory, never in the database, so no backup
+job row can be captured by its own snapshot and restored as a stuck `running`
+job.
+
+### CLI
+
+```bash
+uv run python -m snackbase backup create [--name TEXT]
+uv run python -m snackbase backup list
+uv run python -m snackbase backup delete NAME [--yes]
+```
+
+The commands talk to the configured destination directly and work without a
+running server, so they can be driven by an external cron. `backup delete`
+prompts for confirmation unless `--yes` is passed. Every backup event —
+`backup.create.started`, `backup.create.completed`, `backup.create.failed`,
+`backup.delete` — is appended to the immutable audit log, recording the archive
+name, destination type, byte size on completion, and the acting user (`system`
+for CLI and scheduled runs).
+
+### Disk space
+
+Creating a backup needs roughly **2× the database size** of free disk space at
+the backup location: the `VACUUM INTO` snapshot plus the compressed archive
+coexist during the build. The snapshot and its staging archive are deleted on
+both success and failure.
+
+### How consistency works
+
+SQLite snapshots use `VACUUM INTO`, which writes a transactionally consistent
+copy of the database under a brief lock — a backup taken under heavy write
+load captures a coherent state with no partial transactions. The snapshot
+passes `PRAGMA integrity_check` and is independent of the live WAL. The
+archive layout is:
+
+```
+manifest.json        self-describing metadata (see above)
+data.db              the VACUUM INTO snapshot
+files/<account_id>/… the tree under settings.storage_path (local storage only)
+```
+
+When the active file storage provider is S3, the `files/` tree is not archived
+(files live in the bucket, not on the volume) and the manifest records
+`includes_files: false` and `storage_mode: "s3"`. The backup directory itself
+is never included in an archive.
