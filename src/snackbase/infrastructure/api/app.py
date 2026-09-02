@@ -727,6 +727,9 @@ async def register_builtin_providers(app: FastAPI) -> None:
     """
     from snackbase.core.configuration.config_registry import ConfigurationRegistry
     from snackbase.infrastructure.configuration.providers import EmailPasswordProvider
+    from snackbase.infrastructure.configuration.providers.backup.backup_settings import (
+        BackupSettingsConfiguration,
+    )
     from snackbase.infrastructure.configuration.providers.email.aws_ses import AWSESConfiguration
     from snackbase.infrastructure.configuration.providers.email.resend import ResendConfiguration
     from snackbase.infrastructure.configuration.providers.email.smtp import SMTPConfiguration
@@ -839,6 +842,17 @@ async def register_builtin_providers(app: FastAPI) -> None:
             is_builtin=s3_storage_provider.is_builtin,
         )
 
+        # Register Backup Settings provider
+        backup_settings_provider = BackupSettingsConfiguration()
+        config_registry.register_provider_definition(
+            category=backup_settings_provider.category,
+            provider_name=backup_settings_provider.provider_name,
+            display_name=backup_settings_provider.display_name,
+            logo_url=backup_settings_provider.logo_url,
+            config_schema=backup_settings_provider.config_schema,
+            is_builtin=backup_settings_provider.is_builtin,
+        )
+
         # Register Google OAuth provider
         google_oauth_handler = GoogleOAuthHandler()
         config_registry.register_provider_definition(
@@ -926,6 +940,7 @@ async def register_builtin_providers(app: FastAPI) -> None:
                 system_config.provider_name,
                 local_storage_provider.provider_name,
                 s3_storage_provider.provider_name,
+                backup_settings_provider.provider_name,
                 google_oauth_handler.provider_name,
                 github_oauth_handler.provider_name,
                 microsoft_oauth_handler.provider_name,

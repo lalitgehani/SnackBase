@@ -12,6 +12,7 @@ Welcome to the SnackBase documentation! This directory contains comprehensive gu
 - 🧠 [Conceptual Guides](concepts/) - Deep dives into core concepts
 - 🛠️ [Developer Guides](guides/) - Practical development tutorials
 - 🔌 [Hook System](hooks.md) - Extend SnackBase with custom hooks
+- 💾 [Backups](backups.md) - Configure, create, and restore backup archives
 - 🚀 [API Examples](api-examples.md) - Practical API usage examples
 - 📖 [API Reference](http://localhost:8000/docs) - Interactive Swagger documentation
 

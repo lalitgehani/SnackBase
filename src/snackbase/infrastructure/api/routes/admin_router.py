@@ -16,6 +16,24 @@ router = APIRouter(tags=["admin"])
 logger = get_logger(__name__)
 
 
+def _validate_backup_settings_values(category: str, values: dict[str, Any]) -> None:
+    """Reject invalid backup settings on the configuration write path.
+
+    Raises:
+        HTTPException: 400 carrying the parser's message when a value is invalid.
+    """
+    if category != "backup_settings":
+        return
+    from snackbase.infrastructure.configuration.providers.backup.backup_settings import (
+        validate_backup_settings,
+    )
+
+    try:
+        validate_backup_settings(values)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
 @router.get("/configuration/stats")
 async def get_configuration_stats(
     _admin: SuperadminUser,
@@ -588,6 +606,10 @@ async def update_configuration_values(
             else:
                 new_values[key] = val
 
+        merged_values = dict(current_values)
+        merged_values.update(new_values)
+        _validate_backup_settings_values(config_model.category, merged_values)
+
         config_model.config = registry._encrypt_config(new_values, schema)
         await repo.update(config_model)
         await db.commit()
@@ -640,6 +662,7 @@ async def create_configuration(
         provider_def = registry.get_provider_definition(
             data["category"], data["provider_name"]
         )
+        _validate_backup_settings_values(data["category"], data.get("config") or {})
         if provider_def is None and config_schema is None:
             # Reject credential-like custom configs without a schema
             config_keys = set((data.get("config") or {}).keys())
