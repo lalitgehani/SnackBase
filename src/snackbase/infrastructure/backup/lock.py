@@ -100,7 +100,23 @@ def active_operation(backup_dir: Path | str | None = None) -> dict[str, Any] | N
     return info
 
 
-_process_lock = asyncio.Lock()
+_process_lock: asyncio.Lock = asyncio.Lock()
+_process_lock_loop: asyncio.AbstractEventLoop | None = None
+
+
+def _get_process_lock() -> asyncio.Lock:
+    """The in-process lock, rebuilt when the running loop changes.
+
+    Production runs a single loop so the lock persists; tests (and any
+    embedder) that create successive loops must not inherit a lock bound
+    to a dead one.
+    """
+    global _process_lock, _process_lock_loop
+    loop = asyncio.get_running_loop()
+    if _process_lock_loop is not loop:
+        _process_lock = asyncio.Lock()
+        _process_lock_loop = loop
+    return _process_lock
 
 
 @contextlib.asynccontextmanager
@@ -125,7 +141,7 @@ async def backup_lock(
     # The process lock guards only the check-and-claim so concurrent tasks
     # serialise their filesystem race; the file itself is held for the
     # duration of the operation.
-    async with _process_lock:
+    async with _get_process_lock():
         await asyncio.to_thread(sweep_stale_lock, backup_dir)
         payload = {
             "operation": operation,

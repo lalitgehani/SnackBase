@@ -27,18 +27,30 @@ def validate_backup_name(name: str) -> None:
 
 
 class BackupCreateRequest(BaseModel):
-    """Request body for creating a backup. ``name`` is optional."""
+    """Request body for creating a backup.
+
+    ``name`` is optional. ``type`` selects the archive kind explicitly; the
+    engine routes automatically when omitted (SQLite produces
+    ``sqlite_physical``, PostgreSQL produces ``logical``).
+    """
 
     name: str | None = None
+    type: str | None = None
 
 
 class BackupEntryResponse(BaseModel):
-    """One archive at the destination."""
+    """One archive at the destination.
+
+    ``restorable`` is False for every logical archive: they are portable
+    exports, not restore artifacts in this release.
+    """
 
     name: str
     size: int
     modified: datetime
     is_automatic: bool
+    backup_type: str = "sqlite_physical"
+    restorable: bool = True
 
 
 class BackupListResponse(BaseModel):

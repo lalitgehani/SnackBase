@@ -178,11 +178,14 @@ class BackupScheduler:
                 )
                 return
             try:
+                from snackbase.infrastructure.backup.service import resolve_backup_type
+
                 outcome = await create_backup(
                     name=name,
                     destination=destination,
                     session_factory=session_factory,
                     settings=settings,
+                    backup_type=resolve_backup_type(None, settings.database_url),
                 )
             except BackupInProgressError:
                 logger.info(

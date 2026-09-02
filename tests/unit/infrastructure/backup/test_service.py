@@ -361,3 +361,130 @@ class _NullContext:
 
     async def __aexit__(self, *exc_info: object) -> None:
         return None
+
+
+class TestLogicalArchive:
+    async def test_logical_archive_layout_and_manifest(self, tmp_path: Path) -> None:
+        await _seed_database(tmp_path)
+        backups_dir = tmp_path / "backups"
+        destination = LocalBackupDestination(backups_dir)
+        settings = _make_settings(tmp_path)
+
+        outcome = await create_backup(
+            name="logical.zip",
+            destination=destination,
+            settings=settings,
+            backup_type="logical",
+        )
+
+        assert outcome.manifest.backup_type == "logical"
+        assert outcome.manifest.database_engine == "sqlite"
+        archive_path = backups_dir / "logical.zip"
+        names = member_names(archive_path)
+        assert "manifest.json" in names
+        assert "data.db" not in names
+        assert "tables/users.jsonl" in names
+        assert "tables/accounts.jsonl" in names
+
+        import json as json_module
+
+        with zipfile.ZipFile(archive_path) as archive:
+            manifest = json_module.loads(archive.read("manifest.json"))
+            users_lines = archive.read("tables/users.jsonl").decode().splitlines()
+        assert manifest["backup_type"] == "logical"
+        assert manifest["table_row_counts"] == {"users": 1, "accounts": 1}
+        for line in users_lines:
+            assert json_module.loads(line) == {"id": 1}
+
+    async def test_logical_archive_through_destination_and_lock(
+        self, tmp_path: Path
+    ) -> None:
+        import asyncio
+
+        from snackbase.infrastructure.backup.lock import backup_lock
+
+        await _seed_database(tmp_path)
+        destination = LocalBackupDestination(tmp_path / "backups")
+        settings = _make_settings(tmp_path)
+
+        async def hold_lock() -> None:
+            async with backup_lock("held.zip", "backup", tmp_path / "backups"):
+                await asyncio.sleep(0.15)
+
+        async def expect_error() -> None:
+            from snackbase.infrastructure.backup.destinations import (
+                BackupInProgressError,
+            )
+
+            with pytest.raises(BackupInProgressError):
+                await create_backup(
+                    name="other.zip",
+                    destination=destination,
+                    settings=settings,
+                    backup_type="logical",
+                )
+
+        await asyncio.gather(hold_lock(), expect_error())
+
+
+class TestResolveBackupType:
+    def test_sqlite_defaults_to_physical(self) -> None:
+        from snackbase.infrastructure.backup.service import resolve_backup_type
+
+        assert (
+            resolve_backup_type(None, "sqlite+aiosqlite:///./x.db")
+            == "sqlite_physical"
+        )
+
+    def test_postgresql_defaults_to_logical(self) -> None:
+        from snackbase.infrastructure.backup.service import resolve_backup_type
+
+        assert (
+            resolve_backup_type(None, "postgresql+asyncpg://u:p@h/db") == "logical"
+        )
+
+    def test_sqlite_can_request_logical(self) -> None:
+        from snackbase.infrastructure.backup.service import resolve_backup_type
+
+        assert (
+            resolve_backup_type("logical", "sqlite+aiosqlite:///./x.db") == "logical"
+        )
+
+    def test_postgresql_rejects_physical(self) -> None:
+        from snackbase.infrastructure.backup.service import resolve_backup_type
+
+        with pytest.raises(ValueError, match="sqlite_physical"):
+            resolve_backup_type("sqlite_physical", "postgresql+asyncpg://u:p@h/db")
+
+    def test_unknown_type_rejected(self) -> None:
+        from snackbase.infrastructure.backup.service import resolve_backup_type
+
+        with pytest.raises(ValueError, match="type"):
+            resolve_backup_type("tar", "sqlite+aiosqlite:///./x.db")
+
+
+class TestClassifyArchive:
+    async def test_physical_and_logical_classified(self, tmp_path: Path) -> None:
+        await _seed_database(tmp_path)
+        destination = LocalBackupDestination(tmp_path / "backups")
+        settings = _make_settings(tmp_path)
+
+        await create_backup(
+            name="p.zip", destination=destination, settings=settings
+        )
+        await create_backup(
+            name="l.zip",
+            destination=destination,
+            settings=settings,
+            backup_type="logical",
+        )
+
+        from snackbase.infrastructure.backup.service import classify_archive
+
+        physical_type, physical_restorable = await classify_archive(
+            destination, "p.zip"
+        )
+        logical_type, logical_restorable = await classify_archive(destination, "l.zip")
+
+        assert (physical_type, physical_restorable) == ("sqlite_physical", True)
+        assert (logical_type, logical_restorable) == ("logical", False)

@@ -122,6 +122,10 @@ class BackupManifest:
     secret_key_fingerprint: str
     token_secret_fingerprint: str
     table_row_counts: dict[str, int] = field(default_factory=dict)
+    #: Ephemeral tables deliberately absent from logical exports (F5.1).
+    #: Optional so format_version-1 manifests written before logical backups
+    #: existed still parse.
+    excluded_tables: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to the exact documented field set, in field order."""
@@ -143,7 +147,8 @@ class BackupManifest:
         unknown = sorted(set(data) - known)
         if unknown:
             raise ValueError(f"Unknown manifest fields: {', '.join(unknown)}")
-        missing = sorted(known - set(data))
+        optional = {"excluded_tables"}
+        missing = sorted((known - set(data)) - optional)
         if missing:
             raise ValueError(f"Missing manifest fields: {', '.join(missing)}")
 
@@ -169,13 +174,21 @@ class BackupManifest:
         heads = data[ALEMBIC_HEADS]
         if not (isinstance(heads, list) and all(isinstance(item, str) for item in heads)):
             raise ValueError(f"Manifest field {ALEMBIC_HEADS!r} must be a list of strings")
-        counts = data[TABLE_ROW_COUNTS]
+        counts = data.get(TABLE_ROW_COUNTS, {})
         if not (
             isinstance(counts, dict)
             and all(isinstance(k, str) and isinstance(v, int) for k, v in counts.items())
         ):
             raise ValueError(
                 f"Manifest field {TABLE_ROW_COUNTS!r} must be an object of integers"
+            )
+        excluded = data.get("excluded_tables", [])
+        if not (
+            isinstance(excluded, list)
+            and all(isinstance(item, str) for item in excluded)
+        ):
+            raise ValueError(
+                "Manifest field 'excluded_tables' must be a list of strings"
             )
 
         return cls(
@@ -191,6 +204,7 @@ class BackupManifest:
             secret_key_fingerprint=data[SECRET_KEY_FINGERPRINT],
             token_secret_fingerprint=data[TOKEN_SECRET_FINGERPRINT],
             table_row_counts=counts,
+            excluded_tables=excluded,
         )
 
     @classmethod
@@ -231,6 +245,19 @@ class BackupManifest:
             )
 
         engine = running_engine(settings.database_url)
+        if self.backup_type == "logical":
+            issues.append(
+                CompatibilityIssue(
+                    type="logical_archive_not_restorable",
+                    severity="blocking",
+                    message=(
+                        "Logical archives are portable exports, not restore "
+                        "artifacts in this release. On PostgreSQL, configure "
+                        "disaster recovery on the database itself (managed "
+                        "snapshots or operator-run pg_dump)."
+                    ),
+                )
+            )
         if self.database_engine != engine:
             issues.append(
                 CompatibilityIssue(

@@ -146,3 +146,44 @@ def copy_file_chunks(source: IO[bytes], target: Writable) -> int:
         target.write(chunk)
         written += len(chunk)
     return written
+
+
+_EOCD_SIGNATURE = b"PK\x05\x06"
+_CDH_SIGNATURE = b"PK\x01\x02"
+
+
+def parse_central_directory_names(tail: bytes) -> list[str] | None:
+    """Extract member names from a zip End-of-Central-Directory tail buffer.
+
+    ``tail`` must contain the complete central directory and EOCD record
+    (the last bytes of the archive). Returns None when the buffer is
+    incomplete, including the zip64 case, so callers can retry with a
+    bigger tail.
+    """
+    eocd = tail.rfind(_EOCD_SIGNATURE)
+    if eocd < 0 or len(tail) - eocd < 22:
+        return None
+    total_entries = int.from_bytes(tail[eocd + 10 : eocd + 12], "little")
+    if total_entries == 0xFFFF:  # zip64: entries stored in the EOCD64 record
+        return None
+    cd_size = int.from_bytes(tail[eocd + 12 : eocd + 16], "little")
+    if cd_size == 0xFFFFFFFF:
+        return None
+    if cd_size > len(tail):
+        return None
+    start = eocd - cd_size
+    if start < 0:
+        return None
+
+    names: list[str] = []
+    offset = start
+    for _ in range(total_entries):
+        if len(tail) - offset < 46 or tail[offset : offset + 4] != _CDH_SIGNATURE:
+            return None
+        name_len = int.from_bytes(tail[offset + 28 : offset + 30], "little")
+        extra_len = int.from_bytes(tail[offset + 30 : offset + 32], "little")
+        comment_len = int.from_bytes(tail[offset + 32 : offset + 34], "little")
+        name = tail[offset + 46 : offset + 46 + name_len]
+        names.append(name.decode("utf-8", errors="replace"))
+        offset += 46 + name_len + extra_len + comment_len
+    return names

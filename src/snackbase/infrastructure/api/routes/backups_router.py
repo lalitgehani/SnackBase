@@ -63,8 +63,10 @@ from snackbase.infrastructure.backup.restore import (
 )
 from snackbase.infrastructure.backup.service import (
     backup_working_dir,
+    classify_archive,
     create_backup,
     generate_backup_name,
+    resolve_backup_type,
     staging_dir,
 )
 from snackbase.infrastructure.persistence.database import get_db_manager
@@ -168,6 +170,19 @@ async def create_backup_endpoint(
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
             ) from exc
+
+    from snackbase.core.config import get_settings
+
+    settings = get_settings()
+    try:
+        backup_type = resolve_backup_type(
+            request.type if request else None, settings.database_url
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
+
     destination = await resolve_destination(session)
     working_dir = backup_working_dir(destination)
 
@@ -196,6 +211,7 @@ async def create_backup_endpoint(
                 destination=destination,
                 session_factory=session_factory,
                 actor=actor,
+                backup_type=backup_type,
             )
         except Exception as exc:  # noqa: BLE001 - background task boundary
             logger.error("Background backup failed", archive=name, error=str(exc))
@@ -221,16 +237,21 @@ async def list_backups(
     scheduler = getattr(request.app.state, "backup_scheduler", None)
     failures = getattr(getattr(scheduler, "alerts", None), "consecutive_failures", 0)
     last_error = getattr(getattr(scheduler, "alerts", None), "last_error", None)
-    return BackupListResponse(
-        backups=[
+    response_backups = []
+    for entry in entries:
+        backup_type, restorable = await classify_archive(destination, entry.name)
+        response_backups.append(
             BackupEntryResponse(
                 name=entry.name,
                 size=entry.size,
                 modified=entry.modified,
                 is_automatic=entry.name.startswith("@auto_"),
+                backup_type=backup_type,
+                restorable=restorable,
             )
-            for entry in entries
-        ],
+        )
+    return BackupListResponse(
+        backups=response_backups,
         active=active_operation(working_dir),
         consecutive_failures=int(failures or 0),
         last_error=last_error,

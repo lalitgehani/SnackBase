@@ -150,6 +150,14 @@ class BackupDestination(ABC):
         """
         raise NotImplementedError
 
+    def read_tail_bytes(self, name: str, size: int) -> bytes:
+        """Read the last ``size`` bytes of an archive, for zip metadata.
+
+        Used to classify an archive from its central directory without
+        downloading it.
+        """
+        raise NotImplementedError
+
 
 #: Chunk size for streaming downloads (1 MiB).
 DOWNLOAD_CHUNK_SIZE = 1024 * 1024
@@ -207,6 +215,16 @@ class LocalBackupDestination(BackupDestination):
             raise BackupDestinationError(
                 f"Failed to read archive {name!r} from {self.base_path}: {exc}"
             ) from exc
+
+    def read_tail_bytes(self, name: str, size: int) -> bytes:
+        path = self._path_for(name)
+        if not path.is_file():
+            raise BackupNotFoundError(f"Archive not found: {name}")
+        with open(path, "rb") as handle:
+            handle.seek(0, os.SEEK_END)
+            remaining = handle.tell()
+            handle.seek(max(0, remaining - size))
+            return handle.read()
 
     async def list(self, prefix: str = "") -> list[BackupEntry]:
         if not self.base_path.is_dir():
@@ -432,6 +450,32 @@ class S3BackupDestination(BackupDestination):
                 f"Failed to check archive {name!r} in S3: {exc}"
             ) from exc
         return True
+
+    def read_tail_bytes(self, name: str, size: int) -> bytes:
+        """Range-read the archive tail; S3 bodies never buffer fully."""
+        key = self._object_key(name)
+        try:
+            response = self._get_client().get_object(
+                Bucket=self.bucket,
+                Key=key,
+                Range=f"bytes=-{size}",
+            )
+            body = response["Body"]
+        except ClientError as exc:
+            if self._is_not_found(exc):
+                raise BackupNotFoundError(f"Archive not found: {name}") from exc
+            raise BackupDestinationError(
+                f"Failed to read archive {name!r} from S3: {exc}"
+            ) from exc
+        except BotoCoreError as exc:
+            raise BackupDestinationError(
+                f"Failed to read archive {name!r} from S3: {exc}"
+            ) from exc
+        try:
+            payload: bytes = body.read()
+            return payload
+        finally:
+            body.close()
 
     def open_download_stream(self, name: str) -> Iterator[bytes]:
         key = self._object_key(name)

@@ -44,12 +44,19 @@ def _manifest(**overrides: object) -> BackupManifest:
     return BackupManifest(**data)  # type: ignore[arg-type]
 
 
-def _archive_bytes(manifest: BackupManifest, *, with_data_db: bool = True) -> bytes:
+def _archive_bytes(
+    manifest: BackupManifest,
+    *,
+    with_data_db: bool = True,
+    with_tables: bool = False,
+) -> bytes:
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w") as archive:
         archive.writestr(MANIFEST_MEMBER, manifest.to_json())
         if with_data_db:
             archive.writestr("data.db", SNAP_DB_BYTES)
+        if with_tables:
+            archive.writestr("tables/users.jsonl", '{"id": 1}\n')
     return buffer.getvalue()
 
 
@@ -338,3 +345,55 @@ async def test_restore_status_404_when_never_restored(
         "/api/v1/backups/restore-status", headers=_auth(superadmin_token)
     )
     assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_restore_logical_archive_rejected_with_distinct_message(
+    client, superadmin_token: str, restore_env: Path, tmp_path: Path
+) -> None:
+    """Logical archives are portable, not restorable — distinct from engine mismatch."""
+    _place_archive(
+        restore_env,
+        "portable.zip",
+        _archive_bytes(_manifest(backup_type="logical")),
+    )
+
+    response = await client.post(
+        "/api/v1/backups/portable.zip/restore",
+        headers=_auth(superadmin_token),
+        json={},
+    )
+
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    issues = detail["issues"] if isinstance(detail, dict) else []
+    types = {i["type"] for i in issues}
+    assert "logical_archive_not_restorable" in types
+    assert not (tmp_path / "sb_data" / ".restore-pending.json").exists()
+
+
+@pytest.mark.asyncio
+async def test_list_reports_logical_archives_not_restorable(
+    client,
+    superadmin_token: str,
+    restore_env: Path,
+) -> None:
+    _place_archive(
+        restore_env,
+        "portable.zip",
+        _archive_bytes(
+            _manifest(backup_type="logical"),
+            with_data_db=False,
+            with_tables=True,
+        ),
+    )
+    _place_archive(restore_env, "physical.zip", _archive_bytes(_manifest()))
+
+    response = await client.get("/api/v1/backups", headers=_auth(superadmin_token))
+
+    assert response.status_code == 200
+    entries = {e["name"]: e for e in response.json()["backups"]}
+    assert entries["portable.zip"]["backup_type"] == "logical"
+    assert entries["portable.zip"]["restorable"] is False
+    assert entries["physical.zip"]["backup_type"] == "sqlite_physical"
+    assert entries["physical.zip"]["restorable"] is True

@@ -13,6 +13,8 @@ progress in the database it is snapshotting would capture a job stuck in
 ``running`` that returns on every restore.
 """
 
+import asyncio
+import json
 import secrets
 import sqlite3
 from collections.abc import Callable
@@ -20,6 +22,7 @@ from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
@@ -41,6 +44,7 @@ from snackbase.infrastructure.backup.audit import (
 )
 from snackbase.infrastructure.backup.destinations import (
     BackupDestination,
+    BackupError,
     BackupExistsError,
     LocalBackupDestination,
 )
@@ -146,6 +150,26 @@ def collect_row_counts(snapshot_path: Path) -> dict[str, int]:
         connection.close()
 
 
+async def _write_logical_members(
+    writer: ArchiveWriter,
+    engine: Any,
+    includes_files: bool,
+) -> dict[str, int]:
+    """Write one JSONL member per table; returns the per-table row counts."""
+    from snackbase.infrastructure.backup.logical_snapshot import iter_tables
+
+    counts: dict[str, int] = {}
+    async for table_name, rows in iter_tables(engine):
+        line_count = 0
+        member_name = f"tables/{table_name}.jsonl"
+        with writer.open_member(member_name) as member:
+            async for row in rows:
+                member.write((json.dumps(row) + "\n").encode("utf-8"))
+                line_count += 1
+        counts[table_name] = line_count
+    return counts
+
+
 def build_manifest(
     settings: Settings,
     *,
@@ -153,6 +177,7 @@ def build_manifest(
     storage_mode: str,
     includes_files: bool,
     table_row_counts: dict[str, int],
+    excluded_tables: list[str] | None = None,
 ) -> BackupManifest:
     """Assemble a manifest for the running instance."""
     engine = running_engine(settings.database_url)
@@ -182,6 +207,7 @@ async def create_backup(
     settings: Settings | None = None,
     actor: tuple[str, str, str] | None = None,
     audit_events: bool = True,
+    backup_type: str = "sqlite_physical",
 ) -> BackupOutcome:
     """Create a consistent SQLite backup archive at the destination.
 
@@ -228,6 +254,7 @@ async def create_backup(
                 working_dir=working_dir,
                 session_factory=session_factory,
                 settings=settings,
+                backup_type=backup_type,
             )
     except Exception as exc:
         await audit(
@@ -247,6 +274,7 @@ async def _run_backup(
     session_factory: Callable[..., AbstractAsyncContextManager[AsyncSession]]
     | None,
     settings: Settings,
+    backup_type: str = "sqlite_physical",
 ) -> BackupOutcome:
     staging = staging_dir(working_dir)
     staging.mkdir(parents=True, exist_ok=True)
@@ -260,32 +288,48 @@ async def _run_backup(
             storage_mode = await resolve_storage_mode(session)
     includes_files = storage_mode == "local"
 
-    # Refuse non-SQLite engines before touching the destination: PostgreSQL
-    # disaster recovery is configured on the database, not here.
-    sqlite_file_path(settings.database_url)
-
     engine = create_async_engine(settings.database_url)
     try:
-        await snapshot_sqlite(engine, snapshot_path)
-
-        counts = collect_row_counts(snapshot_path)
-        manifest = build_manifest(
-            settings,
-            backup_type="sqlite_physical",
-            storage_mode=storage_mode,
-            includes_files=includes_files,
-            table_row_counts=counts,
-        )
-
         with ArchiveWriter(archive_path) as writer:
-            writer.write_text_member(MANIFEST_MEMBER, manifest.to_json())
-            # Stream the snapshot in chunks: the database may be far larger
-            # than process memory.
-            with (
-                open(snapshot_path, "rb") as source,
-                writer.open_member(DATA_MEMBER) as member,
-            ):
-                copy_file_chunks(source, member)
+            if backup_type == "logical":
+                from snackbase.infrastructure.backup.logical_snapshot import (
+                    EXCLUDED_TABLES,
+                )
+
+                counts = await _write_logical_members(
+                    writer, engine, includes_files
+                )
+                manifest = build_manifest(
+                    settings,
+                    backup_type="logical",
+                    storage_mode=storage_mode,
+                    includes_files=includes_files,
+                    table_row_counts=counts,
+                    excluded_tables=sorted(EXCLUDED_TABLES),
+                )
+                writer.write_text_member(MANIFEST_MEMBER, manifest.to_json())
+            else:
+                # Physical archives are SQLite-only: PostgreSQL disaster
+                # recovery is configured on the database, not here.
+                sqlite_file_path(settings.database_url)
+                await snapshot_sqlite(engine, snapshot_path)
+                counts = collect_row_counts(snapshot_path)
+                manifest = build_manifest(
+                    settings,
+                    backup_type="sqlite_physical",
+                    storage_mode=storage_mode,
+                    includes_files=includes_files,
+                    table_row_counts=counts,
+                )
+                writer.write_text_member(MANIFEST_MEMBER, manifest.to_json())
+                # Stream the snapshot in chunks: the database may be far
+                # larger than process memory.
+                with (
+                    open(snapshot_path, "rb") as source,
+                    writer.open_member(DATA_MEMBER) as member,
+                ):
+                    copy_file_chunks(source, member)
+
             if includes_files:
                 storage_path = Path(settings.storage_path)
                 writer.write_file_tree(
@@ -328,3 +372,80 @@ def generate_backup_name(prefix: str = "snackbase_backup_") -> str:
     """A timestamped archive name: ``<prefix><UTC yyyymmddHHMMSS>.zip``."""
     stamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
     return f"{prefix}{stamp}.zip"
+
+
+def resolve_backup_type(requested: str | None, database_url: str) -> str:
+    """Pick the archive type for a create request; callers never choose twice.
+
+    The engine routes automatically: SQLite produces ``sqlite_physical``,
+    PostgreSQL produces ``logical``. A SQLite operator may explicitly ask
+    for a portable logical archive; asking for a physical backup on
+    PostgreSQL is a 400-grade error.
+
+    Raises:
+        ValueError: When ``requested`` is not a known type, or names
+            ``sqlite_physical`` on a PostgreSQL instance.
+    """
+    from snackbase.infrastructure.backup.manifest import running_engine
+
+    engine = running_engine(database_url)
+    if requested is not None and requested not in ("logical", "sqlite_physical"):
+        raise ValueError("type must be 'logical' or 'sqlite_physical'")
+    if engine == "postgresql":
+        if requested == "sqlite_physical":
+            raise ValueError(
+                "sqlite_physical backups are not available on PostgreSQL: "
+                "PostgreSQL archives are logical exports"
+            )
+        return "logical"
+    return requested or "sqlite_physical"
+
+
+def _manifest_backup_type_from_names(names: list[str]) -> str:
+    """Classify an archive from its member names: logical exports have no
+    ``data.db`` and carry ``tables/`` members."""
+    if DATA_MEMBER in names:
+        return "sqlite_physical"
+    if any(name.startswith("tables/") for name in names):
+        return "logical"
+    return "unknown"
+
+
+def read_archive_backup_type(archive_path: Path) -> str:
+    """Classify a local archive by reading only its zip central directory."""
+    import zipfile
+
+    try:
+        with zipfile.ZipFile(archive_path) as archive:
+            names = archive.namelist()
+    except (zipfile.BadZipFile, OSError):
+        return "unknown"
+    return _manifest_backup_type_from_names(names)
+
+
+async def classify_archive(
+    destination: BackupDestination, name: str
+) -> tuple[str, bool]:
+    """Report an archive's ``backup_type`` and whether it is restorable.
+
+    Classification reads only zip metadata: the local central directory, or
+    a Range read of the object tail for S3. Logical archives are portable
+    exports — not restorable in this release. Anything unclassifiable is
+    reported as ``unknown`` and not restorable, never silently as physical.
+    """
+    from snackbase.infrastructure.backup.archive import parse_central_directory_names
+
+    if isinstance(destination, LocalBackupDestination):
+        backup_type = read_archive_backup_type(destination.base_path / name)
+        return backup_type, backup_type == "sqlite_physical"
+
+    for tail_size in (65536, 1 << 20):
+        try:
+            tail = await asyncio.to_thread(destination.read_tail_bytes, name, tail_size)
+        except BackupError:
+            return "unknown", False
+        names = parse_central_directory_names(tail)
+        if names is not None:
+            backup_type = _manifest_backup_type_from_names(names)
+            return backup_type, backup_type == "sqlite_physical"
+    return "unknown", False

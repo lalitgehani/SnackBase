@@ -284,3 +284,25 @@ scheduled path, only after the new archive is confirmed written, and a
 deletion failure is logged without failing the (already successful) backup.
 Every prune is audited as `backup.retention.pruned` naming the deleted
 archives.
+
+## PostgreSQL: portable logical archives
+
+`POST /api/v1/backups` routes automatically by engine. On SQLite it produces
+a restorable `sqlite_physical` archive; on PostgreSQL it produces a
+`logical` archive — one `tables/<name>.jsonl` file per table inside the zip,
+exported inside a single `REPEATABLE READ READ ONLY` transaction so the data
+is never torn across tables. A SQLite operator can request a logical archive
+explicitly with `{"type": "logical"}` (or `backup create --type logical`);
+requesting `sqlite_physical` on PostgreSQL is rejected with 400.
+
+Logical archives are **portable artifacts, not recovery artifacts**: they are
+for inspection, environment seeding, and migration preparation, and the API
+reports every logical archive with `restorable: false`. They cannot be
+imported back, and cross-engine migration (SQLite → PostgreSQL) is
+deliberately out of scope. PostgreSQL disaster recovery is configured on the
+database itself — managed snapshots or an operator-run `pg_dump` — not in
+SnackBase.
+
+Ephemeral tables (`token_blacklist`, `refresh_tokens`, `password_resets`,
+`email_verifications`) and `alembic_version` are excluded from logical
+exports by design; the manifest records the excluded list.

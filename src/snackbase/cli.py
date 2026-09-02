@@ -921,7 +921,14 @@ def _human_size(num_bytes: int) -> str:
     default=None,
     help="Archive name (default: snackbase_backup_<UTC timestamp>.zip)",
 )
-def backup_create(name: str | None) -> None:
+@click.option(
+    "--type",
+    "backup_type",
+    type=click.Choice(["logical", "sqlite_physical"]),
+    default=None,
+    help="Archive type (default: engine chooses; PostgreSQL produces logical)",
+)
+def backup_create(name: str | None, backup_type: str | None) -> None:
     """Create a consistent backup archive at the configured destination."""
     import asyncio
 
@@ -932,12 +939,18 @@ def backup_create(name: str | None) -> None:
     from snackbase.infrastructure.backup.service import (
         create_backup,
         generate_backup_name,
+        resolve_backup_type,
     )
     from snackbase.infrastructure.persistence.database import get_db_manager
 
     settings = get_settings()
     configure_logging(settings)
     archive_name = name or generate_backup_name()
+    try:
+        archive_type = resolve_backup_type(backup_type, settings.database_url)
+    except ValueError as exc:
+        click.echo(f"Error: {exc}", err=True)
+        raise SystemExit(1) from exc
 
     async def run() -> int:
         db = get_db_manager()
@@ -948,6 +961,7 @@ def backup_create(name: str | None) -> None:
                 name=archive_name,
                 destination=destination,
                 session_factory=db.session,
+                backup_type=archive_type,
             )
             click.echo(
                 f"Created {outcome.name} "
@@ -972,6 +986,7 @@ def backup_list() -> None:
         BackupError,
         resolve_destination,
     )
+    from snackbase.infrastructure.backup.service import classify_archive
     from snackbase.infrastructure.persistence.database import get_db_manager
 
     settings = get_settings()
@@ -989,9 +1004,13 @@ def backup_list() -> None:
             for entry in entries:
                 marker = "auto" if entry.name.startswith("@auto_") else "manual"
                 modified = entry.modified.strftime("%Y-%m-%d %H:%M:%S")
+                archive_type, restorable = await classify_archive(
+                    destination, entry.name
+                )
+                type_label = archive_type if restorable else f"{archive_type} (portable)"
                 click.echo(
                     f"{entry.name:<48} {_human_size(entry.size):>10} "
-                    f"{modified:<20} {marker}"
+                    f"{modified:<20} {marker:<7} {type_label}"
                 )
             return 0
         except BackupError as exc:
