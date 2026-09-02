@@ -449,6 +449,13 @@ class Settings(BaseSettings):
             "(SNACKBASE_RESTORE_RETAIN_OLD_DATA_HOURS)"
         ),
     )
+    backup_scheduler_enabled: bool = Field(
+        default=True,
+        description=(
+            "Enable the automatic backup scheduler within the FastAPI "
+            "lifespan (SNACKBASE_BACKUP_SCHEDULER_ENABLED)"
+        ),
+    )
 
     # Scheduler Settings
     scheduler_enabled: bool = Field(

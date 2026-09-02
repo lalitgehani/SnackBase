@@ -241,3 +241,46 @@ application does not own: configure disaster recovery on the database itself
 backups produced by SnackBase are *portable logical archives* for inspection
 and environment seeding — they are explicitly not restorable in this
 release, and the API reports them with `restorable: false`.
+
+## Schedule format and retention semantics
+
+### Cron format
+
+The `cron` key uses the standard 5-field syntax, evaluated in UTC:
+
+```
+minute hour day-of-month month day-of-week
+```
+
+Each field supports `*` (any), `*/n` (steps), `n-m` (inclusive ranges),
+`n,m,k` (lists), and name aliases (`JAN`–`DEC`, `SUN`–`SAT`; 7 means Sunday
+in day-of-week). Examples:
+
+| Expression | Meaning |
+| --- | --- |
+| `* * * * *` | Every minute |
+| `*/15 * * * *` | Every 15 minutes |
+| `0 * * * *` | Hourly |
+| `0 2 * * *` | Daily at 02:00 UTC |
+| `0 2 * * SUN` | Weekly, Sunday 02:00 UTC |
+| `0 2 1 * *` | Monthly on day 1 at 02:00 UTC |
+
+Changes to the cron expression are picked up within one scheduler tick (60
+seconds) with no restart; the next run is always computed forward from now,
+so a restart never fires a missed window.
+
+### The `@auto_` prefix and retention
+
+Automatic archives are named `@auto_snackbase_<UTC yyyymmddHHMMSS>.zip`. The
+`@` character is reserved: manual and uploaded archive names cannot contain
+it (`^[a-z0-9_-]{1,150}\.zip$`), so retention can never catch a manual
+archive.
+
+After each successful scheduled backup, the destination is listed under the
+`@auto_` prefix and the oldest archives beyond `max_keep` are deleted — the
+new archive occupies one of the `max_keep` slots and is never deleted.
+Manual and uploaded archives are never touched. Pruning only runs in the
+scheduled path, only after the new archive is confirmed written, and a
+deletion failure is logged without failing the (already successful) backup.
+Every prune is audited as `backup.retention.pruned` naming the deleted
+archives.

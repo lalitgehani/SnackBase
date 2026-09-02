@@ -387,3 +387,36 @@ async def test_create_while_operation_in_flight_conflicts(
     # The list endpoint reports the in-flight operation too.
     listing = await client.get("/api/v1/backups", headers=headers)
     assert listing.json()["active"]["name"] == "running.zip"
+
+
+@pytest.mark.asyncio
+async def test_list_reports_scheduler_health(
+    client, superadmin_token: str, db_session: AsyncSession, local_backup_dir: Path
+) -> None:
+    """consecutive_failures/last_error come from the scheduler when present."""
+    from snackbase.infrastructure.backup.alerting import BackupAlertManager
+
+    await _configure_local_backup(db_session, local_backup_dir)
+    headers = _auth(superadmin_token)
+
+    idle = await client.get("/api/v1/backups", headers=headers)
+    assert idle.status_code == 200
+    body = idle.json()
+    assert body["consecutive_failures"] == 0
+    assert body["last_error"] is None
+
+    # Simulate a scheduler that has seen failures.
+    from snackbase.infrastructure.api.app import app
+
+    scheduler = type("S", (), {"alerts": BackupAlertManager()})()
+    scheduler.alerts.record_failure("s3 unreachable")
+    scheduler.alerts.record_failure("s3 unreachable")
+    app.state.backup_scheduler = scheduler
+    try:
+        failing = await client.get("/api/v1/backups", headers=headers)
+        assert failing.status_code == 200
+        body = failing.json()
+        assert body["consecutive_failures"] == 2
+        assert body["last_error"] == "s3 unreachable"
+    finally:
+        del app.state.backup_scheduler

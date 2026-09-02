@@ -42,10 +42,17 @@ class BackupEntryResponse(BaseModel):
 
 
 class BackupListResponse(BaseModel):
-    """All archives plus the in-flight operation, if any."""
+    """All archives plus the in-flight operation, if any.
+
+    ``consecutive_failures`` and ``last_error`` surface the health of the
+    automatic-backup schedule so the UI can flag a failing schedule without
+    waiting for the alert email.
+    """
 
     backups: list[BackupEntryResponse]
     active: dict[str, Any] | None = None
+    consecutive_failures: int = 0
+    last_error: str | None = None
 
 
 class BackupCreatedResponse(BaseModel):

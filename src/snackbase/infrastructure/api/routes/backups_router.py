@@ -24,7 +24,7 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -211,12 +211,16 @@ async def create_backup_endpoint(
 @router.get("", response_model=BackupListResponse)
 async def list_backups(
     _: SuperadminUser,
+    request: Request,
     session: AsyncSession = Depends(get_db_session),
 ) -> BackupListResponse:
     """List every archive at the destination, newest first, plus in-flight state."""
     destination = await resolve_destination(session)
     entries = await destination.list()
     working_dir = backup_working_dir(destination)
+    scheduler = getattr(request.app.state, "backup_scheduler", None)
+    failures = getattr(getattr(scheduler, "alerts", None), "consecutive_failures", 0)
+    last_error = getattr(getattr(scheduler, "alerts", None), "last_error", None)
     return BackupListResponse(
         backups=[
             BackupEntryResponse(
@@ -228,6 +232,8 @@ async def list_backups(
             for entry in entries
         ],
         active=active_operation(working_dir),
+        consecutive_failures=int(failures or 0),
+        last_error=last_error,
     )
 
 
