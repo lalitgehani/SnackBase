@@ -435,7 +435,9 @@ You can deploy SnackBase using the included multi-stage `Dockerfile` and
 
 The production image:
 
-- Builds the React admin UI and serves it from `./static`
+- Builds the React admin UI and serves it from `./static` at `/_/`
+  (the site root is left free for an application you mount; a bare `/`
+  redirects to the panel when nothing claims it)
 - Installs Python dependencies from wheels only (no C compiler in the image)
 - Includes the `uv` binary so **Functions** can create per-version environments
 - Keeps `curl` for container healthchecks

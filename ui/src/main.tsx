@@ -25,7 +25,7 @@ createRoot(document.getElementById('root')!).render(
       disableTransitionOnChange
     >
       <RootProviders>
-        <BrowserRouter>
+        <BrowserRouter basename="/_/">
           <App />
         </BrowserRouter>
       </RootProviders>

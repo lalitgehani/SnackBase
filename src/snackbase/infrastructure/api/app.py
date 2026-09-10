@@ -12,7 +12,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 
 from snackbase.core.config import get_settings
 from snackbase.core.hooks import HookDecorator, HookEvent, HookRegistry
@@ -650,13 +650,20 @@ def register_routes(app: FastAPI) -> None:
         }
 
 
+ADMIN_PATH = "/_"
+"""Mount point for the built admin SPA.
+
+The admin panel lives under ``/_/`` so the site root stays free for the
+application a customer actually ships. This mirrors PocketBase, where ``/_/``
+is the dashboard and ``/`` is yours.
+"""
+
+
 def register_frontend(app: FastAPI) -> None:
-    """Serve the built React SPA from the ./static directory.
+    """Serve the built React admin SPA from ./static under ``/_/``.
 
     This is a no-op when the static directory does not exist, preserving
-    compatibility with API-only deployments.  All API and health routes are
-    registered before this function is called, so they always take priority
-    over the catch-all handler added here.
+    compatibility with API-only deployments.
 
     Args:
         app: FastAPI application instance.
@@ -667,24 +674,17 @@ def register_frontend(app: FastAPI) -> None:
 
     static_dir_resolved = static_dir.resolve()
 
-    settings = get_settings()
-    api_prefix = settings.api_prefix.strip("/")
+    def _index() -> Response:
+        return FileResponse(str(static_dir / "index.html"))
 
     # HEAD is listed explicitly: FastAPI's APIRoute, unlike Starlette's plain Route,
-    # does not add HEAD alongside GET, so uptime monitors probing HEAD / got a 405.
-    @app.api_route("/{full_path:path}", methods=["GET", "HEAD"], include_in_schema=False)
+    # does not add HEAD alongside GET, so uptime monitors probing HEAD got a 405.
+    @app.api_route(
+        f"{ADMIN_PATH}/{{full_path:path}}", methods=["GET", "HEAD"], include_in_schema=False
+    )
     async def serve_frontend(full_path: str) -> Response:
-        # Serve index.html for the root path
         if not full_path:
-            return FileResponse(str(static_dir / "index.html"))
-
-        # Never answer an API path with the SPA. This catch-all is registered last, so it
-        # otherwise swallows unmatched API routes and hands back index.html with a 200 --
-        # which reaches clients as "JSON expected, got HTML" rather than a 404, and
-        # preempts FastAPI's trailing-slash redirect (e.g. /api/v1/audit-logs ->
-        # /api/v1/audit-logs/) because the catch-all counts as a match.
-        if full_path == api_prefix or full_path.startswith(f"{api_prefix}/"):
-            return JSONResponse(status_code=404, content={"detail": "Not Found"})
+            return _index()
 
         candidate = (static_dir / full_path).resolve()
 
@@ -698,7 +698,18 @@ def register_frontend(app: FastAPI) -> None:
             return FileResponse(str(candidate))
 
         # SPA fallback: unknown paths are handled by React Router
-        return FileResponse(str(static_dir / "index.html"))
+        return _index()
+
+    @app.api_route(ADMIN_PATH, methods=["GET", "HEAD"], include_in_schema=False)
+    async def serve_frontend_root() -> Response:
+        return _index()
+
+    # Nothing is mounted at the site root by default, so send a bare visit to
+    # the admin panel. An application mounted at "/" registers its own root
+    # route ahead of this one and takes precedence.
+    @app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
+    async def root_redirect() -> Response:
+        return RedirectResponse(url=f"{ADMIN_PATH}/", status_code=307)
 
 
 def register_exception_handlers(app: FastAPI) -> None:

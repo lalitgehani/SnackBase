@@ -9,6 +9,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // https://vite.dev/config/
 export default defineConfig({
+  // The admin panel is served from /_/ so the site root stays free for
+  // the application a customer ships. Must match ADMIN_PATH in
+  // src/snackbase/infrastructure/api/app.py and the BrowserRouter
+  // basename in src/main.tsx.
+  base: '/_/',
   plugins: [react(), tailwindcss()],
   resolve: {
     dedupe: ['react', 'react-dom', 'react/jsx-runtime'],
