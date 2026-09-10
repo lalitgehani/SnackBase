@@ -43,6 +43,11 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/snackbase", "src/snackbase_fn"]
+exclude = ["**/__pycache__", "**/*.pyc", "**/*.pyo"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"alembic.ini" = "snackbase/alembic.ini"
+"alembic" = "snackbase/alembic"
 
 [dependency-groups]
 dev = [

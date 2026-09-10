@@ -5,6 +5,8 @@ environment variables and .env files. Configuration is loaded at application
 startup and is immutable during runtime.
 """
 
+from __future__ import annotations
+
 import ipaddress
 import json
 from collections.abc import Sequence

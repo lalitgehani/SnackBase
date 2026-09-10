@@ -292,9 +292,16 @@ async def init_database() -> None:
         from alembic import command
         from alembic.config import Config
 
-        alembic_cfg = Config("alembic.ini")
+        from snackbase.infrastructure.persistence.migration_service import (
+            apply_version_locations,
+            resolve_alembic_ini,
+        )
+
+        ini = str(resolve_alembic_ini())
+        alembic_cfg = Config(ini)
         # Ensure we use the correct database URL
         alembic_cfg.set_main_option("sqlalchemy.url", settings.database_url)
+        apply_version_locations(alembic_cfg, ini)
 
         # Run migrations to heads (all branches) in executor to avoid blocking
         loop = asyncio.get_event_loop()

@@ -30,6 +30,54 @@ from snackbase.infrastructure.persistence.table_builder import TableBuilder
 logger = get_logger(__name__)
 
 
+def resolve_alembic_ini(explicit: str | Path | None = None) -> Path:
+    """Locate ``alembic.ini`` for this process.
+
+    Order: ``SNACKBASE_ALEMBIC_INI``, an existing explicit path, ``./alembic.ini``,
+    the copy packaged inside the ``snackbase`` wheel, then the source checkout
+    next to ``src/snackbase`` (editable installs).
+    """
+    env = os.environ.get("SNACKBASE_ALEMBIC_INI")
+    if env:
+        path = Path(env)
+        if path.is_file():
+            return path.resolve()
+        raise FileNotFoundError(f"SNACKBASE_ALEMBIC_INI={env} does not exist")
+
+    if explicit is not None:
+        path = Path(explicit)
+        if path.is_file():
+            return path.resolve()
+        if path.is_absolute():
+            raise FileNotFoundError(f"alembic.ini not found: {path}")
+
+    cwd = Path.cwd() / "alembic.ini"
+    if cwd.is_file():
+        return cwd.resolve()
+
+    package_root = Path(__file__).resolve().parents[2]
+    packaged = package_root / "alembic.ini"
+    if packaged.is_file():
+        return packaged.resolve()
+
+    checkout = package_root.parent.parent / "alembic.ini"
+    if checkout.is_file():
+        return checkout.resolve()
+
+    raise FileNotFoundError(
+        "alembic.ini not found (cwd, packaged snackbase, or source checkout)"
+    )
+
+
+def _ini_is_packaged(ini: Path) -> bool:
+    package_root = Path(__file__).resolve().parents[2]
+    try:
+        ini.resolve().relative_to(package_root)
+        return True
+    except ValueError:
+        return False
+
+
 def dynamic_migrations_dir(alembic_ini: str | Path = "alembic.ini") -> Path:
     """The instance-volume directory holding dynamic collection migrations.
 
@@ -53,6 +101,12 @@ def dynamic_migrations_dir(alembic_ini: str | Path = "alembic.ini") -> Path:
         return path.resolve()
 
     ini = Path(alembic_ini)
+    if not ini.is_file():
+        ini = resolve_alembic_ini(alembic_ini)
+    if _ini_is_packaged(ini):
+        path = Path.cwd() / "sb_data" / "migrations"
+        path.mkdir(parents=True, exist_ok=True)
+        return path.resolve()
     cfg = Config(str(ini))
     here = Path(cfg.get_main_option("here") or ini.resolve().parent)
 
@@ -101,7 +155,8 @@ class MigrationService:
             database_url: Optional database URL to override the one in alembic.ini.
             engine: Optional database engine to use for migrations.
         """
-        self.config = Config(alembic_ini_path)
+        resolved = str(resolve_alembic_ini(alembic_ini_path))
+        self.config = Config(resolved)
         self.engine = engine
 
         # Ensure we use an absolute path for script_location
@@ -118,7 +173,11 @@ class MigrationService:
             # Otherwise SQLAlchemy masks it with '***' when converted to string
             self.config.set_main_option("sqlalchemy.url", engine.url.render_as_string(hide_password=False))
 
-        apply_version_locations(self.config, alembic_ini_path)
+        apply_version_locations(self.config, resolved)
+        # Generated collection revisions must not require a developer linter
+        # on PATH (pip-installed snackapp has no ruff).
+        if self.config.get_section("post_write_hooks"):
+            self.config.set_section_option("post_write_hooks", "hooks", "")
 
     def _get_dynamic_branch_args(self) -> dict[str, Any]:
         """Return the Alembic keyword arguments needed to place a new revision in the

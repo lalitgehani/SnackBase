@@ -4,6 +4,8 @@ This module configures structlog for structured JSON logging with
 correlation ID tracking for request tracing.
 """
 
+from __future__ import annotations
+
 import logging
 import sys
 from typing import Any
