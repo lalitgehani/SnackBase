@@ -4,6 +4,8 @@ Each step execution within a workflow instance is recorded here, providing
 a full audit trail of what happened, when, and with what input/output.
 """
 
+from __future__ import annotations
+
 import uuid
 from datetime import datetime
 

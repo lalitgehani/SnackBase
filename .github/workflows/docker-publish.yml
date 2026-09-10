@@ -6,7 +6,7 @@
 #    Triggers & tags:
 #      push to main  → :latest
 #      push to demo  → :demo
-#      push tag v*   → :<semver> (e.g. v0.12.0 → :0.12.0, :0.12, :0)
+#      push tag v*   → :<semver> (e.g. v0.12.1 → :0.12.1, :0.12, :0)
 #    Demo branch builds with VITE_IS_DEMO=true; main and version tags use false.
 #
 # 2) Platform Studio image — ghcr.io/<owner>/snackbase-platform-studio
@@ -17,8 +17,8 @@
 # Platforms: linux/amd64 + linux/arm64 (multi-arch manifest list).
 #
 # Usage after a release:
-#   git tag -a v0.12.0 -m "Release 0.12.0"
-#   git push origin v0.12.0
+#   git tag -a v0.12.1 -m "Release 0.12.1"
+#   git push origin v0.12.1
 #
 # Manual rebuild of multi-arch tags: Actions → Docker publish → Run workflow
 
@@ -68,7 +68,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          # latest ← main, demo ← demo branch, semver ← git tags like v0.12.0
+          # latest ← main, demo ← demo branch, semver ← git tags like v0.12.1
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=raw,value=demo,enable=${{ github.ref == 'refs/heads/demo' }}
@@ -132,7 +132,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/snackbase-platform-studio
-          # latest ← main, semver ← git tags like v0.12.0 (no demo tag)
+          # latest ← main, semver ← git tags like v0.12.1 (no demo tag)
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=semver,pattern={{version}}

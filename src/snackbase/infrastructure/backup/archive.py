@@ -11,6 +11,8 @@ ZIP_DEFLATED with compresslevel 1: record payloads are already-compressed
 or incompressible, so throughput beats ratio.
 """
 
+from __future__ import annotations
+
 import zipfile
 from collections.abc import Iterable
 from pathlib import Path

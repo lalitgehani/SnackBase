@@ -6,6 +6,8 @@ Contains the core data structures used by the hook system:
 - HookResult: Result of a hook trigger operation
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 

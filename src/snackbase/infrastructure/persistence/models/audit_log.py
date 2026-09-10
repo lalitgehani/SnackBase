@@ -4,6 +4,8 @@ This table stores GxP-compliant audit trails for all data changes.
 Entries are immutable (write-once) and form a blockchain-style integrity chain.
 """
 
+from __future__ import annotations
+
 from datetime import datetime
 
 from sqlalchemy import (

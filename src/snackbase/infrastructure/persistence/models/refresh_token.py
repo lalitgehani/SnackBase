@@ -4,6 +4,8 @@ Stores refresh tokens for JWT token rotation and invalidation.
 Each token is stored with a hash for secure lookup.
 """
 
+from __future__ import annotations
+
 import uuid
 from datetime import datetime
 

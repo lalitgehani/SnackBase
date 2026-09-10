@@ -11,6 +11,8 @@ The ``actions`` column holds the list of actions to execute when the hook fires.
 It is populated by F8.1; the scheduler (F7.3) passes it through to the job payload.
 """
 
+from __future__ import annotations
+
 import uuid
 from datetime import datetime
 

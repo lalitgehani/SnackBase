@@ -3,6 +3,8 @@
 Invitations allow account admins to invite new users via email.
 """
 
+from __future__ import annotations
+
 from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, Index, String, func

@@ -4,6 +4,8 @@ Outbound webhooks allow developers to configure HTTP callbacks that fire
 when record events occur (create, update, delete).
 """
 
+from __future__ import annotations
+
 import uuid
 from datetime import datetime
 

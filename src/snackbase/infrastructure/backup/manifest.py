@@ -12,6 +12,8 @@ and S3 credentials are silently undecryptable while the restore reports
 success. Comparing fingerprints turns that failure into a refusal.
 """
 
+from __future__ import annotations
+
 import hashlib
 import json
 from dataclasses import asdict, dataclass, field, fields

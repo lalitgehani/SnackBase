@@ -1,3 +1,11 @@
+# Release Notes - v0.12.1
+
+SnackBase v0.12.1 imports on Python 3.12 and 3.13. `HookContext` and other
+`TYPE_CHECKING`-only annotations no longer raise `NameError` at class or
+function definition time.
+
+---
+
 # Release Notes - v0.12.0
 
 SnackBase v0.12.0 adds instance-level backup and restore, fixes rate limiting

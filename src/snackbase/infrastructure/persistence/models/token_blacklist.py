@@ -1,8 +1,9 @@
-
 """SQLAlchemy model for revoked tokens.
 
 This model tracks tokens that have been revoked before their natural expiration.
 """
+
+from __future__ import annotations
 
 from sqlalchemy import Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column

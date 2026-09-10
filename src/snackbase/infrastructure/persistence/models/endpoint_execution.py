@@ -4,6 +4,8 @@ Each row records the outcome of a single custom endpoint invocation,
 including the request snapshot and response body for debugging.
 """
 
+from __future__ import annotations
+
 import uuid
 from datetime import datetime
 

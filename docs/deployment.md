@@ -544,7 +544,7 @@ SNACKBASE_DB_POOL_TIMEOUT=30
 | `SNACKBASE_ENVIRONMENT`                 | `development`                                | Environment: development, staging, production  |
 | `SNACKBASE_DEBUG`                       | `false`                                      | Enable debug mode                              |
 | `SNACKBASE_APP_NAME`                    | `SnackBase`                                  | Application name                               |
-| `SNACKBASE_APP_VERSION`                 | `0.12.0`                                     | Application version                            |
+| `SNACKBASE_APP_VERSION`                 | `0.12.1`                                     | Application version                            |
 | `SNACKBASE_API_PREFIX`                  | `/api/v1`                                    | API route prefix                               |
 | `SNACKBASE_HOST`                        | `0.0.0.0`                                    | Server bind address                            |
 | `SNACKBASE_PORT`                        | `8000`                                       | Server port                                    |
@@ -586,7 +586,7 @@ Response:
 {
   "status": "healthy",
   "service": "SnackBase",
-  "version": "0.12.0"
+  "version": "0.12.1"
 }
 ```
 
@@ -604,7 +604,7 @@ Response:
 {
   "status": "ready",
   "service": "SnackBase",
-  "version": "0.12.0",
+  "version": "0.12.1",
   "database": "connected"
 }
 ```
@@ -623,7 +623,7 @@ Response:
 {
   "status": "alive",
   "service": "SnackBase",
-  "version": "0.12.0"
+  "version": "0.12.1"
 }
 ```
 

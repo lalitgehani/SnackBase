@@ -4,6 +4,8 @@ Macros allow defining reusable SQL snippets for permission rules.
 They are global (shared across accounts) and managed by superadmins.
 """
 
+from __future__ import annotations
+
 from datetime import datetime
 
 from sqlalchemy import DateTime, Integer, String, Text, func

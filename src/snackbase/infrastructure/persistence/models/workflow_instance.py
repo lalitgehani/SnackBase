@@ -5,6 +5,8 @@ It tracks the current execution state, the accumulated context (trigger data
 + per-step outputs), and links to the resume job when paused on a wait step.
 """
 
+from __future__ import annotations
+
 import uuid
 from datetime import datetime
 

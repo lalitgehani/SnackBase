@@ -6,6 +6,8 @@ Codelists mirror the configurations multi-tenancy pattern:
 - Values store stable submission codes; labels resolve at read time
 """
 
+from __future__ import annotations
+
 from datetime import datetime
 
 from sqlalchemy import (

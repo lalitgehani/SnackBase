@@ -4,6 +4,8 @@ Configurations represent external service provider settings (auth, email, storag
 with support for hierarchical configuration (system-level defaults + account-level overrides).
 """
 
+from __future__ import annotations
+
 from datetime import UTC, datetime
 
 from sqlalchemy import (

@@ -4,6 +4,8 @@ Registers every stored object so a download can be authorized against
 something other than the path itself.
 """
 
+from __future__ import annotations
+
 import uuid
 from datetime import datetime
 

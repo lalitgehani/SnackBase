@@ -22,6 +22,8 @@ Usage:
     await worker.stop()
 """
 
+from __future__ import annotations
+
 import asyncio
 import base64
 from collections.abc import Awaitable, Callable

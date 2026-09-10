@@ -266,7 +266,7 @@ OptionalAuthContext = Annotated[AuthorizationContext, Depends(get_optional_auth_
 async def get_email_service(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_db_session)],
-) -> EmailService:
+) -> "EmailService":  # noqa: UP037
     """Get EmailService instance.
 
     Args:
@@ -309,8 +309,8 @@ async def get_email_service(
 
 async def get_verification_service(
     session: Annotated[AsyncSession, Depends(get_db_session)],
-    email_service: Annotated[EmailService, Depends(get_email_service)],
-) -> EmailVerificationService:
+    email_service: Annotated["EmailService", Depends(get_email_service)],  # noqa: UP037
+) -> "EmailVerificationService":  # noqa: UP037
     """Get EmailVerificationService instance.
 
     Args:
@@ -339,8 +339,8 @@ async def get_verification_service(
 
 async def get_password_reset_service(
     session: Annotated[AsyncSession, Depends(get_db_session)],
-    email_service: Annotated[EmailService, Depends(get_email_service)],
-) -> PasswordResetService:
+    email_service: Annotated["EmailService", Depends(get_email_service)],  # noqa: UP037
+) -> "PasswordResetService":  # noqa: UP037
     """Get PasswordResetService instance.
 
     Args:

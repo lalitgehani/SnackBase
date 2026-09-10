@@ -4,6 +4,8 @@ Email templates store customizable email content with Jinja2 variable support.
 Templates can be account-specific or system-level defaults.
 """
 
+from __future__ import annotations
+
 from datetime import datetime
 
 from sqlalchemy import (

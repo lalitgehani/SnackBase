@@ -4,6 +4,8 @@ Each row records the outcome of a single hook execution — whether triggered
 by an event, a cron schedule, or a manual API call.
 """
 
+from __future__ import annotations
+
 import uuid
 from datetime import datetime
 

@@ -4,6 +4,8 @@ All models inherit from the Base class defined in database.py and are
 automatically created on application startup in development mode.
 """
 
+from __future__ import annotations
+
 from snackbase.infrastructure.persistence.models.account import AccountModel
 from snackbase.infrastructure.persistence.models.api_key import APIKeyModel
 from snackbase.infrastructure.persistence.models.audit_log import AuditLogModel

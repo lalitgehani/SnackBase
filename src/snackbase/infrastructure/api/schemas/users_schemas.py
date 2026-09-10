@@ -4,6 +4,8 @@ These schemas are used by the users_router for creating, updating, and
 displaying user information in the admin UI.
 """
 
+from __future__ import annotations
+
 from datetime import datetime
 
 from pydantic import BaseModel, EmailStr, Field, SecretStr, field_validator, model_validator

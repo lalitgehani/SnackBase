@@ -3,6 +3,8 @@
 Stores hashes of password reset tokens sent to users.
 """
 
+from __future__ import annotations
+
 import uuid
 from datetime import datetime
 

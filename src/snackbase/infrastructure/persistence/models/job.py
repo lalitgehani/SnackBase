@@ -4,6 +4,8 @@ Provides a persistent, database-backed job queue with status tracking,
 retry logic, and priority ordering.
 """
 
+from __future__ import annotations
+
 import uuid
 from datetime import datetime
 

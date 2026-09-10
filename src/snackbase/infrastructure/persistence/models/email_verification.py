@@ -3,6 +3,8 @@
 Stores hashes of verification tokens sent to users to verify their email addresses.
 """
 
+from __future__ import annotations
+
 import uuid
 from datetime import datetime
 

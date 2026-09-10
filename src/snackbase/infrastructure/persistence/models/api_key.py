@@ -4,6 +4,8 @@ API keys provide programmatic access for superadmin operations.
 Only SHA-256 hashes are stored for security.
 """
 
+from __future__ import annotations
+
 import uuid
 from datetime import datetime
 

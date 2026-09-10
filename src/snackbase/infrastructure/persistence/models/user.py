@@ -3,6 +3,8 @@
 Users belong to accounts and are uniquely identified by (account_id, email).
 """
 
+from __future__ import annotations
+
 from datetime import datetime
 
 from sqlalchemy import (

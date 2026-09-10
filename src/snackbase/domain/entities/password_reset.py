@@ -3,6 +3,8 @@
 Stores information about password reset tokens sent to users.
 """
 
+from __future__ import annotations
+
 import hashlib
 import secrets
 import uuid

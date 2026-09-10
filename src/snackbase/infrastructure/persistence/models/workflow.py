@@ -5,6 +5,8 @@ schedules, manual API calls, or inbound webhooks. The ``steps`` field
 stores the full step graph as JSON.
 """
 
+from __future__ import annotations
+
 import uuid
 from datetime import datetime
 

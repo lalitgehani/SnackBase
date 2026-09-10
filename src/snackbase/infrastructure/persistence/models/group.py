@@ -3,6 +3,8 @@
 Groups allow organizing users within an account for permission management.
 """
 
+from __future__ import annotations
+
 from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, Index, String, UniqueConstraint, func

@@ -3,6 +3,8 @@
 Email logs provide an audit trail of all email sending attempts.
 """
 
+from __future__ import annotations
+
 from datetime import datetime
 
 from sqlalchemy import (

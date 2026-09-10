@@ -3,6 +3,8 @@
 Collections store metadata about user-created dynamic data tables.
 """
 
+from __future__ import annotations
+
 from datetime import datetime
 
 from sqlalchemy import DateTime, String, Text, func

@@ -4,6 +4,8 @@ Handles file storage operations including saving, retrieving, and deleting files
 Files are stored in account-specific directories with UUID-based filenames.
 """
 
+from __future__ import annotations
+
 import json
 import mimetypes
 import uuid

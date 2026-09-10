@@ -6,6 +6,8 @@ response template. Requests arrive via /api/v1/x/{account_slug}/{path} and
 are dispatched synchronously with a 30-second timeout.
 """
 
+from __future__ import annotations
+
 import uuid
 from datetime import datetime
 
