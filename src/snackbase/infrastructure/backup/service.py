@@ -32,6 +32,7 @@ from snackbase.infrastructure.backup.archive import (
     DATA_MEMBER,
     FILES_PREFIX,
     MANIFEST_MEMBER,
+    MIGRATIONS_PREFIX,
     ArchiveWriter,
     copy_file_chunks,
 )
@@ -60,6 +61,7 @@ from snackbase.infrastructure.backup.sqlite_snapshot import (
     snapshot_sqlite,
     sqlite_file_path,
 )
+from snackbase.infrastructure.persistence.migration_service import dynamic_migrations_dir
 from snackbase.infrastructure.persistence.repositories.configuration_repository import (
     ConfigurationRepository,
 )
@@ -127,7 +129,7 @@ def collect_row_counts(snapshot_path: Path) -> dict[str, int]:
 
     Enumerates the tables that exist in the snapshot itself (core and
     dynamic), skipping SQLite internals and ``alembic_version`` — schema
-    state travels in ``manifest.alembic_heads``.
+    state travels in ``manifest.database_revisions``.
     """
     connection = sqlite3.connect(str(snapshot_path))
     try:
@@ -146,6 +148,29 @@ def collect_row_counts(snapshot_path: Path) -> dict[str, int]:
             row = connection.execute(f'SELECT COUNT(*) FROM "{safe}"').fetchone()
             counts[str(table)] = int(row[0]) if row else 0
         return counts
+    finally:
+        connection.close()
+
+
+def read_database_revisions(snapshot_path: Path) -> list[str]:
+    """Read the snapshot's actual ``alembic_version`` rows.
+
+    This — not the script-directory heads — is the authoritative revision
+    state of the archived database; the post-swap migration run evaluates
+    exactly this against the restored migration scripts.
+
+    Tolerates a snapshot with no ``alembic_version`` table (returns []).
+    """
+    connection = sqlite3.connect(str(snapshot_path))
+    try:
+        exists = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' "
+            "AND name = 'alembic_version'"
+        ).fetchone()
+        if not exists:
+            return []
+        rows = connection.execute("SELECT version_num FROM alembic_version").fetchall()
+        return sorted(str(row[0]) for row in rows)
     finally:
         connection.close()
 
@@ -170,6 +195,25 @@ async def _write_logical_members(
     return counts
 
 
+async def _read_live_database_revisions(engine: Any) -> list[str]:
+    """Read ``alembic_version`` rows from the live database.
+
+    Used by logical archives, which have no snapshot file to read after the
+    fact. Tolerates the table's absence.
+    """
+    from sqlalchemy import text
+
+    try:
+        async with engine.connect() as connection:
+            rows = await connection.execute(
+                text("SELECT version_num FROM alembic_version")
+            )
+            return sorted(str(row[0]) for row in rows.fetchall())
+    except Exception as exc:  # noqa: BLE001 - informational field only
+        logger.warning("Could not read database revisions", error=str(exc))
+        return []
+
+
 def build_manifest(
     settings: Settings,
     *,
@@ -178,12 +222,14 @@ def build_manifest(
     includes_files: bool,
     table_row_counts: dict[str, int],
     excluded_tables: list[str] | None = None,
+    database_revisions: list[str] | None = None,
+    includes_migrations: bool = False,
 ) -> BackupManifest:
     """Assemble a manifest for the running instance."""
     engine = running_engine(settings.database_url)
     fingerprints = fingerprints_from_settings(settings)
     return BackupManifest(
-        format_version=1,
+        format_version=2,
         created_at=datetime.now(UTC).isoformat(),
         snackbase_version=snackbase_version(),
         backup_type=backup_type,
@@ -195,6 +241,8 @@ def build_manifest(
         secret_key_fingerprint=fingerprints["secret_key_fingerprint"],
         token_secret_fingerprint=fingerprints["token_secret_fingerprint"],
         table_row_counts=table_row_counts,
+        database_revisions=database_revisions or [],
+        includes_migrations=includes_migrations,
     )
 
 
@@ -299,6 +347,7 @@ async def _run_backup(
                 counts = await _write_logical_members(
                     writer, engine, includes_files
                 )
+                database_revisions = await _read_live_database_revisions(engine)
                 manifest = build_manifest(
                     settings,
                     backup_type="logical",
@@ -306,6 +355,8 @@ async def _run_backup(
                     includes_files=includes_files,
                     table_row_counts=counts,
                     excluded_tables=sorted(EXCLUDED_TABLES),
+                    database_revisions=database_revisions,
+                    includes_migrations=True,
                 )
                 writer.write_text_member(MANIFEST_MEMBER, manifest.to_json())
             else:
@@ -314,12 +365,19 @@ async def _run_backup(
                 sqlite_file_path(settings.database_url)
                 await snapshot_sqlite(engine, snapshot_path)
                 counts = collect_row_counts(snapshot_path)
+                database_revisions = read_database_revisions(snapshot_path)
                 manifest = build_manifest(
                     settings,
                     backup_type="sqlite_physical",
                     storage_mode=storage_mode,
                     includes_files=includes_files,
                     table_row_counts=counts,
+                    database_revisions=database_revisions,
+                    # The dynamic migration history is authoritative instance
+                    # state: it always travels with a physical archive, even
+                    # when empty (an empty dynamic branch is a real state the
+                    # restore must reproduce by clearing the local directory).
+                    includes_migrations=True,
                 )
                 writer.write_text_member(MANIFEST_MEMBER, manifest.to_json())
                 # Stream the snapshot in chunks: the database may be far
@@ -337,6 +395,15 @@ async def _run_backup(
                     FILES_PREFIX,
                     skip={working_dir, staging, storage_path / STAGING_SUBDIR},
                 )
+
+            # Dynamic collection migrations are engine-agnostic instance
+            # state: the restored database's alembic_version refers to them,
+            # so both archive types carry them.
+            writer.write_file_tree(
+                dynamic_migrations_dir(),
+                MIGRATIONS_PREFIX,
+                skip={dynamic_migrations_dir() / "__pycache__"},
+            )
 
         await destination.write(name, archive_path)
     finally:

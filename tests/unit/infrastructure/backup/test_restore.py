@@ -14,11 +14,13 @@ from snackbase.infrastructure.backup.destinations import LocalBackupDestination
 from snackbase.infrastructure.backup.manifest import BackupManifest, fingerprint
 from snackbase.infrastructure.backup.restore import (
     AUDIT_PENDING_FILENAME,
+    IN_PROGRESS_SENTINEL,
     LAST_RESTORE_FILENAME,
     MARKER_FILENAME,
     RESTORE_OLD_DIRNAME,
     RestoreAbortedError,
     execute_pending_restore,
+    finalize_restore,
     pop_audit_pending,
     read_last_restore,
     read_marker,
@@ -80,13 +82,15 @@ def _matching_manifest(settings: Settings, **overrides: object) -> BackupManifes
 
     prints = fingerprints_from_settings(settings)
     data = dict(
-        format_version=1,
+        format_version=2,
         created_at="2026-09-02T00:00:00+00:00",
         snackbase_version=snackbase_version(),
         backup_type="sqlite_physical",
         database_engine=running_engine(settings.database_url),
         alembic_heads=load_alembic_heads(),
         includes_files=False,
+        database_revisions=["abc123"],
+        includes_migrations=True,
         storage_mode="local",
         encryption_key_fingerprint=prints["encryption_key_fingerprint"],
         secret_key_fingerprint=prints["secret_key_fingerprint"],
@@ -158,7 +162,7 @@ class TestExecutePendingRestore:
         result = execute_pending_restore(settings)
 
         assert result is not None
-        assert result.status == "completed"
+        assert result.status == "swapped"
         assert result.archive_name == "restore_me.zip"
         assert _db_value(db_path) == "before-backup"
 
@@ -167,10 +171,14 @@ class TestExecutePendingRestore:
         preserved = list(old_root.iterdir())
         assert len(preserved) == 1
         assert _db_value(preserved[0] / "data.db") == "after-backup"
+        # The in-progress sentinel is cleared on success: this snapshot is a
+        # deliberate retention, not an interrupted attempt.
+        assert not (preserved[0] / IN_PROGRESS_SENTINEL).exists()
         assert read_marker(settings) is None
         assert not (tmp_path / "sb_data" / ".restore_tmp").exists()
+        assert (tmp_path / "sb_data" / ".restore-manifest.json").is_file()
         last = read_last_restore(settings)
-        assert last is not None and last.status == "completed"
+        assert last is not None and last.status == "swapped"
 
     async def test_restore_moves_files_tree(self, tmp_path: Path) -> None:
         settings = _make_settings(tmp_path)
@@ -202,7 +210,7 @@ class TestExecutePendingRestore:
 
         result = execute_pending_restore(settings)
 
-        assert result is not None and result.status == "completed"
+        assert result is not None and result.status == "swapped"
         restored_file = tmp_path / "sb_data" / "files" / "acc-1" / "keep.txt"
         assert restored_file.is_file()
         assert restored_file.read_text() == "keep"
@@ -230,7 +238,7 @@ class TestExecutePendingRestore:
 
         result = execute_pending_restore(settings)
 
-        assert result is not None and result.status == "completed"
+        assert result is not None and result.status == "swapped"
         assert not (db_path.parent / "snackbase.db-wal").exists()
         assert not (db_path.parent / "snackbase.db-shm").exists()
         assert _db_value(db_path) == "restored"
@@ -257,14 +265,22 @@ class TestExecutePendingRestore:
             manifest_fingerprints={},
         )
 
-        with pytest.raises(RestoreAbortedError):
-            execute_pending_restore(settings)
+        # A fingerprint mismatch can never succeed: the marker is retired
+        # and boot continues on the original data instead of raising.
+        assert execute_pending_restore(settings) is None
 
         assert _db_value(db_path) == "original"
-        assert read_marker(settings) is not None
+        assert read_marker(settings) is None
+        assert (
+            tmp_path / "sb_data" / (MARKER_FILENAME + ".failed")
+        ).exists()
         last = read_last_restore(settings)
         assert last is not None and last.status == "failed"
         assert last.error is not None
+        # The failed audit entry is owed by the continuing boot.
+        flag = tmp_path / "sb_data" / AUDIT_PENDING_FILENAME
+        assert flag.exists()
+        assert json.loads(flag.read_text())["event"] == "backup.restore.failed"
 
     def test_missing_archive_aborts(self, tmp_path: Path) -> None:
         settings = _make_settings(tmp_path)
@@ -276,8 +292,11 @@ class TestExecutePendingRestore:
             manifest_fingerprints={},
         )
 
-        with pytest.raises(RestoreAbortedError):
-            execute_pending_restore(settings)
+        assert execute_pending_restore(settings) is None
+        assert (
+            tmp_path / "sb_data" / (MARKER_FILENAME + ".failed")
+        ).exists()
+        assert read_marker(settings) is None
 
     def test_member_path_escape_rejected_before_extraction(
         self, tmp_path: Path
@@ -300,11 +319,13 @@ class TestExecutePendingRestore:
             manifest_fingerprints={},
         )
 
-        with pytest.raises(RestoreAbortedError):
-            execute_pending_restore(settings)
+        assert execute_pending_restore(settings) is None
 
         assert not (tmp_path / "evil.txt").exists()
         assert not (tmp_path / "sb_data" / "evil.txt").exists()
+        assert (
+            tmp_path / "sb_data" / (MARKER_FILENAME + ".failed")
+        ).exists()
 
     def test_interrupted_attempt_rolls_back_then_restores(
         self, tmp_path: Path
@@ -316,10 +337,12 @@ class TestExecutePendingRestore:
         _archive_with_db(
             backups_dir / "target.zip", "target", _matching_manifest(settings)
         )
-        # Simulate a crash mid-restore: data preserved but marker still present.
+        # Simulate a crash mid-restore: data preserved (with the in-progress
+        # sentinel) but the marker still present.
         old_dir = tmp_path / "sb_data" / RESTORE_OLD_DIRNAME / "20260901T000000"
         old_dir.mkdir(parents=True)
         _write_db(old_dir / "data.db", "preserved-pre-crash")
+        (old_dir / IN_PROGRESS_SENTINEL).write_text("", encoding="utf-8")
         write_marker(
             settings,
             archive_name="target.zip",
@@ -330,7 +353,7 @@ class TestExecutePendingRestore:
 
         result = execute_pending_restore(settings)
 
-        assert result is not None and result.status == "completed"
+        assert result is not None and result.status == "swapped"
         # The interrupted attempt's data was authoritative first, then the
         # target archive replaced it.
         assert _db_value(db_path) == "target"
@@ -362,7 +385,7 @@ class TestExecutePendingRestore:
         monkeypatch.setattr(db_module, "create_async_engine", fail_engine)
 
         result = execute_pending_restore(settings)
-        assert result is not None and result.status == "completed"
+        assert result is not None and result.status == "swapped"
 
 
 class TestOldRetention:
@@ -395,7 +418,8 @@ class TestOldRetention:
 
 
 class TestAuditPendingFlag:
-    def test_flag_written_on_completion(self, tmp_path: Path) -> None:
+    def test_success_writes_no_pending_flag(self, tmp_path: Path) -> None:
+        """The completed event is written by finalize, not the executor."""
         settings = _make_settings(tmp_path)
         db_path = tmp_path / "sb_data" / "snackbase.db"
         backups_dir = tmp_path / "backups"
@@ -412,13 +436,274 @@ class TestAuditPendingFlag:
         execute_pending_restore(settings)
 
         flag = tmp_path / "sb_data" / AUDIT_PENDING_FILENAME
-        assert flag.exists()
-        payload = json.loads(flag.read_text())
-        assert payload["event"] == "backup.restore.completed"
-        assert payload["archive_name"] == "ok.zip"
-        popped = pop_audit_pending(settings)
-        assert popped is not None and popped["event"] == "backup.restore.completed"
+        assert not flag.exists()
         assert pop_audit_pending(settings) is None
+
+
+class TestSwapSafety:
+    def test_retained_snapshot_not_treated_as_interrupted(
+        self, tmp_path: Path
+    ) -> None:
+        """A post-success snapshot (no sentinel) must survive a second restore.
+
+        The second restore's ``.restore_old`` window must hold the data from
+        before the *second* restore, not some older generation.
+        """
+        settings = _make_settings(tmp_path)
+        db_path = tmp_path / "sb_data" / "snackbase.db"
+        backups_dir = tmp_path / "backups"
+        _write_db(db_path, "generation-b")
+        _archive_with_db(
+            backups_dir / "target.zip", "target", _matching_manifest(settings)
+        )
+        # A retained snapshot from an earlier successful restore, with no
+        # sentinel: not interrupted.
+        old_dir = tmp_path / "sb_data" / RESTORE_OLD_DIRNAME / "20260901T000000"
+        old_dir.mkdir(parents=True)
+        _write_db(old_dir / "data.db", "generation-a")
+        write_marker(
+            settings,
+            archive_name="target.zip",
+            destination={"type": "local", "local_path": str(backups_dir)},
+            requested_by="system",
+            manifest_fingerprints={},
+        )
+
+        result = execute_pending_restore(settings)
+
+        assert result is not None and result.status == "swapped"
+        assert _db_value(db_path) == "target"
+        # The retained snapshot was not rolled back or consumed.
+        assert _db_value(old_dir / "data.db") == "generation-a"
+
+    def test_boot_lock_blocks_concurrent_executor(self, tmp_path: Path) -> None:
+        import os
+
+        settings = _make_settings(tmp_path)
+        db_path = tmp_path / "sb_data" / "snackbase.db"
+        backups_dir = tmp_path / "backups"
+        _write_db(db_path, "live")
+        _archive_with_db(
+            backups_dir / "ok.zip", "ok", _matching_manifest(settings)
+        )
+        write_marker(
+            settings,
+            archive_name="ok.zip",
+            destination={"type": "local", "local_path": str(backups_dir)},
+            requested_by="system",
+            manifest_fingerprints={},
+        )
+        lock_file = tmp_path / "sb_data" / ".restore.lock"
+        lock_file.write_text(json.dumps({"pid": os.getpid()}))
+
+        with pytest.raises(RestoreAbortedError, match="Another process"):
+            execute_pending_restore(settings)
+
+        assert read_marker(settings) is not None
+
+    def test_boot_lock_with_dead_holder_is_reclaimed(self, tmp_path: Path) -> None:
+        settings = _make_settings(tmp_path)
+        db_path = tmp_path / "sb_data" / "snackbase.db"
+        backups_dir = tmp_path / "backups"
+        _write_db(db_path, "live")
+        _archive_with_db(
+            backups_dir / "ok.zip", "ok", _matching_manifest(settings)
+        )
+        write_marker(
+            settings,
+            archive_name="ok.zip",
+            destination={"type": "local", "local_path": str(backups_dir)},
+            requested_by="system",
+            manifest_fingerprints={},
+        )
+        lock_file = tmp_path / "sb_data" / ".restore.lock"
+        lock_file.write_text(json.dumps({"pid": 999_999_999}))
+
+        result = execute_pending_restore(settings)
+
+        assert result is not None and result.status == "swapped"
+        assert not lock_file.exists()
+
+    def test_restore_tmp_swept_on_normal_boot(self, tmp_path: Path) -> None:
+        settings = _make_settings(tmp_path)
+        tmp_dir = tmp_path / "sb_data" / ".restore_tmp"
+        tmp_dir.mkdir(parents=True)
+        (tmp_dir / "validate-deadbeef.zip").write_bytes(b"leaked")
+
+        assert execute_pending_restore(settings) is None
+
+        assert not (tmp_dir / "validate-deadbeef.zip").exists()
+
+    def test_postgres_engine_guard_returns_none(self, tmp_path: Path) -> None:
+        """The boot executor must be a no-op on PostgreSQL, marker or not."""
+        settings = Settings(
+            database_url="postgresql+asyncpg://u:p@localhost/db",
+            storage_path=str(tmp_path / "sb_data" / "files"),
+            _env_file=None,
+        )
+        # Even a marker present must not be touched (resolving the SQLite
+        # path from a PostgreSQL URL would raise).
+        result = execute_pending_restore(settings)
+        assert result is None
+
+    def test_migrations_dir_swapped_and_preserved(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        settings = _make_settings(tmp_path)
+        dynamic_dir = tmp_path / "sb_data" / "migrations"
+        monkeypatch.setattr(
+            "snackbase.infrastructure.backup.restore.dynamic_migrations_path",
+            lambda settings: dynamic_dir,
+        )
+        db_path = tmp_path / "sb_data" / "snackbase.db"
+        backups_dir = tmp_path / "backups"
+        _write_db(db_path, "live")
+        dynamic_dir = tmp_path / "sb_data" / "migrations"
+        dynamic_dir.mkdir(parents=True)
+        (dynamic_dir / "old_migration.py").write_text("# old history")
+
+        import zipfile
+
+        archive_file = backups_dir / "with_migrations.zip"
+        scratch = tmp_path / "scratch"
+        scratch.mkdir(parents=True)
+        archive_file.parent.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(archive_file, "w") as archive:
+            archive.writestr(
+                MANIFEST_MEMBER, _matching_manifest(settings).to_json()
+            )
+            archive.writestr("data.db", b"db")
+            archive.writestr("migrations/new_history.py", "# new history")
+        write_marker(
+            settings,
+            archive_name="with_migrations.zip",
+            destination={"type": "local", "local_path": str(backups_dir)},
+            requested_by="system",
+            manifest_fingerprints={},
+        )
+
+        result = execute_pending_restore(settings)
+
+        assert result is not None and result.status == "swapped"
+        assert (dynamic_dir / "new_history.py").exists()
+        assert not (dynamic_dir / "old_migration.py").exists()
+
+    def test_migrations_rolled_back_when_swap_fails(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        settings = _make_settings(tmp_path)
+        dynamic_dir = tmp_path / "sb_data" / "migrations"
+        monkeypatch.setattr(
+            "snackbase.infrastructure.backup.restore.dynamic_migrations_path",
+            lambda settings: dynamic_dir,
+        )
+        db_path = tmp_path / "sb_data" / "snackbase.db"
+        backups_dir = tmp_path / "backups"
+        _write_db(db_path, "live")
+        dynamic_dir = tmp_path / "sb_data" / "migrations"
+        dynamic_dir.mkdir(parents=True)
+        (dynamic_dir / "history.py").write_text("# history")
+        _archive_with_db(backups_dir / "bad.zip", "bad", _matching_manifest(settings))
+
+        import snackbase.infrastructure.backup.restore as restore_module
+
+        original_swap = restore_module._swap_restored_data
+
+        def failing_swap(*args: object, **kwargs: object) -> None:
+            original_swap(*args, **kwargs)  # type: ignore[arg-type]
+            raise OSError("simulated mid-swap failure")
+
+        monkeypatch.setattr(restore_module, "_swap_restored_data", failing_swap)
+        write_marker(
+            settings,
+            archive_name="bad.zip",
+            destination={"type": "local", "local_path": str(backups_dir)},
+            requested_by="system",
+            manifest_fingerprints={},
+        )
+
+        with pytest.raises(RestoreAbortedError, match="simulated"):
+            execute_pending_restore(settings)
+
+        # The migrations directory was restored with the rest of the data.
+        assert (dynamic_dir / "history.py").exists()
+        assert read_marker(settings) is not None
+
+
+class TestFinalizeRestore:
+    async def test_finalize_promotes_swapped_to_completed(
+        self, tmp_path: Path
+    ) -> None:
+        from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+        settings = _make_settings(tmp_path)
+        db_path = tmp_path / "sb_data" / "snackbase.db"
+        backups_dir = tmp_path / "backups"
+        _write_db(db_path, "live")
+        manifest = _matching_manifest(settings)
+        manifest.table_row_counts = {"t": 1}
+        _archive_with_db(backups_dir / "ok.zip", "ok", manifest)
+        write_marker(
+            settings,
+            archive_name="ok.zip",
+            destination={"type": "local", "local_path": str(backups_dir)},
+            requested_by="system",
+            manifest_fingerprints={},
+        )
+        assert execute_pending_restore(settings) is not None
+
+        engine = create_async_engine(f"sqlite+aiosqlite:///{db_path}")
+        try:
+            session_factory = async_sessionmaker(engine, expire_on_commit=False)
+            result = await finalize_restore(settings, session_factory)
+        finally:
+            await engine.dispose()
+
+        assert result is not None
+        assert result.status == "completed"
+        assert result.warnings == []
+        last = read_last_restore(settings)
+        assert last is not None and last.status == "completed"
+        # The stashed manifest copy is consumed by finalize.
+        assert not (tmp_path / "sb_data" / ".restore-manifest.json").exists()
+
+    async def test_finalize_reports_missing_table_as_warning(
+        self, tmp_path: Path
+    ) -> None:
+        from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+        settings = _make_settings(tmp_path)
+        db_path = tmp_path / "sb_data" / "snackbase.db"
+        backups_dir = tmp_path / "backups"
+        _write_db(db_path, "live")
+        manifest = _matching_manifest(settings)
+        manifest.table_row_counts = {"t": 1, "col_ghost": 5}
+        _archive_with_db(backups_dir / "ok.zip", "ok", manifest)
+        write_marker(
+            settings,
+            archive_name="ok.zip",
+            destination={"type": "local", "local_path": str(backups_dir)},
+            requested_by="system",
+            manifest_fingerprints={},
+        )
+        assert execute_pending_restore(settings) is not None
+
+        engine = create_async_engine(f"sqlite+aiosqlite:///{db_path}")
+        try:
+            session_factory = async_sessionmaker(engine, expire_on_commit=False)
+            result = await finalize_restore(settings, session_factory)
+        finally:
+            await engine.dispose()
+
+        assert result is not None
+        assert result.status == "completed_with_warnings"
+        assert any("col_ghost" in w for w in result.warnings)
+
+    async def test_finalize_ignores_non_swapped_status(
+        self, tmp_path: Path
+    ) -> None:
+        settings = _make_settings(tmp_path)
+        assert await finalize_restore(settings, None) is None
 
 
 class TestRestoreStatus:

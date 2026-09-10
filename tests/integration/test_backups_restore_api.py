@@ -27,13 +27,15 @@ def _auth(token: str) -> dict[str, str]:
 def _manifest(**overrides: object) -> BackupManifest:
     settings = get_settings()
     data = dict(
-        format_version=1,
+        format_version=2,
         created_at="2026-09-02T00:00:00+00:00",
         snackbase_version="0.11.0",
         backup_type="sqlite_physical",
         database_engine="sqlite",
         alembic_heads=["abc"],
         includes_files=False,
+        database_revisions=["abc123"],
+        includes_migrations=True,
         storage_mode="local",
         encryption_key_fingerprint=fingerprint(settings.encryption_key),
         secret_key_fingerprint=fingerprint(settings.secret_key),

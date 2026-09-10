@@ -6,8 +6,13 @@ This script removes:
 - All dynamic migrations in sb_data/migrations/
 - All function envs in sb_data/function_envs/
 - The SQLite database file (snackbase.db)
+- All backup archives in sb_data/backups/
+- All restore state in sb_data/ (pending markers, .restore_old/ snapshots,
+  .restore_tmp/ scratch, and the .restore-* bookkeeping files)
 
-WARNING: This will delete all data! Only use in development.
+WARNING: This will delete all data, including every backup and restore
+snapshot! Only use in development. Backup destinations outside sb_data/
+(a custom local_path or S3) are not touched.
 """
 
 import argparse
@@ -28,18 +33,21 @@ def confirm_cleanup(skip_confirm: bool = False) -> bool:
     if skip_confirm:
         return True
 
-    print("⚠️  WARNING: This will delete ALL development data!")
+    print("⚠️  WARNING: This will delete ALL development data, including backups!")
     print("\nThe following will be removed:")
     print("  - All uploaded files (sb_data/files/)")
     print("  - All dynamic migrations (sb_data/migrations/)")
     print("  - All function envs (sb_data/function_envs/)")
     print("  - Database files (sb_data/snackbase.db + WAL/SHM)")
+    print("  - All backup archives (sb_data/backups/)")
+    print("  - All restore state (sb_data/.restore-pending.json*, .restore_old/,")
+    print("    .restore_tmp/, .restore-last.json, .restore-manifest.json,")
+    print("    .restore.lock)")
     print("  - Security test reports (tests/security-reports/)")
     print("\nThis action cannot be undone!")
 
-
     response = input("\nAre you sure you want to continue? (yes/no): ").strip().lower()
-    return response in ['yes', 'y']
+    return response in ["yes", "y"]
 
 
 def cleanup_directory(path: Path, description: str) -> None:
@@ -77,12 +85,13 @@ Examples:
   python cleanup_dev.py          # Interactive mode with confirmation
   python cleanup_dev.py -y       # Skip confirmation prompt
   uv run cleanup_dev.py -y       # Skip confirmation with uv
-        """
+        """,
     )
     parser.add_argument(
-        '-y', '--yes',
-        action='store_true',
-        help='Skip confirmation prompt and proceed with cleanup'
+        "-y",
+        "--yes",
+        action="store_true",
+        help="Skip confirmation prompt and proceed with cleanup",
     )
 
     args = parser.parse_args()
@@ -94,9 +103,17 @@ Examples:
     files_dir = project_root / "sb_data" / "files"
     migrations_dir = project_root / "sb_data" / "migrations"
     function_envs_dir = project_root / "sb_data" / "function_envs"
+    backups_dir = project_root / "sb_data" / "backups"
+    restore_tmp_dir = project_root / "sb_data" / ".restore_tmp"
+    restore_old_dir = project_root / "sb_data" / ".restore_old"
     db_file = project_root / "sb_data" / "snackbase.db"
     db_wal_file = project_root / "sb_data" / "snackbase.db-wal"
     db_shm_file = project_root / "sb_data" / "snackbase.db-shm"
+    restore_pending_marker = project_root / "sb_data" / ".restore-pending.json"
+    restore_failed_marker = project_root / "sb_data" / ".restore-pending.json.failed"
+    restore_last_file = project_root / "sb_data" / ".restore-last.json"
+    restore_manifest_file = project_root / "sb_data" / ".restore-manifest.json"
+    restore_boot_lock = project_root / "sb_data" / ".restore.lock"
     security_reports_dir = project_root / "tests" / "security-reports"
 
     print("=" * 60)
@@ -123,10 +140,25 @@ Examples:
     # Clean function envs (per-version venvs)
     cleanup_directory(function_envs_dir, "Function envs directory")
 
+    # Clean backup archives (including staging and lock files)
+    cleanup_directory(backups_dir, "Backup archives directory")
+
+    # Clean restore scratch and preserved pre-restore data
+    cleanup_directory(restore_tmp_dir, "Restore scratch directory")
+    cleanup_directory(restore_old_dir, "Preserved pre-restore data directory")
+
     # Clean database files (main DB + WAL + SHM)
     cleanup_file(db_file, "Database file")
     cleanup_file(db_wal_file, "Database WAL file")
     cleanup_file(db_shm_file, "Database SHM file")
+
+    # Clean restore state (a stale pending marker would otherwise be executed
+    # at next boot and swap old data over the fresh database)
+    cleanup_file(restore_pending_marker, "Pending restore marker")
+    cleanup_file(restore_failed_marker, "Failed restore marker")
+    cleanup_file(restore_last_file, "Last restore record")
+    cleanup_file(restore_manifest_file, "Restore manifest copy")
+    cleanup_file(restore_boot_lock, "Restore boot lock")
 
     # Clean security reports
     cleanup_directory(security_reports_dir, "Security test reports directory")
@@ -145,4 +177,3 @@ Examples:
 
 if __name__ == "__main__":
     main()
-

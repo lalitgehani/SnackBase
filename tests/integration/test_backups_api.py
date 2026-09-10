@@ -46,13 +46,15 @@ async def _configure_local_backup(
 
 def _valid_archive_bytes(name: str = "uploaded.zip") -> bytes:
     manifest = BackupManifest(
-        format_version=1,
+        format_version=2,
         created_at="2026-09-02T00:00:00+00:00",
         snackbase_version="0.11.0",
         backup_type="sqlite_physical",
         database_engine="sqlite",
         alembic_heads=["abc"],
         includes_files=True,
+        database_revisions=["abc123"],
+        includes_migrations=True,
         storage_mode="local",
         encryption_key_fingerprint="e",
         secret_key_fingerprint="s",
@@ -325,13 +327,15 @@ async def test_upload_exceeding_max_file_size_succeeds(
     headers = _auth(superadmin_token)
 
     manifest = BackupManifest(
-        format_version=1,
+        format_version=2,
         created_at="2026-09-02T00:00:00+00:00",
         snackbase_version="0.11.0",
         backup_type="sqlite_physical",
         database_engine="sqlite",
         alembic_heads=[],
         includes_files=False,
+        database_revisions=["abc123"],
+        includes_migrations=True,
         storage_mode="local",
         encryption_key_fingerprint="e",
         secret_key_fingerprint="s",

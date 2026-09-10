@@ -20,6 +20,7 @@ MANIFEST_MEMBER = "manifest.json"
 DATA_MEMBER = "data.db"
 FILES_PREFIX = "files/"
 TABLES_PREFIX = "tables/"
+MIGRATIONS_PREFIX = "migrations/"
 
 CHUNK_SIZE = 1024 * 1024
 

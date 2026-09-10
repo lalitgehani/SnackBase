@@ -177,6 +177,17 @@ class BackupScheduler:
                     archive=name,
                 )
                 return
+            from snackbase.infrastructure.backup.restore import marker_path
+
+            if marker_path(settings).is_file():
+                # A restore is pending: the instance is about to restart and
+                # a backup racing the shutdown window would be killed
+                # mid-write.
+                logger.info(
+                    "Scheduled backup skipped: a restore is pending",
+                    archive=name,
+                )
+                return
             try:
                 from snackbase.infrastructure.backup.service import resolve_backup_type
 

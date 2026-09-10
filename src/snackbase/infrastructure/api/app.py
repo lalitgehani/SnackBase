@@ -7,6 +7,7 @@ and lifecycle handlers.
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -46,8 +47,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     # config or collection load may run while a data swap is pending (F3.2).
     from snackbase.infrastructure.backup.restore import (
         RestoreAbortedError,
+        RestoreResult,
         execute_pending_restore,
+        finalize_restore,
         pop_audit_pending,
+        record_last_restore,
     )
 
     try:
@@ -92,27 +96,49 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
             logger.info("Database initialized successfully")
         except Exception as e:
             logger.error("Failed to initialize database during startup", error=str(e))
+            if restore_result is not None:
+                # The swap happened but migrations failed: the instance must
+                # never report a completed restore it did not verify.
+                record_last_restore(
+                    settings,
+                    RestoreResult(
+                        archive_name=restore_result.archive_name,
+                        status="failed",
+                        completed_at=datetime.now(UTC).isoformat(),
+                        error=f"Migrations failed after restore: {e}",
+                    ),
+                )
             raise
 
-        # The restore audit entries land in the (possibly restored) database,
-        # which is the correct place for them (F3.3).
+        # Finalize a swapped restore now that migrations have run: verify the
+        # restored schema against the archive manifest and promote the
+        # outcome to completed (F3.3).
         if restore_result is not None:
-            pending = pop_audit_pending(settings)
-            if pending is not None:
-                from snackbase.infrastructure.backup.audit import write_backup_event
-                from snackbase.infrastructure.persistence.database import get_db_manager
+            from snackbase.infrastructure.backup.restore import finalize_restore
+            from snackbase.infrastructure.persistence.database import get_db_manager
 
-                try:
-                    await write_backup_event(
-                        get_db_manager().session,
-                        event=pending["event"],
-                        name=pending["archive_name"],
-                        destination_type="",
-                    )
-                except Exception as exc:  # noqa: BLE001 - never block boot on audit
-                    logger.error(
-                        "Failed to write restore audit entry", error=str(exc)
-                    )
+            await finalize_restore(settings, get_db_manager().session)
+
+        # Restore audit entries land in the database the boot settled on,
+        # which is the correct place for them (F3.3). Runs on every boot: a
+        # terminally failed restore continues boot and still owes its audit
+        # entry.
+        pending = pop_audit_pending(settings)
+        if pending is not None:
+            from snackbase.infrastructure.backup.audit import write_backup_event
+            from snackbase.infrastructure.persistence.database import get_db_manager
+
+            try:
+                await write_backup_event(
+                    get_db_manager().session,
+                    event=pending["event"],
+                    name=pending["archive_name"],
+                    destination_type="",
+                )
+            except Exception as exc:  # noqa: BLE001 - never block boot on audit
+                logger.error(
+                    "Failed to write restore audit entry", error=str(exc)
+                )
 
         # Register built-in authentication providers
         await register_builtin_providers(app)

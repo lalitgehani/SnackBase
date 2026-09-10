@@ -651,9 +651,15 @@ def worker(queue: str | None, poll_interval: float | None) -> None:
     logger = get_logger(__name__)
 
     async def run() -> None:
+        from datetime import UTC, datetime
+
         from snackbase.infrastructure.backup.restore import (
             RestoreAbortedError,
+            RestoreResult,
             execute_pending_restore,
+            finalize_restore,
+            pop_audit_pending,
+            record_last_restore,
         )
         from snackbase.infrastructure.persistence.database import (
             get_db_manager,
@@ -664,14 +670,51 @@ def worker(queue: str | None, poll_interval: float | None) -> None:
         # Perform any pending restore before the database is opened, so a
         # worker-only process cannot boot against half-restored data (F3.2).
         try:
-            execute_pending_restore(settings)
+            restore_result = execute_pending_restore(settings)
         except RestoreAbortedError as exc:
             click.echo(f"Error: pending restore failed: {exc}", err=True)
             raise SystemExit(1) from exc
 
         # Initialize database
-        await init_database()
+        try:
+            await init_database()
+        except Exception as exc:
+            if restore_result is not None:
+                # Swapped but migrations failed: never report completed.
+                record_last_restore(
+                    settings,
+                    RestoreResult(
+                        archive_name=restore_result.archive_name,
+                        status="failed",
+                        completed_at=datetime.now(UTC).isoformat(),
+                        error=f"Migrations failed after restore: {exc}",
+                    ),
+                )
+            raise
         db_manager = get_db_manager()
+
+        # Finalize a swapped restore after migrations, and write any audit
+        # entry the restore owes into the database the boot settled on —
+        # both on every boot, since a terminally failed restore continues
+        # boot (F3.3).
+        if restore_result is not None:
+            await finalize_restore(settings, db_manager.session)
+        pending = pop_audit_pending(settings)
+        if pending is not None:
+            from snackbase.infrastructure.backup.audit import write_backup_event
+
+            try:
+                await write_backup_event(
+                    db_manager.session,
+                    event=pending["event"],
+                    name=pending["archive_name"],
+                    destination_type="",
+                )
+            except Exception as exc:
+                click.echo(
+                    f"Warning: failed to write restore audit entry: {exc}",
+                    err=True,
+                )
 
         # Import job_service module to trigger handler registration side-effects
         import snackbase.infrastructure.services.job_service  # noqa: F401
@@ -957,6 +1000,18 @@ def backup_create(name: str | None, backup_type: str | None) -> None:
         try:
             async with db.session() as session:
                 destination = await resolve_destination(session)
+            from snackbase.infrastructure.backup.restore import marker_path
+
+            if marker_path(settings).is_file():
+                # A restore is pending: the instance is about to restart and
+                # a backup racing the shutdown window would be killed
+                # mid-write.
+                click.echo(
+                    "Error: a restore is pending; the instance will restart "
+                    "to complete it. Create the backup after the restart.",
+                    err=True,
+                )
+                return 1
             outcome = await create_backup(
                 name=archive_name,
                 destination=destination,
@@ -1087,17 +1142,21 @@ def restore(name: str, force: bool, yes: bool) -> None:
 
     from snackbase.infrastructure.backup.destinations import (
         BackupError,
+        BackupInProgressError,
         BackupNotFoundError,
         resolve_destination,
     )
+    from snackbase.infrastructure.backup.lock import backup_lock
     from snackbase.infrastructure.backup.manifest import fingerprints_from_settings
     from snackbase.infrastructure.backup.restore import (
         RestoreAbortedError,
         check_engine_is_sqlite,
         destination_to_marker_dict,
+        marker_path,
         validate_restore_candidate,
         write_marker,
     )
+    from snackbase.infrastructure.backup.service import backup_working_dir
     from snackbase.infrastructure.persistence.database import get_db_manager
 
     settings = get_settings()
@@ -1110,18 +1169,37 @@ def restore(name: str, force: bool, yes: bool) -> None:
                 destination = await resolve_destination(session)
 
             try:
-                validation = validate_restore_candidate(destination, name, settings)
+                async with backup_lock(
+                    name, "restore", backup_working_dir(destination)
+                ):
+                    if marker_path(settings).is_file():
+                        click.echo(
+                            "Error: a restore is already pending; restart the "
+                            "instance to complete or clear it first.",
+                            err=True,
+                        )
+                        return 1
+                    validation = validate_restore_candidate(
+                        destination, name, settings
+                    )
+
+                    try:
+                        check_engine_is_sqlite(settings)
+                    except RestoreAbortedError as exc:
+                        click.echo(f"Error: {exc}", err=True)
+                        return 1
             except BackupNotFoundError as exc:
                 click.echo(f"Error: {exc}", err=True)
                 return 1
             except ValueError as exc:
                 click.echo(f"Error: {exc}", err=True)
                 return 1
-
-            try:
-                check_engine_is_sqlite(settings)
-            except RestoreAbortedError as exc:
-                click.echo(f"Error: {exc}", err=True)
+            except BackupInProgressError as exc:
+                click.echo(
+                    f"Error: a backup or restore is already in progress "
+                    f"({exc.operation} {exc.name})",
+                    err=True,
+                )
                 return 1
 
             manifest = validation.manifest
@@ -1157,13 +1235,23 @@ def restore(name: str, force: bool, yes: bool) -> None:
                     default=False,
                 )
 
-            write_marker(
-                settings,
-                archive_name=name,
-                destination=destination_to_marker_dict(destination, settings),
-                requested_by="system",
-                manifest_fingerprints=fingerprints_from_settings(settings),
-            )
+            async with backup_lock(
+                name, "restore", backup_working_dir(destination)
+            ):
+                if marker_path(settings).is_file():
+                    click.echo(
+                        "Error: a restore is already pending; restart the "
+                        "instance to complete or clear it first.",
+                        err=True,
+                    )
+                    return 1
+                write_marker(
+                    settings,
+                    archive_name=name,
+                    destination=destination_to_marker_dict(destination, settings),
+                    requested_by="system",
+                    manifest_fingerprints=fingerprints_from_settings(settings),
+                )
             click.echo(
                 f"\nRestore of {name!r} scheduled.\n"
                 "\nThe restore completes on next start; a supervised deployment "

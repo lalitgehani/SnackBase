@@ -16,6 +16,7 @@ extend the ``core`` branch without ever touching the ``dynamic`` branch.
 """
 
 import os
+from pathlib import Path
 from typing import Any
 
 from alembic import command
@@ -27,6 +28,43 @@ from snackbase.core.logging import get_logger
 from snackbase.infrastructure.persistence.table_builder import TableBuilder
 
 logger = get_logger(__name__)
+
+
+def dynamic_migrations_dir(alembic_ini: str | Path = "alembic.ini") -> Path:
+    """The instance-volume directory holding dynamic collection migrations.
+
+    Resolved from ``version_locations`` in the Alembic config: the entry that
+    is not part of the packaged ``script_location`` tree. Migration
+    generation, backup, and restore all resolve the location through this one
+    function so the swap cannot drift from where migrations are written.
+
+    Raises:
+        RuntimeError: When ``version_locations`` declares no directory
+            outside the packaged script tree.
+    """
+    ini = Path(alembic_ini)
+    cfg = Config(str(ini))
+    here = Path(cfg.get_main_option("here") or ini.resolve().parent)
+
+    def _expand(raw: str) -> Path:
+        return Path(raw.replace("%(here)s", str(here))).resolve()
+
+    script_location = cfg.get_main_option("script_location")
+    script_root = _expand(script_location) if script_location else None
+    locations = cfg.get_main_option("version_locations") or ""
+    for raw in locations.split(os.pathsep):
+        candidate = _expand(raw.strip())
+        if not raw.strip():
+            continue
+        if script_root is not None and (
+            candidate == script_root or script_root in candidate.parents
+        ):
+            continue
+        return candidate
+    raise RuntimeError(
+        "alembic.ini version_locations does not declare a dynamic migrations "
+        "directory outside the packaged script_location"
+    )
 
 
 class MigrationService:
@@ -112,7 +150,7 @@ class MigrationService:
 
         # We use revision() to generate the skeleton
         # Note: We specify the version path to ensure it goes into sb_data/migrations/
-        dynamic_dir = os.path.abspath("sb_data/migrations")
+        dynamic_dir = str(dynamic_migrations_dir())
         branch_args = self._get_dynamic_branch_args()
 
         # Generate the revision
@@ -155,7 +193,7 @@ class MigrationService:
             The revision ID of the generated migration.
         """
         message = f"update_collection_{collection_name}"
-        dynamic_dir = os.path.abspath("sb_data/migrations")
+        dynamic_dir = str(dynamic_migrations_dir())
         branch_args = self._get_dynamic_branch_args()
 
         rev = command.revision(
@@ -190,7 +228,7 @@ class MigrationService:
             The revision ID of the generated migration.
         """
         message = f"delete_collection_{collection_name}"
-        dynamic_dir = os.path.abspath("sb_data/migrations")
+        dynamic_dir = str(dynamic_migrations_dir())
         branch_args = self._get_dynamic_branch_args()
 
         rev = command.revision(

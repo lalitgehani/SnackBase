@@ -164,15 +164,30 @@ Restore never swaps data in a running process. Instead:
    response flushes, exit code 75). The marker is the transaction record.
 3. The supervisor restarts the process. At startup — **before the database
    engine is created and before migrations run** — SnackBase finds the marker,
-   moves the current database (with its `-wal`/`-shm` siblings) and the local
-   files tree aside under `.restore_old/<timestamp>/`, moves the archive's
-   `data.db` and `files/` into place, and deletes the marker. Only then does
-   the boot continue and migrations run.
+   moves the current database (with its `-wal`/`-shm` siblings), the dynamic
+   collection migrations (`sb_data/migrations/`), and the local files tree
+   aside under `.restore_old/<timestamp>/`, moves the archive's `data.db`,
+   `migrations/`, and `files/` into place, and deletes the marker. Only then
+   does the boot continue and migrations run.
+4. After migrations, the boot verifies the restored schema against the
+   archive's recorded table row counts and promotes the outcome from
+   `swapped` to `completed` (or `completed_with_warnings`, listing any
+   tables or row counts that drifted).
 
 Because the swap happens before anything opens the database, a restore cannot
 corrupt a live instance, and a crash mid-restore is simply retried on the next
-boot: if a marker is present alongside `.restore_old/` data from an
-interrupted attempt, that data is rolled back first and the restore retried.
+boot: if a marker is present alongside `.restore_old/` data carrying an
+in-progress sentinel from an interrupted attempt, that data is rolled back
+first and the restore retried.
+
+The dynamic migration scripts travel inside the archive because the restored
+database's `alembic_version` refers to them. Restoring them with the database
+guarantees the post-swap migration run (`upgrade heads`) evaluates the
+database against its own history: on a fresh instance it can resolve every
+revision, and delete-migrations written after the backup was taken cannot
+replay to drop restored tables. Core migrations still come from the binary,
+so restoring an older archive into a newer binary still applies new core
+migrations normally.
 
 ### Requirements
 
@@ -191,12 +206,16 @@ Before anything is written, the archive's manifest is checked against the
 running instance:
 
 - *Blocking* (never overridable): mismatched `SNACKBASE_ENCRYPTION_KEY`
-  (stored credentials would be undecryptable), a manifest format newer than
-  this binary supports, an archive taken on a different database engine, or a
-  logical archive (PostgreSQL export — see below).
+  (stored credentials would be undecryptable), a manifest format outside the
+  supported range (archives from before format version 2 carry no migration
+  history and cannot be restored safely; newer formats need a newer binary),
+  an archive taken on a different database engine, or a logical archive
+  (PostgreSQL export — see below).
 - *Warnings* (overridable with `force: true` / `--force`): mismatched
   `SNACKBASE_SECRET_KEY` or `SNACKBASE_TOKEN_SECRET` — restoring works, but
-  existing sessions and API keys are invalidated.
+  existing sessions and API keys are invalidated — and a storage-mode
+  mismatch (an archive taken with S3 storage restored onto a local-storage
+  instance, or the reverse).
 
 ### API
 
@@ -209,8 +228,11 @@ The restore endpoint returns 202 with the marker contents and schedules the
 restart. Rejections return 400 (invalid archive, blocking issues, warnings
 without `force`, or non-SQLite instance) or 404 (unknown archive). The
 status endpoint reports the last restore's outcome — `archive_name`,
-`status` (`completed`/`failed`), `completed_at`, and `error` when failed —
-read from `.restore-last.json` in the data directory.
+`status` (`swapped`/`completed`/`completed_with_warnings`/`failed`),
+`completed_at`, `error` when failed, and `warnings` when verification found
+drift — read from `.restore-last.json` in the data directory. `completed`
+means migrations ran and the restored schema matched the archive; `swapped`
+means the data is in place but the boot has not finished verifying it.
 
 ### CLI
 
@@ -230,8 +252,10 @@ the restore itself completes on next start.
   (default 24) hours, then is removed at the next boot.
 - **Manual recovery**: to go back to the pre-restore state, stop the
   instance, copy `data.db` from `.restore_old/<timestamp>/` over the
-  database file (and `files/` over the storage path) manually, delete the
-  marker file if present, and start the instance.
+  database file, restore `migrations/` over `sb_data/migrations/` and
+  `files/` over the storage path, delete the marker file if present, and
+  start the instance. The `migrations/` directory must be restored together
+  with `data.db` — the database's `alembic_version` refers to those scripts.
 
 ### PostgreSQL
 

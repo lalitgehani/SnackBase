@@ -86,9 +86,15 @@ class RestoreRequest(BaseModel):
 
 
 class RestoreStatusResponse(BaseModel):
-    """The outcome of the last restore, read from ``.restore-last.json``."""
+    """The outcome of the last restore, read from ``.restore-last.json``.
+
+    ``swapped`` means the data is in place but migrations have not been
+    verified yet; ``completed_with_warnings`` carries a non-empty
+    ``warnings`` list describing what drifted from the archive.
+    """
 
     archive_name: str
     status: str
     completed_at: str
     error: str | None = None
+    warnings: list[str] = []

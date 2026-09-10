@@ -26,6 +26,7 @@ import type {
   BackupEntry,
   RestoreIssue,
   RestorePreview,
+  RestoreStatus,
 } from '@/services/backups';
 
 export interface RestoreDialogProps {
@@ -41,6 +42,7 @@ export function RestoreDialog({ entry, open, onOpenChange, onRequested }: Restor
   const [submitting, setSubmitting] = useState(false);
   const [phase, setPhase] = useState<'input' | 'restarting' | 'done'>('input');
   const [outcome, setOutcome] = useState<RestoreStatus | null>(null);
+  const [sessionLost, setSessionLost] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [preview, setPreview] = useState<RestorePreview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -52,6 +54,7 @@ export function RestoreDialog({ entry, open, onOpenChange, onRequested }: Restor
       setSubmitting(false);
       setPhase('input');
       setOutcome(null);
+      setSessionLost(false);
       setServerError(null);
       setPreview(null);
       setPreviewError(null);
@@ -81,10 +84,13 @@ export function RestoreDialog({ entry, open, onOpenChange, onRequested }: Restor
 
   async function pollUntilInstanceReturns(): Promise<void> {
     // During the restart the instance refuses connections; treat every
-    // failure as the expected path and keep probing.
+    // failure as the expected path and keep probing. Liveness uses the
+    // unauthenticated /health endpoint: after a restore the operator's
+    // session may no longer exist in the restored database, so an
+    // authenticated probe could 401 forever and never notice the return.
     const probe = async (): Promise<boolean> => {
       try {
-        await backupsApi.restoreStatus();
+        await backupsApi.health();
         return true;
       } catch {
         return false;
@@ -108,12 +114,23 @@ export function RestoreDialog({ entry, open, onOpenChange, onRequested }: Restor
       try {
         const status = await backupsApi.restoreStatus();
         setOutcome(status);
-      } catch {
-        setOutcome({
-          archive_name: entry.name,
-          status: 'unknown',
-          completed_at: '',
-        });
+      } catch (error) {
+        const httpStatus = (
+          error as {response?: {status?: number}} | null
+        )?.response?.status;
+        if (httpStatus === 401) {
+          // The restored database replaced the sessions table: this
+          // operator's session predates the archive, so the outcome is
+          // unreadable until they sign in again. The restore itself
+          // succeeded — the instance answered /health.
+          setSessionLost(true);
+        } else {
+          setOutcome({
+            archive_name: entry.name,
+            status: 'unknown',
+            completed_at: '',
+          });
+        }
       }
       setPhase('done');
     } catch (error) {
@@ -153,15 +170,41 @@ export function RestoreDialog({ entry, open, onOpenChange, onRequested }: Restor
           </Alert>
         )}
 
+        {phase === 'done' && sessionLost && (
+          <Alert>
+            <AlertTitle>Restore applied</AlertTitle>
+            <AlertDescription>
+              The instance is back with the restored data. This session no
+              longer exists in the restored database — sign in again to see
+              the restore outcome.
+            </AlertDescription>
+          </Alert>
+        )}
+
         {phase === 'done' && outcome && (
           <Alert>
             <AlertTitle>
-              {outcome.status === 'completed' ? 'Restore completed' : `Restore ${outcome.status}`}
+              {outcome.status === 'completed'
+                ? 'Restore completed'
+                : outcome.status === 'completed_with_warnings'
+                  ? 'Restore completed with warnings'
+                  : `Restore ${outcome.status}`}
             </AlertTitle>
             <AlertDescription>
-              {outcome.status === 'completed'
-                ? `${outcome.archive_name} was restored.`
-                : outcome.error ?? 'The restore outcome could not be read yet.'}
+              {outcome.status === 'completed' && `${outcome.archive_name} was restored.`}
+              {outcome.status === 'completed_with_warnings' && (
+                <>
+                  {`${outcome.archive_name} was restored with differences from the archive:`}
+                  <ul className="mt-1 list-disc pl-4">
+                    {(outcome.warnings ?? []).map((warning) => (
+                      <li key={warning}>{warning}</li>
+                    ))}
+                  </ul>
+                </>
+              )}
+              {outcome.status !== 'completed' &&
+                outcome.status !== 'completed_with_warnings' &&
+                (outcome.error ?? 'The restore outcome could not be read yet.')}
             </AlertDescription>
           </Alert>
         )}

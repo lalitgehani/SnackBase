@@ -63,9 +63,10 @@ export interface RestorePreview {
 
 export interface RestoreStatus {
   archive_name: string;
-  status: 'completed' | 'failed' | string;
+  status: 'completed' | 'completed_with_warnings' | 'swapped' | 'failed' | string;
   completed_at: string;
   error?: string | null;
+  warnings?: string[];
 }
 
 export interface BackupSettingsValues {
@@ -211,7 +212,20 @@ export function createBackupsApi(options: BackupsApiOptions = {}) {
       return data;
     },
 
-    restoreStatus: async (): Promise<RestoreStatus> => {
+    /**
+   * Unauthenticated liveness probe for the restore restart loop. The
+   * authenticated restore-status poll fails with 401 when the operator's
+   * session predates the restored database, so liveness must not depend
+   * on it.
+   */
+  health: async (): Promise<void> => {
+    // The instance health endpoint lives at the origin root, outside the
+    // /api/v1 prefix the axios client is bound to.
+    const root = baseURL.replace(/\/api\/v1\/?$/, '');
+    await axios.get(`${root}/health`);
+  },
+
+  restoreStatus: async (): Promise<RestoreStatus> => {
       const { data } = await http.get<RestoreStatus>(
         '/api/v1/backups/restore-status',
       );
@@ -302,6 +316,7 @@ export const backupsApi = {
   restore: (...args: Parameters<ReturnType<typeof createBackupsApi>['restore']>) =>
     createBackupsApi().restore(...args),
   restoreStatus: () => createBackupsApi().restoreStatus(),
+  health: () => createBackupsApi().health(),
   cronDescription: (
     ...args: Parameters<ReturnType<typeof createBackupsApi>['cronDescription']>
   ) => createBackupsApi().cronDescription(...args),

@@ -57,6 +57,7 @@ from snackbase.infrastructure.backup.restore import (
     RestoreAbortedError,
     check_engine_is_sqlite,
     destination_to_marker_dict,
+    marker_path,
     read_last_restore,
     validate_restore_candidate,
     write_marker,
@@ -67,6 +68,7 @@ from snackbase.infrastructure.backup.service import (
     create_backup,
     generate_backup_name,
     resolve_backup_type,
+    resolve_storage_mode,
     staging_dir,
 )
 from snackbase.infrastructure.persistence.database import get_db_manager
@@ -193,6 +195,17 @@ async def create_backup_endpoint(
             detail={
                 "message": "A backup or restore is already in progress",
                 "active": current,
+            },
+        )
+    if marker_path(settings).is_file():
+        # A restore was requested: the instance is about to restart and a
+        # backup racing the shutdown window would be killed mid-write.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": "A restore is pending; the instance will restart "
+                "to complete it. Create the backup after the restart.",
+                "active": {"operation": "restore", "name": None},
             },
         )
     if await destination.exists(name):
@@ -387,7 +400,12 @@ async def restore_preview(
     settings = get_settings()
     destination = await resolve_destination(session)
     try:
-        validation = validate_restore_candidate(destination, name, settings)
+        validation = validate_restore_candidate(
+            destination,
+            name,
+            settings,
+            current_storage_mode=await resolve_storage_mode(session),
+        )
     except BackupNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
@@ -442,7 +460,12 @@ async def restore_backup(
     try:
         async with backup_lock(name, "restore", working_dir):
             try:
-                validation = validate_restore_candidate(destination, name, settings)
+                validation = validate_restore_candidate(
+                    destination,
+                    name,
+                    settings,
+                    current_storage_mode=await resolve_storage_mode(session),
+                )
             except BackupNotFoundError as exc:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
