@@ -73,6 +73,35 @@ def test_build_column_def_reference():
     assert col_def == '"author_id" TEXT'
     assert fk == 'FOREIGN KEY ("author_id") REFERENCES "col_authors"("id") ON DELETE CASCADE'
 
+def test_build_column_def_reference_set_null():
+    field = {
+        "name": "author_id",
+        "type": FieldType.REFERENCE.value,
+        "collection": "authors",
+        "on_delete": OnDeleteAction.SET_NULL.value,
+    }
+    _col_def, fk = TableBuilder.build_column_def(field, "col_posts")
+    assert fk == 'FOREIGN KEY ("author_id") REFERENCES "col_authors"("id") ON DELETE SET NULL'
+
+def test_build_column_def_user():
+    field = {
+        "name": "owner",
+        "type": FieldType.USER.value,
+        "on_delete": OnDeleteAction.SET_NULL.value,
+    }
+    col_def, fk = TableBuilder.build_column_def(field, "col_posts")
+    assert col_def == '"owner" TEXT'
+    assert fk is None
+
+def test_build_column_def_user_has_no_sql_fk():
+    field = {
+        "name": "owner",
+        "type": FieldType.USER.value,
+        "on_delete": OnDeleteAction.CASCADE.value,
+    }
+    _col_def, fk = TableBuilder.build_column_def(field, "col_posts")
+    assert fk is None
+
 def test_build_create_table_ddl():
     """Test building the full CREATE TABLE DDL."""
     collection_name = "posts"

@@ -51,6 +51,11 @@ uv run ruff format .                       # Format
 uv run mypy src/                           # Type check
 
 # Testing
+# Safe to run from the repository root: tests isolate via
+# SNACKBASE_TEST_DATA_DIR (default: a temp directory) and refuse to
+# touch ./sb_data/snackbase.db. Pointing SNACKBASE_DATABASE_URL at a
+# snackbase.db outside that directory raises, naming the path and
+# SNACKBASE_TEST_DATA_DIR.
 uv run pytest                              # Run all tests
 uv run pytest tests/unit/                  # Unit tests only
 uv run pytest tests/integration/           # Integration tests only

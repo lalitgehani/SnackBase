@@ -262,7 +262,7 @@ async def test_expand_invalid_field_returns_400(client: AsyncClient, superadmin_
     )
     assert r.status_code == 400
     body = r.json()
-    assert "not a reference field" in body["message"]
+    assert "not a reference or user field" in body["message"]
     assert "employee_name" in body["message"]
 
 

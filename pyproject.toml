@@ -78,6 +78,8 @@ known-first-party = ["snackbase"]
 # N818: `AbortHookException` is part of the hooks API, which is stable at v1.0.
 # Renaming it to an `Error` suffix would break every published hook.
 "src/snackbase/domain/entities/hook_context.py" = ["N818"]
+# Env isolation must run before snackbase imports (which load settings).
+"tests/conftest.py" = ["E402"]
 
 # N803: `SAMLResponse` / `RelayState` are SAML POST binding field names. FastAPI binds
 # `Form(...)` parameters by name, so these must match the protocol exactly.

@@ -26,6 +26,7 @@ from snackbase.core.rules import (
     validate_group_by,
 )
 from snackbase.domain.services import FieldType, PIIMaskingService, RecordValidator
+from snackbase.domain.services.user_field import USER_PUBLIC_KEYS
 from snackbase.infrastructure.api.dependencies import (
     ANONYMOUS_USER_ID,
     AuthenticatedUser,
@@ -133,10 +134,60 @@ def _parse_expand_param(
             continue
         root = parts[0]
         field_def = schema_lookup.get(root)
-        if not field_def or field_def.get("type") != "reference":
+        field_type = (field_def or {}).get("type")
+        if not field_def or field_type not in {"reference", "user"}:
             return [], root
         paths.append(parts)
     return paths, None
+
+
+async def _collect_link_errors(
+    schema: list[dict[str, Any]],
+    data: dict[str, Any],
+    record_repo: RecordRepository,
+    account_id: str,
+) -> list[dict[str, str]]:
+    """Validate ``reference`` and ``user`` fields present in ``data``."""
+    errors: list[dict[str, str]] = []
+    for field in schema:
+        field_name = field["name"]
+        field_type = field.get("type", "text").lower()
+        if field_name not in data:
+            continue
+        ref_value = data[field_name]
+        if ref_value is None:
+            continue
+        if field_type == FieldType.REFERENCE.value:
+            target_collection = field.get("collection", "")
+            exists = await record_repo.check_reference_exists(
+                target_collection,
+                ref_value,
+                account_id,
+            )
+            if not exists:
+                errors.append(
+                    {
+                        "field": field_name,
+                        "message": (
+                            f"Referenced record '{ref_value}' not found in "
+                            f"collection '{target_collection}'"
+                        ),
+                        "code": "invalid_reference",
+                    }
+                )
+        elif field_type == FieldType.USER.value:
+            exists = await record_repo.check_user_exists(str(ref_value), account_id)
+            if not exists:
+                errors.append(
+                    {
+                        "field": field_name,
+                        "message": (
+                            f"Referenced record '{ref_value}' not found in collection 'users'"
+                        ),
+                        "code": "invalid_reference",
+                    }
+                )
+    return errors
 
 
 async def _resolve_account_id(
@@ -222,7 +273,30 @@ async def _expand_records(
 
     for field_name, sub_paths in root_groups.items():
         field_def = schema_lookup.get(field_name)
-        if not field_def or field_def.get("type") != "reference":
+        if not field_def:
+            continue
+        field_type = field_def.get("type")
+        if field_type == "user":
+            ids = {
+                record[field_name]
+                for record in records
+                if record.get(field_name) and isinstance(record[field_name], str)
+            }
+            if not ids:
+                continue
+            fetched = await record_repo.get_users_public(list(ids), account_id)
+            for record in records:
+                val = record.get(field_name)
+                if val and isinstance(val, str):
+                    projected = fetched.get(val)
+                    if projected and projected.get("_account_id") == record.get("account_id"):
+                        record[field_name] = {
+                            key: projected.get(key) for key in USER_PUBLIC_KEYS
+                        }
+                    else:
+                        record[field_name] = None
+            continue
+        if field_type != "reference":
             continue
         target_collection = field_def.get("collection")
         if not target_collection:
@@ -376,28 +450,11 @@ async def create_record(
     if allowed_fields != "*":
         data = apply_field_filter(data, allowed_fields, is_request=True)
 
-    # 4. Validate reference fields (check if referenced records exist)
+    # 4. Validate reference and user fields (check if referenced records exist)
     record_repo = RecordRepository(session)
-    reference_errors = []
-    for field in schema:
-        field_name = field["name"]
-        field_type = field.get("type", "text").lower()
-
-        if field_type == FieldType.REFERENCE.value and field_name in data:
-            ref_value = data[field_name]
-            if ref_value is not None:
-                target_collection = field.get("collection", "")
-                exists = await record_repo.check_reference_exists(
-                    target_collection,
-                    ref_value,
-                    target_account_id,
-                )
-                if not exists:
-                    reference_errors.append({
-                        "field": field_name,
-                        "message": f"Referenced record '{ref_value}' not found in collection '{target_collection}'",
-                        "code": "invalid_reference",
-                    })
+    reference_errors = await _collect_link_errors(
+        schema, data, record_repo, target_account_id
+    )
 
     # 5. Validate record data against schema
     processed_data, validation_errors = RecordValidator.validate_and_apply_defaults(
@@ -796,7 +853,10 @@ async def list_records(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 content={
                     "error": "Invalid expand field",
-                    "message": f"Field '{invalid_field}' is not a reference field and cannot be expanded",
+                    "message": (
+                        f"Field '{invalid_field}' is not a reference or user field "
+                        "and cannot be expanded"
+                    ),
                 },
             )
         if expand_paths:
@@ -1096,24 +1156,9 @@ async def batch_create_records(
         if allowed_fields != "*":
             data = apply_field_filter(data, allowed_fields, is_request=True)
 
-        # Validate reference fields
-        reference_errors = []
-        for field in schema:
-            field_name = field["name"]
-            field_type = field.get("type", "text").lower()
-            if field_type == FieldType.REFERENCE.value and field_name in data:
-                ref_value = data[field_name]
-                if ref_value is not None:
-                    target_col = field.get("collection", "")
-                    exists = await record_repo.check_reference_exists(
-                        target_col, ref_value, target_account_id
-                    )
-                    if not exists:
-                        reference_errors.append({
-                            "field": field_name,
-                            "message": f"Referenced record '{ref_value}' not found in collection '{target_col}'",
-                            "code": "invalid_reference",
-                        })
+        reference_errors = await _collect_link_errors(
+            schema, data, record_repo, target_account_id
+        )
 
         data = prepare_write_payload(data, schema, partial=False)
         processed_data, validation_errors = RecordValidator.validate_and_apply_defaults(data, schema)
@@ -1775,7 +1820,10 @@ async def get_record(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 content={
                     "error": "Invalid expand field",
-                    "message": f"Field '{invalid_field}' is not a reference field and cannot be expanded",
+                    "message": (
+                        f"Field '{invalid_field}' is not a reference or user field "
+                        "and cannot be expanded"
+                    ),
                 },
             )
         if expand_paths:
@@ -1925,30 +1973,10 @@ async def _update_record(
     if allowed_fields != "*":
         data = apply_field_filter(data, allowed_fields, is_request=True)
 
-    # 5. Validate reference fields
-    reference_errors = []
-
-    # Check references only for fields present in data
-    # (if full update, this covers all refs; if partial, only updated refs)
-    for field in schema:
-        field_name = field["name"]
-        field_type = field.get("type", "text").lower()
-
-        if field_type == FieldType.REFERENCE.value and field_name in data:
-            ref_value = data[field_name]
-            if ref_value is not None:
-                target_collection = field.get("collection", "")
-                exists = await record_repo.check_reference_exists(
-                    target_collection,
-                    ref_value,
-                    target_account_id,
-                )
-                if not exists:
-                    reference_errors.append({
-                        "field": field_name,
-                        "message": f"Referenced record '{ref_value}' not found in collection '{target_collection}'",
-                        "code": "invalid_reference",
-                    })
+    # 5. Validate reference and user fields present in data
+    reference_errors = await _collect_link_errors(
+        schema, data, record_repo, target_account_id
+    )
 
     # 6. Validate record data (strip redaction placeholders so secrets are preserved)
     data = prepare_write_payload(data, schema, partial=partial)

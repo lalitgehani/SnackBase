@@ -37,6 +37,11 @@ class MigrationQueryService:
         if database_url:
             self.alembic_cfg.set_main_option("sqlalchemy.url", database_url)
         self.engine = engine
+        from snackbase.infrastructure.persistence.migration_service import (
+            apply_version_locations,
+        )
+
+        apply_version_locations(self.alembic_cfg, alembic_ini_path)
         self.script_dir = ScriptDirectory.from_config(self.alembic_cfg)
 
     async def get_all_revisions(self) -> list[dict[str, Any]]:
@@ -55,8 +60,16 @@ class MigrationQueryService:
         for revision in self.script_dir.walk_revisions():
             # Determine if this is a dynamic migration
             module_path = revision.module.__file__ if revision.module else None
+            from snackbase.infrastructure.persistence.migration_service import (
+                dynamic_migrations_dir,
+            )
+
+            dyn = str(dynamic_migrations_dir())
             is_dynamic = (
-                any(path in module_path for path in ["dynamic", "sb_data/migrations"])
+                any(
+                    path in module_path
+                    for path in ["dynamic", "sb_data/migrations", dyn]
+                )
                 if module_path
                 else False
             )

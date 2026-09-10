@@ -5,6 +5,8 @@ and configuring the FastAPI application with all middleware, routes,
 and lifecycle handlers.
 """
 
+import inspect
+import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -659,17 +661,49 @@ is the dashboard and ``/`` is yours.
 """
 
 
+def admin_panel_enabled() -> bool:
+    """Return False when ``SNACKAPP_ADMIN=off`` (and common falsey aliases)."""
+    value = os.environ.get("SNACKAPP_ADMIN", "on").strip().lower()
+    return value not in {"off", "0", "false", "no"}
+
+
 def register_frontend(app: FastAPI) -> None:
     """Serve the built React admin SPA from ./static under ``/_/``.
 
     This is a no-op when the static directory does not exist, preserving
-    compatibility with API-only deployments.
+    compatibility with API-only deployments. When ``SNACKAPP_ADMIN=off``,
+    ``/_`` and everything beneath it return 404.
+
+    A mounted application claims the site root by registering its own ``/``
+    route ahead of the redirect, or by setting ``app.state.site_root_handler``.
 
     Args:
         app: FastAPI application instance.
     """
+    admin_on = admin_panel_enabled()
     static_dir = Path("static")
-    if not static_dir.exists():
+    has_static = static_dir.exists()
+
+    if not admin_on:
+        @app.api_route(
+            f"{ADMIN_PATH}/{{full_path:path}}",
+            methods=["GET", "HEAD"],
+            include_in_schema=False,
+        )
+        async def admin_disabled(full_path: str) -> Response:
+            return Response(status_code=404)
+
+        @app.api_route(ADMIN_PATH, methods=["GET", "HEAD"], include_in_schema=False)
+        async def admin_disabled_root() -> Response:
+            return Response(status_code=404)
+
+        @app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
+        async def root_when_admin_off(request: Request) -> Response:
+            return await _dispatch_site_root(request, admin_on=False)
+
+        return
+
+    if not has_static:
         return
 
     static_dir_resolved = static_dir.resolve()
@@ -708,8 +742,20 @@ def register_frontend(app: FastAPI) -> None:
     # the admin panel. An application mounted at "/" registers its own root
     # route ahead of this one and takes precedence.
     @app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
-    async def root_redirect() -> Response:
+    async def root_redirect(request: Request) -> Response:
+        return await _dispatch_site_root(request, admin_on=True)
+
+
+async def _dispatch_site_root(request: Request, *, admin_on: bool) -> Response:
+    handler = getattr(request.app.state, "site_root_handler", None)
+    if callable(handler):
+        result = handler(request)
+        if inspect.isawaitable(result):
+            return await result  # type: ignore[no-any-return]
+        return result  # type: ignore[no-any-return]
+    if admin_on:
         return RedirectResponse(url=f"{ADMIN_PATH}/", status_code=307)
+    return Response(status_code=404)
 
 
 def register_exception_handlers(app: FastAPI) -> None:

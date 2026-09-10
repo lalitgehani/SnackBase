@@ -251,6 +251,7 @@ export const FIELD_TYPES = [
   { value: 'reference', label: 'Reference' },
   { value: 'text', label: 'Text' },
   { value: 'url', label: 'URL' },
+  { value: 'user', label: 'User' },
 ] as const;
 
 export const ON_DELETE_OPTIONS = [

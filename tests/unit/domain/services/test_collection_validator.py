@@ -121,6 +121,23 @@ class TestCollectionValidator:
         assert len(errors) == 1
         assert errors[0].code == "reference_on_delete_invalid"
 
+    def test_validate_user_field_accepted(self):
+        field = {"name": "owner", "type": "user"}
+        errors = CollectionValidator.validate_field(field, 0)
+        assert errors == []
+
+    def test_validate_user_field_set_null_accepted(self):
+        field = {"name": "owner", "type": "user", "on_delete": "set_null"}
+        errors = CollectionValidator.validate_field(field, 0)
+        assert errors == []
+
+    def test_validate_user_field_cascade_rejected(self):
+        field = {"name": "owner", "type": "user", "on_delete": "cascade"}
+        errors = CollectionValidator.validate_field(field, 0)
+        assert len(errors) == 1
+        assert errors[0].code == "user_on_delete_cascade_forbidden"
+        assert "owner" in errors[0].message
+
     # --- Schema Validation ---
 
     def test_validate_schema_valid(self):

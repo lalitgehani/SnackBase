@@ -1,7 +1,8 @@
 """Collection validation service for schema and field validation.
 
 Provides validation for collection names, schema definitions, and field configurations.
-Supports field types: text, number, boolean, datetime, email, url, json, reference, file, date.
+Supports field types: text, number, boolean, datetime, email, url, json, reference,
+file, date, computed, user.
 """
 
 import re
@@ -24,6 +25,7 @@ class FieldType(StrEnum):
     FILE = "file"
     DATE = "date"
     COMPUTED = "computed"
+    USER = "user"
 
 
 class OnDeleteAction(StrEnum):
@@ -278,6 +280,49 @@ class CollectionValidator:
         return errors
 
     @classmethod
+    def validate_user_field(
+        cls, field: dict[str, Any], field_index: int
+    ) -> list[CollectionValidationError]:
+        """Validate a ``user`` field configuration.
+
+        ``user`` fields store a UUID pointing at the system ``users`` table.
+        ``on_delete`` is optional (defaults to ``restrict``). ``cascade`` is
+        rejected because deleting a user must not silently wipe application rows.
+        """
+        errors: list[CollectionValidationError] = []
+        on_delete = field.get("on_delete")
+        if not on_delete:
+            return errors
+
+        action = str(on_delete).lower()
+        field_name = field.get("name") or f"schema[{field_index}]"
+        if action == OnDeleteAction.CASCADE.value:
+            errors.append(
+                CollectionValidationError(
+                    field=f"schema[{field_index}].on_delete",
+                    message=(
+                        f"on_delete 'cascade' is not allowed for user field '{field_name}'"
+                    ),
+                    code="user_on_delete_cascade_forbidden",
+                )
+            )
+        elif action not in {
+            OnDeleteAction.SET_NULL.value,
+            OnDeleteAction.RESTRICT.value,
+        }:
+            errors.append(
+                CollectionValidationError(
+                    field=f"schema[{field_index}].on_delete",
+                    message=(
+                        f"Invalid on_delete action '{on_delete}' for user field "
+                        f"'{field_name}'. Valid actions: set_null, restrict"
+                    ),
+                    code="user_on_delete_invalid",
+                )
+            )
+        return errors
+
+    @classmethod
     def get_default_mask_type(cls, field_name: str) -> str | None:
         """Infer default mask type from field name.
 
@@ -491,6 +536,9 @@ class CollectionValidator:
         # If this is a reference field, validate reference-specific config
         if field_type.lower() == FieldType.REFERENCE.value:
             errors.extend(cls.validate_reference_field(field, field_index))
+
+        if field_type.lower() == FieldType.USER.value:
+            errors.extend(cls.validate_user_field(field, field_index))
 
         # Validate PII configuration
         errors.extend(cls.validate_pii_field(field, field_index))

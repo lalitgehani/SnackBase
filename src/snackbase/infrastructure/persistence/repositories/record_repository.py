@@ -16,6 +16,7 @@ from snackbase.core.context import get_current_context
 from snackbase.core.cursor import encode_cursor
 from snackbase.core.hooks.hook_events import HookEvent
 from snackbase.core.logging import get_logger
+from snackbase.domain.services.user_field import project_user_public
 from snackbase.infrastructure.persistence.table_builder import TableBuilder
 
 logger = get_logger(__name__)
@@ -482,6 +483,53 @@ class RecordRepository:
         except Exception:
             # Table doesn't exist or query failed - reference is invalid
             return False
+
+    async def check_user_exists(self, user_id: str, account_id: str) -> bool:
+        """Return True if ``user_id`` exists in ``users`` for ``account_id``."""
+        check_sql = """
+            SELECT 1 FROM users
+            WHERE id = :user_id AND account_id = :account_id
+            LIMIT 1
+        """
+        result = await self.session.execute(
+            text(check_sql),
+            {"user_id": user_id, "account_id": account_id},
+        )
+        return result.scalar_one_or_none() is not None
+
+    async def get_users_public(
+        self,
+        ids: list[str],
+        account_id: str | None,
+    ) -> dict[str, dict[str, Any]]:
+        """Batch-fetch redacted user projections, scoped to ``account_id``.
+
+        Each value is exactly ``{id, email, first_name, last_name, avatar_url}``.
+        The internal ``_account_id`` key is used by expand to match the parent
+        record's account and is stripped before the value is written onto the
+        record.
+        """
+        if not ids:
+            return {}
+
+        id_params = {f"id_{i}": value for i, value in enumerate(ids)}
+        in_clause = ", ".join(f":id_{i}" for i in range(len(ids)))
+        sql = (
+            f"SELECT id, email, account_id, profile_data FROM users "
+            f"WHERE id IN ({in_clause})"
+        )
+        params: dict[str, Any] = dict(id_params)
+        if account_id is not None:
+            sql += " AND account_id = :account_id"
+            params["account_id"] = account_id
+
+        result = await self.session.execute(text(sql), params)
+        out: dict[str, dict[str, Any]] = {}
+        for row in result.mappings():
+            projected = project_user_public(dict(row))
+            projected["_account_id"] = row["account_id"]
+            out[row["id"]] = projected
+        return out
 
     async def get_by_ids(
         self,

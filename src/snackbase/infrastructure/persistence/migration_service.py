@@ -38,10 +38,20 @@ def dynamic_migrations_dir(alembic_ini: str | Path = "alembic.ini") -> Path:
     generation, backup, and restore all resolve the location through this one
     function so the swap cannot drift from where migrations are written.
 
+    When ``SNACKBASE_TEST_DATA_DIR`` is set (the pytest isolation contract),
+    revisions are written under that directory instead of the developer
+    ``sb_data/migrations`` tree.
+
     Raises:
         RuntimeError: When ``version_locations`` declares no directory
             outside the packaged script tree.
     """
+    test_dir = os.environ.get("SNACKBASE_TEST_DATA_DIR")
+    if test_dir:
+        path = Path(test_dir) / "migrations"
+        path.mkdir(parents=True, exist_ok=True)
+        return path.resolve()
+
     ini = Path(alembic_ini)
     cfg = Config(str(ini))
     here = Path(cfg.get_main_option("here") or ini.resolve().parent)
@@ -65,6 +75,14 @@ def dynamic_migrations_dir(alembic_ini: str | Path = "alembic.ini") -> Path:
         "alembic.ini version_locations does not declare a dynamic migrations "
         "directory outside the packaged script_location"
     )
+
+
+def apply_version_locations(config: Config, alembic_ini: str | Path = "alembic.ini") -> None:
+    """Point Alembic at core versions plus ``dynamic_migrations_dir()``."""
+    script_location = config.get_main_option("script_location") or "alembic"
+    versions = os.path.join(script_location, "versions")
+    dyn = str(dynamic_migrations_dir(alembic_ini))
+    config.set_main_option("version_locations", os.pathsep.join([versions, dyn]))
 
 
 class MigrationService:
@@ -99,6 +117,8 @@ class MigrationService:
             # BUG FIX: Use render_as_string(hide_password=False) to ensure password is included
             # Otherwise SQLAlchemy masks it with '***' when converted to string
             self.config.set_main_option("sqlalchemy.url", engine.url.render_as_string(hide_password=False))
+
+        apply_version_locations(self.config, alembic_ini_path)
 
     def _get_dynamic_branch_args(self) -> dict[str, Any]:
         """Return the Alembic keyword arguments needed to place a new revision in the
@@ -255,6 +275,114 @@ class MigrationService:
 
         return rev_id
 
+    def generate_plan_migration(
+        self,
+        plan: dict[str, list[dict[str, Any]]],
+        declared: dict[str, list[dict[str, Any]]],
+        current: dict[str, list[dict[str, Any]]],
+    ) -> str:
+        """Write one Alembic revision implementing a schema plan.
+
+        Type changes use add-column / backfill / drop-column rather than
+        in-place ``ALTER TYPE``.
+        """
+        message = "declarative_schema_sync"
+        dynamic_dir = str(dynamic_migrations_dir())
+        branch_args = self._get_dynamic_branch_args()
+        rev = command.revision(
+            self.config,
+            message=message,
+            autogenerate=False,
+            version_path=dynamic_dir,
+            **branch_args,
+        )
+        rev_id = rev.revision
+        filepath = rev.path
+
+        upgrade_lines = self._generate_plan_upgrade_lines(plan, declared, current)
+        downgrade_lines = ["    # Declarative schema sync is not reversed automatically", "    pass"]
+        self._inject_ops_into_migration(filepath, upgrade_lines, downgrade_lines)
+        return rev_id
+
+    def _generate_plan_upgrade_lines(
+        self,
+        plan: dict[str, list[dict[str, Any]]],
+        declared: dict[str, list[dict[str, Any]]],
+        current: dict[str, list[dict[str, Any]]],
+    ) -> list[str]:
+        lines: list[str] = []
+        current_names = set(current)
+        declared_names = set(declared)
+
+        for collection in sorted(declared_names - current_names):
+            lines.extend(self._generate_create_table_op_lines(collection, declared[collection]))
+
+        added_by_collection: dict[str, list[dict[str, Any]]] = {}
+        for item in plan.get("added", []):
+            collection = item["collection"]
+            if collection not in current_names:
+                continue
+            field_name = item["field"]
+            field_def = next(
+                (f for f in declared.get(collection, []) if f.get("name") == field_name),
+                {"name": field_name, "type": item.get("type") or "text"},
+            )
+            added_by_collection.setdefault(collection, []).append(field_def)
+        for collection, fields in added_by_collection.items():
+            lines.extend(self._generate_add_columns_op_lines(collection, fields))
+
+        for item in plan.get("changed", []):
+            if item.get("from") == item.get("to") and item.get("destructive"):
+                # unique-constraint addition
+                collection = item["collection"]
+                field_name = item["field"]
+                table_name = TableBuilder.generate_table_name(collection)
+                lines.append(
+                    f"    with op.batch_alter_table('{table_name}', schema=None) as batch_op:"
+                )
+                lines.append(
+                    f"        batch_op.create_unique_constraint("
+                    f"'uq_{table_name}_{field_name}', ['{field_name}'])"
+                )
+                continue
+            collection = item["collection"]
+            field_name = item["field"]
+            new_type = item.get("to") or "text"
+            table_name = TableBuilder.generate_table_name(collection)
+            sql_type = self._map_to_sa_type(new_type)
+            tmp = f"{field_name}__new"
+            lines.append(
+                f"    with op.batch_alter_table('{table_name}', schema=None) as batch_op:"
+            )
+            lines.append(
+                f"        batch_op.add_column(sa.Column('{tmp}', {sql_type}, nullable=True))"
+            )
+            lines.append(
+                f"    op.execute('UPDATE \"{table_name}\" SET \"{tmp}\" = \"{field_name}\"')"
+            )
+            lines.append(
+                f"    with op.batch_alter_table('{table_name}', schema=None) as batch_op:"
+            )
+            lines.append(f"        batch_op.drop_column('{field_name}')")
+            lines.append(
+                f"        batch_op.alter_column('{tmp}', new_column_name='{field_name}')"
+            )
+
+        removed_by_collection: dict[str, list[dict[str, Any]]] = {}
+        for item in plan.get("removed", []):
+            collection = item["collection"]
+            if collection not in declared_names:
+                continue
+            removed_by_collection.setdefault(collection, []).append(
+                {"name": item["field"], "type": item.get("type") or "text"}
+            )
+        for collection, fields in removed_by_collection.items():
+            lines.extend(self._generate_remove_columns_op_lines(collection, fields))
+
+        if not lines:
+            return ["    pass"]
+        return lines
+
     async def apply_migrations(self, connection: Any = None) -> None:
         """Apply all pending migrations to the database.
 
@@ -328,18 +456,22 @@ class MigrationService:
 
         # Foreign Keys (computed fields have no FK constraints)
         for field in schema:
-            if field["type"].lower() == "reference":
+            ftype = field["type"].lower()
+            if ftype == "reference":
                 name = field["name"]
                 target = TableBuilder.generate_table_name(field.get("collection", ""))
-                on_delete = field.get("on_delete", "RESTRICT").upper().replace("_", " ")
-                lines.append(f"        sa.ForeignKeyConstraint(['{name}'], ['{target}.id'], ondelete='{on_delete}'),")
+                on_delete = (field.get("on_delete") or "RESTRICT").upper().replace("_", " ")
+                lines.append(
+                    f"        sa.ForeignKeyConstraint(['{name}'], ['{target}.id'], "
+                    f"ondelete='{on_delete}'),"
+                )
 
         lines.append("    )")
 
         # Indexes (skip computed fields — no physical column)
         lines.append(f"    op.create_index('ix_{table_name}_account_id', '{table_name}', ['account_id'])")
         for field in schema:
-            if field["type"].lower() == "reference":
+            if field["type"].lower() in {"reference", "user"}:
                 name = field["name"]
                 lines.append(f"    op.create_index('ix_{table_name}_{name}', '{table_name}', ['{name}'])")
 
@@ -376,8 +508,8 @@ class MigrationService:
             col_part += "))"
             lines.append(col_part)
 
-            # Index if reference
-            if f_type == "reference":
+            # Index if reference or user
+            if f_type in {"reference", "user"}:
                 lines.append(f"        batch_op.create_index('ix_{table_name}_{name}', ['{name}'])")
 
         return lines
@@ -403,6 +535,9 @@ class MigrationService:
             "url": "sa.String(500)",
             "json": "sa.JSON()",
             "reference": "sa.String(36)",
+            "user": "sa.String(36)",
+            "file": "sa.Text()",
+            "date": "sa.Date()",
         }
         return mapping.get(field_type, "sa.Text()")
 

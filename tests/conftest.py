@@ -1,9 +1,18 @@
 """Pytest configuration for all tests."""
 
 import asyncio
+import importlib.util
 import os
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
+from pathlib import Path
+
+_isolate_path = Path(__file__).resolve().parent / "isolate_dev_db.py"
+_isolate_spec = importlib.util.spec_from_file_location("_isolate_dev_db", _isolate_path)
+if _isolate_spec is None or _isolate_spec.loader is None:
+    raise RuntimeError(f"cannot load {_isolate_path}")
+_isolate_mod = importlib.util.module_from_spec(_isolate_spec)
+_isolate_spec.loader.exec_module(_isolate_mod)
 
 import pytest
 import pytest_asyncio
@@ -16,6 +25,12 @@ from snackbase.core.logging import get_logger
 from snackbase.infrastructure.auth.jwt_service import jwt_service
 from snackbase.infrastructure.persistence.database import Base
 from snackbase.infrastructure.persistence.models import AccountModel, RoleModel, UserModel
+from snackbase.testing import TEST_DATA_DIR_ENV, assert_test_database_is_isolated
+
+assert_test_database_is_isolated(
+    os.environ["SNACKBASE_DATABASE_URL"],
+    os.environ[TEST_DATA_DIR_ENV],
+)
 
 logger = get_logger(__name__)
 
@@ -86,15 +101,28 @@ def _reset_rate_limit_storage():
     rate_limit_storage.reset()
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _guard_developer_database():
+    """Refuse to run if settings point at a developer ``snackbase.db``."""
+    from snackbase.core.config import get_settings
+    from snackbase.testing import TEST_DATA_DIR_ENV, assert_test_database_is_isolated
+
+    get_settings.cache_clear()
+    assert_test_database_is_isolated(
+        get_settings().database_url,
+        os.environ[TEST_DATA_DIR_ENV],
+    )
+
+
 @pytest.fixture(autouse=True)
 def _clean_dynamic_migrations():
-    """Clear the dynamic migrations directory before running tests."""
-    import os
+    """Clear the *test* dynamic migrations directory before running tests."""
     import shutil
 
-    dynamic_dir = os.path.abspath("sb_data/migrations")
+    from snackbase.infrastructure.persistence.migration_service import dynamic_migrations_dir
+
+    dynamic_dir = str(dynamic_migrations_dir())
     if os.path.exists(dynamic_dir):
-        # Keep the .gitkeep if it exists, or just clear everything
         for filename in os.listdir(dynamic_dir):
             if filename == ".gitkeep":
                 continue

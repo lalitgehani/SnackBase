@@ -198,8 +198,10 @@ Collections support multiple field types with built-in validation.
 | **email** | Email with validation | `VARCHAR` | user@example.com |
 | **url** | URL with validation | `VARCHAR` | https://example.com |
 | **json** | JSON data | `JSONB` | metadata |
-| **reference** | Reference to another collection | `VARCHAR` (FK) | user_id |
+| **reference** | Reference to another collection | `VARCHAR` (FK) | company_id |
 | **file** | File upload reference | `VARCHAR` | avatar_url |
+| **computed** | Derived expression (no physical column) | virtual | full_name |
+| **user** | Reference to a same-account user | `VARCHAR` (FK to `users.id`) | owner |
 
 > **Screenshot Placeholder 8**
 >

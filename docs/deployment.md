@@ -64,8 +64,13 @@ This guide covers deploying SnackBase in development and production environments
 
 5. **Access the application**:
    - API: http://localhost:8000
+   - Admin panel: http://localhost:8000/_/
    - Swagger UI: http://localhost:8000/docs
    - ReDoc: http://localhost:8000/redoc
+
+   The site root (`/`) redirects to `/_/` unless a mounted application claims
+   it. Set `SNACKAPP_ADMIN=off` to disable the admin panel (404 on `/_` and
+   everything beneath it).
 
 ### Development Configuration
 
@@ -558,6 +563,8 @@ SNACKBASE_DB_POOL_TIMEOUT=30
 | `SNACKBASE_SINGLE_TENANT_MODE`          | `false`                                      | Enable single-tenant mode                      |
 | `SNACKBASE_SINGLE_TENANT_ACCOUNT`       | (none)                                       | Target account slug for single-tenant mode     |
 | `SNACKBASE_SINGLE_TENANT_ACCOUNT_NAME`  | (none)                                       | Optional display name for bootstrapped account |
+| `SNACKAPP_ADMIN`                        | `on`                                         | Set to `off` to 404 the `/_/` admin panel      |
+| `SNACKBASE_TEST_DATA_DIR`               | (temp dir under pytest)                      | Test isolation directory; never the developer DB |
 
 ---
 

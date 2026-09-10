@@ -27,6 +27,7 @@ from snackbase.infrastructure.backup.restore import (
 from snackbase.infrastructure.backup.service import create_backup
 from snackbase.infrastructure.persistence.migration_service import (
     MigrationService,
+    apply_version_locations,
     dynamic_migrations_dir,
 )
 
@@ -39,10 +40,25 @@ def _make_settings(tmp_path: Path) -> Settings:
     )
 
 
+@pytest.fixture(autouse=True)
+def _instance_dynamic_migrations(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep this instance's Alembic files inside the tmp sb_data tree.
+
+    Session-wide SNACKBASE_TEST_DATA_DIR isolates the developer checkout;
+    restore tests need those files inside the instance directory that is
+    backed up and swapped.
+    """
+    instance = tmp_path / "sb_data"
+    instance.mkdir(parents=True, exist_ok=True)
+    (instance / "migrations").mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("SNACKBASE_TEST_DATA_DIR", str(instance))
+
+
 def _run_alembic_upgrade(database_url: str, revision: str = "heads") -> None:
     """Run exactly the migration command boot runs after the swap."""
     cfg = Config("alembic.ini")
     cfg.set_main_option("sqlalchemy.url", database_url)
+    apply_version_locations(cfg)
     command.upgrade(cfg, revision)
 
 
@@ -115,7 +131,7 @@ async def _seed_instance(
 def _latest_dynamic_head() -> str:
     from alembic.script import ScriptDirectory
 
-    script = ScriptDirectory.from_config(Config("alembic.ini"))
+    script = ScriptDirectory.from_config(MigrationService().config)
     heads = [
         head
         for head in script.get_heads()

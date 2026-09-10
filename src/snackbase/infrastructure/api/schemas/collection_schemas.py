@@ -18,7 +18,10 @@ class FieldDefinition(BaseModel):
     )
     type: str = Field(
         ...,
-        description="Field type: text, number, boolean, datetime, email, url, json, reference, file, date",
+        description=(
+            "Field type: text, number, boolean, datetime, email, url, json, "
+            "reference, file, date, computed, user"
+        ),
     )
     required: bool = Field(
         default=False,
@@ -43,7 +46,10 @@ class FieldDefinition(BaseModel):
     )
     on_delete: str | None = Field(
         default=None,
-        description="On delete action: cascade, set_null, restrict (required for reference type)",
+        description=(
+            "On delete action: cascade, set_null, restrict (required for reference; "
+            "user fields accept set_null or restrict only)"
+        ),
     )
     # PII (Personally Identifiable Information) fields
     pii: bool = Field(

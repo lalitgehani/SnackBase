@@ -82,6 +82,10 @@ export function validateSchemaFields(
       errors.collection = 'Target collection is required for reference fields';
     }
 
+    if (field.type === 'user' && field.on_delete === 'cascade') {
+      errors.on_delete = `on_delete 'cascade' is not allowed for user field '${field.name}'`;
+    }
+
     if (field.pii && !field.mask_type) {
       errors.mask_type = 'Mask type is required when PII is enabled';
     }

@@ -14,6 +14,7 @@ SnackBase provides a comprehensive security model with role-based access control
 - [Rule Engine](#rule-engine)
 - [Field-Level Security](#field-level-security)
 - [Account Isolation](#account-isolation)
+- [User Field Projection](#user-field-projection)
 - [Security Best Practices](#security-best-practices)
 
 ---
@@ -462,6 +463,13 @@ SELECT * FROM posts WHERE account_id = 'XY2048';
 ```
 
 Users cannot see or access data from other accounts.
+
+### User Field Projection
+
+Expanding a `user` field replaces the stored UUID in place with exactly
+`{id, email, first_name, last_name, avatar_url}`. `password_hash`, `role_id`,
+`auth_provider`, and `external_id` are never included. A user id from another
+account is rejected on write (`invalid_reference`) and expands to `null`.
 
 > **Screenshot Placeholder 18**
 >

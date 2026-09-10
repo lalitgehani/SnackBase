@@ -49,6 +49,7 @@ FIELD_TYPE_OPERATORS: dict[str, set[str]] = {
     "date": _NO_LIKE,
     "datetime": _NO_LIKE,
     "reference": _EQUALITY_ONLY,
+    "user": _EQUALITY_ONLY,
     "json": _NULL_ONLY,
     # Computed fields: allow all comparisons (return_type determines runtime semantics)
     "computed": _ALL_COMPARISON_OPS,

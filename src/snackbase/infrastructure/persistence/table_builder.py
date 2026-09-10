@@ -25,6 +25,7 @@ FIELD_TYPE_TO_SQL = {
         FieldType.URL.value: "TEXT",
         FieldType.JSON.value: "TEXT",  # JSON stored as TEXT for SQLite
         FieldType.REFERENCE.value: "TEXT",  # Reference stored as TEXT (foreign key ID)
+        FieldType.USER.value: "TEXT",  # User UUID stored as TEXT (FK to users.id)
         FieldType.FILE.value: "TEXT",  # File metadata stored as JSON TEXT
         FieldType.DATE.value: "DATE",
     },
@@ -37,6 +38,7 @@ FIELD_TYPE_TO_SQL = {
         FieldType.URL.value: "TEXT",
         FieldType.JSON.value: "JSONB",  # Native JSONB for PostgreSQL
         FieldType.REFERENCE.value: "TEXT",  # Reference stored as TEXT (foreign key ID)
+        FieldType.USER.value: "TEXT",  # User UUID stored as TEXT (FK to users.id)
         FieldType.FILE.value: "JSONB",  # File metadata stored as JSONB
         FieldType.DATE.value: "DATE",
     },
@@ -158,23 +160,27 @@ class TableBuilder:
 
         column_def = " ".join(parts)
 
-        # Handle foreign key for reference type
+        # Handle foreign key for reference and user types
         fk_constraint = None
+        on_delete_map = {
+            "CASCADE": "CASCADE",
+            "SET_NULL": "SET NULL",
+            "RESTRICT": "RESTRICT",
+        }
         if field_type == FieldType.REFERENCE.value:
             target_collection = field.get("collection", "")
-            on_delete = field.get("on_delete", OnDeleteAction.RESTRICT.value).upper()
-
-            # Map on_delete values to SQL
-            on_delete_map = {
-                "CASCADE": "CASCADE",
-                "SET_NULL": "SET NULL",
-                "RESTRICT": "RESTRICT",
-            }
-            on_delete_sql = on_delete_map.get(on_delete.replace("_", ""), "RESTRICT")
-
-            # Generate target table name
+            on_delete = (field.get("on_delete") or OnDeleteAction.RESTRICT.value).upper()
+            on_delete_sql = on_delete_map.get(on_delete, "RESTRICT")
             target_table = cls.generate_table_name(target_collection)
-            fk_constraint = f'FOREIGN KEY ("{name}") REFERENCES "{target_table}"("id") ON DELETE {on_delete_sql}'
+            fk_constraint = (
+                f'FOREIGN KEY ("{name}") REFERENCES "{target_table}"("id") '
+                f"ON DELETE {on_delete_sql}"
+            )
+        elif field_type == FieldType.USER.value:
+            # User ids are validated against the system users table in the
+            # write path. A SQL FK would pin collection tables to users and
+            # break instance teardown (and SQLite drop order).
+            fk_constraint = None
 
         return column_def, fk_constraint
 
@@ -246,7 +252,7 @@ class TableBuilder:
             if field_type == FieldType.COMPUTED.value:
                 continue
 
-            if field_type == FieldType.REFERENCE.value:
+            if field_type in {FieldType.REFERENCE.value, FieldType.USER.value}:
                 indexes.append(
                     f'CREATE INDEX "idx_{table_name}_{name}" ON "{table_name}"("{name}");'
                 )

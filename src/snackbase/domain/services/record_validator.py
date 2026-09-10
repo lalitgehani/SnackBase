@@ -1,7 +1,8 @@
 """Record validation service for validating record data against collection schemas.
 
 Provides validation for record data, ensuring it conforms to the collection schema.
-Supports field types: text, number, boolean, datetime, email, url, json, reference, file, date.
+Supports field types: text, number, boolean, datetime, email, url, json, reference,
+file, date, computed, user.
 """
 
 import json
@@ -290,6 +291,7 @@ class RecordValidator:
             FieldType.URL.value: cls.validate_url,
             FieldType.JSON.value: cls.validate_json,
             FieldType.REFERENCE.value: cls.validate_reference,
+            FieldType.USER.value: cls.validate_reference,
             FieldType.FILE.value: cls.validate_file,
             FieldType.DATE.value: cls.validate_date,
         }

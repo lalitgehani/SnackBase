@@ -3,7 +3,7 @@
 Provides read-only endpoints for viewing Alembic migration status and history.
 """
 
-from typing import cast
+from typing import Any, cast
 
 from fastapi import APIRouter, Depends, status
 from fastapi.responses import JSONResponse
@@ -15,9 +15,14 @@ from snackbase.core.logging import get_logger
 from snackbase.infrastructure.api.dependencies import SuperadminUser
 from snackbase.infrastructure.api.schemas.migration_query_schemas import (
     CurrentRevisionResponse,
+    DeclaredCollection,
+    MigrationGenerateRequest,
+    MigrationGenerateResponse,
     MigrationHistoryItemResponse,
     MigrationHistoryResponse,
     MigrationListResponse,
+    MigrationPlanRequest,
+    MigrationPlanResponse,
     MigrationRevisionResponse,
 )
 from snackbase.infrastructure.persistence.database import get_db_session
@@ -258,3 +263,158 @@ async def get_migration_history(
                 "message": "Failed to retrieve migration history",
             },
         )
+
+
+def _declared_map(
+    request_collections: list[DeclaredCollection],
+) -> dict[str, list[dict[str, Any]]]:
+    return {item.name: [dict(field) for field in item.fields] for item in request_collections}
+
+
+async def _current_schema_map(session: AsyncSession) -> dict[str, list[dict[str, Any]]]:
+    import json
+
+    from snackbase.infrastructure.persistence.repositories import CollectionRepository
+
+    repo = CollectionRepository(session)
+    collections = await repo.list_all()
+    out: dict[str, list[dict[str, Any]]] = {}
+    for collection in collections:
+        try:
+            out[collection.name] = json.loads(collection.schema)
+        except json.JSONDecodeError:
+            out[collection.name] = []
+    return out
+
+
+@router.post(
+    "/plan",
+    status_code=status.HTTP_200_OK,
+    response_model=MigrationPlanResponse,
+    responses={
+        403: {"description": "Superadmin access required"},
+    },
+)
+async def plan_migrations(
+    body: MigrationPlanRequest,
+    current_user: SuperadminUser,
+    session: AsyncSession = Depends(get_db_session),
+) -> MigrationPlanResponse:
+    """Diff declared collection schemas against the live registry without applying."""
+    from snackbase.domain.services.schema_diff import diff_collection_schemas
+
+    current = await _current_schema_map(session)
+    declared = _declared_map(body.collections)
+    plan = diff_collection_schemas(current, declared)
+    logger.info(
+        "Migration plan computed",
+        added=len(plan.added),
+        removed=len(plan.removed),
+        changed=len(plan.changed),
+        user_id=current_user.user_id,
+    )
+    return MigrationPlanResponse(**plan.to_dict())
+
+
+@router.post(
+    "/generate",
+    status_code=status.HTTP_200_OK,
+    response_model=MigrationGenerateResponse,
+    responses={
+        403: {"description": "Superadmin access required"},
+        409: {"description": "Destructive changes require confirm: true"},
+    },
+)
+async def generate_migrations(
+    body: MigrationGenerateRequest,
+    current_user: SuperadminUser,
+    session: AsyncSession = Depends(get_db_session),
+) -> MigrationGenerateResponse | JSONResponse:
+    """Write one Alembic revision implementing the plan and apply it.
+
+    Destructive changes (type change, field removal, unique addition) require
+    ``confirm: true``. Without it this endpoint returns 409 and writes nothing.
+    """
+    import json
+    import uuid
+
+    from snackbase.domain.services.schema_diff import diff_collection_schemas
+    from snackbase.infrastructure.persistence.migration_service import MigrationService
+    from snackbase.infrastructure.persistence.models import CollectionModel
+    from snackbase.infrastructure.persistence.models.collection_rule import CollectionRuleModel
+    from snackbase.infrastructure.persistence.repositories import CollectionRepository
+    from snackbase.infrastructure.persistence.repositories.collection_rule_repository import (
+        CollectionRuleRepository,
+    )
+
+    current = await _current_schema_map(session)
+    declared = _declared_map(body.collections)
+    plan = diff_collection_schemas(current, declared)
+
+    if plan.has_destructive() and not body.confirm:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={
+                "error": "Confirmation required",
+                "message": "Destructive changes require confirm: true",
+                "plan": plan.to_dict(),
+            },
+        )
+
+    if plan.is_empty():
+        return MigrationGenerateResponse(
+            revision=None,
+            plan=MigrationPlanResponse(**plan.to_dict()),
+            applied=False,
+        )
+
+    engine = cast(AsyncEngine, session.bind)
+    service = MigrationService(alembic_ini_path="alembic.ini", engine=engine)
+
+    rev_id = service.generate_plan_migration(plan.to_dict(), declared, current)
+    await service.apply_migrations()
+
+    repo = CollectionRepository(session)
+    rule_repo = CollectionRuleRepository(session)
+    for name, fields in declared.items():
+        existing = await repo.get_by_name(name)
+        if existing is None:
+            collection_id = str(uuid.uuid4())
+            created = CollectionModel(
+                id=collection_id,
+                name=name,
+                schema=json.dumps(fields),
+                migration_revision=rev_id,
+            )
+            await repo.create(created)
+            await rule_repo.create(
+                CollectionRuleModel(
+                    id=str(uuid.uuid4()),
+                    collection_id=collection_id,
+                    list_rule=None,
+                    view_rule=None,
+                    create_rule=None,
+                    update_rule=None,
+                    delete_rule=None,
+                    list_fields="*",
+                    view_fields="*",
+                    create_fields="*",
+                    update_fields="*",
+                )
+            )
+        else:
+            existing.schema = json.dumps(fields)
+            existing.migration_revision = rev_id
+
+    await session.commit()
+
+    logger.info(
+        "Migration generated and applied",
+        revision=rev_id,
+        user_id=current_user.user_id,
+    )
+    return MigrationGenerateResponse(
+        revision=rev_id,
+        plan=MigrationPlanResponse(**plan.to_dict()),
+        applied=True,
+    )

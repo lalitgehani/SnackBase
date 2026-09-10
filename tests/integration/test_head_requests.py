@@ -8,6 +8,7 @@ The admin SPA is served under ``/_/``; the site root is left free for a mounted
 application and redirects to the panel when nothing claims it.
 """
 
+import re
 from pathlib import Path
 
 import pytest
@@ -105,7 +106,7 @@ def test_mounted_app_can_own_the_site_root(tmp_path: Path,
     # An application mounts itself and splices its routes to the front.
     added_from = len(app.router.routes)
 
-    @app.get("/", include_in_schema=False)
+    @app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
     async def app_root() -> Response:
         return Response(content=b"the customer app", media_type="text/html")
 
@@ -115,7 +116,31 @@ def test_mounted_app_can_own_the_site_root(tmp_path: Path,
 
     client = TestClient(app)
     assert client.get("/", follow_redirects=False).content == b"the customer app"
+    assert client.head("/").status_code == 200
     assert client.get("/_/").content == INDEX_HTML
+
+
+def test_snackapp_admin_off_returns_404(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    static_dir = tmp_path / "static"
+    static_dir.mkdir(parents=True)
+    (static_dir / "index.html").write_bytes(INDEX_HTML)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SNACKAPP_ADMIN", "off")
+
+    app = FastAPI()
+    register_frontend(app)
+    client = TestClient(app)
+    assert client.get("/_/").status_code == 404
+    assert client.get("/_/admin/dashboard").status_code == 404
+    assert client.head("/_/").status_code == 404
+
+
+def test_served_admin_html_has_no_inline_script() -> None:
+    html = Path("static/index.html").read_text(encoding="utf-8")
+    assert re.search(r"<script(?![^>]*\bsrc=)[^>]*>", html) is None
+    assert 'src="/_/theme-init.js"' in html
 
 
 def test_head_health_returns_200_with_empty_body(health_client: TestClient) -> None:
