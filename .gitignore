@@ -110,3 +110,5 @@ tests/security-reports/
 !.agent/
 
 .claude
+
+static
