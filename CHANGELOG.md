@@ -1,60 +1,183 @@
-# Release Notes - Unreleased
+# Release Notes - v0.12.0
 
-## 🚦 Rate limiting and client-IP attribution
+SnackBase v0.12.0 adds instance-level backup and restore, fixes rate limiting
+so the admin UI can load, and attributes proxied clients to the real address
+so login throttling and rate limits no longer collapse every visitor into one
+bucket.
 
-- **The limiter now meters only `/api/v1` paths.** It previously applied to every
-  path, so a single cold load of the admin SPA spent the whole token bucket on its
-  own HTML, JavaScript and CSS and returned `429` for chunks the page needed to
-  render — reaching the browser as unparseable JSON and leaving a blank screen.
-  `/health`, `/ready` and `/live` fall outside the prefix and are exempt by the same
-  rule.
+## ✨ Instance backup and restore
+
+Backups are instance-level, distinct from collection and records export.
+Per-account backup is not supported. There are no new Alembic revisions.
+
+### Destinations, manifests, and the management API
+
+- Added a `backup_settings` configuration category (local disk or S3, cron
+  schedule, retention) managed by a superadmin from System Settings or the
+  configuration API. The S3 secret is stored encrypted and is never returned.
+- Every archive is a zip with a `manifest.json` that records format version,
+  engine, table row counts, and fingerprints of `SNACKBASE_ENCRYPTION_KEY`,
+  `SNACKBASE_SECRET_KEY`, and `SNACKBASE_TOKEN_SECRET`. Restore checks those
+  fingerprints before touching anything: a mismatched encryption key is a hard
+  refusal; signing-key mismatches are warnings an operator can override.
+- Added `/api/v1/backups` for create (202), list, delete, chunked download, and
+  multipart upload (exempt from the user-file size limit). Only one backup or
+  restore runs at a time; in-flight state lives in memory plus a lock file,
+  never in the database.
+- Added `snackbase backup create|list|delete|restore` CLI commands that talk
+  to the destination directly and work without a running server.
+- Removed `scripts/backup_db.py`. Its file-copy approach could capture a
+  database mid-write.
+
+### SQLite physical backups
+
+- SQLite backups use `VACUUM INTO` on an autocommit connection for a
+  transactionally consistent snapshot, then archive `data.db` plus the local
+  `files/` tree. When file storage is S3, files are omitted and the manifest
+  records `includes_files: false`.
+- Dynamic collection migration scripts travel in the archive so a restore can
+  resolve the restored database's own `alembic_version`.
+
+### PostgreSQL logical archives
+
+- PostgreSQL backups are portable logical archives (`tables/<name>.jsonl` per
+  table, one `REPEATABLE READ READ ONLY` transaction), not recovery artifacts.
+  The API reports them `restorable: false`. Disaster recovery stays on the
+  database (managed snapshots or `pg_dump`). Physical backups on PostgreSQL
+  are rejected with 400. SQLite may request a logical archive explicitly.
+
+### Schedule, retention, and failure alerting
+
+- Added `BackupScheduler` behind `SNACKBASE_BACKUP_SCHEDULER_ENABLED` (default
+  on). It ticks every 60 seconds, re-reads cron and retention each tick, and
+  computes the next run forward from now so a restart never fires a missed
+  window.
+- Automatic archives are named `@auto_snackbase_<UTC timestamp>.zip`. Retention
+  deletes the oldest `@auto_` archives beyond `max_keep` (default 3) and never
+  touches manual or uploaded archives.
+- Scheduled failures email every superadmin at most once per 24 hours per
+  distinct error. `consecutive_failures` and `last_error` are exposed on
+  `GET /api/v1/backups`.
+
+### Restore
+
+- Restore never swaps data in a running process. The request validates the
+  archive, writes `.restore-pending.json` beside the SQLite database, and
+  schedules a graceful SIGTERM (exit 75). On the next boot, before any
+  database connection, the current data is moved under
+  `.restore_old/<timestamp>/` and the archive is swapped in. An interrupted
+  attempt is rolled back and retried.
+- Restore is SQLite-only. Free disk below twice the archive size aborts with
+  an explicit message. Pre-restore data is kept for
+  `SNACKBASE_RESTORE_RETAIN_OLD_DATA_HOURS` (default 24).
+- Added restore-preview (validation only) and restore-status endpoints, plus a
+  confirmation dialog in the admin UI that requires typing the archive name.
+
+### Admin UI
+
+- Added Backup Settings, archive list (Restorable/Portable badges, in-flight
+  polling), and Restore flows under System, with a screenshot-backed
+  walkthrough in `docs/backups.md`.
+
+## 🛡️ Rate limiting and client-IP attribution
+
+- **The limiter now meters only `/api/v1` paths.** It previously applied to
+  every path, so a single cold load of the admin SPA spent the whole token
+  bucket on its own HTML, JavaScript and CSS and returned `429` for chunks
+  the page needed to render — reaching the browser as unparseable JSON and
+  leaving a blank screen. `/health`, `/ready` and `/live` fall outside the
+  prefix and are exempt by the same rule.
 - **`rate_limit_burst` is replaced by `rate_limit_burst_multiplier`.** The old
-  setting documented itself as a multiplier but implemented an absolute ceiling of
-  10 requests regardless of `rate_limit_per_minute`. Capacity is now
-  `max(1, rate_per_minute × multiplier)`, so the limit an operator configures is the
-  limit that is enforced. See the upgrade notes.
-- **`trusted_proxies` accepts CIDR networks and `*`.** Entries were compared by exact
-  string against the socket peer, so on a managed platform whose edge address is
-  neither stable nor published there was no correct value to write. Entries are
-  parsed once, and an unparseable one now fails at startup naming the entry rather
-  than being silently skipped.
-- **`CF-Connecting-IP` is honoured** ahead of `X-Forwarded-For`, gated by the same
-  trust check, so an untrusted peer cannot forge it.
-- **A warning is logged** — once per peer — when a request arrives proxied from a peer
-  that is not trusted, naming the setting and the consequence.
-- **`HEAD` is answered on the SPA catch-all and `/health`.** FastAPI's `APIRoute`
-  does not derive `HEAD` from `GET` the way Starlette's plain route does, so uptime
-  monitors probing with `HEAD` saw `405` on a working deployment.
-- **New response header `X-RateLimit-Burst`** reports the computed capacity alongside
-  `X-RateLimit-Limit`, on both `200` and `429`.
-- `rate_limit_per_hour` is removed. It was defined in settings and documented in
+  setting documented itself as a multiplier but implemented an absolute
+  ceiling of 10 requests regardless of `rate_limit_per_minute`. Capacity is
+  now `max(1, rate_per_minute × multiplier)`, so the limit an operator
+  configures is the limit that is enforced. See the upgrade notes.
+- **`trusted_proxies` accepts CIDR networks and `*`.** Entries were compared
+  by exact string against the socket peer, so on a managed platform whose
+  edge address is neither stable nor published there was no correct value to
+  write. Entries are parsed once, and an unparseable one now fails at startup
+  naming the entry rather than being silently skipped.
+- **`CF-Connecting-IP` is honoured** ahead of `X-Forwarded-For`, gated by the
+  same trust check, so an untrusted peer cannot forge it.
+- **A warning is logged** — once per peer — when a request arrives proxied
+  from a peer that is not trusted, naming the setting and the consequence.
+- **`HEAD` is answered on the SPA catch-all and `/health`.** FastAPI's
+  `APIRoute` does not derive `HEAD` from `GET` the way Starlette's plain
+  route does, so uptime monitors probing with `HEAD` saw `405` on a working
+  deployment.
+- **New response header `X-RateLimit-Burst`** reports the computed capacity
+  alongside `X-RateLimit-Limit`, on both `200` and `429`.
+- Removed `rate_limit_per_hour`. It was defined in settings and documented in
   `.env.example` but never read by the limiter.
-- `SNACKBASE_TRUSTED_PROXIES` is now declared in `railway.json` and both compose
+- Declared `SNACKBASE_TRUSTED_PROXIES` in `railway.json` and both compose
   files.
+
+## ☁️ Cloud Console
+
+- Sorted available regions by `sort_order` in the create-project picker.
+- Locked provider metadata (`provider`, `provider_region`, `domain_suffix`)
+  out of the mapped Region so the Console chooses by location only.
+
+## 🚀 Runtime and deployments
+
+- Added a GitHub Actions job that publishes the Platform Studio image to GHCR
+  (`ghcr.io/<owner>/snackbase-platform-studio`) from `main` and version tags.
+- Streamlined `ui/Dockerfile.platform` so SDK dependencies install from the
+  npm registry rather than a local build context.
+
+## 📖 Documentation and quality
+
+- Added `docs/backups.md` covering destinations, manifests, schedule and
+  retention, the restore runbook, and PostgreSQL logical-archive limits.
+- Propagated the rate-limit and trusted-proxy settings through `.env.example`,
+  `railway.json`, and both compose files.
+- Updated application version reporting and documentation to `0.12.0`.
 
 ## ⚠️ Upgrade notes
 
 - **Breaking configuration change: `SNACKBASE_RATE_LIMIT_BURST` →
-  `SNACKBASE_RATE_LIMIT_BURST_MULTIPLIER`.** The old variable is no longer read;
-  delete it. The value is no longer a token count but a multiple of the per-minute
-  allowance, so the default of `1.0` with `SNACKBASE_RATE_LIMIT_PER_MINUTE=60` gives
-  a capacity of 60 — six times the old default of 10, which is the point. Multiply
-  your old intent rather than your old number: `SNACKBASE_RATE_LIMIT_BURST=120`
-  against a rate of 60 becomes `SNACKBASE_RATE_LIMIT_BURST_MULTIPLIER=2.0`.
-- **`SNACKBASE_RATE_LIMIT_PER_HOUR` is no longer read**; delete it. It never had an
-  effect.
-- **Correction to the v0.11.0 upgrade note on trusted proxies.** That note said to
-  "configure the trusted-proxy setting so `X-Forwarded-For` is honoured" without
-  saying that no correct value existed on a managed platform, which is why instances
-  shipped misconfigured. Stated plainly: **leaving `trusted_proxies` at its loopback
-  default behind a proxy collapses every client into one rate-limit bucket and one
-  login-failure budget.** One attacker then exhausts the login budget for every
-  visitor, and any visitor's successful login clears the attacker's accumulated
-  failure count. Set `SNACKBASE_TRUSTED_PROXIES` to your proxy's address or network,
-  or to `*` when the platform's edge address is not stable — `*` is safe only where
-  the application is not directly reachable from the internet.
-- **Known limitation, unchanged:** rate-limit state is per-process and in-memory, so
-  `N` replicas enforce `N` times the configured limit.
+  `SNACKBASE_RATE_LIMIT_BURST_MULTIPLIER`.** The old variable is no longer
+  read; delete it. The value is no longer a token count but a multiple of the
+  per-minute allowance, so the default of `1.0` with
+  `SNACKBASE_RATE_LIMIT_PER_MINUTE=60` gives a capacity of 60 — six times the
+  old default of 10, which is the point. Multiply your old intent rather than
+  your old number: `SNACKBASE_RATE_LIMIT_BURST=120` against a rate of 60
+  becomes `SNACKBASE_RATE_LIMIT_BURST_MULTIPLIER=2.0`.
+- **`SNACKBASE_RATE_LIMIT_PER_HOUR` is no longer read**; delete it. It never
+  had an effect.
+- **Correction to the v0.11.0 upgrade note on trusted proxies.** That note
+  said to "configure the trusted-proxy setting so `X-Forwarded-For` is
+  honoured" without saying that no correct value existed on a managed
+  platform, which is why instances shipped misconfigured. Stated plainly:
+  **leaving `trusted_proxies` at its loopback default behind a proxy
+  collapses every client into one rate-limit bucket and one login-failure
+  budget.** One attacker then exhausts the login budget for every visitor,
+  and any visitor's successful login clears the attacker's accumulated
+  failure count. Set `SNACKBASE_TRUSTED_PROXIES` to your proxy's address or
+  network, or to `*` when the platform's edge address is not stable — `*` is
+  safe only where the application is not directly reachable from the
+  internet.
+- **Known limitation, unchanged:** rate-limit state is per-process and
+  in-memory, so `N` replicas enforce `N` times the configured limit.
+- **No new Alembic revisions in this release.** Run the normal migration
+  upgrade before starting: `uv run python -m snackbase migrate upgrade`.
+- **Backups are opt-in via configuration.** The cron schedule is empty by
+  default. Set destination and schedule from System Settings → Backup, or
+  the `backup_settings` configuration API. Local archives share the volume
+  with the database: they protect against data mistakes, not against losing
+  the volume.
+- **SQLite restore requires a restart policy** of `unless-stopped` or
+  `always` (or an equivalent supervisor). Without a restart the marker stays
+  pending. PostgreSQL archives produced by SnackBase are portable, not
+  restorable; configure disaster recovery on the database itself.
+- **`SNACKBASE_BACKUP_SCHEDULER_ENABLED` defaults to on.** Set it to `false`
+  to keep the in-process scheduler from starting. Scheduled backups still
+  require a non-empty `cron` in `backup_settings`.
+- **`SNACKBASE_RESTORE_RETAIN_OLD_DATA_HOURS` defaults to 24.** Pre-restore
+  data under `.restore_old/` is pruned at the next boot after that window.
+- **Rotating `SNACKBASE_ENCRYPTION_KEY` invalidates the S3 backup secret**
+  along with every other stored credential. An archive taken under a
+  different encryption key cannot be restored.
 
 ---
 
