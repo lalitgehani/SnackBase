@@ -1,0 +1,26 @@
+# Publish snackbase to PyPI via trusted publishing (OIDC). No API token.
+#
+# Required once on https://pypi.org/manage/project/snackbase/publishing/:
+#   Owner: <github org or user>, Repository: <this repo>, Workflow: publish.yml,
+#   Environment: pypi
+#
+# Then: git tag vX.Y.Z && git push origin vX.Y.Z
+
+name: publish
+on:
+  push:
+    tags: ["v*"]
+jobs:
+  pypi:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - run: uv build
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist
