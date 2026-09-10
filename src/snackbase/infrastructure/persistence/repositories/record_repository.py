@@ -25,6 +25,7 @@ logger = get_logger(__name__)
 def _build_computed_select_parts(
     schema: list[dict[str, Any]],
     dialect: str = "sqlite",
+    table_alias: str | None = None,
 ) -> tuple[list[tuple[str, str]], dict[str, Any]]:
     """Build SQL SELECT expressions for computed fields.
 
@@ -73,6 +74,9 @@ def _build_computed_select_parts(
                 for orig_key, ns_key in zip(expr_params.keys(), ns_params.keys()):
                     sql = sql.replace(f":{orig_key}", f":{ns_key}")
                 all_params.update(ns_params)
+            if table_alias:
+                for fname in sorted(allowed_fields, key=len, reverse=True):
+                    sql = sql.replace(f'"{fname}"', f'{table_alias}."{fname}"')
             parts.append((sql, field_name))
         except (ExpressionCompilationError, RuleSyntaxError) as exc:
             logger.warning(
@@ -665,7 +669,9 @@ class RecordRepository:
 
         # 2. Build computed field expressions
         dialect = self._get_dialect()
-        computed_parts, computed_params = _build_computed_select_parts(schema, dialect)
+        computed_parts, computed_params = _build_computed_select_parts(
+            schema, dialect, table_alias="r"
+        )
         computed_expr_map = {name: sql for sql, name in computed_parts}
         computed_sql = ", ".join(
             f'({sql}) AS "{name}"' for sql, name in computed_parts
@@ -791,7 +797,9 @@ class RecordRepository:
 
         # 2. Build computed field expressions
         dialect = self._get_dialect()
-        computed_parts, computed_params = _build_computed_select_parts(schema, dialect)
+        computed_parts, computed_params = _build_computed_select_parts(
+            schema, dialect, table_alias="r"
+        )
         computed_expr_map = {name: sql for sql, name in computed_parts}
         computed_sql = ", ".join(
             f'({sql}) AS "{name}"' for sql, name in computed_parts

@@ -78,6 +78,9 @@ class CollectionService:
         rev_id = self.migration_service.generate_create_collection_migration(name, schema)
 
         # 2. Apply migration
+        # SQLite holds a writer lock for the ORM session; Alembic needs its own
+        # connection for DDL, so release the session first.
+        await self.session.commit()
         logger.info("Applying migration", revision=rev_id)
         await self.migration_service.apply_migrations()
 
@@ -331,6 +334,7 @@ class CollectionService:
                 collection.name, new_fields
             )
 
+            await self.session.commit()
             logger.info("Applying migration", revision=rev_id)
             await self.migration_service.apply_migrations()
 
