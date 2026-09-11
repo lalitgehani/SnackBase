@@ -665,7 +665,10 @@ async def list_records(
         descending = False
         sort_by = sort[1:]
     else:
-        # Default behavior or handle bare field name
+        # A bare field name means ascending. Without this, "-name" and "name"
+        # would be the same query and ascending order would be unreachable:
+        # a literal "+" in a query string decodes to a space.
+        descending = False
         sort_by = sort
 
     # 3b. Reject sort/filter on encrypted fields
