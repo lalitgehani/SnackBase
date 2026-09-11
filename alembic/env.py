@@ -16,9 +16,12 @@ from snackbase.infrastructure.persistence.database import Base
 config = context.config
 
 # Interpret the config file for Python logging.
-# This line sets up loggers basically.
+# ``disable_existing_loggers`` defaults to True, which would silence every
+# logger the embedding application configured before this ran -- migrations
+# are run in-process by hosts such as SnackApp, and a migration must not cost
+# them their logging.
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # Set the target metadata for autogenerate support
 target_metadata = Base.metadata
