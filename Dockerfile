@@ -48,8 +48,13 @@ ENV UV_COMPILE_BYTECODE=1 \
 
 WORKDIR /app
 
-# Project metadata + lock first for better layer caching
-COPY pyproject.toml uv.lock README.md ./
+# Project metadata + lock first for better layer caching.
+# alembic.ini and alembic/ must be present here: --no-editable builds a wheel,
+# and hatch force-includes those paths into the package (needed so a pip-installed
+# snackbase can migrate without a git checkout). Missing them fails the build
+# with FileNotFoundError: Forced include not found: /app/alembic.
+COPY pyproject.toml uv.lock README.md alembic.ini ./
+COPY alembic ./alembic
 COPY src ./src
 COPY packages ./packages
 
