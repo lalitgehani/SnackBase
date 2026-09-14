@@ -1,8 +1,123 @@
-# Release Notes - v0.12.1
+# Release Notes - v0.13.0
 
-SnackBase v0.12.1 imports on Python 3.12 and 3.13. `HookContext` and other
-`TYPE_CHECKING`-only annotations no longer raise `NameError` at class or
-function definition time.
+SnackBase v0.13.0 makes SnackBase embeddable in another Python application: it
+installs from PyPI with its migrations included, runs in-process behind a
+client that keeps every permission check, and moves the admin panel to `/_/`
+so the site root belongs to the application. It also adds a `user` field type
+and reviewable, declarative schema migrations.
+
+This entry covers `0.12.1`, which was published to PyPI only, with no tag,
+GitHub release, or Docker image.
+
+## ✨ Collections and schema
+
+### 👤 `user` fields
+
+- Added a `user` field type that stores the UUID of a user in the same account.
+  Writes are validated against the `users` table, and a cross-account id fails
+  with `invalid_reference`.
+- `?expand=` replaces the UUID in place with exactly
+  `{id, email, first_name, last_name, avatar_url}`. Password hashes, `role_id`,
+  `auth_provider`, and `external_id` are never included, and a user from
+  another account expands to `null`.
+- `on_delete` accepts `set_null` or `restrict`. `cascade` is rejected when the
+  collection is created. `user` fields can be filtered by equality, for example
+  `owner = @request.auth.id`.
+
+### 🔄 Declarative migrations
+
+- Added `POST /api/v1/migrations/plan`. It diffs a declared schema against the
+  live collection registry without applying anything, and marks field type
+  changes, field removals, and new unique constraints `destructive: true`.
+- Added `POST /api/v1/migrations/generate`. It writes one Alembic revision into
+  the dynamic migrations directory and applies it. A destructive plan needs
+  `{"confirm": true}`; without it the endpoint returns 409 and writes nothing.
+  Type changes add a column, backfill it, then drop the old one instead of
+  running `ALTER TYPE` in place. Both endpoints are superadmin only.
+
+## 🧩 Embedding SnackBase
+
+### 🖥️ Admin panel at `/_/`
+
+- Moved the React admin UI from the site root to `/_/`. A bare `/` redirects
+  to the panel unless a mounted application claims it, either with its own `/`
+  route or with `app.state.site_root_handler`.
+- Added `SNACKAPP_ADMIN=off`, which returns 404 for `/_` and everything under
+  it.
+- Moved the theme bootstrap out of an inline script so the panel works under a
+  strict Content Security Policy.
+
+### 🔌 In-process client
+
+- Added `snackbase.embedded.InProcessClient` and the matching `HttpClient`,
+  both created with `create_client`. The in-process client sends each call
+  through the mounted FastAPI app with `httpx.ASGITransport` and the caller's
+  bearer token, so routing, authentication, collection permissions, and audit
+  logging behave exactly as they do over the network. It has no service-role or
+  superadmin bypass. Synchronous wrappers are available for code that cannot
+  await.
+
+### 📦 Packaging
+
+- The wheel now ships `alembic.ini` and the `alembic/` scripts, so
+  `migrate upgrade` works from a pip install. SnackBase looks for `alembic.ini`
+  in this order: `SNACKBASE_ALEMBIC_INI`, `./alembic.ini`, the packaged copy,
+  then the source checkout. With the packaged copy, dynamic migrations go to
+  `./sb_data/migrations`, and generated revisions skip the `ruff` post-write
+  hook.
+- Added a `publish` workflow that uploads to PyPI from `v*` tags through GitHub
+  OIDC trusted publishing, with no stored API token.
+- Fixed the Docker build, which failed once the Alembic files were packaged
+  because the wheel-build stage didn't copy them.
+
+### 🐍 Python 3.12 and 3.13
+
+- Fixed imports on Python 3.12 and 3.13. `HookContext`, the ORM models, and
+  other modules whose annotations name `TYPE_CHECKING`-only types raised
+  `NameError` at import. Annotations are now postponed.
+
+## 🔧 Fixes
+
+- Fixed record sorting: `sort=name` now sorts ascending. A bare field name used
+  to sort descending, the same as `sort=-name`, so the only way to get
+  ascending order was `+name`, and a literal `+` in a query string decodes to a
+  space.
+- Fixed record lists failing with an ambiguous column when a computed field
+  referenced a field that shares a name with an `accounts` column, such as
+  `name`. Computed expressions now qualify their columns with the record table
+  alias.
+- Fixed "database is locked" on SQLite when creating or altering a collection.
+  The ORM session is now committed before Alembic opens its own connection to
+  run the DDL.
+- Fixed Alembic migrations silencing the host application's loggers. `env.py`
+  no longer disables loggers that are already configured, so an embedding app
+  that runs migrations in-process keeps its own logging.
+
+## 📖 Documentation and quality
+
+- Added `docs/SCHEMA.md`, covering field types, `user` fields, and declarative
+  migrations, and `docs/SECURITY.md`, covering user expansion, the in-process
+  transport, and the admin panel. Updated `docs/deployment.md` for `/_/` and
+  `SNACKAPP_ADMIN`.
+- Tests now always run against an isolated data directory
+  (`SNACKBASE_TEST_DATA_DIR`, a temporary directory by default). They refuse to
+  start when `SNACKBASE_DATABASE_URL` points at a `snackbase.db` outside that
+  directory, so `pytest` can no longer wipe the development database.
+- Added integration coverage for `user` fields, migration plan and generate,
+  the in-process client, admin routing, and Python 3.12 imports.
+- Updated application version reporting and documentation to `0.13.0`.
+
+## ⚠️ Upgrade notes
+
+- **The admin panel moved to `/_/`.** Update bookmarks, reverse-proxy rules,
+  and health or uptime checks that load the UI at `/`. API paths are
+  unchanged.
+- **`sort=<field>` now sorts ascending.** Clients that sent a bare field name
+  and depended on descending order must send `sort=-<field>`.
+- **Set `SNACKAPP_ADMIN=off` if you don't want the admin panel exposed.** The
+  default is `on`.
+- There are no new Alembic revisions in this release. Run the normal migration
+  upgrade before starting: `uv run python -m snackbase migrate upgrade`.
 
 ---
 
