@@ -19,8 +19,10 @@ from snackbase.infrastructure.backup.restore import (
     MARKER_FILENAME,
     RESTORE_OLD_DIRNAME,
     RestoreAbortedError,
+    data_dir,
     execute_pending_restore,
     finalize_restore,
+    marker_path,
     pop_audit_pending,
     read_last_restore,
     read_marker,
@@ -438,6 +440,47 @@ class TestAuditPendingFlag:
         flag = tmp_path / "sb_data" / AUDIT_PENDING_FILENAME
         assert not flag.exists()
         assert pop_audit_pending(settings) is None
+
+
+class TestPostgresRestoreState:
+    """Restore state must be inert on PostgreSQL, never an exception.
+
+    The restore executor is SQLite-only, but the marker/last-restore lookups
+    run on every boot and from the backups API and scheduler. Resolving them
+    from the database URL used to raise ``UnsupportedEngineError`` on
+    PostgreSQL, which aborted startup.
+    """
+
+    @staticmethod
+    def _pg_settings(tmp_path: Path) -> Settings:
+        return Settings(
+            database_url="postgresql+asyncpg://sb:sb@localhost:5432/snackbase",
+            storage_path=str(tmp_path / "sb_data" / "files"),
+            _env_file=None,
+        )
+
+    def test_restore_state_resolves_without_a_sqlite_file(self, tmp_path: Path) -> None:
+        settings = self._pg_settings(tmp_path)
+
+        assert data_dir(settings) == (tmp_path / "sb_data").resolve()
+        assert marker_path(settings) == data_dir(settings) / MARKER_FILENAME
+        assert read_marker(settings) is None
+        assert read_last_restore(settings) is None
+
+    def test_sqlite_audit_marker_is_not_replayed_on_postgres(
+        self, tmp_path: Path
+    ) -> None:
+        """A marker left by a previous SQLite deployment must not be consumed."""
+        settings = self._pg_settings(tmp_path)
+        flag = data_dir(settings) / AUDIT_PENDING_FILENAME
+        flag.parent.mkdir(parents=True, exist_ok=True)
+        flag.write_text(
+            json.dumps({"event": "restore", "archive_name": "old.zip"}),
+            encoding="utf-8",
+        )
+
+        assert pop_audit_pending(settings) is None
+        assert flag.exists()
 
 
 class TestSwapSafety:

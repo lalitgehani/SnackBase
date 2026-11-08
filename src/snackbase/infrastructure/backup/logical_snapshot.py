@@ -76,8 +76,17 @@ def decode_value(value: Any) -> Any:
 
 async def _dynamic_collection_tables(
     run_query: Callable[[Any], Awaitable[Any]],
+    existing_tables: set[str] | None = None,
 ) -> list[str]:
-    """Names of dynamic collection tables resolved from the collections table."""
+    """Names of dynamic collection tables resolved from the collections table.
+
+    Callers pass the tables that exist so an unmigrated database can be
+    exported: querying a missing table inside PostgreSQL's read-only snapshot
+    transaction would abort it, and every later table read would fail.
+    """
+    if existing_tables is not None and "collections" not in existing_tables:
+        return []
+
     from snackbase.infrastructure.persistence.table_builder import TableBuilder
 
     try:
@@ -103,7 +112,7 @@ async def _enumerate_tables(
 ) -> list[str]:
     """Union of core and dynamic tables, excluding the ephemeral set."""
     core = _core_table_names()
-    dynamic = await _dynamic_collection_tables(run_query)
+    dynamic = await _dynamic_collection_tables(run_query, existing_tables)
     union: list[str] = []
     seen: set[str] = set()
     for name in [*core, *dynamic]:
@@ -113,6 +122,15 @@ async def _enumerate_tables(
             continue
         seen.add(name)
         union.append(name)
+
+    if existing_tables:
+        # Tables the application does not know about — created by functions,
+        # operators, or extensions — still belong in a portable archive: the
+        # manifest promises one file per table. Sorted for a stable layout.
+        for name in sorted(existing_tables - seen - EXCLUDED_TABLES):
+            seen.add(name)
+            union.append(name)
+
     return union
 
 

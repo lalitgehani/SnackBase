@@ -85,6 +85,26 @@ class TestIterTablesSqlite:
         assert "token_blacklist" not in exported
         assert "alembic_version" not in exported
 
+    async def test_exports_tables_unknown_to_the_orm(self, tmp_path: Path) -> None:
+        """An operator-created table is still part of the portable archive."""
+        db_path = tmp_path / "live.db"
+        engine = create_async_engine(f"sqlite+aiosqlite:///{db_path}")
+        connection = sqlite3.connect(str(db_path))
+        connection.execute("CREATE TABLE users (id INTEGER PRIMARY KEY)")
+        connection.execute(
+            "CREATE TABLE custom_analytics (id INTEGER PRIMARY KEY, hits INTEGER)"
+        )
+        connection.execute("INSERT INTO custom_analytics (hits) VALUES (9)")
+        connection.commit()
+        connection.close()
+
+        exported: dict[str, list[dict]] = {}
+        async for table_name, rows in iter_tables(engine):
+            exported[table_name] = [row async for row in rows]
+        await engine.dispose()
+
+        assert exported["custom_analytics"] == [{"id": 1, "hits": 9}]
+
     async def test_reads_from_vacuum_copy_not_live_database(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:

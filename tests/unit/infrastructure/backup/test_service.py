@@ -393,6 +393,14 @@ class TestLogicalArchive:
             users_lines = archive.read("tables/users.jsonl").decode().splitlines()
         assert manifest["backup_type"] == "logical"
         assert manifest["table_row_counts"] == {"users": 1, "accounts": 1}
+        # The archive must record what it omits by design, not just what it has.
+        assert set(manifest["excluded_tables"]) == {
+            "alembic_version",
+            "token_blacklist",
+            "refresh_tokens",
+            "password_resets",
+            "email_verifications",
+        }
         for line in users_lines:
             assert json_module.loads(line) == {"id": 1}
 
