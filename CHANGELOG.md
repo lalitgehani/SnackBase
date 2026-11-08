@@ -1,3 +1,85 @@
+# Release Notes - v0.13.1
+
+SnackBase v0.13.1 is a patch release for the issues reported against v0.13.0,
+and the first release verified against a real PostgreSQL server: v0.13.0 could
+not start on PostgreSQL at all.
+
+## 🔐 Security
+
+- Raised the PyJWT floor to `2.15.1`. A clean install of v0.13.0 resolved
+  PyJWT 2.13.0, which carries seven advisories on the token verification path
+  (authentication bypass through improper public key, empty HMAC key, and
+  DER-as-HMAC handling, key substitution via JWKS redirects, and token forgery
+  through BOM and JWK container handling).
+- Cleared the dependency-audit backlog: `certifi` 2026.10.23, `dnspython`
+  2.9.2, and `urllib3` 2.8.0 on the Python side, and `vite` 7.3.7, `zod`
+  4.6.7, `vitest` 4.1.12, `eslint` 9.39.5, `typescript-eslint` 8.72.1, and
+  related transitive packages on the frontend. `pip-audit` reports no known
+  vulnerabilities and `npm audit --audit-level=high` exits 0. Seven moderate,
+  dev-only `minimatch` advisories remain inside `typescript-eslint`; no fixed
+  release exists for that chain yet.
+
+## 🐘 PostgreSQL
+
+- **Fixed the boot crash.** Restore state was resolved from the SQLite database
+  file unconditionally, and the boot-time audit check runs on every start, so
+  `serve` and the standalone worker both died with `UnsupportedEngineError`
+  before serving a request. The same path broke the backups API and the backup
+  scheduler on PostgreSQL. Restore state now resolves from the storage
+  directory on non-SQLite engines, and an audit marker left by an earlier
+  SQLite deployment is never replayed.
+- **Logical archives now contain every table.** Only tables known to the ORM
+  were exported, so tables created by functions or operators were silently
+  missing from an archive documented as `tables/<name>.jsonl` per table.
+  Existing tables are included, sorted for a stable layout, and the
+  `collections` lookup is skipped when that table is absent so an unmigrated
+  database no longer aborts the snapshot transaction.
+- Manifests now record `excluded_tables`. The field was accepted by
+  `build_manifest` and dropped, so every archive reported an empty list.
+
+Restore remains SQLite-only by design; PostgreSQL backups are portable logical
+archives that report `restorable: false`.
+
+## 🛠️ Fixes
+
+- **SAML SSO never found a configured provider.** The Okta, Azure AD, and
+  Generic SAML providers were registered under `auth_providers` while every
+  SAML endpoint read `saml_providers`, so SSO always returned `404 "No active
+  SAML provider configured for this account"`. Registration and lookup now
+  agree on `saml_providers`, the admin UI exposes a **SAML Providers** category
+  filter, and a data migration moves existing rows.
+- **Built-in provider logos were broken in built deployments.** Provider
+  definitions return root-absolute paths such as
+  `/assets/providers/system.svg`, but the admin UI is served from `/_/`.
+  Logos now resolve through the admin base path in the provider tabs, the
+  add-provider modal, the configuration form, and recent activity.
+- **`/docs` and `/redoc` rendered blank under the default CSP.** FastAPI loads
+  Swagger UI and ReDoc from `cdn.jsdelivr.net`, which `script-src 'self'`
+  blocks, and the workaround was a wildcard policy. Only the docs routes now
+  receive the extra origins (jsDelivr and Google Fonts); API and admin
+  responses keep the configured policy, and a custom `SNACKBASE_CSP_POLICY` is
+  still honoured.
+- Removed `ui/.env.example`, whose contents were defaults already applied by
+  the UI and which invited creating `ui/.env` when the backend `.env` was
+  intended.
+- CI: the **Full test suite** job builds the admin UI before running pytest,
+  as the Docker image does, and the served-SPA test skips with an actionable
+  message when `static/index.html` is absent instead of raising
+  `FileNotFoundError`.
+
+## ⚠️ Upgrade notes
+
+- Run `python -m snackbase migrate upgrade` before starting. This release adds
+  the Alembic revision `20261108_saml_category`, which moves existing SAML
+  provider configurations from `auth_providers` to `saml_providers`. Rows are
+  skipped when the target already exists, so no configuration is lost.
+- `pyjwt>=2.15.1` is now required. Environments that pin an older PyJWT must
+  raise the pin.
+- PostgreSQL instances that could not start on the 0.13.0 line now boot; no
+  configuration change is required.
+
+---
+
 # Release Notes - v0.13.0
 
 SnackBase v0.13.0 makes SnackBase embeddable in another Python application: it
