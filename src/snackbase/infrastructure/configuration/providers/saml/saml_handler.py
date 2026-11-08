@@ -59,6 +59,18 @@ class SAMLProviderHandler(abc.ABC):
         pass
 
     @property
+    def category(self) -> str:
+        """Configuration category for SAML providers.
+
+        Must match the category the SAML routes read from
+        (``saml_router.py``), otherwise a configured provider is never found.
+
+        Returns:
+            Always returns 'saml_providers'.
+        """
+        return "saml_providers"
+
+    @property
     def provider_type(self) -> str:
         """Provider type identifier.
 

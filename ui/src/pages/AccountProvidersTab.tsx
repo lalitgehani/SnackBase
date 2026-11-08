@@ -340,6 +340,7 @@ const AccountProvidersTab = () => {
                             <SelectContent>
                                 <SelectItem value="all">All Categories</SelectItem>
                                 <SelectItem value="auth_providers">Auth Providers</SelectItem>
+                                <SelectItem value="saml_providers">SAML Providers</SelectItem>
                                 <SelectItem value="email_providers">Email Providers</SelectItem>
                             </SelectContent>
                         </Select>

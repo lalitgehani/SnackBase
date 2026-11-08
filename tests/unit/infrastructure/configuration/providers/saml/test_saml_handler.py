@@ -133,6 +133,17 @@ class TestSAMLProviderHandler:
         provider = TestSAMLProvider()
         assert provider.provider_type == "saml"
 
+    def test_category_matches_saml_router_lookup(self):
+        """Provider definitions must be stored under the category the routes read."""
+        from snackbase.infrastructure.configuration.providers.saml import (
+            AzureADSAMLProvider,
+            GenericSAMLProvider,
+            OktaSAMLProvider,
+        )
+
+        for provider_class in (OktaSAMLProvider, AzureADSAMLProvider, GenericSAMLProvider):
+            assert provider_class().category == "saml_providers"
+
     def test_all_methods_are_async(self):
         """Test that all abstract methods are coroutines."""
 

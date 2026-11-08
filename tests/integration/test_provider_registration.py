@@ -133,6 +133,46 @@ class TestProviderRegistration:
         assert "key_id" in provider_def.config_schema["properties"]
 
     @pytest.mark.asyncio
+    async def test_saml_providers_registered_under_saml_category(self, client):
+        """SAML providers must be registered where the SAML routes read them."""
+        from snackbase.infrastructure.api.app import app as main_app
+        from snackbase.infrastructure.api.routes.saml_router import SAML_HANDLERS
+
+        config_registry = main_app.state.config_registry
+
+        for provider_name in SAML_HANDLERS:
+            provider_def = config_registry.get_provider_definition(
+                category="saml_providers",
+                provider_name=provider_name,
+            )
+
+            assert provider_def is not None, (
+                f"SAML provider '{provider_name}' is not registered under "
+                "'saml_providers', so the SAML SSO flow cannot find it"
+            )
+            assert provider_def.category == "saml_providers"
+            assert provider_def.is_builtin is True
+
+    @pytest.mark.asyncio
+    async def test_saml_providers_not_registered_under_auth_category(self, client):
+        """SAML providers are not OAuth providers and must not live in auth_providers."""
+        from snackbase.infrastructure.api.app import app as main_app
+        from snackbase.infrastructure.api.routes.saml_router import SAML_HANDLERS
+
+        config_registry = main_app.state.config_registry
+
+        for provider_name in SAML_HANDLERS:
+            provider_def = config_registry.get_provider_definition(
+                category="auth_providers",
+                provider_name=provider_name,
+            )
+
+            assert provider_def is None, (
+                f"SAML provider '{provider_name}' is registered under "
+                "'auth_providers', which the SAML routes never read"
+            )
+
+    @pytest.mark.asyncio
     async def test_provider_appears_in_list(self, client):
         """Test that provider appears in list of auth providers."""
         from snackbase.infrastructure.api.app import app as main_app
