@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from snackbase.infrastructure.api.middleware.security_headers_middleware import (
     SecurityHeadersMiddleware,
+    csp_for_docs,
 )
 
 
@@ -175,3 +176,83 @@ def test_custom_csp_policy():
 
         assert response.status_code == 200
         assert response.headers["Content-Security-Policy"] == custom_csp
+
+
+def test_swagger_cdn_is_allowed_on_docs_routes():
+    """Swagger UI must be able to load its scripts and styles from its CDN."""
+    policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'"
+
+    with patch(
+        "snackbase.infrastructure.api.middleware.security_headers_middleware.get_settings"
+    ) as mock_settings:
+        settings = mock_settings.return_value
+        settings.security_headers_enabled = True
+        settings.is_production = False
+        settings.hsts_max_age = 31536000
+        settings.csp_policy = policy
+        settings.permissions_policy = "geolocation=()"
+        settings.https_redirect_enabled = False
+
+        app = FastAPI()
+        app.add_middleware(SecurityHeadersMiddleware)
+
+        @app.get("/docs")
+        async def docs():
+            return {"docs": True}
+
+        @app.get("/docs/oauth2-redirect")
+        async def oauth2_redirect():
+            return {"redirect": True}
+
+        client = TestClient(app)
+
+        for path in ("/docs", "/docs/oauth2-redirect"):
+            response = client.get(path)
+            assert response.status_code == 200
+            csp = response.headers["Content-Security-Policy"]
+            assert "script-src 'self' https://cdn.jsdelivr.net" in csp
+            assert (
+                "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net "
+                "https://fonts.googleapis.com"
+            ) in csp
+            assert "img-src https://cdn.jsdelivr.net" in csp
+            assert "font-src https://cdn.jsdelivr.net https://fonts.gstatic.com" in csp
+            assert "default-src 'self'" in csp
+
+
+def test_swagger_cdn_is_not_allowed_on_other_routes():
+    """The relaxation must never leak onto API or admin responses."""
+    policy = "default-src 'self'; script-src 'self'"
+
+    with patch(
+        "snackbase.infrastructure.api.middleware.security_headers_middleware.get_settings"
+    ) as mock_settings:
+        settings = mock_settings.return_value
+        settings.security_headers_enabled = True
+        settings.is_production = False
+        settings.hsts_max_age = 31536000
+        settings.csp_policy = policy
+        settings.permissions_policy = "geolocation=()"
+        settings.https_redirect_enabled = False
+
+        app = FastAPI()
+        app.add_middleware(SecurityHeadersMiddleware)
+
+        @app.get("/test")
+        async def test_endpoint():
+            return {"message": "test"}
+
+        client = TestClient(app)
+        response = client.get("/test")
+
+        assert response.status_code == 200
+        assert response.headers["Content-Security-Policy"] == policy
+
+
+def test_csp_for_docs_does_not_duplicate_origins():
+    """A policy that already allows the CDN keeps a single occurrence per directive."""
+    policy = "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net"
+
+    csp = csp_for_docs(policy)
+
+    assert csp.count("https://cdn.jsdelivr.net") == 4

@@ -14,6 +14,48 @@ from snackbase.core.logging import get_logger
 
 logger = get_logger(__name__)
 
+# Origins FastAPI's bundled Swagger UI (``/docs``) and ReDoc (``/redoc``) load
+# their assets from. A strict ``script-src 'self'`` policy blocks them.
+DOCS_CSP_ORIGINS: dict[str, tuple[str, ...]] = {
+    "script-src": ("https://cdn.jsdelivr.net",),
+    "style-src": ("https://cdn.jsdelivr.net", "https://fonts.googleapis.com"),
+    "img-src": ("https://cdn.jsdelivr.net",),
+    "font-src": ("https://cdn.jsdelivr.net", "https://fonts.gstatic.com"),
+}
+
+
+def _is_api_docs_path(path: str) -> bool:
+    """Return True for the interactive API docs routes served by FastAPI."""
+    return (
+        path == "/docs"
+        or path.startswith("/docs/")
+        or path == "/redoc"
+        or path.startswith("/redoc/")
+    )
+
+
+def csp_for_docs(policy: str) -> str:
+    """Extend a CSP policy so FastAPI's bundled API docs can load their assets.
+
+    Swagger UI and ReDoc pull their bundles from ``cdn.jsdelivr.net`` by
+    default, which a ``script-src 'self'`` policy blocks. The extension applies
+    only to the docs responses; every other response keeps the configured
+    policy untouched.
+    """
+    directives: dict[str, list[str]] = {}
+    for raw_directive in policy.split(";"):
+        tokens = raw_directive.split()
+        if tokens:
+            directives[tokens[0].lower()] = tokens
+
+    for directive_name, origins in DOCS_CSP_ORIGINS.items():
+        tokens = directives.setdefault(directive_name, [directive_name])
+        for origin in origins:
+            if origin not in tokens[1:]:
+                tokens.append(origin)
+
+    return "; ".join(" ".join(tokens) for tokens in directives.values())
+
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Middleware to add security headers to all responses.
@@ -84,7 +126,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             )
 
         # Content Security Policy - prevents XSS and injection attacks
-        response.headers["Content-Security-Policy"] = settings.csp_policy
+        if _is_api_docs_path(request.url.path):
+            response.headers["Content-Security-Policy"] = csp_for_docs(
+                settings.csp_policy
+            )
+        else:
+            response.headers["Content-Security-Policy"] = settings.csp_policy
 
         # Permissions Policy - restricts browser features
         response.headers["Permissions-Policy"] = settings.permissions_policy
