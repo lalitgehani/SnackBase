@@ -1,3 +1,31 @@
+# Release Notes - v0.13.2
+
+Hotfix for v0.13.1: the `migrate` command only worked from a source checkout,
+so a pip install could not apply migrations from the CLI.
+
+## 🛠️ Fixes
+
+- `python -m snackbase migrate upgrade`, `downgrade`, `revision`, `history`,
+  `current`, and `repair` — and `python -m snackbase init-db` — built their
+  Alembic configuration from `./alembic.ini` in the current working directory.
+  Outside a checkout that file does not exist, so they failed with
+  `alembic.util.exc.CommandError: No 'script_location' key found in
+  configuration`, even though the wheel ships the scripts and the server
+  booted and migrated normally. Every command now resolves the config the same
+  way the runtime does ( `SNACKBASE_ALEMBIC_INI`, the working directory, the
+  copy packaged in the wheel, then the source checkout ) and points Alembic at
+  both the core and dynamic migration directories.
+- Verified from the built wheel installed into a clean Python 3.12 virtual
+  environment, in a directory with no checkout: `migrate upgrade` applied every
+  revision and `migrate current` reported `20261108_saml_category (head)`.
+
+## ⚠️ Upgrade notes
+
+- There are no new Alembic revisions. `pip install --upgrade
+  snackbase==0.13.2`, or pull `ghcr.io/lalitgehani/snackbase:0.13.2`.
+
+---
+
 # Release Notes - v0.13.1
 
 SnackBase v0.13.1 is a patch release for the issues reported against v0.13.0,

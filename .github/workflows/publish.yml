@@ -1,8 +1,10 @@
-# Publish snackbase to PyPI via trusted publishing (OIDC). No API token.
+# Publish snackbase to PyPI.
 #
-# Required once on https://pypi.org/manage/project/snackbase/publishing/:
-#   Owner: <github org or user>, Repository: <this repo>, Workflow: publish.yml,
-#   Environment: pypi
+# Authentication uses the `PYPI_API_TOKEN` repository secret. Trusted
+# publishing (OIDC) is preferred long term: register a publisher on
+# https://pypi.org/manage/project/snackbase/publishing/ (Owner: lalitgehani,
+# Repository: SnackBase, Workflow: publish.yml, Environment: pypi), then drop
+# the `password:` input below and restore `id-token: write`.
 #
 # Then: git tag vX.Y.Z && git push origin vX.Y.Z
 
@@ -24,3 +26,4 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist
+          password: ${{ secrets.PYPI_API_TOKEN }}

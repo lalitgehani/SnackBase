@@ -4,7 +4,7 @@ A self-hosted alternative to PocketBase with multi-tenancy,
 row-level security, and GxP-compliant audit logging.
 """
 
-__version__ = "0.13.1"
+__version__ = "0.13.2"
 
 from snackbase.infrastructure.api.app import app
 

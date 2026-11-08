@@ -44,7 +44,7 @@ def _alembic_config() -> Config:
 
 
 @click.group()
-@click.version_option(version="0.13.1", prog_name="SnackBase")
+@click.version_option(version="0.13.2", prog_name="SnackBase")
 @click.option(
     "--config",
     type=click.Path(exists=True),

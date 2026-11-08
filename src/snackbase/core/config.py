@@ -169,7 +169,7 @@ class Settings(BaseSettings):
 
     # Application Settings
     app_name: str = "SnackBase"
-    app_version: str = "0.13.1"
+    app_version: str = "0.13.2"
     environment: Literal["development", "production", "testing"] = "development"
     debug: bool = False
     api_prefix: str = "/api/v1"
