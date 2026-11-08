@@ -1,6 +1,7 @@
 import React from 'react';
 import { Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { resolveProviderLogoUrl } from '@/lib/providerLogo';
 
 interface ProviderLogoProps {
     logoUrl?: string | null;
@@ -16,8 +17,9 @@ export const ProviderLogo: React.FC<ProviderLogoProps> = ({
     size = 24,
 }) => {
     const pixelSize = typeof size === 'number' ? `${size}px` : size;
+    const resolvedLogoUrl = resolveProviderLogoUrl(logoUrl);
 
-    if (!logoUrl) {
+    if (!resolvedLogoUrl) {
         return (
             <div
                 className={cn(
@@ -37,11 +39,11 @@ export const ProviderLogo: React.FC<ProviderLogoProps> = ({
             style={{
                 width: pixelSize,
                 height: pixelSize,
-                maskImage: `url(${logoUrl})`,
+                maskImage: `url(${resolvedLogoUrl})`,
                 maskRepeat: 'no-repeat',
                 maskPosition: 'center',
                 maskSize: 'contain',
-                WebkitMaskImage: `url(${logoUrl})`,
+                WebkitMaskImage: `url(${resolvedLogoUrl})`,
                 WebkitMaskRepeat: 'no-repeat',
                 WebkitMaskPosition: 'center',
                 WebkitMaskSize: 'contain',

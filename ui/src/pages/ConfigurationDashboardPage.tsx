@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { adminService } from '@/services/admin.service';
 import type { Configuration, ConfigurationStats } from '@/services/admin.service';
+import { resolveProviderLogoUrl } from '@/lib/providerLogo';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Plus, Activity, Server, Users, Settings, RefreshCw } from 'lucide-react';
@@ -204,7 +205,7 @@ const ConfigurationDashboardPage = () => {
                                                 <div key={config.id} className="flex items-center justify-between border-b pb-2 last:border-0 last:pb-0">
                                                     <div className="flex items-center gap-4">
                                                         {config.logo_url ? (
-                                                            <img src={config.logo_url} alt={config.provider_name} className="h-8 w-8 object-contain" />
+                                                            <img src={resolveProviderLogoUrl(config.logo_url)} alt={config.provider_name} className="h-8 w-8 object-contain" />
                                                         ) : (
                                                             <div className="h-8 w-8 bg-secondary rounded-full flex items-center justify-center">
                                                                 <Settings className="h-4 w-4" />
