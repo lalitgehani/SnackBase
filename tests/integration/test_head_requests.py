@@ -137,6 +137,13 @@ def test_snackapp_admin_off_returns_404(
     assert client.head("/_/").status_code == 404
 
 
+@pytest.mark.skipif(
+    not Path("static/index.html").is_file(),
+    reason=(
+        "requires the built admin UI in static/ "
+        "(run `npm ci && npm run build` in ui/ and copy ui/dist to static/)"
+    ),
+)
 def test_served_admin_html_has_no_inline_script() -> None:
     html = Path("static/index.html").read_text(encoding="utf-8")
     assert re.search(r"<script(?![^>]*\bsrc=)[^>]*>", html) is None

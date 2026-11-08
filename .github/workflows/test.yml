@@ -136,6 +136,15 @@ jobs:
       - name: Reset development state
         run: uv run python cleanup_dev.py -y
 
+      # `static/` is a build artifact (gitignored). Some tests exercise the
+      # served admin SPA, so build it exactly as the Docker image does.
+      - name: Build admin UI for static assets
+        run: |
+          npm ci --prefix ui
+          npm run build --prefix ui
+          rm -rf static
+          cp -r ui/dist static
+
       # Lint and type-check are reported but non-blocking: the repository
       # carries a large pre-existing ruff/strict-mypy backlog that predates
       # this workflow. Surfacing it in CI is useful; failing every PR on it is
