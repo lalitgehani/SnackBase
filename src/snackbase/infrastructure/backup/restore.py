@@ -114,12 +114,18 @@ class RestoreResult:
 
 
 def data_dir(settings: Settings) -> Path:
-    """The directory beside the SQLite database file.
+    """The directory holding this instance's restore state.
 
-    The marker lives here — not in the backup directory — so it is found at
-    boot regardless of destination configuration.
+    For SQLite it is the directory beside the database file, so the marker is
+    found at boot regardless of destination configuration. Other engines have
+    no database file and their restore flow is SQLite-only, so the directory
+    beside the storage path is used instead: restore-state lookups (the backup
+    scheduler, the backups API, boot audit checks) then see no marker rather
+    than raising ``UnsupportedEngineError``.
     """
-    return database_path(settings).parent
+    if running_engine(settings.database_url) == "sqlite":
+        return database_path(settings).parent
+    return Path(settings.storage_path).expanduser().resolve().parent
 
 
 def database_path(settings: Settings) -> Path:
@@ -999,7 +1005,14 @@ def mark_audit_pending(settings: Settings, event: str, archive_name: str) -> Non
 
 
 def pop_audit_pending(settings: Settings) -> dict[str, str] | None:
-    """Read and clear the audit-pending flag, if present."""
+    """Read and clear the audit-pending flag, if present.
+
+    Restores are SQLite-only, so nothing can have written this flag on another
+    engine; returning None there keeps a marker left over from a previous
+    SQLite deployment from being replayed into a PostgreSQL database.
+    """
+    if running_engine(settings.database_url) != "sqlite":
+        return None
     path = data_dir(settings) / AUDIT_PENDING_FILENAME
     if not path.is_file():
         return None

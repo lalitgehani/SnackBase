@@ -241,6 +241,7 @@ def build_manifest(
         secret_key_fingerprint=fingerprints["secret_key_fingerprint"],
         token_secret_fingerprint=fingerprints["token_secret_fingerprint"],
         table_row_counts=table_row_counts,
+        excluded_tables=excluded_tables or [],
         database_revisions=database_revisions or [],
         includes_migrations=includes_migrations,
     )
