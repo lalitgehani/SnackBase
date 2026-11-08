@@ -4,13 +4,43 @@ This module provides the CLI commands for running and managing
 the SnackBase application.
 """
 
+from __future__ import annotations
+
+import os
 import sys
-from typing import NoReturn
+from typing import TYPE_CHECKING, NoReturn
 
 import click
 
 from snackbase.core.config import get_settings
 from snackbase.core.logging import configure_logging, get_logger
+
+if TYPE_CHECKING:
+    from alembic.config import Config
+
+
+def _alembic_config() -> Config:
+    """Build an Alembic config that also works from a pip install.
+
+    ``Config("alembic.ini")`` only works when the process runs from a source
+    checkout. Resolve the file the same way the runtime does (env var, cwd,
+    the copy packaged in the wheel, then the checkout) and point Alembic at
+    the core and dynamic migration directories.
+    """
+    from alembic.config import Config
+
+    from snackbase.infrastructure.persistence.migration_service import (
+        apply_version_locations,
+        resolve_alembic_ini,
+    )
+
+    resolved = str(resolve_alembic_ini())
+    config = Config(resolved)
+    script_location = config.get_main_option("script_location")
+    if script_location and not os.path.isabs(script_location):
+        config.set_main_option("script_location", os.path.abspath(script_location))
+    apply_version_locations(config, resolved)
+    return config
 
 
 @click.group()
@@ -202,7 +232,6 @@ def init_db(force: bool) -> None:
     import asyncio
 
     from alembic import command
-    from alembic.config import Config
 
     from snackbase.infrastructure.persistence.database import get_db_manager
     from snackbase.infrastructure.persistence.models import RoleModel
@@ -236,7 +265,7 @@ def init_db(force: bool) -> None:
 
     # Step 2: Run Alembic migrations
     click.echo("Running Alembic migrations...")
-    alembic_cfg = Config("alembic.ini")
+    alembic_cfg = _alembic_config()
     # Note: env.py will set the URL from settings if not provided
     command.upgrade(alembic_cfg, "heads")
     click.echo("Migrations applied successfully.")
@@ -433,9 +462,8 @@ def migrate() -> None:
 def upgrade(revision: str) -> None:
     """Apply pending migrations across all branches (core and dynamic)."""
     from alembic import command
-    from alembic.config import Config
 
-    alembic_cfg = Config("alembic.ini")
+    alembic_cfg = _alembic_config()
     # env.py will set the database URL from settings
     command.upgrade(alembic_cfg, revision)
     click.echo(f"Database upgraded to {revision}")
@@ -451,9 +479,8 @@ def upgrade(revision: str) -> None:
 def downgrade(revision: str) -> None:
     """Roll back migrations."""
     from alembic import command
-    from alembic.config import Config
 
-    alembic_cfg = Config("alembic.ini")
+    alembic_cfg = _alembic_config()
     # env.py will set the database URL from settings
     command.downgrade(alembic_cfg, revision)
     click.echo(f"Database downgraded to {revision}")
@@ -476,9 +503,8 @@ def downgrade(revision: str) -> None:
 def revision(message: str, autogenerate: bool) -> None:
     """Create a new migration revision."""
     from alembic import command
-    from alembic.config import Config
 
-    alembic_cfg = Config("alembic.ini")
+    alembic_cfg = _alembic_config()
     # env.py will set the database URL from settings
     command.revision(alembic_cfg, message=message, autogenerate=autogenerate)
     click.echo(f"Created new migration: {message}")
@@ -488,9 +514,8 @@ def revision(message: str, autogenerate: bool) -> None:
 def history() -> None:
     """Show migration history."""
     from alembic import command
-    from alembic.config import Config
 
-    alembic_cfg = Config("alembic.ini")
+    alembic_cfg = _alembic_config()
     command.history(alembic_cfg)
 
 
@@ -498,9 +523,8 @@ def history() -> None:
 def current() -> None:
     """Show current revision."""
     from alembic import command
-    from alembic.config import Config
 
-    alembic_cfg = Config("alembic.ini")
+    alembic_cfg = _alembic_config()
     command.current(alembic_cfg)
 
 
@@ -524,10 +548,9 @@ def repair(dry_run: bool) -> None:
     import re
     from pathlib import Path
 
-    from alembic.config import Config
     from alembic.script import ScriptDirectory
 
-    alembic_cfg = Config("alembic.ini")
+    alembic_cfg = _alembic_config()
     script_dir = ScriptDirectory.from_config(alembic_cfg)
 
     dynamic_dir = Path("sb_data/migrations")

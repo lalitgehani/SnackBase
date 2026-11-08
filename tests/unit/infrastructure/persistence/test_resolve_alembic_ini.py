@@ -36,3 +36,22 @@ def test_resolved_ini_loads_script_location(tmp_path, monkeypatch):
     if not script_path.is_absolute():
         script_path = ini.parent / script_path
     assert script_path.exists() or (ini.parent / "alembic").is_dir()
+
+
+def test_cli_alembic_config_without_cwd_file(tmp_path, monkeypatch):
+    """``migrate`` must work outside a checkout, e.g. from a pip install."""
+    from snackbase.cli import _alembic_config
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("SNACKBASE_ALEMBIC_INI", raising=False)
+
+    cfg = _alembic_config()
+
+    assert cfg.config_file_name
+    script_location = cfg.get_main_option("script_location")
+    assert script_location
+    assert Path(script_location).is_absolute()
+    assert Path(script_location).is_dir()
+    version_locations = cfg.get_main_option("version_locations") or ""
+    assert str(tmp_path) not in version_locations
+    assert version_locations
