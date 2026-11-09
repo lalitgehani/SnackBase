@@ -125,10 +125,6 @@ async def _dispatch_webhooks(
     from snackbase.infrastructure.persistence.repositories.webhook_repository import (
         WebhookRepository,
     )
-    from snackbase.infrastructure.webhooks.webhook_service import (
-        _evaluate_filter,
-        dispatch_webhook,
-    )
 
     settings = get_settings()
     timeout = getattr(settings, "webhook_timeout_seconds", 30)
@@ -144,25 +140,17 @@ async def _dispatch_webhooks(
             if event_key not in (webhook.events or []):
                 continue
 
-            # Evaluate optional filter expression
-            if webhook.filter:
-                record_for_filter = current_record or record
-                if not _evaluate_filter(webhook.filter, record_for_filter):
-                    logger.debug(
-                        "Webhook filter did not match — skipping",
-                        webhook_id=webhook.id,
-                        collection=collection,
-                    )
-                    continue
-
-            # Fire delivery as background task, deferred so the calling
-            # transaction can commit first (avoids SQLite "database is locked").
+            # Project, filter and deliver as a background task, deferred so the
+            # calling transaction can commit first (avoids SQLite "database is
+            # locked").
             async def _dispatch(wh: Any = webhook) -> None:
                 try:
-                    await dispatch_webhook(
+                    await _project_and_dispatch(
                         webhook=wh,
-                        event_type=webhook_event,
-                        record=current_record or {},
+                        webhook_event=webhook_event,
+                        collection=collection,
+                        account_id=account_id,
+                        current_record=current_record,
                         previous=previous,
                         session_factory=session_factory,
                         timeout_seconds=timeout,
@@ -187,3 +175,66 @@ async def _dispatch_webhooks(
         )
 
     return data
+
+
+async def _project_and_dispatch(
+    *,
+    webhook: Any,
+    webhook_event: str,
+    collection: str,
+    account_id: str,
+    current_record: dict[str, Any] | None,
+    previous: dict[str, Any] | None,
+    session_factory: Any,
+    timeout_seconds: int,
+) -> None:
+    """Project the event through the webhook author's read access, then deliver.
+
+    The payload leaves the server, so it carries only what the webhook's
+    creator could read through the REST API. The optional filter is evaluated
+    on the projected record, so it cannot probe withheld fields either.
+    """
+    from snackbase.infrastructure.security.record_projection import project_record_for_user
+    from snackbase.infrastructure.webhooks import webhook_service
+
+    async def _project(values: dict[str, Any] | None) -> dict[str, Any] | None:
+        if not values:
+            return None
+        async with session_factory() as session:
+            return await project_record_for_user(
+                session,
+                collection=collection,
+                account_id=account_id,
+                user_id=webhook.created_by,
+                record=values,
+            )
+
+    projected_current = await _project(current_record)
+    projected_previous = await _project(previous)
+
+    # The row the event is about: the new state, or the removed row on delete.
+    subject = projected_previous if webhook_event == "records.delete" else projected_current
+    if subject is None:
+        logger.debug(
+            "Webhook author may not view this record — skipping",
+            webhook_id=webhook.id,
+            collection=collection,
+        )
+        return
+
+    if webhook.filter and not webhook_service._evaluate_filter(webhook.filter, subject):
+        logger.debug(
+            "Webhook filter did not match — skipping",
+            webhook_id=webhook.id,
+            collection=collection,
+        )
+        return
+
+    await webhook_service.dispatch_webhook(
+        webhook=webhook,
+        event_type=webhook_event,
+        record=projected_current or {},
+        previous=projected_previous,
+        session_factory=session_factory,
+        timeout_seconds=timeout_seconds,
+    )
