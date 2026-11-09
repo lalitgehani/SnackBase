@@ -105,6 +105,36 @@ async def require_superadmin(
     return current_user
 
 
+async def require_account_admin(
+    current_user: AuthenticatedUser,
+) -> AuthUser:
+    """Ensure the current user administers their account.
+
+    Admits the account's ``admin`` role and superadmins (system account). Used to
+    gate surfaces that act with account-wide privilege, such as the automation
+    control plane (hooks, custom endpoints, webhooks, workflows).
+
+    Raises:
+        HTTPException: 403 if the user is neither an account admin nor a superadmin.
+    """
+    if current_user.account_id == SYSTEM_ACCOUNT_ID:
+        return current_user
+    if (current_user.role or "").lower() == "admin":
+        return current_user
+    logger.info(
+        "Account admin access denied",
+        user_id=current_user.user_id,
+        account_id=current_user.account_id,
+        role=current_user.role,
+    )
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Account admin access required",
+    )
+
+
+AccountAdminUser = Annotated[AuthUser, Depends(require_account_admin)]
+
 async def get_user_role_id(
     current_user: AuthenticatedUser,
     session: Annotated[AsyncSession, Depends(get_db_session)],

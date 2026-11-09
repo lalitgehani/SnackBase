@@ -68,9 +68,9 @@ async def other_account(db_session: AsyncSession) -> AccountModel:
 
 
 @pytest_asyncio.fixture
-async def user_token(db_session: AsyncSession, account: AccountModel) -> str:
+async def admin_token(db_session: AsyncSession, account: AccountModel) -> str:
     role = (
-        await db_session.execute(select(RoleModel).where(RoleModel.name == "user"))
+        await db_session.execute(select(RoleModel).where(RoleModel.name == "admin"))
     ).scalar_one()
     user = UserModel(
         id="wf-test-user-1",
@@ -87,14 +87,14 @@ async def user_token(db_session: AsyncSession, account: AccountModel) -> str:
         user_id=user.id,
         account_id=account.id,
         email=user.email,
-        role="user",
+        role="admin",
     )
 
 
 @pytest_asyncio.fixture
-async def other_user_token(db_session: AsyncSession, other_account: AccountModel) -> str:
+async def other_admin_token(db_session: AsyncSession, other_account: AccountModel) -> str:
     role = (
-        await db_session.execute(select(RoleModel).where(RoleModel.name == "user"))
+        await db_session.execute(select(RoleModel).where(RoleModel.name == "admin"))
     ).scalar_one()
     user = UserModel(
         id="wf-test-user-2",
@@ -111,7 +111,7 @@ async def other_user_token(db_session: AsyncSession, other_account: AccountModel
         user_id=user.id,
         account_id=other_account.id,
         email=user.email,
-        role="user",
+        role="admin",
     )
 
 
@@ -125,7 +125,7 @@ def _auth(token: str) -> dict:
 
 
 @pytest.mark.asyncio
-async def test_create_manual_workflow(client: AsyncClient, user_token: str) -> None:
+async def test_create_manual_workflow(client: AsyncClient, admin_token: str) -> None:
     """Create a minimal manual-trigger workflow."""
     resp = await client.post(
         "/api/v1/workflows",
@@ -134,7 +134,7 @@ async def test_create_manual_workflow(client: AsyncClient, user_token: str) -> N
             "trigger": {"type": "manual"},
             "steps": [],
         },
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert resp.status_code == 201, resp.text
     data = resp.json()
@@ -150,7 +150,7 @@ async def test_create_manual_workflow(client: AsyncClient, user_token: str) -> N
 
 
 @pytest.mark.asyncio
-async def test_create_event_workflow(client: AsyncClient, user_token: str) -> None:
+async def test_create_event_workflow(client: AsyncClient, admin_token: str) -> None:
     """Create an event-triggered workflow with a collection filter."""
     resp = await client.post(
         "/api/v1/workflows",
@@ -170,7 +170,7 @@ async def test_create_event_workflow(client: AsyncClient, user_token: str) -> No
                 }
             ],
         },
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert resp.status_code == 201, resp.text
     data = resp.json()
@@ -182,7 +182,7 @@ async def test_create_event_workflow(client: AsyncClient, user_token: str) -> No
 
 
 @pytest.mark.asyncio
-async def test_create_schedule_workflow(client: AsyncClient, user_token: str) -> None:
+async def test_create_schedule_workflow(client: AsyncClient, admin_token: str) -> None:
     """Create a schedule-triggered workflow with a cron expression."""
     resp = await client.post(
         "/api/v1/workflows",
@@ -191,7 +191,7 @@ async def test_create_schedule_workflow(client: AsyncClient, user_token: str) ->
             "trigger": {"type": "schedule", "cron": "0 9 * * MON"},
             "steps": [],
         },
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert resp.status_code == 201, resp.text
     data = resp.json()
@@ -200,7 +200,7 @@ async def test_create_schedule_workflow(client: AsyncClient, user_token: str) ->
 
 
 @pytest.mark.asyncio
-async def test_create_webhook_workflow(client: AsyncClient, user_token: str) -> None:
+async def test_create_webhook_workflow(client: AsyncClient, admin_token: str) -> None:
     """Create a webhook-triggered workflow; server generates the token."""
     resp = await client.post(
         "/api/v1/workflows",
@@ -209,7 +209,7 @@ async def test_create_webhook_workflow(client: AsyncClient, user_token: str) -> 
             "trigger": {"type": "webhook"},
             "steps": [],
         },
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert resp.status_code == 201, resp.text
     data = resp.json()
@@ -220,7 +220,7 @@ async def test_create_webhook_workflow(client: AsyncClient, user_token: str) -> 
 
 
 @pytest.mark.asyncio
-async def test_create_workflow_with_description(client: AsyncClient, user_token: str) -> None:
+async def test_create_workflow_with_description(client: AsyncClient, admin_token: str) -> None:
     resp = await client.post(
         "/api/v1/workflows",
         json={
@@ -229,7 +229,7 @@ async def test_create_workflow_with_description(client: AsyncClient, user_token:
             "trigger": {"type": "manual"},
             "steps": [],
         },
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert resp.status_code == 201, resp.text
     data = resp.json()
@@ -237,7 +237,7 @@ async def test_create_workflow_with_description(client: AsyncClient, user_token:
 
 
 @pytest.mark.asyncio
-async def test_create_workflow_disabled(client: AsyncClient, user_token: str) -> None:
+async def test_create_workflow_disabled(client: AsyncClient, admin_token: str) -> None:
     resp = await client.post(
         "/api/v1/workflows",
         json={
@@ -246,7 +246,7 @@ async def test_create_workflow_disabled(client: AsyncClient, user_token: str) ->
             "steps": [],
             "enabled": False,
         },
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert resp.status_code == 201, resp.text
     assert resp.json()["enabled"] is False
@@ -258,7 +258,7 @@ async def test_create_workflow_disabled(client: AsyncClient, user_token: str) ->
 
 
 @pytest.mark.asyncio
-async def test_create_workflow_invalid_cron(client: AsyncClient, user_token: str) -> None:
+async def test_create_workflow_invalid_cron(client: AsyncClient, admin_token: str) -> None:
     resp = await client.post(
         "/api/v1/workflows",
         json={
@@ -266,13 +266,13 @@ async def test_create_workflow_invalid_cron(client: AsyncClient, user_token: str
             "trigger": {"type": "schedule", "cron": "not-a-cron"},
             "steps": [],
         },
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert resp.status_code == 422, resp.text
 
 
 @pytest.mark.asyncio
-async def test_create_workflow_unknown_event(client: AsyncClient, user_token: str) -> None:
+async def test_create_workflow_unknown_event(client: AsyncClient, admin_token: str) -> None:
     resp = await client.post(
         "/api/v1/workflows",
         json={
@@ -280,7 +280,7 @@ async def test_create_workflow_unknown_event(client: AsyncClient, user_token: st
             "trigger": {"type": "event", "event": "unknown.event"},
             "steps": [],
         },
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert resp.status_code == 422, resp.text
 
@@ -300,8 +300,8 @@ async def test_create_workflow_requires_auth(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_list_workflows_empty(client: AsyncClient, user_token: str) -> None:
-    resp = await client.get("/api/v1/workflows", headers=_auth(user_token))
+async def test_list_workflows_empty(client: AsyncClient, admin_token: str) -> None:
+    resp = await client.get("/api/v1/workflows", headers=_auth(admin_token))
     assert resp.status_code == 200
     data = resp.json()
     assert data["total"] == 0
@@ -309,14 +309,14 @@ async def test_list_workflows_empty(client: AsyncClient, user_token: str) -> Non
 
 
 @pytest.mark.asyncio
-async def test_list_workflows(client: AsyncClient, user_token: str) -> None:
+async def test_list_workflows(client: AsyncClient, admin_token: str) -> None:
     for i in range(3):
         await client.post(
             "/api/v1/workflows",
             json={"name": f"Flow {i}", "trigger": {"type": "manual"}, "steps": []},
-            headers=_auth(user_token),
+            headers=_auth(admin_token),
         )
-    resp = await client.get("/api/v1/workflows", headers=_auth(user_token))
+    resp = await client.get("/api/v1/workflows", headers=_auth(admin_token))
     assert resp.status_code == 200
     data = resp.json()
     assert data["total"] == 3
@@ -324,19 +324,19 @@ async def test_list_workflows(client: AsyncClient, user_token: str) -> None:
 
 
 @pytest.mark.asyncio
-async def test_list_workflows_filter_trigger_type(client: AsyncClient, user_token: str) -> None:
+async def test_list_workflows_filter_trigger_type(client: AsyncClient, admin_token: str) -> None:
     await client.post(
         "/api/v1/workflows",
         json={"name": "Event Flow", "trigger": {"type": "event", "event": "records.create"}, "steps": []},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     await client.post(
         "/api/v1/workflows",
         json={"name": "Manual Flow", "trigger": {"type": "manual"}, "steps": []},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
 
-    resp = await client.get("/api/v1/workflows?trigger_type=event", headers=_auth(user_token))
+    resp = await client.get("/api/v1/workflows?trigger_type=event", headers=_auth(admin_token))
     assert resp.status_code == 200
     data = resp.json()
     assert data["total"] == 1
@@ -344,19 +344,19 @@ async def test_list_workflows_filter_trigger_type(client: AsyncClient, user_toke
 
 
 @pytest.mark.asyncio
-async def test_list_workflows_filter_enabled(client: AsyncClient, user_token: str) -> None:
+async def test_list_workflows_filter_enabled(client: AsyncClient, admin_token: str) -> None:
     await client.post(
         "/api/v1/workflows",
         json={"name": "Active", "trigger": {"type": "manual"}, "steps": [], "enabled": True},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     await client.post(
         "/api/v1/workflows",
         json={"name": "Inactive", "trigger": {"type": "manual"}, "steps": [], "enabled": False},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
 
-    resp = await client.get("/api/v1/workflows?enabled=false", headers=_auth(user_token))
+    resp = await client.get("/api/v1/workflows?enabled=false", headers=_auth(admin_token))
     assert resp.status_code == 200
     data = resp.json()
     assert data["total"] == 1
@@ -364,21 +364,21 @@ async def test_list_workflows_filter_enabled(client: AsyncClient, user_token: st
 
 
 @pytest.mark.asyncio
-async def test_list_workflows_pagination(client: AsyncClient, user_token: str) -> None:
+async def test_list_workflows_pagination(client: AsyncClient, admin_token: str) -> None:
     for i in range(5):
         await client.post(
             "/api/v1/workflows",
             json={"name": f"Flow {i}", "trigger": {"type": "manual"}, "steps": []},
-            headers=_auth(user_token),
+            headers=_auth(admin_token),
         )
 
-    resp = await client.get("/api/v1/workflows?limit=2&offset=0", headers=_auth(user_token))
+    resp = await client.get("/api/v1/workflows?limit=2&offset=0", headers=_auth(admin_token))
     assert resp.status_code == 200
     data = resp.json()
     assert data["total"] == 5
     assert len(data["items"]) == 2
 
-    resp2 = await client.get("/api/v1/workflows?limit=2&offset=4", headers=_auth(user_token))
+    resp2 = await client.get("/api/v1/workflows?limit=2&offset=4", headers=_auth(admin_token))
     assert len(resp2.json()["items"]) == 1
 
 
@@ -388,23 +388,23 @@ async def test_list_workflows_pagination(client: AsyncClient, user_token: str) -
 
 
 @pytest.mark.asyncio
-async def test_get_workflow(client: AsyncClient, user_token: str) -> None:
+async def test_get_workflow(client: AsyncClient, admin_token: str) -> None:
     create = await client.post(
         "/api/v1/workflows",
         json={"name": "Target Flow", "trigger": {"type": "manual"}, "steps": []},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     wf_id = create.json()["id"]
 
-    resp = await client.get(f"/api/v1/workflows/{wf_id}", headers=_auth(user_token))
+    resp = await client.get(f"/api/v1/workflows/{wf_id}", headers=_auth(admin_token))
     assert resp.status_code == 200
     assert resp.json()["id"] == wf_id
     assert resp.json()["name"] == "Target Flow"
 
 
 @pytest.mark.asyncio
-async def test_get_workflow_not_found(client: AsyncClient, user_token: str) -> None:
-    resp = await client.get("/api/v1/workflows/nonexistent-id", headers=_auth(user_token))
+async def test_get_workflow_not_found(client: AsyncClient, admin_token: str) -> None:
+    resp = await client.get("/api/v1/workflows/nonexistent-id", headers=_auth(admin_token))
     assert resp.status_code == 404
 
 
@@ -414,29 +414,29 @@ async def test_get_workflow_not_found(client: AsyncClient, user_token: str) -> N
 
 
 @pytest.mark.asyncio
-async def test_update_workflow_name(client: AsyncClient, user_token: str) -> None:
+async def test_update_workflow_name(client: AsyncClient, admin_token: str) -> None:
     create = await client.post(
         "/api/v1/workflows",
         json={"name": "Old Name", "trigger": {"type": "manual"}, "steps": []},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     wf_id = create.json()["id"]
 
     resp = await client.put(
         f"/api/v1/workflows/{wf_id}",
         json={"name": "New Name"},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert resp.status_code == 200
     assert resp.json()["name"] == "New Name"
 
 
 @pytest.mark.asyncio
-async def test_update_workflow_steps(client: AsyncClient, user_token: str) -> None:
+async def test_update_workflow_steps(client: AsyncClient, admin_token: str) -> None:
     create = await client.post(
         "/api/v1/workflows",
         json={"name": "Step Flow", "trigger": {"type": "manual"}, "steps": []},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     wf_id = create.json()["id"]
 
@@ -446,7 +446,7 @@ async def test_update_workflow_steps(client: AsyncClient, user_token: str) -> No
     resp = await client.put(
         f"/api/v1/workflows/{wf_id}",
         json={"steps": new_steps},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert resp.status_code == 200
     assert len(resp.json()["steps"]) == 1
@@ -460,7 +460,7 @@ async def test_update_workflow_steps(client: AsyncClient, user_token: str) -> No
 
 @pytest.mark.asyncio
 async def test_create_branched_workflow_with_positions(
-    client: AsyncClient, user_token: str
+    client: AsyncClient, admin_token: str
 ) -> None:
     """Condition branches + positions round-trip on create/get."""
     steps = [
@@ -497,7 +497,7 @@ async def test_create_branched_workflow_with_positions(
             "trigger": {"type": "manual"},
             "steps": steps,
         },
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert create.status_code == 201, create.text
     wf_id = create.json()["id"]
@@ -509,7 +509,7 @@ async def test_create_branched_workflow_with_positions(
     assert gate["position_y"] == 100
 
     get_resp = await client.get(
-        f"/api/v1/workflows/{wf_id}", headers=_auth(user_token)
+        f"/api/v1/workflows/{wf_id}", headers=_auth(admin_token)
     )
     assert get_resp.status_code == 200
     got = get_resp.json()["steps"]
@@ -523,7 +523,7 @@ async def test_create_branched_workflow_with_positions(
 
 @pytest.mark.asyncio
 async def test_create_workflow_with_step_positions(
-    client: AsyncClient, user_token: str
+    client: AsyncClient, admin_token: str
 ) -> None:
     """Create + GET round-trips position_x / position_y on steps."""
     steps = [
@@ -552,7 +552,7 @@ async def test_create_workflow_with_step_positions(
             "trigger": {"type": "manual"},
             "steps": steps,
         },
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert create.status_code == 201, create.text
     wf_id = create.json()["id"]
@@ -562,7 +562,7 @@ async def test_create_workflow_with_step_positions(
     assert create.json()["steps"][1]["position_y"] == 40
 
     get_resp = await client.get(
-        f"/api/v1/workflows/{wf_id}", headers=_auth(user_token)
+        f"/api/v1/workflows/{wf_id}", headers=_auth(admin_token)
     )
     assert get_resp.status_code == 200
     got = get_resp.json()["steps"]
@@ -577,7 +577,7 @@ async def test_create_workflow_with_step_positions(
 
 @pytest.mark.asyncio
 async def test_update_workflow_step_positions_only(
-    client: AsyncClient, user_token: str
+    client: AsyncClient, admin_token: str
 ) -> None:
     """Updating positions must not strip step logic fields."""
     create = await client.post(
@@ -613,7 +613,7 @@ async def test_update_workflow_step_positions_only(
                 },
             ],
         },
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert create.status_code == 201, create.text
     wf_id = create.json()["id"]
@@ -648,7 +648,7 @@ async def test_update_workflow_step_positions_only(
     resp = await client.put(
         f"/api/v1/workflows/{wf_id}",
         json={"steps": updated_steps},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert resp.status_code == 200
     steps = resp.json()["steps"]
@@ -664,7 +664,7 @@ async def test_update_workflow_step_positions_only(
 
 @pytest.mark.asyncio
 async def test_workflow_without_positions_still_works(
-    client: AsyncClient, user_token: str
+    client: AsyncClient, admin_token: str
 ) -> None:
     """Legacy steps without positions create, load, and execute without error."""
     create = await client.post(
@@ -688,7 +688,7 @@ async def test_workflow_without_positions_still_works(
                 },
             ],
         },
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert create.status_code == 201, create.text
     data = create.json()
@@ -696,19 +696,19 @@ async def test_workflow_without_positions_still_works(
     assert "position_y" not in data["steps"][0]
 
     get_resp = await client.get(
-        f"/api/v1/workflows/{data['id']}", headers=_auth(user_token)
+        f"/api/v1/workflows/{data['id']}", headers=_auth(admin_token)
     )
     assert get_resp.status_code == 200
     assert len(get_resp.json()["steps"]) == 2
 
     trigger_resp = await client.post(
-        f"/api/v1/workflows/{data['id']}/trigger", headers=_auth(user_token)
+        f"/api/v1/workflows/{data['id']}/trigger", headers=_auth(admin_token)
     )
     assert trigger_resp.status_code == 202
     instance_id = trigger_resp.json()["instance_id"]
     await asyncio.sleep(0.3)
     detail = await client.get(
-        f"/api/v1/workflow-instances/{instance_id}", headers=_auth(user_token)
+        f"/api/v1/workflow-instances/{instance_id}", headers=_auth(admin_token)
     )
     assert detail.status_code == 200
     # Empty webhook may fail action but must not crash on unknown keys;
@@ -718,7 +718,7 @@ async def test_workflow_without_positions_still_works(
 
 @pytest.mark.asyncio
 async def test_executor_ignores_step_positions(
-    client: AsyncClient, user_token: str
+    client: AsyncClient, admin_token: str
 ) -> None:
     """Multi-step workflow with positions still runs (executor ignores layout keys)."""
     create = await client.post(
@@ -746,41 +746,41 @@ async def test_executor_ignores_step_positions(
                 },
             ],
         },
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert create.status_code == 201, create.text
     wf_id = create.json()["id"]
 
     trigger_resp = await client.post(
-        f"/api/v1/workflows/{wf_id}/trigger", headers=_auth(user_token)
+        f"/api/v1/workflows/{wf_id}/trigger", headers=_auth(admin_token)
     )
     assert trigger_resp.status_code == 202
     instance_id = trigger_resp.json()["instance_id"]
     await asyncio.sleep(0.3)
     detail = await client.get(
-        f"/api/v1/workflow-instances/{instance_id}", headers=_auth(user_token)
+        f"/api/v1/workflow-instances/{instance_id}", headers=_auth(admin_token)
     )
     assert detail.status_code == 200
     assert detail.json()["status"] in ("completed", "failed", "running")
     # Positions must still be stored on the parent workflow definition
-    get_wf = await client.get(f"/api/v1/workflows/{wf_id}", headers=_auth(user_token))
+    get_wf = await client.get(f"/api/v1/workflows/{wf_id}", headers=_auth(admin_token))
     assert get_wf.json()["steps"][0]["position_x"] == 10
     assert get_wf.json()["steps"][1]["position_y"] == 20
 
 
 @pytest.mark.asyncio
-async def test_update_workflow_trigger(client: AsyncClient, user_token: str) -> None:
+async def test_update_workflow_trigger(client: AsyncClient, admin_token: str) -> None:
     create = await client.post(
         "/api/v1/workflows",
         json={"name": "Trigger Flow", "trigger": {"type": "manual"}, "steps": []},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     wf_id = create.json()["id"]
 
     resp = await client.put(
         f"/api/v1/workflows/{wf_id}",
         json={"trigger": {"type": "event", "event": "records.update"}},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert resp.status_code == 200
     assert resp.json()["trigger_type"] == "event"
@@ -788,29 +788,29 @@ async def test_update_workflow_trigger(client: AsyncClient, user_token: str) -> 
 
 
 @pytest.mark.asyncio
-async def test_update_workflow_invalid_cron(client: AsyncClient, user_token: str) -> None:
+async def test_update_workflow_invalid_cron(client: AsyncClient, admin_token: str) -> None:
     create = await client.post(
         "/api/v1/workflows",
         json={"name": "Cron Flow", "trigger": {"type": "manual"}, "steps": []},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     wf_id = create.json()["id"]
 
     resp = await client.put(
         f"/api/v1/workflows/{wf_id}",
         json={"trigger": {"type": "schedule", "cron": "bad-cron"}},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert resp.status_code == 422
 
 
 @pytest.mark.asyncio
-async def test_update_webhook_trigger_preserves_token(client: AsyncClient, user_token: str) -> None:
+async def test_update_webhook_trigger_preserves_token(client: AsyncClient, admin_token: str) -> None:
     """Updating a webhook workflow's name should not rotate the token."""
     create = await client.post(
         "/api/v1/workflows",
         json={"name": "Webhook Flow", "trigger": {"type": "webhook"}, "steps": []},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     wf_id = create.json()["id"]
     original_token = create.json()["trigger_config"]["token"]
@@ -818,7 +818,7 @@ async def test_update_webhook_trigger_preserves_token(client: AsyncClient, user_
     resp = await client.put(
         f"/api/v1/workflows/{wf_id}",
         json={"name": "Renamed Webhook Flow", "trigger": {"type": "webhook"}},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert resp.status_code == 200
     # Token must be preserved
@@ -831,24 +831,24 @@ async def test_update_webhook_trigger_preserves_token(client: AsyncClient, user_
 
 
 @pytest.mark.asyncio
-async def test_delete_workflow(client: AsyncClient, user_token: str) -> None:
+async def test_delete_workflow(client: AsyncClient, admin_token: str) -> None:
     create = await client.post(
         "/api/v1/workflows",
         json={"name": "Doomed Flow", "trigger": {"type": "manual"}, "steps": []},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     wf_id = create.json()["id"]
 
-    resp = await client.delete(f"/api/v1/workflows/{wf_id}", headers=_auth(user_token))
+    resp = await client.delete(f"/api/v1/workflows/{wf_id}", headers=_auth(admin_token))
     assert resp.status_code == 204
 
-    get_resp = await client.get(f"/api/v1/workflows/{wf_id}", headers=_auth(user_token))
+    get_resp = await client.get(f"/api/v1/workflows/{wf_id}", headers=_auth(admin_token))
     assert get_resp.status_code == 404
 
 
 @pytest.mark.asyncio
-async def test_delete_workflow_not_found(client: AsyncClient, user_token: str) -> None:
-    resp = await client.delete("/api/v1/workflows/ghost-id", headers=_auth(user_token))
+async def test_delete_workflow_not_found(client: AsyncClient, admin_token: str) -> None:
+    resp = await client.delete("/api/v1/workflows/ghost-id", headers=_auth(admin_token))
     assert resp.status_code == 404
 
 
@@ -858,21 +858,21 @@ async def test_delete_workflow_not_found(client: AsyncClient, user_token: str) -
 
 
 @pytest.mark.asyncio
-async def test_toggle_workflow(client: AsyncClient, user_token: str) -> None:
+async def test_toggle_workflow(client: AsyncClient, admin_token: str) -> None:
     create = await client.post(
         "/api/v1/workflows",
         json={"name": "Toggleable", "trigger": {"type": "manual"}, "steps": [], "enabled": True},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     wf_id = create.json()["id"]
 
     # Disable
-    resp = await client.patch(f"/api/v1/workflows/{wf_id}/toggle", headers=_auth(user_token))
+    resp = await client.patch(f"/api/v1/workflows/{wf_id}/toggle", headers=_auth(admin_token))
     assert resp.status_code == 200
     assert resp.json()["enabled"] is False
 
     # Re-enable
-    resp2 = await client.patch(f"/api/v1/workflows/{wf_id}/toggle", headers=_auth(user_token))
+    resp2 = await client.patch(f"/api/v1/workflows/{wf_id}/toggle", headers=_auth(admin_token))
     assert resp2.status_code == 200
     assert resp2.json()["enabled"] is True
 
@@ -883,15 +883,15 @@ async def test_toggle_workflow(client: AsyncClient, user_token: str) -> None:
 
 
 @pytest.mark.asyncio
-async def test_trigger_workflow_creates_instance(client: AsyncClient, user_token: str) -> None:
+async def test_trigger_workflow_creates_instance(client: AsyncClient, admin_token: str) -> None:
     create = await client.post(
         "/api/v1/workflows",
         json={"name": "Triggerable", "trigger": {"type": "manual"}, "steps": []},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     wf_id = create.json()["id"]
 
-    resp = await client.post(f"/api/v1/workflows/{wf_id}/trigger", headers=_auth(user_token))
+    resp = await client.post(f"/api/v1/workflows/{wf_id}/trigger", headers=_auth(admin_token))
     assert resp.status_code == 202, resp.text
     data = resp.json()
     assert "instance_id" in data
@@ -899,18 +899,18 @@ async def test_trigger_workflow_creates_instance(client: AsyncClient, user_token
 
 
 @pytest.mark.asyncio
-async def test_trigger_workflow_with_body(client: AsyncClient, user_token: str) -> None:
+async def test_trigger_workflow_with_body(client: AsyncClient, admin_token: str) -> None:
     create = await client.post(
         "/api/v1/workflows",
         json={"name": "Body Flow", "trigger": {"type": "manual"}, "steps": []},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     wf_id = create.json()["id"]
 
     trigger_resp = await client.post(
         f"/api/v1/workflows/{wf_id}/trigger",
         json={"order_id": "abc123", "amount": 42},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert trigger_resp.status_code == 202
 
@@ -920,7 +920,7 @@ async def test_trigger_workflow_with_body(client: AsyncClient, user_token: str) 
     instance_id = trigger_resp.json()["instance_id"]
     detail_resp = await client.get(
         f"/api/v1/workflow-instances/{instance_id}",
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert detail_resp.status_code == 200
     ctx = detail_resp.json()["context"]
@@ -929,17 +929,17 @@ async def test_trigger_workflow_with_body(client: AsyncClient, user_token: str) 
 
 
 @pytest.mark.asyncio
-async def test_trigger_workflow_instance_completes(client: AsyncClient, user_token: str) -> None:
+async def test_trigger_workflow_instance_completes(client: AsyncClient, admin_token: str) -> None:
     """Empty-step workflow should complete immediately after triggering."""
     create = await client.post(
         "/api/v1/workflows",
         json={"name": "No-op Flow", "trigger": {"type": "manual"}, "steps": []},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     wf_id = create.json()["id"]
 
     trigger_resp = await client.post(
-        f"/api/v1/workflows/{wf_id}/trigger", headers=_auth(user_token)
+        f"/api/v1/workflows/{wf_id}/trigger", headers=_auth(admin_token)
     )
     instance_id = trigger_resp.json()["instance_id"]
 
@@ -947,15 +947,15 @@ async def test_trigger_workflow_instance_completes(client: AsyncClient, user_tok
     await asyncio.sleep(0.2)
 
     detail = await client.get(
-        f"/api/v1/workflow-instances/{instance_id}", headers=_auth(user_token)
+        f"/api/v1/workflow-instances/{instance_id}", headers=_auth(admin_token)
     )
     assert detail.status_code == 200
     assert detail.json()["status"] == "completed"
 
 
 @pytest.mark.asyncio
-async def test_trigger_nonexistent_workflow(client: AsyncClient, user_token: str) -> None:
-    resp = await client.post("/api/v1/workflows/ghost/trigger", headers=_auth(user_token))
+async def test_trigger_nonexistent_workflow(client: AsyncClient, admin_token: str) -> None:
+    resp = await client.post("/api/v1/workflows/ghost/trigger", headers=_auth(admin_token))
     assert resp.status_code == 404
 
 
@@ -965,15 +965,15 @@ async def test_trigger_nonexistent_workflow(client: AsyncClient, user_token: str
 
 
 @pytest.mark.asyncio
-async def test_list_instances_empty(client: AsyncClient, user_token: str) -> None:
+async def test_list_instances_empty(client: AsyncClient, admin_token: str) -> None:
     create = await client.post(
         "/api/v1/workflows",
         json={"name": "Empty Flow", "trigger": {"type": "manual"}, "steps": []},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     wf_id = create.json()["id"]
 
-    resp = await client.get(f"/api/v1/workflows/{wf_id}/instances", headers=_auth(user_token))
+    resp = await client.get(f"/api/v1/workflows/{wf_id}/instances", headers=_auth(admin_token))
     assert resp.status_code == 200
     data = resp.json()
     assert data["total"] == 0
@@ -981,21 +981,21 @@ async def test_list_instances_empty(client: AsyncClient, user_token: str) -> Non
 
 
 @pytest.mark.asyncio
-async def test_list_instances_after_trigger(client: AsyncClient, user_token: str) -> None:
+async def test_list_instances_after_trigger(client: AsyncClient, admin_token: str) -> None:
     create = await client.post(
         "/api/v1/workflows",
         json={"name": "Multi-run Flow", "trigger": {"type": "manual"}, "steps": []},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     wf_id = create.json()["id"]
 
     # Trigger twice
-    await client.post(f"/api/v1/workflows/{wf_id}/trigger", headers=_auth(user_token))
-    await client.post(f"/api/v1/workflows/{wf_id}/trigger", headers=_auth(user_token))
+    await client.post(f"/api/v1/workflows/{wf_id}/trigger", headers=_auth(admin_token))
+    await client.post(f"/api/v1/workflows/{wf_id}/trigger", headers=_auth(admin_token))
 
     await asyncio.sleep(0.2)
 
-    resp = await client.get(f"/api/v1/workflows/{wf_id}/instances", headers=_auth(user_token))
+    resp = await client.get(f"/api/v1/workflows/{wf_id}/instances", headers=_auth(admin_token))
     assert resp.status_code == 200
     assert resp.json()["total"] == 2
 
@@ -1006,21 +1006,21 @@ async def test_list_instances_after_trigger(client: AsyncClient, user_token: str
 
 
 @pytest.mark.asyncio
-async def test_get_instance_detail(client: AsyncClient, user_token: str) -> None:
+async def test_get_instance_detail(client: AsyncClient, admin_token: str) -> None:
     create = await client.post(
         "/api/v1/workflows",
         json={"name": "Detail Flow", "trigger": {"type": "manual"}, "steps": []},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     wf_id = create.json()["id"]
     trigger_resp = await client.post(
-        f"/api/v1/workflows/{wf_id}/trigger", headers=_auth(user_token)
+        f"/api/v1/workflows/{wf_id}/trigger", headers=_auth(admin_token)
     )
     instance_id = trigger_resp.json()["instance_id"]
     await asyncio.sleep(0.2)
 
     resp = await client.get(
-        f"/api/v1/workflow-instances/{instance_id}", headers=_auth(user_token)
+        f"/api/v1/workflow-instances/{instance_id}", headers=_auth(admin_token)
     )
     assert resp.status_code == 200
     data = resp.json()
@@ -1031,8 +1031,8 @@ async def test_get_instance_detail(client: AsyncClient, user_token: str) -> None
 
 
 @pytest.mark.asyncio
-async def test_get_instance_not_found(client: AsyncClient, user_token: str) -> None:
-    resp = await client.get("/api/v1/workflow-instances/ghost-id", headers=_auth(user_token))
+async def test_get_instance_not_found(client: AsyncClient, admin_token: str) -> None:
+    resp = await client.get("/api/v1/workflow-instances/ghost-id", headers=_auth(admin_token))
     assert resp.status_code == 404
 
 
@@ -1044,7 +1044,7 @@ async def test_get_instance_not_found(client: AsyncClient, user_token: str) -> N
 @pytest.mark.asyncio
 async def test_cancel_instance(
     client: AsyncClient,
-    user_token: str,
+    admin_token: str,
     db_session: AsyncSession,
     account: AccountModel,
 ) -> None:
@@ -1074,7 +1074,7 @@ async def test_cancel_instance(
 
     resp = await client.post(
         f"/api/v1/workflow-instances/{inst.id}/cancel",
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert resp.status_code == 200
     assert resp.json()["status"] == "cancelled"
@@ -1083,7 +1083,7 @@ async def test_cancel_instance(
 @pytest.mark.asyncio
 async def test_cancel_completed_instance_returns_409(
     client: AsyncClient,
-    user_token: str,
+    admin_token: str,
     db_session: AsyncSession,
     account: AccountModel,
 ) -> None:
@@ -1113,7 +1113,7 @@ async def test_cancel_completed_instance_returns_409(
 
     resp = await client.post(
         f"/api/v1/workflow-instances/{inst.id}/cancel",
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert resp.status_code == 409
 
@@ -1126,7 +1126,7 @@ async def test_cancel_completed_instance_returns_409(
 @pytest.mark.asyncio
 async def test_resume_failed_instance(
     client: AsyncClient,
-    user_token: str,
+    admin_token: str,
     db_session: AsyncSession,
     account: AccountModel,
 ) -> None:
@@ -1156,7 +1156,7 @@ async def test_resume_failed_instance(
 
     resp = await client.post(
         f"/api/v1/workflow-instances/{inst.id}/resume",
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert resp.status_code == 202
     assert resp.json()["instance_id"] == inst.id
@@ -1165,7 +1165,7 @@ async def test_resume_failed_instance(
 @pytest.mark.asyncio
 async def test_resume_running_instance_returns_409(
     client: AsyncClient,
-    user_token: str,
+    admin_token: str,
     db_session: AsyncSession,
     account: AccountModel,
 ) -> None:
@@ -1194,7 +1194,7 @@ async def test_resume_running_instance_returns_409(
 
     resp = await client.post(
         f"/api/v1/workflow-instances/{inst.id}/resume",
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert resp.status_code == 409
 
@@ -1205,11 +1205,11 @@ async def test_resume_running_instance_returns_409(
 
 
 @pytest.mark.asyncio
-async def test_webhook_trigger_creates_instance(client: AsyncClient, user_token: str) -> None:
+async def test_webhook_trigger_creates_instance(client: AsyncClient, admin_token: str) -> None:
     create = await client.post(
         "/api/v1/workflows",
         json={"name": "Webhook Flow", "trigger": {"type": "webhook"}, "steps": []},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert create.status_code == 201
     token = create.json()["trigger_config"]["token"]
@@ -1228,19 +1228,19 @@ async def test_webhook_trigger_creates_instance(client: AsyncClient, user_token:
 
     # Verify instance was created
     instances_resp = await client.get(
-        f"/api/v1/workflows/{wf_id}/instances", headers=_auth(user_token)
+        f"/api/v1/workflows/{wf_id}/instances", headers=_auth(admin_token)
     )
     assert instances_resp.json()["total"] == 1
 
 
 @pytest.mark.asyncio
 async def test_webhook_trigger_passes_body_as_context(
-    client: AsyncClient, user_token: str
+    client: AsyncClient, admin_token: str
 ) -> None:
     create = await client.post(
         "/api/v1/workflows",
         json={"name": "Webhook Body Flow", "trigger": {"type": "webhook"}, "steps": []},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     token = create.json()["trigger_config"]["token"]
 
@@ -1252,7 +1252,7 @@ async def test_webhook_trigger_passes_body_as_context(
     await asyncio.sleep(0.2)
 
     detail = await client.get(
-        f"/api/v1/workflow-instances/{instance_id}", headers=_auth(user_token)
+        f"/api/v1/workflow-instances/{instance_id}", headers=_auth(admin_token)
     )
     assert detail.json()["context"]["trigger"]["payload"] == "hello"
     assert detail.json()["context"]["trigger"]["_source"] == "webhook"
@@ -1265,7 +1265,7 @@ async def test_webhook_trigger_invalid_token(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_webhook_trigger_disabled_workflow(client: AsyncClient, user_token: str) -> None:
+async def test_webhook_trigger_disabled_workflow(client: AsyncClient, admin_token: str) -> None:
     """Disabled workflow should not be found via webhook."""
     create = await client.post(
         "/api/v1/workflows",
@@ -1275,7 +1275,7 @@ async def test_webhook_trigger_disabled_workflow(client: AsyncClient, user_token
             "steps": [],
             "enabled": False,
         },
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     token = create.json()["trigger_config"]["token"]
 
@@ -1290,68 +1290,68 @@ async def test_webhook_trigger_disabled_workflow(client: AsyncClient, user_token
 
 @pytest.mark.asyncio
 async def test_workflow_not_visible_cross_account(
-    client: AsyncClient, user_token: str, other_user_token: str
+    client: AsyncClient, admin_token: str, other_admin_token: str
 ) -> None:
     create = await client.post(
         "/api/v1/workflows",
         json={"name": "Private Flow", "trigger": {"type": "manual"}, "steps": []},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     wf_id = create.json()["id"]
 
     # Other account cannot get it
-    resp = await client.get(f"/api/v1/workflows/{wf_id}", headers=_auth(other_user_token))
+    resp = await client.get(f"/api/v1/workflows/{wf_id}", headers=_auth(other_admin_token))
     assert resp.status_code == 404
 
 
 @pytest.mark.asyncio
 async def test_workflow_list_is_account_scoped(
-    client: AsyncClient, user_token: str, other_user_token: str
+    client: AsyncClient, admin_token: str, other_admin_token: str
 ) -> None:
     await client.post(
         "/api/v1/workflows",
         json={"name": "Account A Flow", "trigger": {"type": "manual"}, "steps": []},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
 
-    resp = await client.get("/api/v1/workflows", headers=_auth(other_user_token))
+    resp = await client.get("/api/v1/workflows", headers=_auth(other_admin_token))
     assert resp.json()["total"] == 0
 
 
 @pytest.mark.asyncio
 async def test_workflow_delete_cross_account_returns_404(
-    client: AsyncClient, user_token: str, other_user_token: str
+    client: AsyncClient, admin_token: str, other_admin_token: str
 ) -> None:
     create = await client.post(
         "/api/v1/workflows",
         json={"name": "Protected Flow", "trigger": {"type": "manual"}, "steps": []},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     wf_id = create.json()["id"]
 
-    resp = await client.delete(f"/api/v1/workflows/{wf_id}", headers=_auth(other_user_token))
+    resp = await client.delete(f"/api/v1/workflows/{wf_id}", headers=_auth(other_admin_token))
     assert resp.status_code == 404
 
 
 @pytest.mark.asyncio
 async def test_instance_not_visible_cross_account(
     client: AsyncClient,
-    user_token: str,
-    other_user_token: str,
+    admin_token: str,
+    other_admin_token: str,
 ) -> None:
     create = await client.post(
         "/api/v1/workflows",
         json={"name": "Isolated Flow", "trigger": {"type": "manual"}, "steps": []},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     wf_id = create.json()["id"]
     trigger = await client.post(
-        f"/api/v1/workflows/{wf_id}/trigger", headers=_auth(user_token)
+        f"/api/v1/workflows/{wf_id}/trigger", headers=_auth(admin_token)
     )
     instance_id = trigger.json()["instance_id"]
 
     resp = await client.get(
-        f"/api/v1/workflow-instances/{instance_id}", headers=_auth(other_user_token)
+        f"/api/v1/workflow-instances/{instance_id}", headers=_auth(other_admin_token)
     )
     assert resp.status_code == 404
 
@@ -1363,7 +1363,7 @@ async def test_instance_not_visible_cross_account(
 
 @pytest.mark.asyncio
 async def test_max_workflow_limit(
-    client: AsyncClient, user_token: str, monkeypatch: pytest.MonkeyPatch
+    client: AsyncClient, admin_token: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Account cannot create more than the configured maximum."""
     import snackbase.infrastructure.api.routes.workflows_router as wf_router
@@ -1374,14 +1374,14 @@ async def test_max_workflow_limit(
         r = await client.post(
             "/api/v1/workflows",
             json={"name": f"Flow {i}", "trigger": {"type": "manual"}, "steps": []},
-            headers=_auth(user_token),
+            headers=_auth(admin_token),
         )
         assert r.status_code == 201
 
     resp = await client.post(
         "/api/v1/workflows",
         json={"name": "One Too Many", "trigger": {"type": "manual"}, "steps": []},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert resp.status_code == 409
     assert "maximum" in resp.json()["detail"].lower()

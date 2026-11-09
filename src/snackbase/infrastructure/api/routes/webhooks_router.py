@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.core.config import get_settings
 from snackbase.core.logging import get_logger
-from snackbase.infrastructure.api.dependencies import AuthenticatedUser
+from snackbase.infrastructure.api.dependencies import AuthenticatedUser, require_account_admin
 from snackbase.infrastructure.api.schemas.webhook_schemas import (
     WebhookCreateRequest,
     WebhookCreateResponse,
@@ -48,7 +48,7 @@ def _decrypt_webhook_secret(stored: str) -> str:
     decrypted = service.try_decrypt(stored)
     return decrypted if decrypted is not None else stored
 
-router = APIRouter(tags=["Webhooks"])
+router = APIRouter(tags=["Webhooks"], dependencies=[Depends(require_account_admin)])
 logger = get_logger(__name__)
 
 

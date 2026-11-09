@@ -36,10 +36,10 @@ async def account(db_session: AsyncSession) -> AccountModel:
 
 
 @pytest_asyncio.fixture
-async def user_token(db_session: AsyncSession, account: AccountModel) -> str:
-    """Create a user in the test account and return their access token."""
-    user_role = (
-        await db_session.execute(select(RoleModel).where(RoleModel.name == "user"))
+async def admin_token(db_session: AsyncSession, account: AccountModel) -> str:
+    """Create an account admin in the test account and return their access token."""
+    admin_role = (
+        await db_session.execute(select(RoleModel).where(RoleModel.name == "admin"))
     ).scalar_one()
 
     user = UserModel(
@@ -47,7 +47,7 @@ async def user_token(db_session: AsyncSession, account: AccountModel) -> str:
         email="user@webhooktest.com",
         account_id=account.id,
         password_hash="hashed",
-        role=user_role,
+        role=admin_role,
         is_active=True,
         created_at=datetime.now(UTC),
     )
@@ -58,7 +58,7 @@ async def user_token(db_session: AsyncSession, account: AccountModel) -> str:
         user_id=user.id,
         account_id=user.account_id,
         email=user.email,
-        role="user",
+        role="admin",
     )
     return token
 
@@ -85,7 +85,7 @@ async def existing_webhook(db_session: AsyncSession, account: AccountModel) -> W
 
 
 @pytest.mark.asyncio
-async def test_create_webhook(client: AsyncClient, user_token: str) -> None:
+async def test_create_webhook(client: AsyncClient, admin_token: str) -> None:
     """POST /api/v1/webhooks creates a webhook and returns secret once."""
     response = await client.post(
         "/api/v1/webhooks",
@@ -94,7 +94,7 @@ async def test_create_webhook(client: AsyncClient, user_token: str) -> None:
             "collection": "posts",
             "events": ["create", "update"],
         },
-        headers={"Authorization": f"Bearer {user_token}"},
+        headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert response.status_code == 201, response.text
     data = response.json()
@@ -108,7 +108,7 @@ async def test_create_webhook(client: AsyncClient, user_token: str) -> None:
 
 @pytest.mark.asyncio
 async def test_create_webhook_auto_generates_secret(
-    client: AsyncClient, user_token: str
+    client: AsyncClient, admin_token: str
 ) -> None:
     """Webhook secret is auto-generated if not provided."""
     response = await client.post(
@@ -118,7 +118,7 @@ async def test_create_webhook_auto_generates_secret(
             "collection": "orders",
             "events": ["create"],
         },
-        headers={"Authorization": f"Bearer {user_token}"},
+        headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert response.status_code == 201
     data = response.json()
@@ -126,7 +126,7 @@ async def test_create_webhook_auto_generates_secret(
 
 
 @pytest.mark.asyncio
-async def test_create_webhook_invalid_event(client: AsyncClient, user_token: str) -> None:
+async def test_create_webhook_invalid_event(client: AsyncClient, admin_token: str) -> None:
     """Invalid event name returns 422."""
     response = await client.post(
         "/api/v1/webhooks",
@@ -135,7 +135,7 @@ async def test_create_webhook_invalid_event(client: AsyncClient, user_token: str
             "collection": "posts",
             "events": ["create", "invalid_event"],
         },
-        headers={"Authorization": f"Bearer {user_token}"},
+        headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert response.status_code == 422
 
@@ -143,7 +143,7 @@ async def test_create_webhook_invalid_event(client: AsyncClient, user_token: str
 @pytest.mark.asyncio
 async def test_create_webhook_http_url_in_production_rejected(
     client: AsyncClient,
-    user_token: str,
+    admin_token: str,
     account: AccountModel,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -161,13 +161,13 @@ async def test_create_webhook_http_url_in_production_rejected(
     get_settings.cache_clear()
 
     try:
-        # `user_token` was signed with the development secret, which no longer
+        # `admin_token` was signed with the development secret, which no longer
         # verifies now that a production signing key is in force.
         production_token = jwt_service.create_access_token(
             user_id="wh-test-user",
             account_id=account.id,
             email="user@webhooktest.com",
-            role="user",
+            role="admin",
         )
         response = await client.post(
             "/api/v1/webhooks",
@@ -190,7 +190,7 @@ async def test_create_webhook_http_url_in_production_rejected(
 
 @pytest.mark.asyncio
 async def test_create_webhook_private_ip_rejected(
-    client: AsyncClient, user_token: str
+    client: AsyncClient, admin_token: str
 ) -> None:
     """Private IP addresses are rejected."""
     response = await client.post(
@@ -200,7 +200,7 @@ async def test_create_webhook_private_ip_rejected(
             "collection": "posts",
             "events": ["create"],
         },
-        headers={"Authorization": f"Bearer {user_token}"},
+        headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert response.status_code == 422
     assert "private" in response.json()["detail"].lower()
@@ -209,13 +209,13 @@ async def test_create_webhook_private_ip_rejected(
 @pytest.mark.asyncio
 async def test_list_webhooks(
     client: AsyncClient,
-    user_token: str,
+    admin_token: str,
     existing_webhook: WebhookModel,
 ) -> None:
     """GET /api/v1/webhooks lists webhooks for the account."""
     response = await client.get(
         "/api/v1/webhooks",
-        headers={"Authorization": f"Bearer {user_token}"},
+        headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert response.status_code == 200
     data = response.json()
@@ -230,13 +230,13 @@ async def test_list_webhooks(
 @pytest.mark.asyncio
 async def test_get_webhook(
     client: AsyncClient,
-    user_token: str,
+    admin_token: str,
     existing_webhook: WebhookModel,
 ) -> None:
     """GET /api/v1/webhooks/{id} returns webhook details without secret."""
     response = await client.get(
         f"/api/v1/webhooks/{existing_webhook.id}",
-        headers={"Authorization": f"Bearer {user_token}"},
+        headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert response.status_code == 200
     data = response.json()
@@ -245,11 +245,11 @@ async def test_get_webhook(
 
 
 @pytest.mark.asyncio
-async def test_get_webhook_not_found(client: AsyncClient, user_token: str) -> None:
+async def test_get_webhook_not_found(client: AsyncClient, admin_token: str) -> None:
     """GET /api/v1/webhooks/{id} returns 404 for unknown ID."""
     response = await client.get(
         "/api/v1/webhooks/nonexistent-id",
-        headers={"Authorization": f"Bearer {user_token}"},
+        headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert response.status_code == 404
 
@@ -257,14 +257,14 @@ async def test_get_webhook_not_found(client: AsyncClient, user_token: str) -> No
 @pytest.mark.asyncio
 async def test_update_webhook(
     client: AsyncClient,
-    user_token: str,
+    admin_token: str,
     existing_webhook: WebhookModel,
 ) -> None:
     """PUT /api/v1/webhooks/{id} updates a webhook."""
     response = await client.put(
         f"/api/v1/webhooks/{existing_webhook.id}",
         json={"enabled": False, "events": ["delete"]},
-        headers={"Authorization": f"Bearer {user_token}"},
+        headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert response.status_code == 200
     data = response.json()
@@ -275,14 +275,14 @@ async def test_update_webhook(
 @pytest.mark.asyncio
 async def test_delete_webhook(
     client: AsyncClient,
-    user_token: str,
+    admin_token: str,
     existing_webhook: WebhookModel,
     db_session: AsyncSession,
 ) -> None:
     """DELETE /api/v1/webhooks/{id} removes the webhook."""
     response = await client.delete(
         f"/api/v1/webhooks/{existing_webhook.id}",
-        headers={"Authorization": f"Bearer {user_token}"},
+        headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert response.status_code == 204
 
@@ -308,13 +308,13 @@ async def test_unauthenticated_request_rejected(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_list_deliveries_empty(
     client: AsyncClient,
-    user_token: str,
+    admin_token: str,
     existing_webhook: WebhookModel,
 ) -> None:
     """GET /api/v1/webhooks/{id}/deliveries returns empty list initially."""
     response = await client.get(
         f"/api/v1/webhooks/{existing_webhook.id}/deliveries",
-        headers={"Authorization": f"Bearer {user_token}"},
+        headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert response.status_code == 200
     data = response.json()
@@ -325,7 +325,7 @@ async def test_list_deliveries_empty(
 @pytest.mark.asyncio
 async def test_list_deliveries_with_records(
     client: AsyncClient,
-    user_token: str,
+    admin_token: str,
     existing_webhook: WebhookModel,
     db_session: AsyncSession,
 ) -> None:
@@ -345,7 +345,7 @@ async def test_list_deliveries_with_records(
 
     response = await client.get(
         f"/api/v1/webhooks/{existing_webhook.id}/deliveries",
-        headers={"Authorization": f"Bearer {user_token}"},
+        headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert response.status_code == 200
     data = response.json()
@@ -357,7 +357,7 @@ async def test_list_deliveries_with_records(
 @pytest.mark.asyncio
 async def test_test_webhook_endpoint(
     client: AsyncClient,
-    user_token: str,
+    admin_token: str,
     existing_webhook: WebhookModel,
 ) -> None:
     """POST /api/v1/webhooks/{id}/test sends a test payload."""
@@ -376,7 +376,7 @@ async def test_test_webhook_endpoint(
 
         response = await client.post(
             f"/api/v1/webhooks/{existing_webhook.id}/test",
-            headers={"Authorization": f"Bearer {user_token}"},
+            headers={"Authorization": f"Bearer {admin_token}"},
         )
 
     assert response.status_code == 200
@@ -388,7 +388,7 @@ async def test_test_webhook_endpoint(
 @pytest.mark.asyncio
 async def test_test_webhook_failure(
     client: AsyncClient,
-    user_token: str,
+    admin_token: str,
     existing_webhook: WebhookModel,
 ) -> None:
     """Test webhook endpoint returns success=False on non-2xx response."""
@@ -407,7 +407,7 @@ async def test_test_webhook_failure(
 
         response = await client.post(
             f"/api/v1/webhooks/{existing_webhook.id}/test",
-            headers={"Authorization": f"Bearer {user_token}"},
+            headers={"Authorization": f"Bearer {admin_token}"},
         )
 
     assert response.status_code == 200
@@ -538,7 +538,7 @@ def test_filter_evaluation_no_filter_allows_delivery() -> None:
 @pytest.mark.asyncio
 async def test_max_webhooks_per_account(
     client: AsyncClient,
-    user_token: str,
+    admin_token: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Cannot create more webhooks than the per-account limit."""
@@ -553,7 +553,7 @@ async def test_max_webhooks_per_account(
         r1 = await client.post(
             "/api/v1/webhooks",
             json={"url": "https://example.com/1", "collection": "a", "events": ["create"]},
-            headers={"Authorization": f"Bearer {user_token}"},
+            headers={"Authorization": f"Bearer {admin_token}"},
         )
         assert r1.status_code == 201
 
@@ -561,7 +561,7 @@ async def test_max_webhooks_per_account(
         r2 = await client.post(
             "/api/v1/webhooks",
             json={"url": "https://example.com/2", "collection": "b", "events": ["create"]},
-            headers={"Authorization": f"Bearer {user_token}"},
+            headers={"Authorization": f"Bearer {admin_token}"},
         )
         assert r2.status_code == 400
         assert "Maximum" in r2.json()["detail"]

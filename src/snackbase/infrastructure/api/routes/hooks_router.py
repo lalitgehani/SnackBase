@@ -28,7 +28,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.core.cron.parser import describe_cron, get_next_run, validate_cron
 from snackbase.core.logging import get_logger
-from snackbase.infrastructure.api.dependencies import AuthenticatedUser, get_db_session
+from snackbase.infrastructure.api.dependencies import (
+    AuthenticatedUser,
+    get_db_session,
+    require_account_admin,
+)
 from snackbase.infrastructure.api.schemas.hook_schemas import (
     VALID_EVENT_NAMES,
     HookCreateRequest,
@@ -41,7 +45,7 @@ from snackbase.infrastructure.api.schemas.hook_schemas import (
 from snackbase.infrastructure.persistence.models.hook import HookModel
 from snackbase.infrastructure.persistence.repositories.hook_repository import HookRepository
 
-router = APIRouter(tags=["Hooks"])
+router = APIRouter(tags=["Hooks"], dependencies=[Depends(require_account_admin)])
 logger = get_logger(__name__)
 
 # Default maximum hooks per account (can be overridden by settings)

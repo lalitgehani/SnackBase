@@ -465,7 +465,7 @@ async def two_tenant_endpoints(
         security_test_data["user_a_token"], account_a.slug, "ALPHA-ENDPOINT"
     )
     endpoint_b = await _create(
-        security_test_data["user_b_token"], account_b.slug, "BETA-ENDPOINT"
+        security_test_data["admin_b_token"], account_b.slug, "BETA-ENDPOINT"
     )
 
     return {
