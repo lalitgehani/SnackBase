@@ -3,8 +3,7 @@
 Provides endpoints for SAML 2.0 Single Sign-On (SSO) flows.
 """
 
-import base64
-import json
+import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -33,9 +32,11 @@ from snackbase.infrastructure.persistence.models import (
     RefreshTokenModel,
     UserModel,
 )
+from snackbase.infrastructure.persistence.models.configuration import OAuthStateModel
 from snackbase.infrastructure.persistence.repositories import (
     AccountRepository,
     ConfigurationRepository,
+    OAuthStateRepository,
     RefreshTokenRepository,
     RoleRepository,
     UserRepository,
@@ -44,6 +45,13 @@ from snackbase.infrastructure.persistence.repositories import (
 logger = get_logger(__name__)
 
 router = APIRouter()
+
+# SP-initiated flow context (account, provider, client relay state) is kept
+# server-side in the auth flow state table, keyed by an opaque single-use token
+# that travels as RelayState. Rows are namespaced so an OAuth callback can never
+# consume a SAML flow state, and vice versa.
+_FLOW_STATE_PREFIX = "saml:"
+_FLOW_STATE_TTL = timedelta(minutes=10)
 
 # Mapping of provider names to handler instances
 SAML_HANDLERS = {
@@ -173,17 +181,28 @@ async def sso(
     from snackbase.core.config import get_settings
     settings = get_settings()
 
-    # Construct relay state with context (account_id, provider_name, original_relay_state)
-    # This allows us to know which provider to use on the callback (ACS).
-    relay_state_data = {
-        "a": account_id,
-        "p": selected_provider_name,
-        "r": relay_state
-    }
-    encoded_relay_state = base64.urlsafe_b64encode(json.dumps(relay_state_data).encode()).decode()
-
     # ACS URL where IdP should post response
     acs_url = f"{settings.external_url.rstrip('/')}{settings.api_prefix}/auth/saml/acs"
+
+    # Store the flow context server-side; only an opaque token (43 chars, within
+    # the 80-byte RelayState limit) travels through the IdP.
+    flow_token = secrets.token_urlsafe(32)
+    await OAuthStateRepository(session).create(
+        OAuthStateModel(
+            id=str(uuid.uuid4()),
+            provider_name=f"{_FLOW_STATE_PREFIX}{selected_provider_name}",
+            state_token=flow_token,
+            redirect_uri=acs_url,
+            expires_at=datetime.now(UTC) + _FLOW_STATE_TTL,
+            metadata_={
+                "account_id": account_id,
+                "provider_name": selected_provider_name,
+                "relay_state": relay_state,
+            },
+        )
+    )
+    await session.commit()
+    encoded_relay_state = flow_token
 
     try:
         auth_url = await handler.get_authorization_url(
@@ -240,31 +259,37 @@ async def acs(
             detail="System configuration error",
         )
 
-    # 1. Decode RelayState to get context
+    # 1. Resolve the flow context from the server-side state named by RelayState.
+    # The account and provider are never read from the request itself.
     account_id = None
     provider_name = None
-    # original_relay_state = None  # TODO: We might want to pass this back in response if needed
 
+    flow_state = None
+    state_repo = OAuthStateRepository(session)
     if RelayState:
-        try:
-            # Try to decode our JSON relay state
-            decoded = base64.urlsafe_b64decode(RelayState).decode()
-            data = json.loads(decoded)
-            if isinstance(data, dict):
-                account_id = data.get("a")
-                provider_name = data.get("p")
-                # original_relay_state = data.get("r")
-        except Exception:
-            # Fallback: Maybe it's not our JSON state or invalid
-            logger.warning("Could not decode RelayState, proceeding without context", relay_state=RelayState)
+        flow_state = await state_repo.get_by_token(RelayState)
+
+    if flow_state is not None:
+        expires_at = flow_state.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=UTC)
+        metadata = flow_state.metadata_ or {}
+        if (
+            flow_state.provider_name.startswith(_FLOW_STATE_PREFIX)
+            and expires_at > datetime.now(UTC)
+        ):
+            account_id = metadata.get("account_id")
+            provider_name = metadata.get("provider_name")
+        if flow_state.provider_name.startswith(_FLOW_STATE_PREFIX):
+            # Single-use, valid or not.
+            await state_repo.delete(flow_state.id)
+            await session.commit()
 
     if not account_id or not provider_name:
-        logger.error("Missing context in RelayState for SAML ACS")
-        # In a real scenario, we might retry with idp_initiated flow if we support it,
-        # but for now we require SP-initiated flow with state.
+        logger.info("SAML ACS failed: unknown, expired or reused RelayState")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Missing context in RelayState. Only SP-initiated SSO is supported.",
+            detail="Invalid or expired RelayState. Only SP-initiated SSO is supported.",
         )
 
     # 2. Get provider configuration
@@ -384,22 +409,34 @@ async def acs(
                 detail="Target account for SAML flow not found",
             )
 
-        # Create user record with 'admin' role (or default role)
-        # Assuming admin for now or we should interpret attributes for role mapping?
-        # F4.6 requirements don't specify role mapping. Defaulting to admin or member?
-        # OAuth implementation defaulted to admin which is risky for random sign ups but maybe fine for first user?
-        # Actually OAuth implementation: `if account_id == "0000..."`: create account -> admin.
-        # Else: `join existing account` -> admin? That seems generous.
-        # Checking `oauth_router.py` again:
-        # "Join existing account" -> `user = UserModel(..., role_id=admin_role.id, ...)`
-        # Yes, it gives admin role to everyone joining. That might be a "beta" feature.
-        # I will replicate this behavior for consistency but add a TODO.
+        # Just-in-time provisioning only for an account that configured this
+        # SAML provider itself (its own IdP), and only with the 'user' role.
+        # A system-level provider must not admit identities into any account.
+        account_provider = await ConfigurationRepository(session).get_config(
+            category="saml_providers",
+            account_id=account_id,
+            provider_name=provider_name,
+            is_system=False,
+        )
+        if account_provider is None or not account_provider.enabled:
+            logger.info(
+                "SAML ACS refused: account does not provision via provider",
+                provider=provider_name,
+                account_id=account_id,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    f"This account does not accept sign-up through '{provider_name}'. "
+                    "Ask an account admin for an invitation."
+                ),
+            )
 
-        admin_role = await role_repo.get_by_name("admin")
-        if not admin_role:
-             raise HTTPException(
+        member_role = await role_repo.get_by_name("user")
+        if not member_role:
+            raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="System configuration error: admin role missing",
+                detail="System configuration error: user role missing",
             )
 
         # Create user
@@ -408,7 +445,7 @@ async def acs(
             account_id=account_id,
             email=email,
             password_hash=hash_password(generate_random_password()),
-            role_id=admin_role.id,
+            role_id=member_role.id,
             is_active=True,
             auth_provider="saml",
             auth_provider_name=provider_name,

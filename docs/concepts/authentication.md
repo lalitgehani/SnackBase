@@ -1132,21 +1132,11 @@ This returns XML metadata that can be imported into Okta, Azure AD, etc.:
 
 ### RelayState in SAML
 
-SAML RelayState serves the same purpose as OAuth state:
+SAML RelayState serves the same purpose as OAuth state. `/sso` stores the flow context (account, provider, and the client's own `relay_state`) server-side and sends the IdP only an opaque, single-use token that expires after 10 minutes. The ACS endpoint resolves the account and provider from that stored state, never from the request, and rejects unknown, expired or reused tokens.
 
-```python
-# RelayState structure
-relay_state_data = {
-  "account_id": "550e8400-...",
-  "provider_name": "okta",
-  "client_state": "abc123"
-}
+### SAML Just-in-Time Provisioning
 
-# Base64 encode for URL transmission
-relay_state = base64.urlsafe_b64encode(
-  json.dumps(relay_state_data).encode()
-).decode()
-```
+A first-time SAML user is created in the flow's account with the `user` role, and only if that account has its own enabled configuration for the SAML provider. A provider configured only at system level does not admit new users into an account; the ACS endpoint returns `403` and the user needs an invitation.
 
 ### SAML User Attributes
 
