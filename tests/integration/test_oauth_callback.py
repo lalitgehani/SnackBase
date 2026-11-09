@@ -248,17 +248,35 @@ class TestOAuthCallback:
         state = await oauth_state_repo.get_by_token(state_token)
         assert state is None
 
-    async def test_callback_join_existing_account_success(self, client: AsyncClient, db_session: AsyncSession):
-        """Test successful callback where user joins an existing specific account."""
+    async def _join_flow(
+        self, client: AsyncClient, db_session: AsyncSession, *, account_level_config: bool
+    ):
+        """Run a first-time OAuth callback whose state targets an existing account."""
+        from snackbase.infrastructure.api.app import app
+
         await self._setup_infra(db_session)
 
-        # Create an existing account
         account_repo = AccountRepository(db_session)
         account = AccountModel(id=str(uuid.uuid4()), account_code="AC5678", name="Target Account", slug="target")
         await account_repo.create(account)
+        if account_level_config:
+            await app.state.config_registry.create_config(
+                account_id=account.id,
+                category="auth_providers",
+                provider_name="google",
+                display_name="Google (tenant)",
+                config={
+                    "client_id": "tenant-client-id",
+                    "client_secret": "tenant-client-secret",
+                    "scopes": ["openid", "email"],
+                    "redirect_uri": "http://localhost:8000/callback",
+                },
+                is_system=False,
+                enabled=True,
+                repository=ConfigurationRepository(db_session),
+            )
         await db_session.commit()
 
-        # Create state targeting this account
         state_token = "state-join"
         oauth_state_repo = OAuthStateRepository(db_session)
         state_model = OAuthStateModel(
@@ -272,7 +290,6 @@ class TestOAuthCallback:
         await oauth_state_repo.create(state_model)
         await db_session.commit()
 
-        # Mock handler
         mock_handler = AsyncMock()
         mock_handler.exchange_code_for_tokens.return_value = {"access_token": "mock-token"}
         mock_handler.get_user_info.return_value = {
@@ -290,13 +307,31 @@ class TestOAuthCallback:
                     "redirect_uri": "http://myapp.com/callback"
                 }
             )
+        return account, response
 
-        assert response.status_code == 200
+    async def test_callback_join_existing_account_success(self, client: AsyncClient, db_session: AsyncSession):
+        """A first-time user joins an account that configured the provider itself, as 'user'."""
+        account, response = await self._join_flow(client, db_session, account_level_config=True)
+
+        assert response.status_code == 200, response.text
         data = response.json()
         assert data["user"]["email"] == "join@example.com"
         assert data["account"]["id"] == account.id
         assert data["is_new_user"] is True
         assert data["is_new_account"] is False
+
+        user = await UserRepository(db_session).get_by_external_id("google", "google-user-join")
+        role = await RoleRepository(db_session).get_by_id(user.role_id)
+        assert role.name == "user"
+
+    async def test_callback_join_existing_account_requires_account_provider(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        """A system-level provider alone never provisions a member into an existing account."""
+        account, response = await self._join_flow(client, db_session, account_level_config=False)
+
+        assert response.status_code == 403, response.text
+        assert await UserRepository(db_session).get_by_external_id("google", "google-user-join") is None
 
     async def test_callback_inactive_user_error(self, client: AsyncClient, db_session: AsyncSession):
         """Test callback fails for an inactive user."""

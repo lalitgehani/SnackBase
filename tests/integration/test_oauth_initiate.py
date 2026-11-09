@@ -94,13 +94,15 @@ class TestOAuthInitiate:
         data = response.json()
         assert "authorization_url" in data
         assert "google" in data["authorization_url"]
-        assert "state=test-state" in data["authorization_url"]
-        assert data["state"] == "test-state"
+        # A caller-supplied state is ignored; the server always generates it.
+        assert data["state"] != "test-state"
+        assert f"state={data['state']}" in data["authorization_url"]
         assert data["provider"] == "google"
 
         # 3. Verify state is in database
         oauth_state_repo = OAuthStateRepository(db_session)
-        state_record = await oauth_state_repo.get_by_token("test-state")
+        assert await oauth_state_repo.get_by_token("test-state") is None
+        state_record = await oauth_state_repo.get_by_token(data["state"])
         assert state_record is not None
         assert state_record.provider_name == "google"
         assert state_record.redirect_uri == "http://myapp.com/callback"
