@@ -66,9 +66,9 @@ async def other_account(db_session: AsyncSession) -> AccountModel:
 
 
 @pytest_asyncio.fixture
-async def user_token(db_session: AsyncSession, account: AccountModel) -> str:
+async def admin_token(db_session: AsyncSession, account: AccountModel) -> str:
     role = (
-        await db_session.execute(select(RoleModel).where(RoleModel.name == "user"))
+        await db_session.execute(select(RoleModel).where(RoleModel.name == "admin"))
     ).scalar_one()
     user = UserModel(
         id="endpoint-test-user-1",
@@ -85,14 +85,14 @@ async def user_token(db_session: AsyncSession, account: AccountModel) -> str:
         user_id=user.id,
         account_id=account.id,
         email=user.email,
-        role="user",
+        role="admin",
     )
 
 
 @pytest_asyncio.fixture
-async def other_user_token(db_session: AsyncSession, other_account: AccountModel) -> str:
+async def other_admin_token(db_session: AsyncSession, other_account: AccountModel) -> str:
     role = (
-        await db_session.execute(select(RoleModel).where(RoleModel.name == "user"))
+        await db_session.execute(select(RoleModel).where(RoleModel.name == "admin"))
     ).scalar_one()
     user = UserModel(
         id="endpoint-test-user-2",
@@ -109,7 +109,7 @@ async def other_user_token(db_session: AsyncSession, other_account: AccountModel
         user_id=user.id,
         account_id=other_account.id,
         email=user.email,
-        role="user",
+        role="admin",
     )
 
 
@@ -124,12 +124,12 @@ def _auth(token: str) -> dict:
 
 @pytest.mark.asyncio
 async def test_create_endpoint_minimal(
-    client: AsyncClient, account: AccountModel, user_token: str
+    client: AsyncClient, account: AccountModel, admin_token: str
 ) -> None:
     resp = await client.post(
         "/api/v1/endpoints",
         json={"name": "Hello", "path": "/hello", "method": "GET"},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert resp.status_code == 201, resp.text
     data = resp.json()
@@ -143,7 +143,7 @@ async def test_create_endpoint_minimal(
 
 @pytest.mark.asyncio
 async def test_create_endpoint_full(
-    client: AsyncClient, account: AccountModel, user_token: str
+    client: AsyncClient, account: AccountModel, admin_token: str
 ) -> None:
     resp = await client.post(
         "/api/v1/endpoints",
@@ -156,7 +156,7 @@ async def test_create_endpoint_full(
             "actions": [{"type": "send_webhook", "url": "https://example.com/hook"}],
             "response_template": {"status": 201, "body": {"ok": True}},
         },
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert resp.status_code == 201
     data = resp.json()
@@ -167,37 +167,37 @@ async def test_create_endpoint_full(
 
 @pytest.mark.asyncio
 async def test_create_endpoint_invalid_path_no_slash(
-    client: AsyncClient, account: AccountModel, user_token: str
+    client: AsyncClient, account: AccountModel, admin_token: str
 ) -> None:
     resp = await client.post(
         "/api/v1/endpoints",
         json={"name": "Bad", "path": "no-slash", "method": "GET"},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert resp.status_code == 422
 
 
 @pytest.mark.asyncio
 async def test_create_endpoint_reserved_path(
-    client: AsyncClient, account: AccountModel, user_token: str
+    client: AsyncClient, account: AccountModel, admin_token: str
 ) -> None:
     resp = await client.post(
         "/api/v1/endpoints",
         json={"name": "Bad", "path": "/auth/login", "method": "POST"},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert resp.status_code == 422
 
 
 @pytest.mark.asyncio
 async def test_create_endpoint_duplicate_409(
-    client: AsyncClient, account: AccountModel, user_token: str
+    client: AsyncClient, account: AccountModel, admin_token: str
 ) -> None:
     payload = {"name": "Dup", "path": "/dup-test", "method": "POST"}
-    resp1 = await client.post("/api/v1/endpoints", json=payload, headers=_auth(user_token))
+    resp1 = await client.post("/api/v1/endpoints", json=payload, headers=_auth(admin_token))
     assert resp1.status_code == 201
 
-    resp2 = await client.post("/api/v1/endpoints", json=payload, headers=_auth(user_token))
+    resp2 = await client.post("/api/v1/endpoints", json=payload, headers=_auth(admin_token))
     assert resp2.status_code == 409
 
 
@@ -217,9 +217,9 @@ async def test_create_endpoint_unauthenticated(client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_list_endpoints_empty(
-    client: AsyncClient, account: AccountModel, user_token: str
+    client: AsyncClient, account: AccountModel, admin_token: str
 ) -> None:
-    resp = await client.get("/api/v1/endpoints", headers=_auth(user_token))
+    resp = await client.get("/api/v1/endpoints", headers=_auth(admin_token))
     assert resp.status_code == 200
     data = resp.json()
     assert data["total"] == 0
@@ -228,20 +228,20 @@ async def test_list_endpoints_empty(
 
 @pytest.mark.asyncio
 async def test_list_endpoints_with_filter(
-    client: AsyncClient, account: AccountModel, user_token: str
+    client: AsyncClient, account: AccountModel, admin_token: str
 ) -> None:
     await client.post(
         "/api/v1/endpoints",
         json={"name": "A", "path": "/list-a", "method": "GET"},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     await client.post(
         "/api/v1/endpoints",
         json={"name": "B", "path": "/list-b", "method": "POST"},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
 
-    resp = await client.get("/api/v1/endpoints?method=GET", headers=_auth(user_token))
+    resp = await client.get("/api/v1/endpoints?method=GET", headers=_auth(admin_token))
     assert resp.status_code == 200
     data = resp.json()
     assert data["total"] == 1
@@ -255,27 +255,27 @@ async def test_list_endpoints_with_filter(
 
 @pytest.mark.asyncio
 async def test_get_endpoint(
-    client: AsyncClient, account: AccountModel, user_token: str
+    client: AsyncClient, account: AccountModel, admin_token: str
 ) -> None:
     create_resp = await client.post(
         "/api/v1/endpoints",
         json={"name": "Get Test", "path": "/get-test", "method": "DELETE"},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     eid = create_resp.json()["id"]
 
-    resp = await client.get(f"/api/v1/endpoints/{eid}", headers=_auth(user_token))
+    resp = await client.get(f"/api/v1/endpoints/{eid}", headers=_auth(admin_token))
     assert resp.status_code == 200
     assert resp.json()["id"] == eid
 
 
 @pytest.mark.asyncio
 async def test_get_endpoint_not_found(
-    client: AsyncClient, account: AccountModel, user_token: str
+    client: AsyncClient, account: AccountModel, admin_token: str
 ) -> None:
     resp = await client.get(
         "/api/v1/endpoints/00000000-0000-0000-0000-000000000099",
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert resp.status_code == 404
 
@@ -287,19 +287,19 @@ async def test_get_endpoint_not_found(
 
 @pytest.mark.asyncio
 async def test_update_endpoint(
-    client: AsyncClient, account: AccountModel, user_token: str
+    client: AsyncClient, account: AccountModel, admin_token: str
 ) -> None:
     create_resp = await client.post(
         "/api/v1/endpoints",
         json={"name": "Orig", "path": "/update-test", "method": "GET"},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     eid = create_resp.json()["id"]
 
     resp = await client.put(
         f"/api/v1/endpoints/{eid}",
         json={"name": "Updated", "auth_required": False},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert resp.status_code == 200
     data = resp.json()
@@ -314,23 +314,23 @@ async def test_update_endpoint(
 
 @pytest.mark.asyncio
 async def test_toggle_endpoint(
-    client: AsyncClient, account: AccountModel, user_token: str
+    client: AsyncClient, account: AccountModel, admin_token: str
 ) -> None:
     create_resp = await client.post(
         "/api/v1/endpoints",
         json={"name": "Toggle", "path": "/toggle-test", "method": "GET"},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     eid = create_resp.json()["id"]
 
     toggle_resp = await client.patch(
-        f"/api/v1/endpoints/{eid}/toggle", headers=_auth(user_token)
+        f"/api/v1/endpoints/{eid}/toggle", headers=_auth(admin_token)
     )
     assert toggle_resp.status_code == 200
     assert toggle_resp.json()["enabled"] is False
 
     toggle_resp2 = await client.patch(
-        f"/api/v1/endpoints/{eid}/toggle", headers=_auth(user_token)
+        f"/api/v1/endpoints/{eid}/toggle", headers=_auth(admin_token)
     )
     assert toggle_resp2.json()["enabled"] is True
 
@@ -342,19 +342,19 @@ async def test_toggle_endpoint(
 
 @pytest.mark.asyncio
 async def test_delete_endpoint(
-    client: AsyncClient, account: AccountModel, user_token: str
+    client: AsyncClient, account: AccountModel, admin_token: str
 ) -> None:
     create_resp = await client.post(
         "/api/v1/endpoints",
         json={"name": "Del", "path": "/del-test", "method": "GET"},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     eid = create_resp.json()["id"]
 
-    del_resp = await client.delete(f"/api/v1/endpoints/{eid}", headers=_auth(user_token))
+    del_resp = await client.delete(f"/api/v1/endpoints/{eid}", headers=_auth(admin_token))
     assert del_resp.status_code == 204
 
-    get_resp = await client.get(f"/api/v1/endpoints/{eid}", headers=_auth(user_token))
+    get_resp = await client.get(f"/api/v1/endpoints/{eid}", headers=_auth(admin_token))
     assert get_resp.status_code == 404
 
 
@@ -368,23 +368,23 @@ async def test_account_isolation(
     client: AsyncClient,
     account: AccountModel,
     other_account: AccountModel,
-    user_token: str,
-    other_user_token: str,
+    admin_token: str,
+    other_admin_token: str,
 ) -> None:
     create_resp = await client.post(
         "/api/v1/endpoints",
         json={"name": "Isolated", "path": "/isolated", "method": "GET"},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     eid = create_resp.json()["id"]
 
     # Other account cannot see it
-    list_resp = await client.get("/api/v1/endpoints", headers=_auth(other_user_token))
+    list_resp = await client.get("/api/v1/endpoints", headers=_auth(other_admin_token))
     ids = [e["id"] for e in list_resp.json()["items"]]
     assert eid not in ids
 
     # Other account cannot get it directly
-    get_resp = await client.get(f"/api/v1/endpoints/{eid}", headers=_auth(other_user_token))
+    get_resp = await client.get(f"/api/v1/endpoints/{eid}", headers=_auth(other_admin_token))
     assert get_resp.status_code == 404
 
 
@@ -395,7 +395,7 @@ async def test_account_isolation(
 
 @pytest.mark.asyncio
 async def test_dispatcher_empty_actions(
-    client: AsyncClient, account: AccountModel, user_token: str
+    client: AsyncClient, account: AccountModel, admin_token: str
 ) -> None:
     """An endpoint with no actions returns 200 with empty body by default."""
     await client.post(
@@ -407,7 +407,7 @@ async def test_dispatcher_empty_actions(
             "auth_required": False,
             "actions": [],
         },
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
 
     resp = await client.get("/api/v1/x/endpoint-test/ping")
@@ -416,7 +416,7 @@ async def test_dispatcher_empty_actions(
 
 @pytest.mark.asyncio
 async def test_dispatcher_response_template(
-    client: AsyncClient, account: AccountModel, user_token: str
+    client: AsyncClient, account: AccountModel, admin_token: str
 ) -> None:
     """Response template static values are returned correctly."""
     await client.post(
@@ -432,7 +432,7 @@ async def test_dispatcher_response_template(
                 "headers": {"X-Custom": "yes"},
             },
         },
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
 
     resp = await client.post("/api/v1/x/endpoint-test/static-resp", json={})
@@ -443,7 +443,7 @@ async def test_dispatcher_response_template(
 
 @pytest.mark.asyncio
 async def test_dispatcher_auth_required_no_token(
-    client: AsyncClient, account: AccountModel, user_token: str
+    client: AsyncClient, account: AccountModel, admin_token: str
 ) -> None:
     """auth_required=True returns 401 when no token is provided."""
     await client.post(
@@ -454,7 +454,7 @@ async def test_dispatcher_auth_required_no_token(
             "method": "GET",
             "auth_required": True,
         },
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
 
     resp = await client.get("/api/v1/x/endpoint-test/protected")
@@ -463,7 +463,7 @@ async def test_dispatcher_auth_required_no_token(
 
 @pytest.mark.asyncio
 async def test_dispatcher_auth_required_with_token(
-    client: AsyncClient, account: AccountModel, user_token: str
+    client: AsyncClient, account: AccountModel, admin_token: str
 ) -> None:
     """auth_required=True succeeds when a valid token is provided."""
     await client.post(
@@ -475,12 +475,12 @@ async def test_dispatcher_auth_required_with_token(
             "auth_required": True,
             "response_template": {"status": 200, "body": {"ok": True}},
         },
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
 
     resp = await client.get(
         "/api/v1/x/endpoint-test/protected2",
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert resp.status_code == 200
     assert resp.json()["ok"] is True
@@ -488,7 +488,7 @@ async def test_dispatcher_auth_required_with_token(
 
 @pytest.mark.asyncio
 async def test_dispatcher_public_no_auth(
-    client: AsyncClient, account: AccountModel, user_token: str
+    client: AsyncClient, account: AccountModel, admin_token: str
 ) -> None:
     """auth_required=False allows unauthenticated access."""
     await client.post(
@@ -500,7 +500,7 @@ async def test_dispatcher_public_no_auth(
             "auth_required": False,
             "response_template": {"status": 200, "body": {"public": True}},
         },
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
 
     resp = await client.get("/api/v1/x/endpoint-test/public-endpoint")
@@ -531,7 +531,7 @@ async def test_dispatcher_unknown_account(client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_dispatcher_path_params(
-    client: AsyncClient, account: AccountModel, user_token: str
+    client: AsyncClient, account: AccountModel, admin_token: str
 ) -> None:
     """Path parameters are resolved in the response template."""
     await client.post(
@@ -546,7 +546,7 @@ async def test_dispatcher_path_params(
                 "body": {"profile_id": "{{request.params.profile_id}}"},
             },
         },
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
 
     resp = await client.get("/api/v1/x/endpoint-test/profiles/abc123")
@@ -556,7 +556,7 @@ async def test_dispatcher_path_params(
 
 @pytest.mark.asyncio
 async def test_dispatcher_multiple_path_params(
-    client: AsyncClient, account: AccountModel, user_token: str
+    client: AsyncClient, account: AccountModel, admin_token: str
 ) -> None:
     """Multiple path params are all extracted correctly."""
     await client.post(
@@ -574,7 +574,7 @@ async def test_dispatcher_multiple_path_params(
                 },
             },
         },
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
 
     resp = await client.get("/api/v1/x/endpoint-test/shops/s1/items/i2")
@@ -591,7 +591,7 @@ async def test_dispatcher_multiple_path_params(
 
 @pytest.mark.asyncio
 async def test_dispatcher_request_body_template(
-    client: AsyncClient, account: AccountModel, user_token: str
+    client: AsyncClient, account: AccountModel, admin_token: str
 ) -> None:
     """Request body fields are accessible via {{request.body.field}}."""
     await client.post(
@@ -606,7 +606,7 @@ async def test_dispatcher_request_body_template(
                 "body": {"echo": "{{request.body.message}}"},
             },
         },
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
 
     resp = await client.post(
@@ -619,7 +619,7 @@ async def test_dispatcher_request_body_template(
 
 @pytest.mark.asyncio
 async def test_dispatcher_query_params_template(
-    client: AsyncClient, account: AccountModel, user_token: str
+    client: AsyncClient, account: AccountModel, admin_token: str
 ) -> None:
     """Query parameters are accessible via {{request.query.field}}."""
     await client.post(
@@ -634,7 +634,7 @@ async def test_dispatcher_query_params_template(
                 "body": {"q": "{{request.query.q}}"},
             },
         },
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
 
     resp = await client.get("/api/v1/x/endpoint-test/echo-query?q=search-term")
@@ -649,7 +649,7 @@ async def test_dispatcher_query_params_template(
 
 @pytest.mark.asyncio
 async def test_dispatcher_auth_context_template(
-    client: AsyncClient, account: AccountModel, user_token: str
+    client: AsyncClient, account: AccountModel, admin_token: str
 ) -> None:
     """Auth context variables are resolved in response template."""
     await client.post(
@@ -667,12 +667,12 @@ async def test_dispatcher_auth_context_template(
                 },
             },
         },
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
 
     resp = await client.get(
         "/api/v1/x/endpoint-test/auth-echo",
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert resp.status_code == 200
     body = resp.json()
@@ -687,7 +687,7 @@ async def test_dispatcher_auth_context_template(
 
 @pytest.mark.asyncio
 async def test_dispatcher_disabled_endpoint_not_found(
-    client: AsyncClient, account: AccountModel, user_token: str
+    client: AsyncClient, account: AccountModel, admin_token: str
 ) -> None:
     """A disabled endpoint is not dispatched (404)."""
     create_resp = await client.post(
@@ -698,10 +698,10 @@ async def test_dispatcher_disabled_endpoint_not_found(
             "method": "GET",
             "auth_required": False,
         },
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     eid = create_resp.json()["id"]
-    await client.patch(f"/api/v1/endpoints/{eid}/toggle", headers=_auth(user_token))
+    await client.patch(f"/api/v1/endpoints/{eid}/toggle", headers=_auth(admin_token))
 
     resp = await client.get("/api/v1/x/endpoint-test/disabled-ep")
     assert resp.status_code == 404
@@ -714,7 +714,7 @@ async def test_dispatcher_disabled_endpoint_not_found(
 
 @pytest.mark.asyncio
 async def test_execution_history_recorded(
-    client: AsyncClient, account: AccountModel, user_token: str
+    client: AsyncClient, account: AccountModel, admin_token: str
 ) -> None:
     """Invocations are recorded in execution history."""
     create_resp = await client.post(
@@ -726,7 +726,7 @@ async def test_execution_history_recorded(
             "auth_required": False,
             "response_template": {"status": 200, "body": {}},
         },
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     eid = create_resp.json()["id"]
 
@@ -734,7 +734,7 @@ async def test_execution_history_recorded(
     await client.get("/api/v1/x/endpoint-test/tracked")
 
     history_resp = await client.get(
-        f"/api/v1/endpoints/{eid}/executions", headers=_auth(user_token)
+        f"/api/v1/endpoints/{eid}/executions", headers=_auth(admin_token)
     )
     assert history_resp.status_code == 200
     data = history_resp.json()
@@ -752,7 +752,7 @@ async def test_execution_history_recorded(
 
 @pytest.mark.asyncio
 async def test_endpoint_limit_enforcement(
-    client: AsyncClient, account: AccountModel, user_token: str, monkeypatch
+    client: AsyncClient, account: AccountModel, admin_token: str, monkeypatch
 ) -> None:
     """Returns 409 when the account exceeds max_endpoints_per_account."""
     # Patch the limit to 2 for this test
@@ -770,14 +770,14 @@ async def test_endpoint_limit_enforcement(
             resp = await client.post(
                 "/api/v1/endpoints",
                 json={"name": f"EP{i}", "path": f"/limit-ep-{i}", "method": "GET"},
-                headers=_auth(user_token),
+                headers=_auth(admin_token),
             )
             assert resp.status_code == 201
 
         over_limit_resp = await client.post(
             "/api/v1/endpoints",
             json={"name": "Over", "path": "/over-limit", "method": "GET"},
-            headers=_auth(user_token),
+            headers=_auth(admin_token),
         )
         assert over_limit_resp.status_code == 409
     finally:

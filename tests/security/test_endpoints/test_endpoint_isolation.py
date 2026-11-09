@@ -39,7 +39,7 @@ async def test_ep_iso_001_cross_tenant_matrix_on_endpoint_management(
         attack_client,
         victim_url=f"/api/v1/endpoints/{two_tenant_endpoints['account_a_id']}",
         victim_token=security_test_data["user_a_token"],
-        attacker_token=security_test_data["user_b_token"],
+        attacker_token=security_test_data["admin_b_token"],
     )
 
     assert_allowed(results[OWNER_CONTROL_KEY], allowed=(200,))
@@ -61,7 +61,7 @@ async def test_ep_iso_002_endpoint_still_exists_after_cross_tenant_delete(
     """EP-ISO-002: a denied DELETE must not have removed the resource anyway."""
     await attack_client.delete(
         f"/api/v1/endpoints/{two_tenant_endpoints['account_a_id']}",
-        headers=_auth(security_test_data["user_b_token"]),
+        headers=_auth(security_test_data["admin_b_token"]),
         description="B attempts to delete A's endpoint",
     )
 
@@ -82,7 +82,7 @@ async def test_ep_iso_003_cannot_invoke_other_tenants_dispatcher_path(
     """EP-ISO-003: B's token cannot invoke A's endpoint through the dispatcher."""
     response = await attack_client.get(
         two_tenant_endpoints["account_a_url"],
-        headers=_auth(security_test_data["user_b_token"]),
+        headers=_auth(security_test_data["admin_b_token"]),
         description="B invokes A's custom endpoint",
     )
 
@@ -111,7 +111,7 @@ async def test_ep_iso_004_forged_account_id_on_create_is_ignored(
             "actions": [],
         },
         headers={
-            **_auth(security_test_data["user_b_token"]),
+            **_auth(security_test_data["admin_b_token"]),
             "X-Account-ID": account_a.id,
         },
     )
@@ -132,7 +132,7 @@ async def test_ep_iso_005_listing_never_includes_other_tenants_endpoints(
     """EP-ISO-005: the list endpoint is scoped to the caller's account."""
     response = await attack_client.get(
         "/api/v1/endpoints",
-        headers=_auth(security_test_data["user_b_token"]),
+        headers=_auth(security_test_data["admin_b_token"]),
         description="B lists endpoints",
     )
 
@@ -150,7 +150,7 @@ async def test_ep_iso_006_cannot_read_other_tenants_execution_history(
     """EP-ISO-006: execution history is not readable across tenants."""
     response = await attack_client.get(
         f"/api/v1/endpoints/{two_tenant_endpoints['account_a_id']}/executions",
-        headers=_auth(security_test_data["user_b_token"]),
+        headers=_auth(security_test_data["admin_b_token"]),
         description="B reads A's endpoint execution history",
     )
 

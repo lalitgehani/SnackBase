@@ -33,7 +33,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.core.cron.parser import validate_cron
 from snackbase.core.logging import get_logger
-from snackbase.infrastructure.api.dependencies import AuthenticatedUser, get_db_session
+from snackbase.infrastructure.api.dependencies import (
+    AuthenticatedUser,
+    get_db_session,
+    require_account_admin,
+)
 from snackbase.infrastructure.api.schemas.workflow_schemas import (
     VALID_WORKFLOW_EVENTS,
     TriggerWorkflowResponse,
@@ -69,7 +73,7 @@ _background_tasks: set[asyncio.Task] = set()
 # Routers — two separate routers so they can be mounted at different prefixes
 # ---------------------------------------------------------------------------
 
-router = APIRouter(tags=["Workflows"])
+router = APIRouter(tags=["Workflows"], dependencies=[Depends(require_account_admin)])
 webhook_router = APIRouter(tags=["Workflows"])
 
 

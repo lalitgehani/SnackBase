@@ -57,9 +57,9 @@ async def other_account(db_session: AsyncSession) -> AccountModel:
 
 
 @pytest_asyncio.fixture
-async def user_token(db_session: AsyncSession, account: AccountModel) -> str:
+async def admin_token(db_session: AsyncSession, account: AccountModel) -> str:
     role = (
-        await db_session.execute(select(RoleModel).where(RoleModel.name == "user"))
+        await db_session.execute(select(RoleModel).where(RoleModel.name == "admin"))
     ).scalar_one()
     user = UserModel(
         id="hook-test-user-1",
@@ -76,14 +76,14 @@ async def user_token(db_session: AsyncSession, account: AccountModel) -> str:
         user_id=user.id,
         account_id=account.id,
         email=user.email,
-        role="user",
+        role="admin",
     )
 
 
 @pytest_asyncio.fixture
-async def other_user_token(db_session: AsyncSession, other_account: AccountModel) -> str:
+async def other_admin_token(db_session: AsyncSession, other_account: AccountModel) -> str:
     role = (
-        await db_session.execute(select(RoleModel).where(RoleModel.name == "user"))
+        await db_session.execute(select(RoleModel).where(RoleModel.name == "admin"))
     ).scalar_one()
     user = UserModel(
         id="hook-test-user-2",
@@ -100,7 +100,7 @@ async def other_user_token(db_session: AsyncSession, other_account: AccountModel
         user_id=user.id,
         account_id=other_account.id,
         email=user.email,
-        role="user",
+        role="admin",
     )
 
 
@@ -114,7 +114,7 @@ def _auth(token: str) -> dict:
 
 
 @pytest.mark.asyncio
-async def test_create_schedule_hook(client: AsyncClient, user_token: str) -> None:
+async def test_create_schedule_hook(client: AsyncClient, admin_token: str) -> None:
     """POST /api/v1/hooks creates a schedule-type hook and returns next_run_at."""
     response = await client.post(
         "/api/v1/hooks",
@@ -124,7 +124,7 @@ async def test_create_schedule_hook(client: AsyncClient, user_token: str) -> Non
             "actions": [],
             "enabled": True,
         },
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert response.status_code == 201, response.text
     data = response.json()
@@ -139,7 +139,7 @@ async def test_create_schedule_hook(client: AsyncClient, user_token: str) -> Non
 
 
 @pytest.mark.asyncio
-async def test_create_schedule_hook_invalid_cron(client: AsyncClient, user_token: str) -> None:
+async def test_create_schedule_hook_invalid_cron(client: AsyncClient, admin_token: str) -> None:
     """Invalid cron expression returns 422."""
     response = await client.post(
         "/api/v1/hooks",
@@ -148,7 +148,7 @@ async def test_create_schedule_hook_invalid_cron(client: AsyncClient, user_token
             "trigger": {"type": "schedule", "cron": "not-a-cron"},
             "actions": [],
         },
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert response.status_code == 422
     assert "cron" in response.text.lower() or "Invalid" in response.text
@@ -156,7 +156,7 @@ async def test_create_schedule_hook_invalid_cron(client: AsyncClient, user_token
 
 @pytest.mark.asyncio
 async def test_create_schedule_hook_disabled_has_no_next_run(
-    client: AsyncClient, user_token: str
+    client: AsyncClient, admin_token: str
 ) -> None:
     """Disabled schedule hook has next_run_at = None."""
     response = await client.post(
@@ -166,7 +166,7 @@ async def test_create_schedule_hook_disabled_has_no_next_run(
             "trigger": {"type": "schedule", "cron": "0 9 * * *"},
             "enabled": False,
         },
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert response.status_code == 201
     assert response.json()["next_run_at"] is None
@@ -179,7 +179,7 @@ async def test_create_schedule_hook_disabled_has_no_next_run(
 
 
 @pytest.mark.asyncio
-async def test_create_event_hook(client: AsyncClient, user_token: str) -> None:
+async def test_create_event_hook(client: AsyncClient, admin_token: str) -> None:
     """POST /api/v1/hooks creates an event-type hook."""
     response = await client.post(
         "/api/v1/hooks",
@@ -189,7 +189,7 @@ async def test_create_event_hook(client: AsyncClient, user_token: str) -> None:
             "condition": 'status = "published"',
             "actions": [{"type": "send_webhook", "url": "https://example.com/notify"}],
         },
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert response.status_code == 201, response.text
     data = response.json()
@@ -203,7 +203,7 @@ async def test_create_event_hook(client: AsyncClient, user_token: str) -> None:
 
 
 @pytest.mark.asyncio
-async def test_create_event_hook_without_collection(client: AsyncClient, user_token: str) -> None:
+async def test_create_event_hook_without_collection(client: AsyncClient, admin_token: str) -> None:
     """Event hook with no collection listens to all collections."""
     response = await client.post(
         "/api/v1/hooks",
@@ -212,7 +212,7 @@ async def test_create_event_hook_without_collection(client: AsyncClient, user_to
             "trigger": {"type": "event", "event": "records.create"},
             "actions": [],
         },
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert response.status_code == 201
     data = response.json()
@@ -220,7 +220,7 @@ async def test_create_event_hook_without_collection(client: AsyncClient, user_to
 
 
 @pytest.mark.asyncio
-async def test_create_event_hook_invalid_event(client: AsyncClient, user_token: str) -> None:
+async def test_create_event_hook_invalid_event(client: AsyncClient, admin_token: str) -> None:
     """Unknown event name returns 422."""
     response = await client.post(
         "/api/v1/hooks",
@@ -229,13 +229,13 @@ async def test_create_event_hook_invalid_event(client: AsyncClient, user_token: 
             "trigger": {"type": "event", "event": "records.nonexistent"},
             "actions": [],
         },
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert response.status_code == 422
 
 
 @pytest.mark.asyncio
-async def test_create_event_hook_all_record_events(client: AsyncClient, user_token: str) -> None:
+async def test_create_event_hook_all_record_events(client: AsyncClient, admin_token: str) -> None:
     """All supported record event strings are accepted."""
     for event in ("records.create", "records.update", "records.delete"):
         response = await client.post(
@@ -245,13 +245,13 @@ async def test_create_event_hook_all_record_events(client: AsyncClient, user_tok
                 "trigger": {"type": "event", "event": event},
                 "actions": [],
             },
-            headers=_auth(user_token),
+            headers=_auth(admin_token),
         )
         assert response.status_code == 201, f"Failed for event={event}: {response.text}"
 
 
 @pytest.mark.asyncio
-async def test_create_event_hook_auth_events(client: AsyncClient, user_token: str) -> None:
+async def test_create_event_hook_auth_events(client: AsyncClient, admin_token: str) -> None:
     """Auth event strings are accepted."""
     for event in ("auth.login", "auth.register"):
         response = await client.post(
@@ -261,7 +261,7 @@ async def test_create_event_hook_auth_events(client: AsyncClient, user_token: st
                 "trigger": {"type": "event", "event": event},
                 "actions": [],
             },
-            headers=_auth(user_token),
+            headers=_auth(admin_token),
         )
         assert response.status_code == 201, f"Failed for event={event}: {response.text}"
 
@@ -272,7 +272,7 @@ async def test_create_event_hook_auth_events(client: AsyncClient, user_token: st
 
 
 @pytest.mark.asyncio
-async def test_create_manual_hook(client: AsyncClient, user_token: str) -> None:
+async def test_create_manual_hook(client: AsyncClient, admin_token: str) -> None:
     """POST /api/v1/hooks creates a manual-type hook."""
     response = await client.post(
         "/api/v1/hooks",
@@ -282,7 +282,7 @@ async def test_create_manual_hook(client: AsyncClient, user_token: str) -> None:
             "trigger": {"type": "manual"},
             "actions": [{"type": "enqueue_job", "handler": "sync_report", "payload": {}}],
         },
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert response.status_code == 201, response.text
     data = response.json()
@@ -298,31 +298,31 @@ async def test_create_manual_hook(client: AsyncClient, user_token: str) -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_hook(client: AsyncClient, user_token: str) -> None:
+async def test_get_hook(client: AsyncClient, admin_token: str) -> None:
     """GET /api/v1/hooks/{id} returns the hook."""
     create = await client.post(
         "/api/v1/hooks",
         json={"name": "Get Me", "trigger": {"type": "manual"}, "actions": []},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     hook_id = create.json()["id"]
 
-    response = await client.get(f"/api/v1/hooks/{hook_id}", headers=_auth(user_token))
+    response = await client.get(f"/api/v1/hooks/{hook_id}", headers=_auth(admin_token))
     assert response.status_code == 200
     assert response.json()["id"] == hook_id
 
 
 @pytest.mark.asyncio
-async def test_get_hook_not_found(client: AsyncClient, user_token: str) -> None:
+async def test_get_hook_not_found(client: AsyncClient, admin_token: str) -> None:
     """GET /api/v1/hooks/{non-existent-id} returns 404."""
-    response = await client.get("/api/v1/hooks/does-not-exist", headers=_auth(user_token))
+    response = await client.get("/api/v1/hooks/does-not-exist", headers=_auth(admin_token))
     assert response.status_code == 404
 
 
 @pytest.mark.asyncio
-async def test_list_hooks_empty(client: AsyncClient, user_token: str) -> None:
+async def test_list_hooks_empty(client: AsyncClient, admin_token: str) -> None:
     """GET /api/v1/hooks returns empty list when no hooks exist."""
-    response = await client.get("/api/v1/hooks", headers=_auth(user_token))
+    response = await client.get("/api/v1/hooks", headers=_auth(admin_token))
     assert response.status_code == 200
     data = response.json()
     assert data["items"] == []
@@ -330,24 +330,24 @@ async def test_list_hooks_empty(client: AsyncClient, user_token: str) -> None:
 
 
 @pytest.mark.asyncio
-async def test_list_hooks_returns_all_types(client: AsyncClient, user_token: str) -> None:
+async def test_list_hooks_returns_all_types(client: AsyncClient, admin_token: str) -> None:
     """GET /api/v1/hooks returns all three trigger types."""
     for payload in [
         {"name": "S", "trigger": {"type": "schedule", "cron": "0 * * * *"}, "actions": []},
         {"name": "E", "trigger": {"type": "event", "event": "records.create"}, "actions": []},
         {"name": "M", "trigger": {"type": "manual"}, "actions": []},
     ]:
-        r = await client.post("/api/v1/hooks", json=payload, headers=_auth(user_token))
+        r = await client.post("/api/v1/hooks", json=payload, headers=_auth(admin_token))
         assert r.status_code == 201
 
-    response = await client.get("/api/v1/hooks", headers=_auth(user_token))
+    response = await client.get("/api/v1/hooks", headers=_auth(admin_token))
     assert response.status_code == 200
     data = response.json()
     assert data["total"] == 3
 
 
 @pytest.mark.asyncio
-async def test_list_hooks_filter_by_trigger_type(client: AsyncClient, user_token: str) -> None:
+async def test_list_hooks_filter_by_trigger_type(client: AsyncClient, admin_token: str) -> None:
     """GET /api/v1/hooks?trigger_type=event returns only event hooks."""
     for payload in [
         {"name": "S", "trigger": {"type": "schedule", "cron": "0 * * * *"}, "actions": []},
@@ -355,10 +355,10 @@ async def test_list_hooks_filter_by_trigger_type(client: AsyncClient, user_token
         {"name": "E2", "trigger": {"type": "event", "event": "records.delete"}, "actions": []},
         {"name": "M", "trigger": {"type": "manual"}, "actions": []},
     ]:
-        await client.post("/api/v1/hooks", json=payload, headers=_auth(user_token))
+        await client.post("/api/v1/hooks", json=payload, headers=_auth(admin_token))
 
     response = await client.get(
-        "/api/v1/hooks?trigger_type=event", headers=_auth(user_token)
+        "/api/v1/hooks?trigger_type=event", headers=_auth(admin_token)
     )
     assert response.status_code == 200
     data = response.json()
@@ -367,21 +367,21 @@ async def test_list_hooks_filter_by_trigger_type(client: AsyncClient, user_token
 
 
 @pytest.mark.asyncio
-async def test_list_hooks_filter_schedule(client: AsyncClient, user_token: str) -> None:
+async def test_list_hooks_filter_schedule(client: AsyncClient, admin_token: str) -> None:
     """GET /api/v1/hooks?trigger_type=schedule returns only schedule hooks."""
     await client.post(
         "/api/v1/hooks",
         json={"name": "S", "trigger": {"type": "schedule", "cron": "0 * * * *"}, "actions": []},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     await client.post(
         "/api/v1/hooks",
         json={"name": "M", "trigger": {"type": "manual"}, "actions": []},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
 
     response = await client.get(
-        "/api/v1/hooks?trigger_type=schedule", headers=_auth(user_token)
+        "/api/v1/hooks?trigger_type=schedule", headers=_auth(admin_token)
     )
     assert response.status_code == 200
     data = response.json()
@@ -390,20 +390,20 @@ async def test_list_hooks_filter_schedule(client: AsyncClient, user_token: str) 
 
 
 @pytest.mark.asyncio
-async def test_list_hooks_filter_enabled(client: AsyncClient, user_token: str) -> None:
+async def test_list_hooks_filter_enabled(client: AsyncClient, admin_token: str) -> None:
     """GET /api/v1/hooks?enabled=false returns only disabled hooks."""
     await client.post(
         "/api/v1/hooks",
         json={"name": "Active", "trigger": {"type": "manual"}, "actions": [], "enabled": True},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     await client.post(
         "/api/v1/hooks",
         json={"name": "Inactive", "trigger": {"type": "manual"}, "actions": [], "enabled": False},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
 
-    response = await client.get("/api/v1/hooks?enabled=false", headers=_auth(user_token))
+    response = await client.get("/api/v1/hooks?enabled=false", headers=_auth(admin_token))
     assert response.status_code == 200
     data = response.json()
     assert data["total"] == 1
@@ -416,19 +416,19 @@ async def test_list_hooks_filter_enabled(client: AsyncClient, user_token: str) -
 
 
 @pytest.mark.asyncio
-async def test_update_hook_name_and_description(client: AsyncClient, user_token: str) -> None:
+async def test_update_hook_name_and_description(client: AsyncClient, admin_token: str) -> None:
     """PATCH /api/v1/hooks/{id} updates name and description."""
     create = await client.post(
         "/api/v1/hooks",
         json={"name": "Old Name", "trigger": {"type": "manual"}, "actions": []},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     hook_id = create.json()["id"]
 
     response = await client.patch(
         f"/api/v1/hooks/{hook_id}",
         json={"name": "New Name", "description": "Updated desc"},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert response.status_code == 200
     data = response.json()
@@ -437,19 +437,19 @@ async def test_update_hook_name_and_description(client: AsyncClient, user_token:
 
 
 @pytest.mark.asyncio
-async def test_update_hook_trigger_to_event(client: AsyncClient, user_token: str) -> None:
+async def test_update_hook_trigger_to_event(client: AsyncClient, admin_token: str) -> None:
     """PATCH /api/v1/hooks/{id} can change trigger type from manual to event."""
     create = await client.post(
         "/api/v1/hooks",
         json={"name": "Hook", "trigger": {"type": "manual"}, "actions": []},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     hook_id = create.json()["id"]
 
     response = await client.patch(
         f"/api/v1/hooks/{hook_id}",
         json={"trigger": {"type": "event", "event": "records.update", "collection": "orders"}},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert response.status_code == 200
     data = response.json()
@@ -459,31 +459,31 @@ async def test_update_hook_trigger_to_event(client: AsyncClient, user_token: str
 
 
 @pytest.mark.asyncio
-async def test_update_hook_condition(client: AsyncClient, user_token: str) -> None:
+async def test_update_hook_condition(client: AsyncClient, admin_token: str) -> None:
     """PATCH /api/v1/hooks/{id} updates condition expression."""
     create = await client.post(
         "/api/v1/hooks",
         json={"name": "Hook", "trigger": {"type": "manual"}, "actions": []},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     hook_id = create.json()["id"]
 
     response = await client.patch(
         f"/api/v1/hooks/{hook_id}",
         json={"condition": 'status = "active"'},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert response.status_code == 200
     assert response.json()["condition"] == 'status = "active"'
 
 
 @pytest.mark.asyncio
-async def test_update_hook_actions(client: AsyncClient, user_token: str) -> None:
+async def test_update_hook_actions(client: AsyncClient, admin_token: str) -> None:
     """PATCH /api/v1/hooks/{id} updates actions list."""
     create = await client.post(
         "/api/v1/hooks",
         json={"name": "Hook", "trigger": {"type": "manual"}, "actions": []},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     hook_id = create.json()["id"]
 
@@ -491,7 +491,7 @@ async def test_update_hook_actions(client: AsyncClient, user_token: str) -> None
     response = await client.patch(
         f"/api/v1/hooks/{hook_id}",
         json={"actions": new_actions},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert response.status_code == 200
     data = response.json()
@@ -500,30 +500,30 @@ async def test_update_hook_actions(client: AsyncClient, user_token: str) -> None
 
 
 @pytest.mark.asyncio
-async def test_update_hook_not_found(client: AsyncClient, user_token: str) -> None:
+async def test_update_hook_not_found(client: AsyncClient, admin_token: str) -> None:
     """PATCH /api/v1/hooks/{non-existent} returns 404."""
     response = await client.patch(
         "/api/v1/hooks/does-not-exist",
         json={"name": "x"},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert response.status_code == 404
 
 
 @pytest.mark.asyncio
-async def test_update_schedule_hook_invalid_cron(client: AsyncClient, user_token: str) -> None:
+async def test_update_schedule_hook_invalid_cron(client: AsyncClient, admin_token: str) -> None:
     """Updating a schedule trigger with invalid cron returns 422."""
     create = await client.post(
         "/api/v1/hooks",
         json={"name": "Hook", "trigger": {"type": "schedule", "cron": "0 * * * *"}, "actions": []},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     hook_id = create.json()["id"]
 
     response = await client.patch(
         f"/api/v1/hooks/{hook_id}",
         json={"trigger": {"type": "schedule", "cron": "bad"}},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert response.status_code == 422
 
@@ -534,26 +534,26 @@ async def test_update_schedule_hook_invalid_cron(client: AsyncClient, user_token
 
 
 @pytest.mark.asyncio
-async def test_delete_hook(client: AsyncClient, user_token: str) -> None:
+async def test_delete_hook(client: AsyncClient, admin_token: str) -> None:
     """DELETE /api/v1/hooks/{id} removes the hook."""
     create = await client.post(
         "/api/v1/hooks",
         json={"name": "Delete Me", "trigger": {"type": "manual"}, "actions": []},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     hook_id = create.json()["id"]
 
-    response = await client.delete(f"/api/v1/hooks/{hook_id}", headers=_auth(user_token))
+    response = await client.delete(f"/api/v1/hooks/{hook_id}", headers=_auth(admin_token))
     assert response.status_code == 204
 
-    get_resp = await client.get(f"/api/v1/hooks/{hook_id}", headers=_auth(user_token))
+    get_resp = await client.get(f"/api/v1/hooks/{hook_id}", headers=_auth(admin_token))
     assert get_resp.status_code == 404
 
 
 @pytest.mark.asyncio
-async def test_delete_hook_not_found(client: AsyncClient, user_token: str) -> None:
+async def test_delete_hook_not_found(client: AsyncClient, admin_token: str) -> None:
     """DELETE /api/v1/hooks/{non-existent} returns 404."""
-    response = await client.delete("/api/v1/hooks/does-not-exist", headers=_auth(user_token))
+    response = await client.delete("/api/v1/hooks/does-not-exist", headers=_auth(admin_token))
     assert response.status_code == 404
 
 
@@ -563,38 +563,38 @@ async def test_delete_hook_not_found(client: AsyncClient, user_token: str) -> No
 
 
 @pytest.mark.asyncio
-async def test_toggle_hook_disables(client: AsyncClient, user_token: str) -> None:
+async def test_toggle_hook_disables(client: AsyncClient, admin_token: str) -> None:
     """PATCH /api/v1/hooks/{id}/toggle disables an enabled hook."""
     create = await client.post(
         "/api/v1/hooks",
         json={"name": "Toggle Me", "trigger": {"type": "manual"}, "actions": [], "enabled": True},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     hook_id = create.json()["id"]
 
-    response = await client.patch(f"/api/v1/hooks/{hook_id}/toggle", headers=_auth(user_token))
+    response = await client.patch(f"/api/v1/hooks/{hook_id}/toggle", headers=_auth(admin_token))
     assert response.status_code == 200
     assert response.json()["enabled"] is False
 
 
 @pytest.mark.asyncio
-async def test_toggle_hook_enables(client: AsyncClient, user_token: str) -> None:
+async def test_toggle_hook_enables(client: AsyncClient, admin_token: str) -> None:
     """PATCH /api/v1/hooks/{id}/toggle re-enables a disabled hook."""
     create = await client.post(
         "/api/v1/hooks",
         json={"name": "Toggle Me", "trigger": {"type": "manual"}, "actions": [], "enabled": False},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     hook_id = create.json()["id"]
 
-    response = await client.patch(f"/api/v1/hooks/{hook_id}/toggle", headers=_auth(user_token))
+    response = await client.patch(f"/api/v1/hooks/{hook_id}/toggle", headers=_auth(admin_token))
     assert response.status_code == 200
     assert response.json()["enabled"] is True
 
 
 @pytest.mark.asyncio
 async def test_toggle_schedule_hook_recalculates_next_run(
-    client: AsyncClient, user_token: str
+    client: AsyncClient, admin_token: str
 ) -> None:
     """Re-enabling a schedule hook sets a new next_run_at."""
     create = await client.post(
@@ -604,12 +604,12 @@ async def test_toggle_schedule_hook_recalculates_next_run(
             "trigger": {"type": "schedule", "cron": "0 * * * *"},
             "enabled": False,
         },
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     hook_id = create.json()["id"]
     assert create.json()["next_run_at"] is None
 
-    response = await client.patch(f"/api/v1/hooks/{hook_id}/toggle", headers=_auth(user_token))
+    response = await client.patch(f"/api/v1/hooks/{hook_id}/toggle", headers=_auth(admin_token))
     assert response.status_code == 200
     data = response.json()
     assert data["enabled"] is True
@@ -622,7 +622,7 @@ async def test_toggle_schedule_hook_recalculates_next_run(
 
 
 @pytest.mark.asyncio
-async def test_trigger_manual_hook(client: AsyncClient, user_token: str) -> None:
+async def test_trigger_manual_hook(client: AsyncClient, admin_token: str) -> None:
     """POST /api/v1/hooks/{id}/trigger executes a manual hook and returns result."""
     create = await client.post(
         "/api/v1/hooks",
@@ -631,11 +631,11 @@ async def test_trigger_manual_hook(client: AsyncClient, user_token: str) -> None
             "trigger": {"type": "manual"},
             "actions": [],  # no-op actions so it succeeds
         },
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     hook_id = create.json()["id"]
 
-    response = await client.post(f"/api/v1/hooks/{hook_id}/trigger", headers=_auth(user_token))
+    response = await client.post(f"/api/v1/hooks/{hook_id}/trigger", headers=_auth(admin_token))
     assert response.status_code == 202, response.text
     data = response.json()
     assert "status" in data
@@ -643,7 +643,7 @@ async def test_trigger_manual_hook(client: AsyncClient, user_token: str) -> None
 
 
 @pytest.mark.asyncio
-async def test_trigger_event_hook_manually(client: AsyncClient, user_token: str) -> None:
+async def test_trigger_event_hook_manually(client: AsyncClient, admin_token: str) -> None:
     """POST /api/v1/hooks/{id}/trigger works for event-type hooks too."""
     create = await client.post(
         "/api/v1/hooks",
@@ -652,25 +652,25 @@ async def test_trigger_event_hook_manually(client: AsyncClient, user_token: str)
             "trigger": {"type": "event", "event": "records.create"},
             "actions": [],
         },
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     hook_id = create.json()["id"]
 
-    response = await client.post(f"/api/v1/hooks/{hook_id}/trigger", headers=_auth(user_token))
+    response = await client.post(f"/api/v1/hooks/{hook_id}/trigger", headers=_auth(admin_token))
     assert response.status_code == 202
 
 
 @pytest.mark.asyncio
-async def test_trigger_disabled_hook_still_works(client: AsyncClient, user_token: str) -> None:
+async def test_trigger_disabled_hook_still_works(client: AsyncClient, admin_token: str) -> None:
     """Manual trigger ignores enabled flag — always fires."""
     create = await client.post(
         "/api/v1/hooks",
         json={"name": "Disabled Hook", "trigger": {"type": "manual"}, "actions": [], "enabled": False},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     hook_id = create.json()["id"]
 
-    response = await client.post(f"/api/v1/hooks/{hook_id}/trigger", headers=_auth(user_token))
+    response = await client.post(f"/api/v1/hooks/{hook_id}/trigger", headers=_auth(admin_token))
     assert response.status_code == 202
 
 
@@ -680,16 +680,16 @@ async def test_trigger_disabled_hook_still_works(client: AsyncClient, user_token
 
 
 @pytest.mark.asyncio
-async def test_get_executions_empty(client: AsyncClient, user_token: str) -> None:
+async def test_get_executions_empty(client: AsyncClient, admin_token: str) -> None:
     """GET /api/v1/hooks/{id}/executions returns empty list for new hook."""
     create = await client.post(
         "/api/v1/hooks",
         json={"name": "No Executions", "trigger": {"type": "manual"}, "actions": []},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     hook_id = create.json()["id"]
 
-    response = await client.get(f"/api/v1/hooks/{hook_id}/executions", headers=_auth(user_token))
+    response = await client.get(f"/api/v1/hooks/{hook_id}/executions", headers=_auth(admin_token))
     assert response.status_code == 200
     data = response.json()
     assert data["items"] == []
@@ -697,19 +697,19 @@ async def test_get_executions_empty(client: AsyncClient, user_token: str) -> Non
 
 
 @pytest.mark.asyncio
-async def test_get_executions_after_trigger(client: AsyncClient, user_token: str) -> None:
+async def test_get_executions_after_trigger(client: AsyncClient, admin_token: str) -> None:
     """GET /api/v1/hooks/{id}/executions returns execution record after manual trigger."""
     create = await client.post(
         "/api/v1/hooks",
         json={"name": "Executed Hook", "trigger": {"type": "manual"}, "actions": []},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     hook_id = create.json()["id"]
 
     # Trigger the hook (no-op actions, should produce success execution)
-    await client.post(f"/api/v1/hooks/{hook_id}/trigger", headers=_auth(user_token))
+    await client.post(f"/api/v1/hooks/{hook_id}/trigger", headers=_auth(admin_token))
 
-    response = await client.get(f"/api/v1/hooks/{hook_id}/executions", headers=_auth(user_token))
+    response = await client.get(f"/api/v1/hooks/{hook_id}/executions", headers=_auth(admin_token))
     assert response.status_code == 200
     data = response.json()
     assert data["total"] == 1
@@ -722,10 +722,10 @@ async def test_get_executions_after_trigger(client: AsyncClient, user_token: str
 
 
 @pytest.mark.asyncio
-async def test_get_executions_not_found(client: AsyncClient, user_token: str) -> None:
+async def test_get_executions_not_found(client: AsyncClient, admin_token: str) -> None:
     """GET /api/v1/hooks/{non-existent}/executions returns 404."""
     response = await client.get(
-        "/api/v1/hooks/does-not-exist/executions", headers=_auth(user_token)
+        "/api/v1/hooks/does-not-exist/executions", headers=_auth(admin_token)
     )
     assert response.status_code == 404
 
@@ -737,71 +737,71 @@ async def test_get_executions_not_found(client: AsyncClient, user_token: str) ->
 
 @pytest.mark.asyncio
 async def test_hook_not_visible_cross_account(
-    client: AsyncClient, user_token: str, other_user_token: str
+    client: AsyncClient, admin_token: str, other_admin_token: str
 ) -> None:
     """A hook created by account A is not visible to account B."""
     create = await client.post(
         "/api/v1/hooks",
         json={"name": "Private Hook", "trigger": {"type": "manual"}, "actions": []},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     hook_id = create.json()["id"]
 
     # Account B tries to read account A's hook
-    response = await client.get(f"/api/v1/hooks/{hook_id}", headers=_auth(other_user_token))
+    response = await client.get(f"/api/v1/hooks/{hook_id}", headers=_auth(other_admin_token))
     assert response.status_code == 404
 
 
 @pytest.mark.asyncio
 async def test_hook_not_in_other_account_list(
-    client: AsyncClient, user_token: str, other_user_token: str
+    client: AsyncClient, admin_token: str, other_admin_token: str
 ) -> None:
     """Account B's list does not include account A's hooks."""
     await client.post(
         "/api/v1/hooks",
         json={"name": "Account A Hook", "trigger": {"type": "manual"}, "actions": []},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
 
-    response = await client.get("/api/v1/hooks", headers=_auth(other_user_token))
+    response = await client.get("/api/v1/hooks", headers=_auth(other_admin_token))
     assert response.status_code == 200
     assert response.json()["total"] == 0
 
 
 @pytest.mark.asyncio
 async def test_delete_other_account_hook_forbidden(
-    client: AsyncClient, user_token: str, other_user_token: str
+    client: AsyncClient, admin_token: str, other_admin_token: str
 ) -> None:
     """Account B cannot delete account A's hook."""
     create = await client.post(
         "/api/v1/hooks",
         json={"name": "Protected Hook", "trigger": {"type": "manual"}, "actions": []},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     hook_id = create.json()["id"]
 
-    response = await client.delete(f"/api/v1/hooks/{hook_id}", headers=_auth(other_user_token))
+    response = await client.delete(f"/api/v1/hooks/{hook_id}", headers=_auth(other_admin_token))
     assert response.status_code == 404
 
     # Verify hook still exists for its owner
-    owner_response = await client.get(f"/api/v1/hooks/{hook_id}", headers=_auth(user_token))
+    owner_response = await client.get(f"/api/v1/hooks/{hook_id}", headers=_auth(admin_token))
     assert owner_response.status_code == 200
 
 
 @pytest.mark.asyncio
 async def test_trigger_other_account_hook_forbidden(
-    client: AsyncClient, user_token: str, other_user_token: str
+    client: AsyncClient, admin_token: str, other_admin_token: str
 ) -> None:
     """Account B cannot manually trigger account A's hook."""
     create = await client.post(
         "/api/v1/hooks",
         json={"name": "Protected Hook", "trigger": {"type": "manual"}, "actions": []},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     hook_id = create.json()["id"]
 
     response = await client.post(
-        f"/api/v1/hooks/{hook_id}/trigger", headers=_auth(other_user_token)
+        f"/api/v1/hooks/{hook_id}/trigger", headers=_auth(other_admin_token)
     )
     assert response.status_code == 404
 
@@ -813,7 +813,7 @@ async def test_trigger_other_account_hook_forbidden(
 
 @pytest.mark.asyncio
 async def test_hook_count_limit_enforced(
-    client: AsyncClient, user_token: str, monkeypatch: pytest.MonkeyPatch
+    client: AsyncClient, admin_token: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Creating more hooks than the limit returns 409."""
     from snackbase.core import config as cfg
@@ -834,7 +834,7 @@ async def test_hook_count_limit_enforced(
         r = await client.post(
             "/api/v1/hooks",
             json={"name": f"Hook {i}", "trigger": {"type": "manual"}, "actions": []},
-            headers=_auth(user_token),
+            headers=_auth(admin_token),
         )
         assert r.status_code == 201, f"Hook {i} creation failed: {r.text}"
 
@@ -842,7 +842,7 @@ async def test_hook_count_limit_enforced(
     r = await client.post(
         "/api/v1/hooks",
         json={"name": "One Too Many", "trigger": {"type": "manual"}, "actions": []},
-        headers=_auth(user_token),
+        headers=_auth(admin_token),
     )
     assert r.status_code == 409
     assert "maximum" in r.json()["detail"].lower()

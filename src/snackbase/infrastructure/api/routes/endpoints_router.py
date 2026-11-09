@@ -22,7 +22,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.core.logging import get_logger
-from snackbase.infrastructure.api.dependencies import AuthenticatedUser, get_db_session
+from snackbase.infrastructure.api.dependencies import (
+    AuthenticatedUser,
+    get_db_session,
+    require_account_admin,
+)
 from snackbase.infrastructure.api.schemas.endpoint_schemas import (
     EndpointCreateRequest,
     EndpointExecutionListResponse,
@@ -36,7 +40,7 @@ from snackbase.infrastructure.persistence.repositories.endpoint_repository impor
     EndpointRepository,
 )
 
-router = APIRouter(tags=["Endpoints"])
+router = APIRouter(tags=["Endpoints"], dependencies=[Depends(require_account_admin)])
 logger = get_logger(__name__)
 
 _DEFAULT_MAX_ENDPOINTS = 20
