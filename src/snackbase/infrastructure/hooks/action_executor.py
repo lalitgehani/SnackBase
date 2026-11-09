@@ -232,15 +232,27 @@ async def _execute_enqueue_job(
     session_factory: Any,
     account_id: str | None,
 ) -> None:
-    """Enqueue a background job."""
+    """Enqueue a background job.
+
+    The handler name and payload are author-controlled, so only handlers
+    registered for automation are accepted. Internal handlers (webhook
+    delivery, email, workflow resume, scheduled hooks) take privileged
+    parameters from their payload and are never reachable from here. The job's
+    tenant is always the automation's own account.
+    """
+    from snackbase.infrastructure.persistence.models.job import JobModel
+    from snackbase.infrastructure.persistence.repositories.job_repository import JobRepository
+    from snackbase.infrastructure.services.job_service import handler_registry
+
     handler = config.get("handler", "")
     if not handler:
         raise ValueError("enqueue_job action requires a 'handler'")
+    if not isinstance(handler, str) or not handler_registry.is_automation_handler(handler):
+        raise ValueError(f"enqueue_job: handler '{handler}' cannot be enqueued by automation")
 
     payload = config.get("payload") or {}
-
-    from snackbase.infrastructure.persistence.models.job import JobModel
-    from snackbase.infrastructure.persistence.repositories.job_repository import JobRepository
+    if not isinstance(payload, dict):
+        raise ValueError("enqueue_job: 'payload' must be an object")
 
     async with session_factory() as session:
         job_repo = JobRepository(session)
