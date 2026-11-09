@@ -541,6 +541,7 @@ class RecordRepository:
         ids: list[str],
         account_id: str | None,
         schema: list[dict[str, Any]],
+        rule_filter: RuleFilter | None = None,
     ) -> dict[str, dict[str, Any]]:
         """Batch-fetch records by a list of IDs, scoped to account.
 
@@ -549,6 +550,7 @@ class RecordRepository:
             ids: List of record IDs to fetch.
             account_id: The account ID for scoping (None for superadmin bypass).
             schema: The collection schema for type conversion.
+            rule_filter: Optional rule filter for row-level security.
 
         Returns:
             Dict mapping record ID to record dict for found records.
@@ -565,6 +567,10 @@ class RecordRepository:
         if account_id:
             where_clauses.append('"account_id" = :account_id')
             params["account_id"] = account_id
+
+        if rule_filter:
+            where_clauses.append(f"({rule_filter.sql})")
+            params.update(rule_filter.params)
 
         where_clause = " AND ".join(where_clauses)
 
