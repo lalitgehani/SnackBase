@@ -84,7 +84,6 @@ def _extract_bearer(request: Request) -> str | None:
 
 async def build_invoke_env(
     *,
-    request: Request,
     fn: FunctionModel,
     account_id: str,
     auth: dict[str, Any],
@@ -92,11 +91,14 @@ async def build_invoke_env(
     caller_token: str | None,
     account_slug: str | None = None,
 ) -> dict[str, str]:
-    """Build allowlisted env for the child process."""
+    """Build allowlisted env for the child process.
+
+    ``SNACKBASE_URL`` is the operator-configured ``external_url``. It is never
+    derived from the incoming request: the SDK sends the minted admin token to
+    this origin, so a caller-controlled ``Host`` header must not influence it.
+    """
     settings = get_settings()
-    base_url = str(request.base_url).rstrip("/")
-    # Prefer configured public URL if available
-    snackbase_url = getattr(settings, "public_url", None) or base_url
+    snackbase_url = settings.external_url.rstrip("/")
 
     grants = fn.grants or {}
     caps = grants.get("capabilities") if isinstance(grants, dict) else grants
@@ -347,7 +349,6 @@ async def _handle_invoke(
                 "auth": auth,
             }
             extra_env = await build_invoke_env(
-                request=request,
                 fn=fn,
                 account_id=account.id,
                 auth=auth,
