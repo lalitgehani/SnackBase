@@ -84,11 +84,16 @@ def _resolve_action(action: dict[str, Any], record: dict[str, Any], context: Hoo
 
 
 async def _execute_send_webhook(config: dict[str, Any]) -> None:
-    """Fire an outbound HTTP request."""
-    try:
-        import httpx
-    except ImportError:
-        raise RuntimeError("httpx is required for send_webhook actions")
+    """Fire an outbound HTTP request.
+
+    The destination is validated against the same internal-address guard as
+    first-party webhooks immediately before the send, and the connection is
+    pinned to the validated address so DNS rebinding cannot redirect it.
+    Redirects are not followed.
+    """
+    import httpx
+
+    from snackbase.infrastructure.webhooks.webhook_service import pinned_transport
 
     url = config.get("url", "")
     if not url:
@@ -104,7 +109,10 @@ async def _execute_send_webhook(config: dict[str, Any]) -> None:
         if "content-type" not in {k.lower() for k in headers}:
             request_kwargs["headers"] = {**headers, "Content-Type": "application/json"}
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    transport = await pinned_transport(url)
+    async with httpx.AsyncClient(
+        timeout=30.0, transport=transport, follow_redirects=False
+    ) as client:
         response = await client.request(method, url, **request_kwargs)
         response.raise_for_status()
         logger.debug("send_webhook delivered", url=url, status=response.status_code)

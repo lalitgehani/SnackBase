@@ -207,7 +207,7 @@ class _PinnedIPTransport(httpx.AsyncHTTPTransport):
         return await super().handle_async_request(request)
 
 
-async def _pinned_transport(url: str) -> httpx.AsyncHTTPTransport | None:
+async def pinned_transport(url: str) -> httpx.AsyncHTTPTransport | None:
     """Re-validate a webhook destination and return a transport pinned to it.
 
     Validation runs immediately before every send, not just at registration, so a
@@ -386,7 +386,7 @@ async def attempt_webhook_delivery(
     success = False
 
     try:
-        transport = await _pinned_transport(url)
+        transport = await pinned_transport(url)
         async with httpx.AsyncClient(
             timeout=timeout_seconds, transport=transport, follow_redirects=False
         ) as client:
@@ -554,7 +554,7 @@ async def test_webhook(
         headers.update(webhook.headers)
 
     try:
-        transport = await _pinned_transport(webhook.url)
+        transport = await pinned_transport(webhook.url)
         async with httpx.AsyncClient(
             timeout=timeout_seconds, transport=transport, follow_redirects=False
         ) as client:
