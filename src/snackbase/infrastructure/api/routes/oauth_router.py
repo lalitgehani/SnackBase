@@ -150,21 +150,12 @@ async def authorize(
             detail=f"Provider '{provider_name}' handler not found",
         )
 
-    # 4. Generate/Validate state token
-    state_token = request_body.state or secrets.token_urlsafe(32)
+    # 4. Generate the state token. It is always server-generated: a
+    # caller-chosen state would let an attacker plant a flow and complete it.
+    state_token = secrets.token_urlsafe(32)
 
     # 5. Store state in database
     oauth_state_repo = OAuthStateRepository(session)
-
-    # Check if a state with this token already exists
-    existing_state = await oauth_state_repo.get_by_token(state_token)
-    if existing_state:
-        if request_body.state:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="State token already in use",
-            )
-        state_token = secrets.token_urlsafe(32)
 
     expires_at = datetime.now(UTC) + timedelta(minutes=10)
 
@@ -530,13 +521,37 @@ async def callback(
                     detail="Target account for OAuth flow not found",
                 )
 
-            # Create user record with 'admin' role
-            admin_role = await role_repo.get_by_name("admin")
-            if not admin_role:
-                logger.error("Admin role not found in database")
+            # The account is named by whoever starts the flow, so a provider
+            # identity alone must not grant membership. Only an account that
+            # configured this provider itself (its own IdP) provisions new
+            # members, and only with the 'user' role. Otherwise membership
+            # comes from an invitation.
+            account_provider = await ConfigurationRepository(session).get_config(
+                category="auth_providers",
+                account_id=account_model.id,
+                provider_name=provider_name,
+                is_system=False,
+            )
+            if account_provider is None or not account_provider.enabled:
+                logger.info(
+                    "OAuth callback refused: account does not provision via provider",
+                    provider=provider_name,
+                    account_id=account_id,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=(
+                        f"This account does not accept sign-up through '{provider_name}'. "
+                        "Ask an account admin for an invitation."
+                    ),
+                )
+
+            member_role = await role_repo.get_by_name("user")
+            if not member_role:
+                logger.error("User role not found in database")
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="System configuration error: admin role missing",
+                    detail="System configuration error: user role missing",
                 )
 
             user = UserModel(
@@ -544,7 +559,7 @@ async def callback(
                 account_id=account_id,
                 email=email,
                 password_hash=hash_password(generate_random_password()),
-                role_id=admin_role.id,
+                role_id=member_role.id,
                 is_active=True,
                 auth_provider="oauth",
                 auth_provider_name=provider_name,

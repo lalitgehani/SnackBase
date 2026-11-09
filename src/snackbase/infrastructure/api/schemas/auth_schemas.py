@@ -122,9 +122,6 @@ class OAuthAuthorizeRequest(BaseModel):
         description="Display name for the new account (used when creating a new account)",
     )
     redirect_uri: str = Field(..., description="URI to redirect to after OAuth completion")
-    state: str | None = Field(
-        None, description="Optional state for CSRF (auto-generated if missing)"
-    )
 
 
 class OAuthAuthorizeResponse(BaseModel):
