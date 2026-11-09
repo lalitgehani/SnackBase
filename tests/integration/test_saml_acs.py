@@ -1,6 +1,5 @@
-import base64
-import json
 import uuid
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -9,9 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from snackbase.core.config import get_settings
 from snackbase.infrastructure.persistence.models import AccountModel, UserModel
+from snackbase.infrastructure.persistence.models.configuration import OAuthStateModel
 from snackbase.infrastructure.persistence.repositories import (
     AccountRepository,
     ConfigurationRepository,
+    OAuthStateRepository,
     RoleRepository,
     UserRepository,
 )
@@ -77,6 +78,44 @@ class TestSAMLACS:
         )
         await db_session.commit()
 
+    async def _flow_state(self, db_session: AsyncSession, account_id: str, provider: str = "okta") -> str:
+        """Store an SP-initiated flow state as /sso does and return its RelayState token."""
+        token = f"flow-{uuid.uuid4().hex}"
+        await OAuthStateRepository(db_session).create(
+            OAuthStateModel(
+                id=str(uuid.uuid4()),
+                provider_name=f"saml:{provider}",
+                state_token=token,
+                redirect_uri="http://localhost:8000/api/v1/auth/saml/acs",
+                expires_at=datetime.now(UTC) + timedelta(minutes=10),
+                metadata_={"account_id": account_id, "provider_name": provider, "relay_state": None},
+            )
+        )
+        await db_session.commit()
+        return token
+
+    async def _add_account_provider(self, db_session: AsyncSession, account_id: str) -> None:
+        """Give the account its own Okta configuration (a tenant-owned IdP)."""
+        from snackbase.infrastructure.api.app import app
+
+        await app.state.config_registry.create_config(
+            account_id=account_id,
+            category="saml_providers",
+            provider_name="okta",
+            display_name="Okta (tenant)",
+            config={
+                "idp_entity_id": "http://www.okta.com/tenant",
+                "idp_sso_url": "https://tenant.okta.com/app/sso/saml",
+                "idp_x509_cert": "cert",
+                "sp_entity_id": "http://localhost:8000/saml/metadata",
+                "assertion_consumer_url": "http://localhost:8000/api/v1/auth/saml/acs",
+            },
+            is_system=False,
+            enabled=True,
+            repository=ConfigurationRepository(db_session),
+        )
+        await db_session.commit()
+
     async def test_acs_success_existing_user(self, client: AsyncClient, db_session: AsyncSession):
         """Test successful ACS callback for an existing user."""
         await self._setup_infra(db_session)
@@ -104,13 +143,7 @@ class TestSAMLACS:
         await user_repo.create(user)
         await db_session.commit()
 
-        # Prepare RelayState
-        relay_state_data = {
-            "a": account.id,
-            "p": "okta",
-            "r": "some-original-state"
-        }
-        encoded_relay_state = base64.urlsafe_b64encode(json.dumps(relay_state_data).encode()).decode()
+        encoded_relay_state = await self._flow_state(db_session, account.id)
 
         # Mock handler
         mock_handler = AsyncMock()
@@ -144,14 +177,9 @@ class TestSAMLACS:
         account = AccountModel(id=str(uuid.uuid4()), account_code="AC9999", name="New User Account", slug="saml-new")
         await account_repo.create(account)
         await db_session.commit()
+        await self._add_account_provider(db_session, account.id)
 
-        # Prepare RelayState
-        relay_state_data = {
-            "a": account.id,
-            "p": "okta",
-            "r": None
-        }
-        encoded_relay_state = base64.urlsafe_b64encode(json.dumps(relay_state_data).encode()).decode()
+        encoded_relay_state = await self._flow_state(db_session, account.id)
 
         # Mock handler
         mock_handler = AsyncMock()
@@ -182,6 +210,55 @@ class TestSAMLACS:
         assert user is not None
         assert user.auth_provider == "saml"
         assert user.auth_provider_name == "okta"
+        role = await RoleRepository(db_session).get_by_id(user.role_id)
+        assert role.name == "user"
+
+    async def test_acs_new_user_requires_account_provider(self, client: AsyncClient, db_session: AsyncSession):
+        """A system-level SAML provider alone never provisions a user into an account."""
+        await self._setup_infra(db_session)
+
+        account = AccountModel(id=str(uuid.uuid4()), account_code="AC9998", name="No IdP", slug="saml-no-idp")
+        await AccountRepository(db_session).create(account)
+        await db_session.commit()
+        relay_state = await self._flow_state(db_session, account.id)
+
+        mock_handler = AsyncMock()
+        mock_handler.parse_saml_response.return_value = {"id": "okta-outsider", "email": "outsider@example.com"}
+
+        with patch("snackbase.infrastructure.api.routes.saml_router.SAML_HANDLERS", {"okta": mock_handler}):
+            response = await client.post(
+                "/api/v1/auth/saml/acs",
+                data={"SAMLResponse": "dummy-response", "RelayState": relay_state},
+            )
+
+        assert response.status_code == 403, response.text
+        assert await UserRepository(db_session).get_by_external_id("okta", "okta-outsider") is None
+
+    async def test_acs_relay_state_is_single_use(self, client: AsyncClient, db_session: AsyncSession):
+        """A RelayState token cannot be replayed."""
+        await self._setup_infra(db_session)
+
+        account = AccountModel(id=str(uuid.uuid4()), account_code="AC9997", name="Replay", slug="saml-replay")
+        await AccountRepository(db_session).create(account)
+        await db_session.commit()
+        await self._add_account_provider(db_session, account.id)
+        relay_state = await self._flow_state(db_session, account.id)
+
+        mock_handler = AsyncMock()
+        mock_handler.parse_saml_response.return_value = {"id": "okta-replay", "email": "replay@example.com"}
+
+        with patch("snackbase.infrastructure.api.routes.saml_router.SAML_HANDLERS", {"okta": mock_handler}):
+            first = await client.post(
+                "/api/v1/auth/saml/acs",
+                data={"SAMLResponse": "dummy-response", "RelayState": relay_state},
+            )
+            second = await client.post(
+                "/api/v1/auth/saml/acs",
+                data={"SAMLResponse": "dummy-response", "RelayState": relay_state},
+            )
+
+        assert first.status_code == 200, first.text
+        assert second.status_code == 400
 
     async def test_acs_missing_relay_state(self, client: AsyncClient, db_session: AsyncSession):
         """Test ACS fails without RelayState (context)."""
@@ -192,7 +269,7 @@ class TestSAMLACS:
             }
         )
         assert response.status_code == 400
-        assert "Missing context" in response.json()["detail"]
+        assert "Invalid or expired RelayState" in response.json()["detail"]
 
     async def test_acs_invalid_relay_state(self, client: AsyncClient, db_session: AsyncSession):
         """Test ACS fails with invalid RelayState."""
@@ -204,7 +281,7 @@ class TestSAMLACS:
             }
         )
         assert response.status_code == 400
-        assert "Missing context" in response.json()["detail"]
+        assert "Invalid or expired RelayState" in response.json()["detail"]
 
     async def test_acs_provider_not_configured(self, client: AsyncClient, db_session: AsyncSession):
         """Test ACS fails if provider not configured for account."""
@@ -221,11 +298,9 @@ class TestSAMLACS:
         # But we set up system default okta. So 'okta' will work for any account.
         # Let's use 'azure_ad' which is not configured.
 
-        relay_state_data = {
-            "a": "00000000-0000-0000-0000-000000000000",
-            "p": "azure_ad"
-        }
-        encoded_relay_state = base64.urlsafe_b64encode(json.dumps(relay_state_data).encode()).decode()
+        encoded_relay_state = await self._flow_state(
+            db_session, "00000000-0000-0000-0000-000000000000", provider="azure_ad"
+        )
 
         response = await client.post(
             "/api/v1/auth/saml/acs",
