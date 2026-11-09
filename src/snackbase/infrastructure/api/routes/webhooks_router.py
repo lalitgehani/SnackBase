@@ -30,6 +30,7 @@ from snackbase.infrastructure.persistence.repositories.webhook_repository import
     WebhookRepository,
 )
 from snackbase.infrastructure.security.encryption import EncryptionService
+from snackbase.infrastructure.security.record_projection import project_record_for_user
 from snackbase.infrastructure.webhooks.webhook_service import (
     generate_webhook_secret,
     test_webhook,
@@ -248,19 +249,40 @@ async def list_deliveries(
     current_user: AuthenticatedUser,
     webhook_repo: WebhookRepo,
     delivery_repo: DeliveryRepo,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> WebhookDeliveryListResponse:
-    """List delivery history for a webhook (paginated)."""
+    """List delivery history for a webhook (paginated).
+
+    Stored payloads carry record data, so the ``record`` and ``previous`` rows
+    of each payload are projected through the caller's own view access to the
+    webhook's collection, exactly as ``GET /{collection}/{id}`` would serve
+    them. A row the caller cannot view is returned as ``null``.
+    """
     webhook = await webhook_repo.get_by_id_and_account(webhook_id, current_user.account_id)
     if webhook is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Webhook not found")
 
     deliveries, total = await delivery_repo.list_by_webhook(webhook_id, limit=limit, offset=offset)
-    return WebhookDeliveryListResponse(
-        items=[WebhookDeliveryResponse.model_validate(d) for d in deliveries],
-        total=total,
-    )
+
+    items: list[WebhookDeliveryResponse] = []
+    for delivery in deliveries:
+        item = WebhookDeliveryResponse.model_validate(delivery)
+        payload = dict(item.payload)
+        for key in ("record", "previous"):
+            values = payload.get(key)
+            if isinstance(values, dict) and values:
+                payload[key] = await project_record_for_user(
+                    session,
+                    collection=webhook.collection,
+                    account_id=webhook.account_id,
+                    user_id=current_user.user_id,
+                    record=values,
+                )
+        items.append(item.model_copy(update={"payload": payload}))
+
+    return WebhookDeliveryListResponse(items=items, total=total)
 
 
 @router.post(
