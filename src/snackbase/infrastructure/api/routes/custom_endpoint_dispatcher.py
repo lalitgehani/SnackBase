@@ -299,6 +299,9 @@ async def _handle_custom_endpoint(request: Request, account_slug: str, path: str
         auth_user_id=auth_user.user_id if auth_user else "",
         auth_email=getattr(auth_user, "email", "") if auth_user else "",
         auth_account_id=account_id,
+        # Record-reading actions apply the caller's collection rules; a caller
+        # from another account is anonymous to this account's data.
+        auth_user=auth_user if auth_user and auth_user.account_id == account_id else None,
     )
 
     # 5. Evaluate condition

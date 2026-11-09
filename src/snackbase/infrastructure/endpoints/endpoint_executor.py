@@ -61,6 +61,9 @@ class EndpointRequestContext:
         auth_user_id: Authenticated user ID, or empty string for anonymous.
         auth_email: Authenticated user email, or empty string.
         auth_account_id: The account ID from authentication context.
+        auth_user: The authenticated caller when they belong to the endpoint's
+            account, else None (anonymous). Record-reading actions apply this
+            principal's collection rules.
         action_results: Running list of results from completed actions
             (populated during execution; used for {{actions[N].result}}).
     """
@@ -71,6 +74,7 @@ class EndpointRequestContext:
     auth_user_id: str = ""
     auth_email: str = ""
     auth_account_id: str = ""
+    auth_user: Any = None
     action_results: list[Any] = field(default_factory=list)
 
 
@@ -256,8 +260,13 @@ async def _execute_aggregate_records(
     config: dict[str, Any],
     session_factory: Any,
     account_id: str | None,
+    auth_user: Any = None,
 ) -> dict[str, Any]:
     """Aggregate records in a collection and return the result.
+
+    Rows are restricted by the caller's ``list`` rule on the collection, exactly
+    as ``GET /{collection}/aggregate`` does; an anonymous caller gets the
+    anonymous rule set. A caller who may not list the collection gets an error.
 
     Config keys:
         collection (str, required): Target collection name.
@@ -277,6 +286,7 @@ async def _execute_aggregate_records(
     if function != "count" and not agg_field:
         raise ValueError(f"aggregate_records: function '{function}' requires a 'field'")
 
+    from fastapi import HTTPException
     from sqlalchemy.exc import SQLAlchemyError
 
     from snackbase.core.rules import (
@@ -288,6 +298,8 @@ async def _execute_aggregate_records(
         validate_filter_expression,
         validate_group_by,
     )
+    from snackbase.infrastructure.api.dependencies import AuthorizationContext
+    from snackbase.infrastructure.api.middleware import check_collection_permission
     from snackbase.infrastructure.persistence.repositories.record_repository import (
         RecordRepository,
         RuleFilter,
@@ -300,6 +312,16 @@ async def _execute_aggregate_records(
         # record router uses, then let the repository build the statement.
         schema = await _load_collection_schema(session, collection)
         schema_lookup = {field_def["name"]: field_def for field_def in schema}
+
+        try:
+            rule_filter = await check_collection_permission(
+                auth_context=AuthorizationContext(user=auth_user, role_id=None),
+                collection=collection,
+                operation="list",
+                session=session,
+            )
+        except HTTPException as exc:
+            raise PermissionError(f"aggregate_records: {exc.detail}") from exc
 
         try:
             agg_functions = parse_agg_functions(
@@ -330,6 +352,7 @@ async def _execute_aggregate_records(
                 agg_functions=agg_functions,
                 group_by_fields=group_by_fields,
                 user_filter=user_filter,
+                rule_filter=rule_filter,
                 schema=schema,
             )
         except SQLAlchemyError as exc:
@@ -434,7 +457,9 @@ async def _run_actions(
                 result = await _execute_query_records(resolved, session_factory, account_id)
 
             elif action_type == "aggregate_records":
-                result = await _execute_aggregate_records(resolved, session_factory, account_id)
+                result = await _execute_aggregate_records(
+                    resolved, session_factory, account_id, ctx.auth_user
+                )
 
             elif action_type == "transform":
                 # transform reads from the live ctx (action_results already populated)
