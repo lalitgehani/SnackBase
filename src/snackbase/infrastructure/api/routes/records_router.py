@@ -240,8 +240,16 @@ async def _expand_records(
     record_repo: RecordRepository,
     depth: int,
     max_depth: int,
+    auth_context: AuthorizationContext,
+    session: AsyncSession,
 ) -> list[dict[str, Any]]:
     """Recursively expand reference fields in records using batch loading.
+
+    Each referenced collection is read under the caller's own ``view`` rule:
+    its row filter is applied to the batch fetch, and the result is projected
+    through the rule's ``allowed_fields``, encrypted-field redaction and PII
+    masking exactly as ``GET /{collection}/{id}`` would. A reference the caller
+    cannot view expands to ``None``.
 
     Args:
         records: List of record dicts to expand.
@@ -252,6 +260,8 @@ async def _expand_records(
         record_repo: RecordRepository instance.
         depth: Current recursion depth.
         max_depth: Maximum allowed depth.
+        auth_context: Caller's authorization context.
+        session: Database session.
 
     Returns:
         Records with reference fields replaced by full record objects.
@@ -323,13 +333,45 @@ async def _expand_records(
         except json.JSONDecodeError:
             continue
 
-        # Batch fetch all referenced records
+        # The caller must be allowed to view the target collection. A denied
+        # or locked view rule expands every reference to None.
+        try:
+            target_rule = await check_collection_permission(
+                auth_context=auth_context,
+                collection=target_collection,
+                operation="view",
+                session=session,
+            )
+        except HTTPException:
+            for r in records:
+                if r.get(field_name):
+                    r[field_name] = None
+            continue
+
+        # Batch fetch referenced records the caller's view rule admits
         fetched = await record_repo.get_by_ids(
             collection_name=target_collection,
             ids=list(ids),
             account_id=account_id,
             schema=target_schema,
+            rule_filter=target_rule,
         )
+
+        # Project each fetched record exactly as GET /{collection}/{id} does,
+        # before recursing, so hidden reference fields cannot be expanded.
+        caller = auth_context.user
+        visible: dict[str, dict[str, Any]] = {}
+        for rid, target in fetched.items():
+            if target_rule.allowed_fields != "*":
+                target = apply_field_filter(target, target_rule.allowed_fields)
+            target = _apply_encrypted_redaction(target, target_schema)
+            visible[rid] = _mask_record_pii(
+                target,
+                target_schema,
+                caller.groups if caller else [],
+                caller.account_id if caller else None,
+            )
+        fetched = visible
 
         # Recurse for nested expansion paths
         if sub_paths and depth + 1 < max_depth and fetched:
@@ -342,6 +384,8 @@ async def _expand_records(
                 record_repo=record_repo,
                 depth=depth + 1,
                 max_depth=max_depth,
+                auth_context=auth_context,
+                session=session,
             )
             fetched = {r["id"]: r for r in expanded}
 
@@ -874,6 +918,8 @@ async def list_records(
                 record_repo=record_repo,
                 depth=0,
                 max_depth=max_depth,
+                auth_context=auth_context,
+                session=session,
             )
 
     # 8. Apply additional field limiting if requested via query param
@@ -1841,6 +1887,8 @@ async def get_record(
                 record_repo=record_repo,
                 depth=0,
                 max_depth=max_depth,
+                auth_context=auth_context,
+                session=session,
             )
             record = expanded[0]
 
