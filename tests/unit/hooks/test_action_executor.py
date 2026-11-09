@@ -228,7 +228,12 @@ async def test_send_webhook_http_error_aborts_chain() -> None:
 
 @pytest.mark.asyncio
 async def test_enqueue_job_action_creates_job() -> None:
-    """enqueue_job action creates a JobModel via the JobRepository."""
+    """enqueue_job action creates a JobModel for an automation-enqueueable handler."""
+    from snackbase.infrastructure.services.job_service import handler_registry
+
+    @handler_registry.register("send_report", automation=True)
+    async def _send_report(payload, job):  # noqa: ANN001, ANN202
+        return None
 
     class FakeSession:
         async def flush(self):
@@ -249,22 +254,46 @@ async def test_enqueue_job_action_creates_job() -> None:
     mock_repo.create = AsyncMock(return_value=None)
 
     # JobRepository is imported locally inside _execute_enqueue_job; patch at source
-    with patch(
-        "snackbase.infrastructure.persistence.repositories.job_repository.JobRepository",
-        return_value=mock_repo,
-    ):
-        actions = [
-            {"type": "enqueue_job", "handler": "send_report", "payload": {"format": "pdf"}}
-        ]
-        executed, error = await execute_actions(
-            actions=actions,
-            record={},
-            context=HookContext(app=None, account_id="acc-test"),
-            session_factory=session_factory,
-        )
+    try:
+        with patch(
+            "snackbase.infrastructure.persistence.repositories.job_repository.JobRepository",
+            return_value=mock_repo,
+        ):
+            actions = [
+                {"type": "enqueue_job", "handler": "send_report", "payload": {"format": "pdf"}}
+            ]
+            executed, error = await execute_actions(
+                actions=actions,
+                record={},
+                context=HookContext(app=None, account_id="acc-test"),
+                session_factory=session_factory,
+            )
+    finally:
+        handler_registry._handlers.pop("send_report", None)
+        handler_registry._automation_handlers.discard("send_report")
 
     assert executed == 1
     assert error is None
+
+
+@pytest.mark.asyncio
+async def test_enqueue_job_action_rejects_internal_handler() -> None:
+    """enqueue_job refuses internal handlers whose payload carries privileged parameters."""
+    executed, error = await execute_actions(
+        actions=[
+            {
+                "type": "enqueue_job",
+                "handler": "webhook_delivery",
+                "payload": {"url": "http://127.0.0.1:1/admin", "secret": "chosen"},
+            }
+        ],
+        record={},
+        context=HookContext(app=None, account_id="acc-test"),
+        session_factory=lambda: None,
+    )
+
+    assert executed == 0
+    assert error is not None and "webhook_delivery" in error
 
 
 @pytest.mark.asyncio

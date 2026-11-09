@@ -49,16 +49,27 @@ class HandlerRegistry:
         @handler_registry.register("my_handler")
         async def my_handler(payload: dict, job: JobModel) -> None:
             ...
+
+    Handlers are internal by default. Only handlers registered with
+    ``automation=True`` may be enqueued by user-authored automation (the
+    ``enqueue_job`` action of hooks, custom endpoints and workflows), whose
+    handler name and payload are author-controlled. Such a handler must treat
+    its payload as untrusted input and take its tenant from ``job.account_id``.
     """
 
     def __init__(self) -> None:
         self._handlers: dict[str, JobHandler] = {}
+        self._automation_handlers: set[str] = set()
 
-    def register(self, name: str) -> Callable[[JobHandler], JobHandler]:
+    def register(
+        self, name: str, *, automation: bool = False
+    ) -> Callable[[JobHandler], JobHandler]:
         """Register a handler function under the given name.
 
         Args:
             name: The handler identifier used in job records.
+            automation: Whether user-authored automation may enqueue this
+                handler with an author-controlled payload.
 
         Returns:
             Decorator that registers and returns the function unchanged.
@@ -66,9 +77,17 @@ class HandlerRegistry:
 
         def decorator(fn: JobHandler) -> JobHandler:
             self._handlers[name] = fn
+            if automation:
+                self._automation_handlers.add(name)
+            else:
+                self._automation_handlers.discard(name)
             return fn
 
         return decorator
+
+    def is_automation_handler(self, name: str) -> bool:
+        """Return True if user-authored automation may enqueue this handler."""
+        return name in self._automation_handlers and name in self._handlers
 
     def get(self, name: str) -> JobHandler | None:
         """Look up a handler by name.
@@ -153,7 +172,7 @@ async def _handle_send_email(payload: dict, job: JobModel) -> None:
         )
 
 
-@handler_registry.register("scheduled_task")
+@handler_registry.register("scheduled_task", automation=True)
 async def _handle_scheduled_task(payload: dict, job: JobModel) -> None:
     """Placeholder handler for generic scheduled tasks.
 
