@@ -72,7 +72,7 @@ async def execute_invoke_function(
 
         # Mint admin token for automation context
         extra_env: dict[str, str] = {
-            "SNACKBASE_URL": getattr(settings, "public_url", None) or "http://127.0.0.1:8090",
+            "SNACKBASE_URL": settings.external_url.rstrip("/"),
             "FN_SLUG": fn.slug,
             "FN_ACCOUNT_ID": account_id,
             "FN_FUNCTION_ID": fn.id,

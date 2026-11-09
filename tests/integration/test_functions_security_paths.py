@@ -332,6 +332,8 @@ async def test_recursive_self_invoke_hits_nested_budget(
     """Handler POSTs /api/v1/f/... to itself; depth headers propagate until 429."""
     monkeypatch.setenv("SNACKBASE_FUNCTION_ENV_BASE_PATH", str(tmp_path / "envs"))
     monkeypatch.setenv("SNACKBASE_FUNCTION_NESTED_INVOKE_LIMIT_PER_MINUTE", "3")
+    # The sandbox calls back to the configured external URL, never the Host header.
+    monkeypatch.setenv("SNACKBASE_EXTERNAL_URL", live_server)
     from snackbase.core.config import get_settings
 
     get_settings.cache_clear()

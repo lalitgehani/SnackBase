@@ -598,7 +598,6 @@ async def test_function(
         "auth": auth_ctx,
     }
     extra_env = await build_invoke_env(
-        request=request,
         fn=fn,
         account_id=fn.account_id,
         auth=auth_ctx,
