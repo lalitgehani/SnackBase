@@ -135,6 +135,7 @@ async def _dispatch_api_hooks(
 
     from snackbase.infrastructure.hooks.action_executor import execute_actions
     from snackbase.infrastructure.persistence.repositories.hook_repository import HookRepository
+    from snackbase.infrastructure.security.record_projection import project_record_for_user
 
     try:
         async with session_factory() as session:
@@ -146,10 +147,31 @@ async def _dispatch_api_hooks(
             )
 
         for hook in hooks:
+            hook_record = record
+            if internal_event in _RECORD_EVENTS and collection:
+                # Actions ship the record out of the server, so they see only
+                # what the hook's author could read through the REST API.
+                async with session_factory() as session:
+                    projected = await project_record_for_user(
+                        session,
+                        collection=collection,
+                        account_id=account_id,
+                        user_id=hook.created_by,
+                        record=record,
+                    )
+                if projected is None:
+                    logger.debug(
+                        "Hook author may not view this record — skipping",
+                        hook_id=hook.id,
+                        collection=collection,
+                    )
+                    continue
+                hook_record = projected
+
             await _run_hook(
                 hook=hook,
                 trigger_type="event",
-                record=record,
+                record=hook_record,
                 context=context,
                 session_factory=session_factory,
                 execute_actions=execute_actions,
