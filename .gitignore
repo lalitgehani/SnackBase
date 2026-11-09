@@ -90,6 +90,7 @@ logs/
 
 # Security Reports
 tests/security-reports/
+*VULNHUNT*
 
 # Temporary files
 *.tmp
