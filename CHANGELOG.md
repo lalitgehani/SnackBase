@@ -1,3 +1,52 @@
+# Release Notes - v0.13.3
+
+Security patch release. It closes a set of authorization and data-exposure
+issues found in a vulnerability review of v0.13.2. Upgrading is recommended
+for every deployment, especially those with OAuth/SAML sign-in or
+API-defined automation enabled.
+
+## 🔐 Security
+
+- **OAuth / SAML tenant takeover.** `/oauth/authorize` accepted a
+  caller-chosen `state` and an unauthenticated account name, and the callback
+  created first-time identities in that account with the `admin` role. SAML
+  did the same through an unsigned `RelayState`. The OAuth state is now always
+  server-generated, SAML flow context is stored server-side behind an opaque,
+  single-use, 10-minute token, and new users joining an existing account get
+  the `user` role. Joining requires the account to have its own enabled
+  configuration for the provider; otherwise the callback returns 403 and
+  membership comes from an invitation.
+- **Function admin-token leak.** `SNACKBASE_URL` for functions is now taken
+  from the operator-configured `external_url`, never from the request `Host`
+  header, so the minted admin token cannot be sent to an attacker's origin.
+- **`?expand=` bypassed view rules.** Expanded references now enforce the
+  target collection's view rule, `allowed_fields`, encrypted-field redaction
+  and PII masking. A reference the caller cannot view expands to `null`.
+- **Automation control plane gated.** Hooks, custom endpoints, webhooks and
+  workflows (and their execution/delivery history) now require an account
+  admin or superadmin instead of any authenticated member.
+- **Automation data exposure.** Record-event hooks and outbound webhooks now
+  run on the record as their author could read it, and are skipped when the
+  author cannot view it. Webhook delivery history is projected through the
+  requesting user's view access. `aggregate_records` endpoint actions apply
+  the caller's list rule.
+- **SSRF.** The `send_webhook` action now uses the same address validation,
+  connection pinning and no-redirect policy as first-party webhook delivery.
+- **`enqueue_job` restricted.** Automation can only enqueue handlers
+  explicitly registered for it (`scheduled_task`), preventing use of internal
+  handlers such as `webhook_delivery`, `send_email` and `workflow_resume`.
+
+## ⚠ Upgrade notes
+
+- No new Alembic revisions. `pip install --upgrade snackbase==0.13.3`, or pull
+  `ghcr.io/lalitgehani/snackbase:0.13.3`.
+- Behaviour changes: the `state` field is removed from the OAuth authorize
+  request; first-time OAuth/SAML users joining an existing account are no
+  longer admins; non-admin members can no longer manage hooks, endpoints,
+  webhooks or workflows.
+
+---
+
 # Release Notes - v0.13.2
 
 Hotfix for v0.13.1: the `migrate` command only worked from a source checkout,
