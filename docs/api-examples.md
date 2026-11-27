@@ -3728,7 +3728,7 @@ Health check endpoints have no authentication requirement.
 {
   "status": "healthy",
   "service": "SnackBase",
-  "version": "0.13.2"
+  "version": "0.13.3"
 }
 ```
 
@@ -3744,7 +3744,7 @@ Health check endpoints have no authentication requirement.
 {
   "status": "ready",
   "service": "SnackBase",
-  "version": "0.13.2",
+  "version": "0.13.3",
   "database": "connected"
 }
 ```
@@ -3755,7 +3755,7 @@ Health check endpoints have no authentication requirement.
 {
   "status": "not_ready",
   "service": "SnackBase",
-  "version": "0.13.2",
+  "version": "0.13.3",
   "database": "disconnected"
 }
 ```
@@ -3772,7 +3772,7 @@ Health check endpoints have no authentication requirement.
 {
   "status": "alive",
   "service": "SnackBase",
-  "version": "0.13.2"
+  "version": "0.13.3"
 }
 ```
 
